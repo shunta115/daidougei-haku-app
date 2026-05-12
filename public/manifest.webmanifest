@@ -1,0 +1,18 @@
+{
+  "name": "大道芸博 · Street Performance Expo",
+  "short_name": "大道芸博",
+  "description": "来場者向けストリートフェス体験アプリ（デモ）。タイムテーブル・マップ・投げ銭導線。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050506",
+  "theme_color": "#050506",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
