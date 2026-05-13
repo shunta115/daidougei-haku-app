@@ -112,6 +112,7 @@ export type PerformerRegistration = {
   updatedAt: string
   status: RegistrationStatus
   artistName: string
+  /** 代表者名（運営連絡用） */
   realName: string
   email: string
   phone: string

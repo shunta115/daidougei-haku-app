@@ -37,7 +37,7 @@ type AdminRegistrationsScreenProps = {
 }
 
 /**
- * 運営コンソール。将来は管理者ログインと API に置き換え可能。
+ * 運営管理：登録者一覧・詳細・ステータス・編集・削除（現状は localStorage）。
  */
 export function AdminRegistrationsScreen({ onExit }: AdminRegistrationsScreenProps) {
   const [items, setItems] = useState<PerformerRegistration[]>(() => readRegistrations())
@@ -82,30 +82,17 @@ export function AdminRegistrationsScreen({ onExit }: AdminRegistrationsScreenPro
         <button type="button" className="fe-page-head__back" onClick={onExit}>
           ← 来場者モードへ
         </button>
-        <p className="fe-page-head__eyebrow">Staff console</p>
-        <h1 className="fe-page-head__title">登録者一覧</h1>
+        <p className="fe-page-head__eyebrow">Staff</p>
+        <h1 className="fe-page-head__title">運営管理 · 登録者一覧</h1>
         <p className="fe-page-head__lead">
-          localStorage の事前登録を確認します。ステータス変更・編集・削除はこの端末に保存されます。将来は管理者ログインと API に置き換え可能な構造です。
+          出演者登録の内容を確認します。ステータス変更・編集・削除はこの端末の localStorage に保存されます。本番では管理者認証と API に接続する想定です。
         </p>
       </header>
-
-      <div className="fe-admin-hub">
-        <h2 className="fe-admin-hub__title">運営ハブ</h2>
-        <p className="fe-admin-hub__lead">将来は管理者ログインの下に配置。現状は入口のみ（ダミー）。</p>
-        <div className="fe-admin-hub__actions">
-          <button type="button" className="fe-admin-hub__btn" disabled title="近日公開">
-            スケジュール管理
-          </button>
-          <button type="button" className="fe-admin-hub__btn" disabled title="近日公開">
-            お知らせ管理
-          </button>
-        </div>
-      </div>
 
       {items.length === 0 ? (
         <div className="fe-admin-empty">
           <p>まだ登録がありません。</p>
-          <p className="fe-admin-empty__hint">出演者モードの ENTRY からテスト送信してみてください。</p>
+          <p className="fe-admin-empty__hint">来場者トップの「出演者登録」から送信できます。</p>
         </div>
       ) : (
         <ul className="fe-admin-list">
@@ -191,6 +178,10 @@ export function AdminRegistrationsScreen({ onExit }: AdminRegistrationsScreenPro
 
                 {open && !editing ? (
                   <dl className="fe-admin-detail">
+                    <div>
+                      <dt>代表者名</dt>
+                      <dd>{r.realName || '—'}</dd>
+                    </div>
                     <div>
                       <dt>電話</dt>
                       <dd>{r.phone || '—'}</dd>

@@ -9,9 +9,8 @@ import { ForYouSection } from './components/home/ForYouSection'
 import { FutureRoadmapSection } from './components/home/FutureRoadmapSection'
 import { HomeAudiencePortals } from './components/home/HomeAudiencePortals'
 import { HomeTipsTeaser } from './components/home/HomeTipsTeaser'
+import { HomeOfficialEntry } from './components/home/HomeOfficialEntry'
 import { NowCommandDashboard } from './components/home/NowCommandDashboard'
-import { LaunchPartyPitchSection } from './components/home/LaunchPartyPitchSection'
-import { PresentationDeckSection } from './components/home/PresentationDeckSection'
 import { TodaysPicksSection } from './components/home/TodaysPicksSection'
 import { LiveNextSection } from './components/LiveNextSection'
 import { PerformerBottomNav } from './components/performer/PerformerBottomNav'
@@ -42,7 +41,6 @@ import {
   slotsByPerformer,
 } from './lib/scheduleEngine'
 import { shareFestival } from './lib/share'
-import { readLaunchPartyDemo, writeLaunchPartyDemo } from './lib/launchPartyModeStorage'
 import { readAppPersona, writeAppPersona } from './session/appPersona'
 import type { AppPersona, Performer, PerformerFlow, VisitorTab } from './types'
 
@@ -55,7 +53,9 @@ export function FestivalApp() {
   const [mapFocusVenueId, setMapFocusVenueId] = useState<string | null>(null)
   const [gamificationTick, setGamificationTick] = useState(0)
   const [fabOpen, setFabOpen] = useState(false)
-  const [launchPartyDemo, setLaunchPartyDemo] = useState(() => readLaunchPartyDemo())
+  const [lastSubmittedRegId, setLastSubmittedRegId] = useState<string | null>(null)
+  const [registerEditId, setRegisterEditId] = useState<string | null>(null)
+  const [performerEntryFromVisitor, setPerformerEntryFromVisitor] = useState(false)
 
   const { live, next } = buildMarkedPulses(PERFORMERS)
   const liveArtist = live ? performerById(live.performerId) : undefined
@@ -99,30 +99,6 @@ export function FestivalApp() {
   const consumeMapFocus = useCallback(() => setMapFocusVenueId(null), [])
 
   useEffect(() => {
-    try {
-      if (new URLSearchParams(window.location.search).get('party') === '1') {
-        writeLaunchPartyDemo(true)
-        setLaunchPartyDemo(true)
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  const toggleLaunchPartyDemo = useCallback(() => {
-    setLaunchPartyDemo((v) => {
-      const next = !v
-      writeLaunchPartyDemo(next)
-      if (next) {
-        queueMicrotask(() =>
-          document.getElementById('fe-launch-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-        )
-      }
-      return next
-    })
-  }, [])
-
-  useEffect(() => {
     const syncHash = () => {
       const m = window.location.hash.match(/^#artist-(.+)$/)
       const id = m?.[1]
@@ -144,6 +120,9 @@ export function FestivalApp() {
     setVisitorTab('home')
     setPerformerFlow('hub')
     setDetailId(null)
+    setRegisterEditId(null)
+    setLastSubmittedRegId(null)
+    setPerformerEntryFromVisitor(false)
   }, [])
 
   const goVisitorBrowseActs = useCallback(() => {
@@ -152,10 +131,13 @@ export function FestivalApp() {
     setVisitorTab('performers')
   }, [])
 
-  const enterPerformerPortal = useCallback(() => {
+  const openPerformerRegisterFromVisitor = useCallback(() => {
+    setPerformerEntryFromVisitor(true)
+    setRegisterEditId(null)
+    setLastSubmittedRegId(null)
     writeAppPersona('performer')
     setPersonaState('performer')
-    setPerformerFlow('hub')
+    setPerformerFlow('register')
   }, [])
 
   const enterAdminPortal = useCallback(() => {
@@ -163,7 +145,9 @@ export function FestivalApp() {
     setPersonaState('admin')
   }, [])
 
-  const onRegisterSuccess = useCallback(() => {
+  const onRegisterSuccess = useCallback((id: string) => {
+    setLastSubmittedRegId(id)
+    setRegisterEditId(null)
     setPerformerFlow('registerComplete')
   }, [])
 
@@ -199,6 +183,7 @@ export function FestivalApp() {
         return (
           <main className="fe-main fe-main--home fe-main--dashhome">
             <EventStripHeader onShare={() => void shareFestival()} />
+            <HomeOfficialEntry onPerformerRegister={openPerformerRegisterFromVisitor} onAdmin={enterAdminPortal} />
             <NowCommandDashboard
               live={live}
               next={next}
@@ -221,50 +206,34 @@ export function FestivalApp() {
                 if (nextArtist) openDetail(nextArtist.id)
               }}
             />
-            <LaunchPartyPitchSection />
-            <HomeAudiencePortals
-              onScrollTips={scrollTips}
-              onPerformer={enterPerformerPortal}
-              onAdmin={enterAdminPortal}
-            />
-            {!launchPartyDemo ? (
-              <>
-                <Reveal>
-                  <HomeTipsTeaser onOpenLibrary={() => setVisitorTab('library')} />
-                </Reveal>
-                <Reveal>
-                  <LiveNextSection live={live} next={next} livePerformer={liveArtist} nextPerformer={nextArtist} />
-                </Reveal>
-                <Reveal>
-                  <TodaysPicksSection performers={todaysPicks} onOpen={openDetail} />
-                </Reveal>
-                <Reveal>
-                  <SpotlightSection performers={spotlight} onOpenPerformer={openDetail} />
-                </Reveal>
-                <Reveal>
-                  <ForYouSection favorites={forYouFavs} recommended={forYouRec} onOpen={openDetail} />
-                </Reveal>
-                <Reveal>
-                  <TrendingSection performers={trending} onOpenPerformer={openDetail} />
-                </Reveal>
-                <Reveal>
-                  <FirstVisitGuideSection />
-                </Reveal>
-              </>
-            ) : null}
+            <HomeAudiencePortals onScrollTips={scrollTips} />
             <Reveal>
-              <PresentationDeckSection />
+              <HomeTipsTeaser onOpenLibrary={() => setVisitorTab('library')} />
             </Reveal>
-            {!launchPartyDemo ? (
-              <>
-                <Reveal>
-                  <ExperienceSection />
-                </Reveal>
-                <Reveal>
-                  <FutureRoadmapSection />
-                </Reveal>
-              </>
-            ) : null}
+            <Reveal>
+              <LiveNextSection live={live} next={next} livePerformer={liveArtist} nextPerformer={nextArtist} />
+            </Reveal>
+            <Reveal>
+              <TodaysPicksSection performers={todaysPicks} onOpen={openDetail} />
+            </Reveal>
+            <Reveal>
+              <SpotlightSection performers={spotlight} onOpenPerformer={openDetail} />
+            </Reveal>
+            <Reveal>
+              <ForYouSection favorites={forYouFavs} recommended={forYouRec} onOpen={openDetail} />
+            </Reveal>
+            <Reveal>
+              <TrendingSection performers={trending} onOpenPerformer={openDetail} />
+            </Reveal>
+            <Reveal>
+              <FirstVisitGuideSection />
+            </Reveal>
+            <Reveal>
+              <ExperienceSection />
+            </Reveal>
+            <Reveal>
+              <FutureRoadmapSection />
+            </Reveal>
           </main>
         )
       case 'performers':
@@ -321,16 +290,49 @@ export function FestivalApp() {
     switch (performerFlow) {
       case 'hub':
         return (
-          <PerformerHubScreen onOpenEntry={() => setPerformerFlow('register')} onBrowseActs={goVisitorBrowseActs} />
+          <PerformerHubScreen
+            onOpenEntry={() => {
+              setPerformerEntryFromVisitor(false)
+              setRegisterEditId(null)
+              setPerformerFlow('register')
+            }}
+            onBrowseActs={goVisitorBrowseActs}
+          />
         )
       case 'register':
-        return <RegisterFormScreen onSuccess={onRegisterSuccess} onBack={() => setPerformerFlow('hub')} />
+        return (
+          <RegisterFormScreen
+            key={registerEditId ?? 'new'}
+            editRegistrationId={registerEditId}
+            onSuccess={onRegisterSuccess}
+            onBack={() => {
+              setRegisterEditId(null)
+              if (performerEntryFromVisitor) {
+                writeAppPersona('visitor')
+                setPersonaState('visitor')
+                setVisitorTab('home')
+              } else {
+                setPerformerFlow('hub')
+              }
+            }}
+          />
+        )
       case 'registerComplete':
         return (
           <RegisterCompleteScreen
-            onHome={() => setPerformerFlow('hub')}
-            onRegisterAnother={() => setPerformerFlow('register')}
-            homeCtaLabel="出演者トップへ"
+            onTop={() => {
+              writeAppPersona('visitor')
+              setPersonaState('visitor')
+              setVisitorTab('home')
+              setPerformerFlow('hub')
+              setLastSubmittedRegId(null)
+              setRegisterEditId(null)
+              setPerformerEntryFromVisitor(false)
+            }}
+            onReEdit={() => {
+              if (lastSubmittedRegId) setRegisterEditId(lastSubmittedRegId)
+              setPerformerFlow('register')
+            }}
           />
         )
       default:
@@ -338,10 +340,7 @@ export function FestivalApp() {
     }
   }
 
-  const rootClass =
-    launchPartyDemo && persona === 'visitor'
-      ? `fe-root fe-root--${persona} fe-root--launch-party`
-      : `fe-root fe-root--${persona}`
+  const rootClass = `fe-root fe-root--${persona}`
 
   return (
     <div className={rootClass} lang="ja">
@@ -350,13 +349,7 @@ export function FestivalApp() {
       <div className="fe-shell">
         {persona === 'visitor' ? (
           <>
-            <TopBar
-              persona="visitor"
-              onExitPerformerOrAdmin={goVisitorHome}
-              visitorContext="Guest"
-              launchPartyDemo={launchPartyDemo}
-              onToggleLaunchPartyDemo={toggleLaunchPartyDemo}
-            />
+            <TopBar persona="visitor" onExitPerformerOrAdmin={goVisitorHome} visitorContext="Guest" />
             {renderVisitorBody()}
             <VisitorBottomNav tab={visitorTab} onChange={setVisitorTab} />
             <VisitorFab onOpen={() => setFabOpen(true)} />
@@ -398,7 +391,11 @@ export function FestivalApp() {
             <PerformerBottomNav
               flow={performerFlow}
               onHub={() => setPerformerFlow('hub')}
-              onEntry={() => setPerformerFlow('register')}
+              onEntry={() => {
+                setPerformerEntryFromVisitor(false)
+                setRegisterEditId(null)
+                setPerformerFlow('register')
+              }}
             />
           </>
         ) : null}

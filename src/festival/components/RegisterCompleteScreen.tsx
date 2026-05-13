@@ -1,15 +1,11 @@
 type RegisterCompleteScreenProps = {
-  onHome: () => void
-  onRegisterAnother: () => void
-  /** 例: 出演者トップへ */
-  homeCtaLabel?: string
+  /** 来場者トップへ */
+  onTop: () => void
+  /** 直前の登録内容をフォームで再編集 */
+  onReEdit: () => void
 }
 
-export function RegisterCompleteScreen({
-  onHome,
-  onRegisterAnother,
-  homeCtaLabel = 'ホームへ',
-}: RegisterCompleteScreenProps) {
+export function RegisterCompleteScreen({ onTop, onReEdit }: RegisterCompleteScreenProps) {
   return (
     <main className="fe-main fe-main--complete">
       <div className="fe-complete">
@@ -25,19 +21,16 @@ export function RegisterCompleteScreen({
             />
           </svg>
         </div>
-        <h1 className="fe-complete__title">送信完了</h1>
+        <h1 className="fe-complete__title">登録を受け付けました</h1>
         <p className="fe-complete__message">
           登録ありがとうございます。運営確認後、公式アプリに掲載されます。
         </p>
-        <p className="fe-complete__sub" lang="en">
-          Thank you. Our team will review your entry before it appears in the official app.
-        </p>
         <div className="fe-complete__actions">
-          <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={onHome}>
-            {homeCtaLabel}
+          <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={onTop}>
+            トップへ戻る
           </button>
-          <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onRegisterAnother}>
-            続けて登録する
+          <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onReEdit}>
+            内容を再編集する
           </button>
         </div>
       </div>

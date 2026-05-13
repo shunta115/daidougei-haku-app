@@ -55,8 +55,8 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         <input className="fe-input" value={v.artistName} onChange={patch('artistName')} required />
       </label>
       <label className="fe-field">
-        <span className="fe-label">本名</span>
-        <input className="fe-input" value={v.realName} onChange={patch('realName')} />
+        <span className="fe-label">代表者名</span>
+        <input className="fe-input" value={v.realName} onChange={patch('realName')} required />
       </label>
       <label className="fe-field">
         <span className="fe-label">メール</span>

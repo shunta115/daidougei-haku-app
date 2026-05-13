@@ -13,7 +13,7 @@ export function ExperienceSection() {
         <article className="fe-xp-card">
           <h3>Visitor flow</h3>
           <p>
-            下部ナビの <strong>Time / Map / Save</strong> でタイムテーブル・会場マップ・お気に入りと投げ銭導線にアクセス。出演者・運営はトップの控えめな入口から。
+            下部ナビの <strong>Time / Map / Save</strong> でタイムテーブル・会場マップ・お気に入りと投げ銭導線にアクセス。出演者登録・運営管理はトップの公式導線から。
           </p>
         </article>
         <article className="fe-xp-card">

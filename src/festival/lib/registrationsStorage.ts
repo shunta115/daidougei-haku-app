@@ -40,6 +40,26 @@ export type RegistrationDraft = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'status'
 >
 
+/** 出演者による内容更新。ステータス（承認ワークフロー）は変更しない。 */
+export function updateRegistrationContent(id: string, draft: RegistrationDraft): boolean {
+  const list = readRegistrations()
+  const idx = list.findIndex((r) => r.id === id)
+  if (idx < 0) return false
+  const prev = list[idx]!
+  const nextRow: PerformerRegistration = {
+    ...prev,
+    ...draft,
+    id: prev.id,
+    createdAt: prev.createdAt,
+    status: prev.status,
+    updatedAt: new Date().toISOString(),
+  }
+  const next = [...list]
+  next[idx] = nextRow
+  writeRegistrations(next)
+  return true
+}
+
 export function appendRegistration(draft: RegistrationDraft): PerformerRegistration {
   const now = new Date().toISOString()
   const row: PerformerRegistration = {
