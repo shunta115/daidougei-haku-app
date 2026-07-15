@@ -44,7 +44,7 @@ export function FestivalApp() {
   const [favTick, setFavTick] = useState(0)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [mapFocusVenueId, setMapFocusVenueId] = useState<string | null>(null)
-  const [gamificationTick, setGamificationTick] = useState(0)
+  const [, setGamificationTick] = useState(0)
   const [fabOpen, setFabOpen] = useState(false)
   const [lastSubmittedRegId, setLastSubmittedRegId] = useState<string | null>(null)
   const [registerEditId, setRegisterEditId] = useState<string | null>(null)
