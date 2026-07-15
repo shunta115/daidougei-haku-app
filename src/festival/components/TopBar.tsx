@@ -2,14 +2,10 @@ import type { AppPersona } from '../types'
 
 type TopBarProps = {
   persona: AppPersona
-  /** 来場者モードのときのみ意味を持つ（将来: 通知バッジ等） */
   visitorContext?: string
   onExitPerformerOrAdmin: () => void
 }
 
-/**
- * 将来: visitorContext を Auth の displayName に、退出ボタンをログアウトに差し替え。
- */
 export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopBarProps) {
   const isVisitor = persona === 'visitor'
 

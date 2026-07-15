@@ -26,8 +26,8 @@ export function FirstVisitGuideSection() {
         <li>
           <span className="fe-guide__n">3</span>
           <div>
-            <p className="fe-guide__title">ハートと投げ銭で応援</p>
-            <p className="fe-guide__text">お気に入りは端末保存。投げ銭は外部リンクから（ログイン不要）。</p>
+            <p className="fe-guide__title">ハートとエールで応援</p>
+            <p className="fe-guide__text">お気に入りは端末に保存。応援は各アーティストの外部ページから（ログイン不要）。</p>
           </div>
         </li>
       </ol>

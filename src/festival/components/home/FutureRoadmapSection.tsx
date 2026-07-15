@@ -8,7 +8,7 @@ export function FutureRoadmapSection() {
           <span className="fe-section-title__eyebrow">Future</span>
           <span className="fe-section-title__main">将来構想</span>
         </h2>
-        <p className="fe-section-title__sub">多言語 · プッシュ · 混雑 · 投票 · TikTok · チケット / グッズ · Supabase · PWA などを段階接続。</p>
+        <p className="fe-section-title__sub">多言語 · プッシュ · 混雑 · 投票 · ライブ映像 · チケット / グッズ · Supabase · PWA などを段階接続。</p>
       </div>
       <ul className="fe-roadmap__grid">
         {FUTURE_CAPABILITIES.map((cap) => (

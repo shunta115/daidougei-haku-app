@@ -44,6 +44,15 @@ export function slotsSorted(): ScheduleSlot[] {
   })
 }
 
+/** 開始時刻順（タイムテーブル一覧用） */
+export function sortSlotsChronological(slots: ScheduleSlot[]): ScheduleSlot[] {
+  return [...slots].sort((a, b) => {
+    const da = a.date.localeCompare(b.date)
+    if (da !== 0) return da
+    return a.start.localeCompare(b.start)
+  })
+}
+
 export function slotsByDate(date: string) {
   return slotsSorted().filter((s) => s.date === date)
 }
@@ -271,5 +280,69 @@ export function uniqueGenresFromPerformers(performers: Performer[]): string[] {
     if (p.genre?.trim()) g.add(p.genre.trim())
   }
   return [...g].sort((a, b) => a.localeCompare(b, 'ja'))
+}
+
+/** 本日のスケジュール由来の雨天・変更アラート（運営メモは別途マージ） */
+export function todayBuiltInScheduleAlerts(): string[] {
+  const today = demoTodayDateString()
+  const lines: string[] = []
+  for (const s of slotsByDate(today)) {
+    if (s.status === 'cancelled' || s.status === 'delayed' || s.status === 'indoor_moved') {
+      const bit = s.noteJa ?? statusLabelJa(s.status)
+      lines.push(`${s.stageJa} · ${bit}`)
+    }
+  }
+  return lines
+}
+
+/** まもなく開演に入った最初の枠（回遊・通知UI用） */
+export function firstStartsSoonSlot(
+  performers: Performer[],
+  now: Date = getDemoNow(),
+): { slot: ScheduleSlot; performer: Performer } | undefined {
+  const today = demoTodayDateString()
+  for (const s of slotsByDate(today)) {
+    if (derivedAudienceTimeStatus(s, now) !== 'starts_soon') continue
+    const performer = performers.find((x) => x.id === s.performerId)
+    if (performer) return { slot: s, performer }
+  }
+  return undefined
+}
+
+/** 開演までの分数（未開演: 正、開演後: 負） */
+export function minutesBeforeSlotStart(slot: ScheduleSlot, now: Date): number {
+  return (slotAsDate(slot).getTime() - now.getTime()) / 60_000
+}
+
+/**
+ * 開演の N 分前以内の枠（未 LIVE・未終了）。ホーム「まもなく開始」レール用。
+ * 中止・遅延・屋内移動は除外。
+ */
+export function slotsStartingWithinMinutes(
+  performers: Performer[],
+  now: Date = getDemoNow(),
+  withinMinutes = 15,
+): Array<{ slot: ScheduleSlot; performer: Performer }> {
+  const today = demoTodayDateString()
+  const out: Array<{ slot: ScheduleSlot; performer: Performer }> = []
+  for (const slot of slotsByDate(today)) {
+    if (slot.status === 'cancelled') continue
+    const st = derivedAudienceTimeStatus(slot, now)
+    if (st === 'live_now' || st === 'finished' || st === 'cancelled' || st === 'delayed' || st === 'moved') continue
+    const mins = minutesBeforeSlotStart(slot, now)
+    if (mins > 0 && mins <= withinMinutes) {
+      const performer = performers.find((x) => x.id === slot.performerId)
+      if (performer) out.push({ slot, performer })
+    }
+  }
+  return out.sort((a, b) => slotAsDate(a.slot).getTime() - slotAsDate(b.slot).getTime())
+}
+
+/** 親コンポーネント用：まもなく開演チップの演者・ラベル */
+export function computeSoonHint(performers: Performer[], now: Date = getDemoNow()) {
+  const row = firstStartsSoonSlot(performers, now)
+  if (!row) return { performer: undefined as Performer | undefined, label: undefined as string | undefined }
+  const st = derivedAudienceTimeStatus(row.slot, now)
+  return { performer: row.performer, label: audienceStatusLabelJa(st) }
 }
 

@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { Performer } from '../types'
 import { initials } from '../lib/initials'
-import { formatCompact } from '../lib/format'
 import { sharePerformer } from '../lib/share'
 
 type PerformerSocialCardProps = {
@@ -74,7 +73,7 @@ export function PerformerSocialCard({
                   type="button"
                   className={`fe-pcard__heart${favorite ? ' fe-pcard__heart--on' : ''}`}
                   aria-pressed={favorite}
-                  aria-label={favorite ? `${p.name} をお気に入りから外す` : `${p.name} をお気に入りに追加`}
+                  aria-label={favorite ? `${p.nameJa} を推しから外す` : `${p.nameJa} を推しに追加`}
                   onClick={(e) => {
                     e.stopPropagation()
                     onToggleFavorite()
@@ -106,7 +105,7 @@ export function PerformerSocialCard({
 
             <div className="fe-pcard__tags">
               <span className="fe-chip fe-chip--neon">{p.act}</span>
-              <span className="fe-chip fe-chip--gold">{p.locale}</span>
+              <span className="fe-chip fe-chip--ghost fe-chip--cyan">{p.locale}</span>
               {p.genre ? (
                 <span className="fe-chip fe-chip--ghost">{p.genre}</span>
               ) : (
@@ -116,32 +115,10 @@ export function PerformerSocialCard({
 
             <p className="fe-pcard__quote">{p.tagline}</p>
 
-            <footer className="fe-pcard__foot">
-              <span className="fe-pcard__stat">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M12 21s-7-4.35-7-10a7 7 0 1 1 14 0c0 5.65-7 10-7 10Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                {formatCompact(p.likes)}
-              </span>
-              <span className="fe-pcard__stat">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 12v8a1 1 0 0 0 1 1h5v-7H4Zm16 0h-6v7h5a1 1 0 0 0 1-1v-8ZM15 3H9L4 9h16L15 3Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                {formatCompact(p.saves)}
-              </span>
-              <span className="fe-pcard__heat">
-                <span className="fe-pcard__heat-label">HEAT</span>
-                <span className="fe-pcard__heat-value">{p.heat}</span>
+            <footer className="fe-pcard__foot fe-pcard__foot--soft">
+              <span className="fe-pcard__locale">{p.locale}</span>
+              <span className="fe-pcard__signal" aria-hidden="true">
+                <span className="fe-pcard__signal-bar" style={{ width: `${Math.min(100, p.heat)}%` }} />
               </span>
             </footer>
           </div>
@@ -161,11 +138,23 @@ export function PerformerSocialCard({
             ) : null}
             {onQuickTips ? (
               <button type="button" className="fe-pcard__q" onClick={() => onQuickTips(p)}>
-                投げ銭
+                応援
               </button>
             ) : null}
             <button type="button" className="fe-pcard__q" onClick={() => void sharePerformer(p)}>
               シェア
+            </button>
+          </div>
+        ) : null}
+
+        {favoritesEnabled && onToggleFavorite ? (
+          <div className="fe-pcard__oshi-row" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className={`fe-pcard__oshi${favorite ? ' fe-pcard__oshi--on' : ''}`}
+              onClick={onToggleFavorite}
+            >
+              {favorite ? '推し中' : '推しに追加'}
             </button>
           </div>
         ) : null}

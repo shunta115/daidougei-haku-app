@@ -3,9 +3,11 @@ type RegisterCompleteScreenProps = {
   onTop: () => void
   /** 直前の登録内容をフォームで再編集 */
   onReEdit: () => void
+  /** localStorage に保存した申請一覧 */
+  onViewList: () => void
 }
 
-export function RegisterCompleteScreen({ onTop, onReEdit }: RegisterCompleteScreenProps) {
+export function RegisterCompleteScreen({ onTop, onReEdit, onViewList }: RegisterCompleteScreenProps) {
   return (
     <main className="fe-main fe-main--complete">
       <div className="fe-complete">
@@ -26,8 +28,11 @@ export function RegisterCompleteScreen({ onTop, onReEdit }: RegisterCompleteScre
           登録ありがとうございます。運営確認後、公式アプリに掲載されます。
         </p>
         <div className="fe-complete__actions">
-          <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={onTop}>
-            トップへ戻る
+          <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={onViewList}>
+            登録一覧を見る
+          </button>
+          <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onTop}>
+            来場者トップへ
           </button>
           <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onReEdit}>
             内容を再編集する

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { getDemoNow } from '../../lib/demoClock'
@@ -5,10 +6,14 @@ import {
   demoTodayDateString,
   nextSlotForPerformerFromNow,
   slotsByPerformer,
-  statusLabelJa,
   todaySlotsForPerformer,
 } from '../../lib/scheduleEngine'
 import { sharePerformer } from '../../lib/share'
+import { recordCheerMoment } from '../../lib/cheerMomentStorage'
+import { isOnWatchlist, toggleWatchlist } from '../../lib/watchlistStorage'
+import { PerformerDetailProfile } from './performer/PerformerDetailProfile'
+import { PerformerDetailSchedule } from './performer/PerformerDetailSchedule'
+import { PerformerDetailVideo } from './performer/PerformerDetailVideo'
 
 type PerformerDetailScreenProps = {
   performer: Performer
@@ -18,6 +23,8 @@ type PerformerDetailScreenProps = {
   onOpenTimetable: () => void
   onOpenTips?: () => void
   onOpenMap?: () => void
+  onWatchStream?: (id: string) => void
+  onSupportStream?: (id: string) => void
 }
 
 export function PerformerDetailScreen({
@@ -28,6 +35,8 @@ export function PerformerDetailScreen({
   onOpenTimetable,
   onOpenTips,
   onOpenMap,
+  onWatchStream,
+  onSupportStream,
 }: PerformerDetailScreenProps) {
   const schedule = slotsByPerformer(p.id)
   const tips = p.tipLinks ?? []
@@ -35,9 +44,19 @@ export function PerformerDetailScreen({
   const today = demoTodayDateString()
   const todaySlots = todaySlotsForPerformer(p.id, today)
   const nextAfter = nextSlotForPerformerFromNow(p.id, now)
+  const [watch, setWatch] = useState(() => isOnWatchlist(p.id))
+  const [cheerHint, setCheerHint] = useState<string | null>(null)
+
+  const streamReady = p.approvalStatus === 'approved' && p.canStream
+  const isLive = streamReady && p.isLive
+  const supportUrl = p.supportUrl || tips[0]?.url
+
+  useEffect(() => {
+    setWatch(isOnWatchlist(p.id))
+  }, [p.id])
 
   return (
-    <div className="fe-detail fe-detail--native" role="dialog" aria-modal="true" aria-labelledby="fe-detail-title">
+    <div className="fe-detail fe-detail--native fe-detail--step5" role="dialog" aria-modal="true" aria-labelledby="fe-detail-title">
       <header className="fe-detail__bar">
         <button type="button" className="fe-detail__back" onClick={onClose}>
           ← 戻る
@@ -56,51 +75,63 @@ export function PerformerDetailScreen({
           </button>
           <button
             type="button"
-            className="fe-detail__fan"
+            className={`fe-detail__fan${favorite ? ' fe-detail__fan--on' : ''}`}
             aria-pressed={favorite}
             onClick={onToggleFavorite}
           >
-            {favorite ? '登録済み' : 'ファン登録'}
-          </button>
-          <button
-            type="button"
-            className={`fe-detail__iconbtn${favorite ? ' fe-detail__iconbtn--on' : ''}`}
-            aria-pressed={favorite}
-            onClick={onToggleFavorite}
-            aria-label={favorite ? 'お気に入り解除' : 'お気に入り'}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                fill={favorite ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                strokeWidth="1.35"
-              />
-            </svg>
+            {favorite ? '★ お気に入り済み' : '☆ お気に入りに追加'}
           </button>
         </div>
       </header>
 
       <div
-        className={`fe-detail__hero fe-detail__hero--mega${p.photoUrl ? ' fe-detail__hero--photo' : ''}`}
+        className={`fe-detail__hero fe-detail__hero--mega fe-detail__hero--step5${p.photoUrl ? ' fe-detail__hero--photo' : ''}${isLive ? ' fe-detail__hero--streaming' : ''}`}
         style={
           p.photoUrl
-            ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(5,5,8,0.88) 100%), url(${p.photoUrl})` }
+            ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(5,5,8,0.92) 100%), url(${p.photoUrl})` }
             : { background: p.gradient }
         }
       >
         {!p.photoUrl ? <span className="fe-detail__hero-mono">{initials(p.name)}</span> : null}
+        {isLive ? (
+          <span className="fe-detail__live-badge" lang="en">
+            LIVE
+          </span>
+        ) : null}
         <div className="fe-detail__hero-text">
-          <p className="fe-detail__eyebrow">Artist</p>
+          {p.genre ? <p className="fe-detail__genre-pill">{p.genre}</p> : null}
+          <p className="fe-detail__eyebrow">{isLive ? 'LIVE STREAM' : 'Artist'}</p>
           <h1 id="fe-detail-title" className="fe-detail__title">
-            {p.name}
+            {p.nameJa}
           </h1>
-          <p className="fe-detail__title-ja">{p.nameJa}</p>
-          <p className="fe-detail__acts">
-            {p.act} · <span lang="en">{p.actJa}</span>
+          <p className="fe-detail__title-en" lang="en">
+            {p.name}
           </p>
+          <p className="fe-detail__acts">
+            {p.country ? `${p.country} · ` : null}
+            {p.actJa} · <span lang="en">{p.act}</span>
+          </p>
+          <p className="fe-detail__tagline">{isLive && p.streamTitle ? p.streamTitle : p.tagline}</p>
         </div>
       </div>
+
+      {streamReady && onWatchStream && onSupportStream ? (
+        <div className="fe-detail-stream-cta" aria-label="ライブ配信">
+          <p className="fe-detail-stream-cta__status">
+            {isLive ? 'いまライブ配信中' : '配信可能なパフォーマーです'}
+          </p>
+          <div className="fe-detail-stream-cta__row">
+            <button type="button" className="fe-detail-stream-cta__watch" onClick={() => onWatchStream(p.id)}>
+              {isLive ? '視聴する' : '配信ページを開く'}
+            </button>
+            <button type="button" className="fe-detail-stream-cta__support" onClick={() => onSupportStream(p.id)}>
+              応援する
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <PerformerDetailVideo performer={p} />
 
       <div className="fe-detail__quick">
         {onOpenMap ? (
@@ -108,9 +139,13 @@ export function PerformerDetailScreen({
             地図
           </button>
         ) : null}
-        {onOpenTips ? (
-          <button type="button" className="fe-detail__qbtn fe-detail__qbtn--gold" onClick={onOpenTips}>
-            投げ銭
+        {streamReady && onSupportStream ? (
+          <button type="button" className="fe-detail__qbtn fe-detail__qbtn--support" onClick={() => onSupportStream(p.id)}>
+            WEB応援
+          </button>
+        ) : onOpenTips ? (
+          <button type="button" className="fe-detail__qbtn fe-detail__qbtn--support" onClick={onOpenTips}>
+            応援
           </button>
         ) : null}
         <button type="button" className="fe-detail__qbtn" onClick={() => void sharePerformer(p)}>
@@ -131,124 +166,104 @@ export function PerformerDetailScreen({
       ) : null}
 
       <main className="fe-detail__main">
-        <section className="fe-detail-block" aria-labelledby="fe-d-today">
-          <h2 id="fe-d-today" className="fe-detail-h">
-            今日の出演
-          </h2>
-          {todaySlots.length ? (
-            <ul className="fe-detail-sch">
-              {todaySlots.map((slot) => (
-                <li key={slot.id} className="fe-detail-sch__row">
-                  <span className="fe-detail-sch__date">
-                    {slot.start}–{slot.end}
-                  </span>
-                  <span className="fe-detail-sch__venue">{slot.stageJa}</span>
-                  <span className={`fe-detail-status fe-detail-status--${slot.status}`}>{statusLabelJa(slot.status)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="fe-detail-muted">本日の枠なし（デモ日付と照合）</p>
-          )}
-        </section>
+        <PerformerDetailSchedule
+          performer={p}
+          todaySlots={todaySlots}
+          allSlots={schedule}
+          onOpenTimetable={onOpenTimetable}
+        />
+        <PerformerDetailProfile performer={p} />
 
-        <section className="fe-detail-block" aria-labelledby="fe-d-bio">
-          <h2 id="fe-d-bio" className="fe-detail-h">
-            プロフィール
-          </h2>
-          <p className="fe-detail-body">{p.bio ?? p.tagline}</p>
-          {p.achievementsDetail ? (
-            <>
-              <h3 className="fe-detail-subh">実績</h3>
-              <p className="fe-detail-body">{p.achievementsDetail}</p>
-            </>
-          ) : null}
-          {p.genre ? (
-            <p className="fe-detail-tags">
-              <span className="fe-chip fe-chip--neon">{p.genre}</span>
-              <span className="fe-chip fe-chip--ghost">{p.locale}</span>
-            </p>
-          ) : null}
-        </section>
-
-        {p.snsList?.length ? (
-          <section className="fe-detail-block" aria-labelledby="fe-d-sns">
-            <h2 id="fe-d-sns" className="fe-detail-h">
-              SNS
-            </h2>
-            <ul className="fe-detail-sns">
-              {p.snsList.map((s) => (
-                <li key={s.url}>
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="fe-detail-sns__a">
-                    {s.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <section className="fe-detail-block" aria-labelledby="fe-d-sch">
-          <div className="fe-detail-block__row">
-            <h2 id="fe-d-sch" className="fe-detail-h">
-              全スケジュール
-            </h2>
-            <button type="button" className="fe-detail-link" onClick={onOpenTimetable}>
-              タイムテーブルへ
+        <section className="fe-detail-cheer" aria-label="応援">
+          <h2 className="fe-detail-cheer__h">ライブ応援（端末内 · デモ）</h2>
+          <p className="fe-detail-cheer__lead">拍手やメッセージは端末内のみ。本格的な応援はWEB投げ銭へ。</p>
+          <div className="fe-detail-cheer__row">
+            <button
+              type="button"
+              className="fe-detail-cheer__btn"
+              onClick={() => {
+                recordCheerMoment({ performerId: p.id, kind: 'clap', at: new Date().toISOString() })
+                setCheerHint('拍手を送りました')
+                window.setTimeout(() => setCheerHint(null), 1600)
+              }}
+            >
+              拍手
+            </button>
+            <button
+              type="button"
+              className="fe-detail-cheer__btn fe-detail-cheer__btn--heart"
+              onClick={() => {
+                recordCheerMoment({ performerId: p.id, kind: 'heart', at: new Date().toISOString() })
+                setCheerHint('ハートを送りました')
+                window.setTimeout(() => setCheerHint(null), 1600)
+              }}
+            >
+              ハート
+            </button>
+            <button
+              type="button"
+              className="fe-detail-cheer__btn"
+              onClick={() => {
+                const text = window.prompt('応援メッセージ（端末内のみ保存）', '')
+                if (text == null || !text.trim()) return
+                recordCheerMoment({ performerId: p.id, kind: 'message', at: new Date().toISOString(), text: text.trim() })
+                setCheerHint('メッセージを届けました')
+                window.setTimeout(() => setCheerHint(null), 1600)
+              }}
+            >
+              メッセージ
+            </button>
+            <button
+              type="button"
+              className={`fe-detail-cheer__btn${watch ? ' fe-detail-cheer__btn--on' : ''}`}
+              onClick={() => setWatch(toggleWatchlist(p.id))}
+            >
+              見たいリスト
             </button>
           </div>
-          {schedule.length ? (
-            <ul className="fe-detail-sch">
-              {schedule.map((slot) => (
-                <li key={slot.id} className="fe-detail-sch__row">
-                  <span className="fe-detail-sch__date">
-                    {slot.date} {slot.start}–{slot.end}
-                  </span>
-                  <span className="fe-detail-sch__venue">{slot.stageJa}</span>
-                  <span className={`fe-detail-status fe-detail-status--${slot.status}`}>{statusLabelJa(slot.status)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="fe-detail-muted">スケジュール未設定（デモ）</p>
-          )}
+          {cheerHint ? <p className="fe-detail-cheer__toast">{cheerHint}</p> : null}
         </section>
 
         <section className="fe-detail-block" aria-labelledby="fe-d-tip">
           <h2 id="fe-d-tip" className="fe-detail-h">
-            投げ銭 · Tips
+            WEB完結投げ銭
           </h2>
-          <p className="fe-detail-lead">PayPay / Stripe / Square / OFUSE など外部リンクから。</p>
-          {tips.length ? (
-            <div className="fe-tip-grid">
-              {tips.map((t) => (
-                <a key={t.id} className="fe-btn fe-btn--gold fe-btn--block" href={t.url} target="_blank" rel="noopener noreferrer">
-                  {t.labelJa}
-                </a>
-              ))}
-            </div>
-          ) : (
-            <p className="fe-detail-muted">リンク未登録（デモ）</p>
-          )}
-        </section>
-
-        {tips.length ? (
-          <section className="fe-detail-aftershow" aria-labelledby="fe-d-after">
-            <div className="fe-detail-aftershow__inner">
-              <h2 id="fe-d-after" className="fe-detail-aftershow__title">
-                感動したら応援
-              </h2>
-              <p className="fe-detail-aftershow__text">演目後のテンションのまま、外部リンクでサポート。</p>
-              <div className="fe-detail-aftershow__row">
-                {tips.map((t) => (
-                  <a key={`after-${t.id}`} className="fe-btn fe-btn--glass fe-btn--compact" href={t.url} target="_blank" rel="noopener noreferrer">
+          <p className="fe-detail-lead">
+            お支払いは外部の安全な決済ページへ。アプリ内課金はありません。合計金額の表示もしません。
+          </p>
+          {streamReady && onSupportStream ? (
+            <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={() => onSupportStream(p.id)}>
+              配信画面で応援する
+            </button>
+          ) : null}
+          {supportUrl ? (
+            <div className="fe-tip-grid" style={{ marginTop: streamReady ? 10 : 0 }}>
+              <a
+                className="fe-btn fe-btn--glass fe-btn--block fe-btn--support-primary"
+                href={supportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                外部サイトで応援する
+              </a>
+              {tips
+                .filter((t) => t.url !== supportUrl)
+                .map((t) => (
+                  <a
+                    key={t.id}
+                    className="fe-btn fe-btn--glass fe-btn--block"
+                    href={t.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {t.labelJa}
                   </a>
                 ))}
-              </div>
             </div>
-          </section>
-        ) : null}
+          ) : (
+            <p className="fe-detail-muted">投げ銭リンク未登録（デモ）</p>
+          )}
+        </section>
       </main>
     </div>
   )

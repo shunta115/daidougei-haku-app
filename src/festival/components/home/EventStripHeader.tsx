@@ -2,7 +2,6 @@ type EventStripHeaderProps = {
   onShare: () => void
 }
 
-/** LP的ヒーローを避け、ネイティブ風の極薄ヘッダ */
 export function EventStripHeader({ onShare }: EventStripHeaderProps) {
   return (
     <header className="fe-strip">

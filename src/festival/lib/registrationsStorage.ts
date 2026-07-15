@@ -2,19 +2,31 @@ import type { EditableRegistrationFields, PerformerRegistration, RegistrationSta
 
 const STORAGE_KEY = 'daidougei-haku-performer-registrations-v1'
 
+function normalizeRow(row: PerformerRegistration): PerformerRegistration {
+  return {
+    ...row,
+    preferredStage: typeof row.preferredStage === 'string' ? row.preferredStage : '',
+    activityBase: typeof row.activityBase === 'string' ? row.activityBase : '',
+    videoUrl: typeof row.videoUrl === 'string' ? row.videoUrl : '',
+    staffNote: typeof row.staffNote === 'string' ? row.staffNote : '',
+  }
+}
+
 function safeParse(raw: string | null): PerformerRegistration[] {
   if (!raw) return []
   try {
     const data = JSON.parse(raw) as unknown
     if (!Array.isArray(data)) return []
-    return data.filter((row): row is PerformerRegistration => {
-      return (
-        typeof row === 'object' &&
-        row !== null &&
-        typeof (row as PerformerRegistration).id === 'string' &&
-        typeof (row as PerformerRegistration).artistName === 'string'
-      )
-    })
+    return data
+      .filter((row): row is PerformerRegistration => {
+        return (
+          typeof row === 'object' &&
+          row !== null &&
+          typeof (row as PerformerRegistration).id === 'string' &&
+          typeof (row as PerformerRegistration).artistName === 'string'
+        )
+      })
+      .map(normalizeRow)
   } catch {
     return []
   }
@@ -124,6 +136,10 @@ export function registrationToEditable(r: PerformerRegistration): EditableRegist
     photoUrl: r.photoUrl,
     tipUrl: r.tipUrl,
     preferredDates: r.preferredDates,
+    preferredStage: r.preferredStage ?? '',
+    activityBase: r.activityBase ?? '',
+    videoUrl: r.videoUrl ?? '',
+    staffNote: r.staffNote ?? '',
     notes: r.notes,
   }
 }

@@ -12,7 +12,7 @@ export function HomeAudiencePortals({ onScrollTips }: HomeAudiencePortalsProps) 
         <div className="fe-portals__card fe-portals__card--primary">
           <p className="fe-portals__label">来場者向け</p>
           <p className="fe-portals__title">Guest</p>
-          <p className="fe-portals__desc">ログイン不要。タイムテーブル・マップ・お気に入り・投げ銭導線までこのままご利用ください。</p>
+          <p className="fe-portals__desc">ログイン不要。タイムテーブル・マップ・お気に入り・応援までこのままご利用ください。</p>
           <button type="button" className="fe-portals__mini" onClick={onScrollTips}>
             フェスを楽しむヒント
           </button>

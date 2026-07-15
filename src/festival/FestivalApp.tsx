@@ -1,35 +1,28 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import './festival.css'
-import { AdminRegistrationsScreen } from './components/AdminRegistrationsScreen'
-import { ExperienceSection } from './components/ExperienceSection'
+import { AdminDashboardScreen } from './components/AdminDashboardScreen'
 import { FestivalBackground } from './components/FestivalBackground'
-import { EventStripHeader } from './components/home/EventStripHeader'
-import { FirstVisitGuideSection } from './components/home/FirstVisitGuideSection'
-import { ForYouSection } from './components/home/ForYouSection'
-import { FutureRoadmapSection } from './components/home/FutureRoadmapSection'
-import { HomeAudiencePortals } from './components/home/HomeAudiencePortals'
-import { HomeTipsTeaser } from './components/home/HomeTipsTeaser'
-import { HomeOfficialEntry } from './components/home/HomeOfficialEntry'
-import { NowCommandDashboard } from './components/home/NowCommandDashboard'
-import { TodaysPicksSection } from './components/home/TodaysPicksSection'
-import { LiveNextSection } from './components/LiveNextSection'
 import { PerformerBottomNav } from './components/performer/PerformerBottomNav'
 import { PerformerHubScreen } from './components/performer/PerformerHubScreen'
-import { PerformerSocialCard } from './components/PerformerSocialCard'
+import { MyRegistrationsListScreen } from './components/MyRegistrationsListScreen'
 import { RegisterCompleteScreen } from './components/RegisterCompleteScreen'
 import { RegisterFormScreen } from './components/RegisterFormScreen'
-import { Reveal } from './components/Reveal'
-import { SpotlightSection } from './components/SpotlightSection'
 import { TopBar } from './components/TopBar'
-import { TrendingSection } from './components/TrendingSection'
-import { LibraryScreen } from './components/visitor/LibraryScreen'
+import { HomeScreen } from './components/home/HomeScreen'
 import { MapScreen } from './components/visitor/MapScreen'
+import { OshiListScreen } from './components/visitor/OshiListScreen'
 import { PerformerDetailScreen } from './components/visitor/PerformerDetailScreen'
+import { PerformerListScreen } from './components/visitor/performer/PerformerListScreen'
 import { TimetableScreen } from './components/visitor/TimetableScreen'
 import { TipsScreen } from './components/visitor/TipsScreen'
 import { VisitorBottomNav } from './components/visitor/VisitorBottomNav'
 import { VisitorFab, VisitorQuickSheet } from './components/visitor/VisitorQuickSheet'
-import { HOT_RANK_IDS, PERFORMERS, SPOTLIGHT_IDS, TODAYS_PICK_IDS, performerById } from './data'
+import { SPOTLIGHT_IDS, TODAYS_PICK_IDS, performerById } from './data'
+import { getPerformerById, getPerformers, liveStreamPerformers, approvedStreamers } from './lib/performerCatalog'
+import { seedStreamApplicationsIfEmpty } from './lib/streamApplicationsStorage'
+import { LiveStreamScreen } from './components/stream/LiveStreamScreen'
+import { StreamPerformerRegisterScreen } from './components/stream/StreamPerformerRegisterScreen'
+import { StreamPerformerRegisterCompleteScreen } from './components/stream/StreamPerformerRegisterCompleteScreen'
 import { getDemoNow } from './lib/demoClock'
 import { readFavorites, toggleFavorite } from './lib/favoritesStorage'
 import { bumpXp } from './lib/gamificationStorage'
@@ -56,10 +49,21 @@ export function FestivalApp() {
   const [lastSubmittedRegId, setLastSubmittedRegId] = useState<string | null>(null)
   const [registerEditId, setRegisterEditId] = useState<string | null>(null)
   const [performerEntryFromVisitor, setPerformerEntryFromVisitor] = useState(false)
+  /** 登録フォームの「戻る」先（一覧から開いた場合は一覧へ） */
+  const [registerBackToList, setRegisterBackToList] = useState(false)
+  const [liveStreamId, setLiveStreamId] = useState<string | null>(null)
+  const [streamOpenFocusTip, setStreamOpenFocusTip] = useState(false)
+  const performers = getPerformers()
 
-  const { live, next } = buildMarkedPulses(PERFORMERS)
-  const liveArtist = live ? performerById(live.performerId) : undefined
-  const nextArtist = next ? performerById(next.performerId) : undefined
+  useEffect(() => {
+    seedStreamApplicationsIfEmpty()
+  }, [])
+
+  const { live, next } = buildMarkedPulses(performers)
+  const liveArtist = live ? getPerformerById(live.performerId) : undefined
+  const nextArtist = next ? getPerformerById(next.performerId) : undefined
+  const liveStreamers = liveStreamPerformers()
+  const upcomingStreamers = approvedStreamers().filter((p) => !p.isLive)
   const hotVenue = hotVenueForDashboard()
   const goVenueId = live?.venueId ?? next?.venueId ?? hotVenue.id
 
@@ -67,8 +71,25 @@ export function FestivalApp() {
   const bumpGame = useCallback(() => setGamificationTick((n) => n + 1), [])
 
   const openDetail = useCallback((id: string) => {
-    if (!performerById(id)) return
+    if (!getPerformerById(id)) return
     setDetailId(id)
+  }, [])
+
+  const openLiveStream = useCallback((id: string, focusTip = false) => {
+    const p = getPerformerById(id)
+    if (!p?.canStream || p.approvalStatus !== 'approved') return
+    setDetailId(null)
+    setStreamOpenFocusTip(focusTip)
+    setLiveStreamId(id)
+    window.history.replaceState(null, '', `#live-${id}`)
+  }, [])
+
+  const closeLiveStream = useCallback(() => {
+    setLiveStreamId(null)
+    setStreamOpenFocusTip(false)
+    if (window.location.hash.startsWith('#live-')) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
   }, [])
 
   const closeDetail = useCallback(() => {
@@ -100,6 +121,21 @@ export function FestivalApp() {
 
   useEffect(() => {
     const syncHash = () => {
+      const liveMatch = window.location.hash.match(/^#live-(.+)$/)
+      const liveId = liveMatch?.[1]
+      if (liveId && getPerformerById(liveId)) {
+        writeAppPersona('visitor')
+        setPersonaState('visitor')
+        setVisitorTab('home')
+        setDetailId(null)
+        const p = getPerformerById(liveId)
+        if (p?.canStream && p.approvalStatus === 'approved') {
+          setStreamOpenFocusTip(false)
+          setLiveStreamId(liveId)
+        }
+        return
+      }
+
       const m = window.location.hash.match(/^#artist-(.+)$/)
       const id = m?.[1]
       if (id && performerById(id)) {
@@ -120,9 +156,12 @@ export function FestivalApp() {
     setVisitorTab('home')
     setPerformerFlow('hub')
     setDetailId(null)
+    setLiveStreamId(null)
+    setStreamOpenFocusTip(false)
     setRegisterEditId(null)
     setLastSubmittedRegId(null)
     setPerformerEntryFromVisitor(false)
+    setRegisterBackToList(false)
   }, [])
 
   const goVisitorBrowseActs = useCallback(() => {
@@ -131,13 +170,11 @@ export function FestivalApp() {
     setVisitorTab('performers')
   }, [])
 
-  const openPerformerRegisterFromVisitor = useCallback(() => {
+  const openStreamRegisterFromVisitor = useCallback(() => {
     setPerformerEntryFromVisitor(true)
-    setRegisterEditId(null)
-    setLastSubmittedRegId(null)
     writeAppPersona('performer')
     setPersonaState('performer')
-    setPerformerFlow('register')
+    setPerformerFlow('streamRegister')
   }, [])
 
   const enterAdminPortal = useCallback(() => {
@@ -151,135 +188,86 @@ export function FestivalApp() {
     setPerformerFlow('registerComplete')
   }, [])
 
-  const scrollTips = useCallback(() => {
-    document.getElementById('fe-xp-anchor')?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
+  const spotlight = SPOTLIGHT_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
+  const todaysPicks = TODAYS_PICK_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
+  const primePicksForHome = [...spotlight, ...todaysPicks]
+    .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
+    .slice(0, 4)
 
-  const spotlight = SPOTLIGHT_IDS.map((id) => performerById(id)).filter(Boolean) as typeof PERFORMERS
-  const trending = HOT_RANK_IDS.map((id) => performerById(id)).filter(Boolean) as typeof PERFORMERS
-  const todaysPicks = TODAYS_PICK_IDS.map((id) => performerById(id)).filter(Boolean) as typeof PERFORMERS
-
-  const favoriteIds = readFavorites()
-
-  const idsForYou = readFavorites()
-  const forYouFavs = PERFORMERS.filter((p) => idsForYou.includes(p.id))
-  const forYouRec = PERFORMERS.filter((p) => !idsForYou.includes(p.id))
-    .sort((a, b) => b.heat - a.heat)
-    .slice(0, 3)
-
-  const detailPerformer = detailId ? performerById(detailId) : undefined
-
-  const toggleNextFavorite = useCallback(() => {
-    if (!nextArtist) return
-    const was = readFavorites().includes(nextArtist.id)
-    toggleFavorite(nextArtist.id)
-    if (!was) bumpXp(5)
-    bumpFav()
-  }, [nextArtist, bumpFav])
+  const detailPerformer = detailId ? getPerformerById(detailId) : undefined
+  const liveStreamPerformer = liveStreamId ? getPerformerById(liveStreamId) : undefined
 
   const renderVisitorBody = (): ReactNode => {
     switch (visitorTab) {
       case 'home':
         return (
-          <main className="fe-main fe-main--home fe-main--dashhome">
-            <EventStripHeader onShare={() => void shareFestival()} />
-            <HomeOfficialEntry onPerformerRegister={openPerformerRegisterFromVisitor} onAdmin={enterAdminPortal} />
-            <NowCommandDashboard
-              live={live}
-              next={next}
-              livePerformer={liveArtist}
-              nextPerformer={nextArtist}
-              hotVenue={hotVenue}
-              goVenueId={goVenueId}
-              xpTick={gamificationTick}
-              onStamp={bumpGame}
-              onGoNow={() => {
-                setMapFocusVenueId(goVenueId)
-                setVisitorTab('map')
-              }}
-              onOpenMap={() => setVisitorTab('map')}
-              onOpenTips={() => setVisitorTab('tips')}
-              onOpenTimetable={() => setVisitorTab('timetable')}
-              onToggleNextFavorite={toggleNextFavorite}
-              nextIsFavorite={nextArtist ? favoriteIds.includes(nextArtist.id) : false}
-              onOpenNextDetail={() => {
-                if (nextArtist) openDetail(nextArtist.id)
-              }}
-            />
-            <HomeAudiencePortals onScrollTips={scrollTips} />
-            <Reveal>
-              <HomeTipsTeaser onOpenLibrary={() => setVisitorTab('library')} />
-            </Reveal>
-            <Reveal>
-              <LiveNextSection live={live} next={next} livePerformer={liveArtist} nextPerformer={nextArtist} />
-            </Reveal>
-            <Reveal>
-              <TodaysPicksSection performers={todaysPicks} onOpen={openDetail} />
-            </Reveal>
-            <Reveal>
-              <SpotlightSection performers={spotlight} onOpenPerformer={openDetail} />
-            </Reveal>
-            <Reveal>
-              <ForYouSection favorites={forYouFavs} recommended={forYouRec} onOpen={openDetail} />
-            </Reveal>
-            <Reveal>
-              <TrendingSection performers={trending} onOpenPerformer={openDetail} />
-            </Reveal>
-            <Reveal>
-              <FirstVisitGuideSection />
-            </Reveal>
-            <Reveal>
-              <ExperienceSection />
-            </Reveal>
-            <Reveal>
-              <FutureRoadmapSection />
-            </Reveal>
-          </main>
+          <HomeScreen
+            liveStreamers={liveStreamers}
+            upcomingStreamers={upcomingStreamers}
+            live={live}
+            next={next}
+            livePerformer={liveArtist}
+            nextPerformer={nextArtist}
+            pickPerformers={primePicksForHome}
+            hotVenue={hotVenue}
+            goVenueId={goVenueId}
+            onWatchStream={(id) => openLiveStream(id, false)}
+            onSupportStream={(id) => openLiveStream(id, true)}
+            onOpenDetail={openDetail}
+            onOpenMap={() => setVisitorTab('map')}
+            onNearShows={() => {
+              setMapFocusVenueId(goVenueId)
+              setVisitorTab('map')
+            }}
+            onOpenTimetable={() => setVisitorTab('timetable')}
+            onOpenOshi={() => setVisitorTab('oshi')}
+            onShare={() => void shareFestival()}
+            onStreamRegister={openStreamRegisterFromVisitor}
+            onAdmin={enterAdminPortal}
+          />
         )
       case 'performers':
         return (
-          <main className="fe-main fe-main--list">
-            <header className="fe-list-hero">
-              <p className="fe-list-hero__eyebrow">Official roster</p>
-              <h1 className="fe-list-hero__title">Artists</h1>
-              <p className="fe-list-hero__sub">下段からワンタップ · カード本文で詳細</p>
-            </header>
-            <div className="fe-list-stack">
-              {PERFORMERS.map((p, i) => (
-                <Reveal key={p.id}>
-                  <PerformerSocialCard
-                    performer={p}
-                    index={i}
-                    favoritesEnabled
-                    favorite={favoriteIds.includes(p.id)}
-                    onOpenDetail={(x) => openDetail(x.id)}
-                    onQuickGo={focusMapForPerformer}
-                    onQuickMap={focusMapForPerformer}
-                    onQuickTips={() => {
-                      setVisitorTab('tips')
-                      bumpGame()
-                    }}
-                    onToggleFavorite={() => {
-                      const was = readFavorites().includes(p.id)
-                      toggleFavorite(p.id)
-                      if (!was) bumpXp(4)
-                      bumpFav()
-                    }}
-                  />
-                </Reveal>
-              ))}
-            </div>
-          </main>
+          <PerformerListScreen
+            performers={performers}
+            favTick={favTick}
+            onOpenDetail={openDetail}
+            onWatchStream={(id) => openLiveStream(id, false)}
+            onSupportStream={(id) => openLiveStream(id, true)}
+            onToggleFavorite={(id) => {
+              const was = readFavorites().includes(id)
+              toggleFavorite(id)
+              if (!was) bumpXp(4)
+              bumpFav()
+            }}
+          />
         )
       case 'timetable':
-        return <TimetableScreen favTick={favTick} />
+        return (
+          <TimetableScreen favTick={favTick} onOpenDetail={openDetail} onFavChange={bumpFav} />
+        )
       case 'map':
         return <MapScreen focusVenueId={mapFocusVenueId} onConsumedFocus={consumeMapFocus} />
       case 'tips':
-        return <TipsScreen performers={PERFORMERS} onOpenPerformer={openDetail} onXpBump={bumpGame} />
-      case 'library':
         return (
-          <LibraryScreen performers={PERFORMERS} favTick={favTick} onFavoritesChange={bumpFav} onOpenPerformer={openDetail} />
+          <TipsScreen
+            performers={performers}
+            onOpenPerformer={openDetail}
+            onXpBump={bumpGame}
+            onWatchStream={(id) => openLiveStream(id, false)}
+            onSupportStream={(id) => openLiveStream(id, true)}
+          />
+        )
+      case 'oshi':
+        return (
+          <OshiListScreen
+            performers={performers}
+            favTick={favTick}
+            onFavoritesChange={bumpFav}
+            onOpenPerformer={openDetail}
+            onWatchStream={(id) => openLiveStream(id, false)}
+            onSupportStream={(id) => openLiveStream(id, true)}
+          />
         )
       default:
         return null
@@ -291,12 +279,62 @@ export function FestivalApp() {
       case 'hub':
         return (
           <PerformerHubScreen
+            onOpenStreamRegister={() => {
+              setPerformerEntryFromVisitor(false)
+              setPerformerFlow('streamRegister')
+            }}
             onOpenEntry={() => {
               setPerformerEntryFromVisitor(false)
+              setRegisterBackToList(false)
               setRegisterEditId(null)
               setPerformerFlow('register')
             }}
+            onOpenList={() => setPerformerFlow('myRegistrations')}
             onBrowseActs={goVisitorBrowseActs}
+          />
+        )
+      case 'streamRegister':
+        return (
+          <StreamPerformerRegisterScreen
+            onSuccess={() => setPerformerFlow('streamRegisterComplete')}
+            onBack={() => {
+              if (performerEntryFromVisitor) {
+                writeAppPersona('visitor')
+                setPersonaState('visitor')
+                setVisitorTab('home')
+                setPerformerEntryFromVisitor(false)
+                setPerformerFlow('hub')
+              } else {
+                setPerformerFlow('hub')
+              }
+            }}
+          />
+        )
+      case 'streamRegisterComplete':
+        return (
+          <StreamPerformerRegisterCompleteScreen
+            fromVisitor={performerEntryFromVisitor}
+            onBackHub={() => {
+              if (performerEntryFromVisitor) {
+                writeAppPersona('visitor')
+                setPersonaState('visitor')
+                setVisitorTab('home')
+                setPerformerEntryFromVisitor(false)
+              }
+              setPerformerFlow('hub')
+            }}
+          />
+        )
+      case 'myRegistrations':
+        return (
+          <MyRegistrationsListScreen
+            onBack={() => setPerformerFlow('hub')}
+            onNewRegistration={() => {
+              setRegisterEditId(null)
+              setLastSubmittedRegId(null)
+              setRegisterBackToList(true)
+              setPerformerFlow('register')
+            }}
           />
         )
       case 'register':
@@ -311,6 +349,10 @@ export function FestivalApp() {
                 writeAppPersona('visitor')
                 setPersonaState('visitor')
                 setVisitorTab('home')
+                setRegisterBackToList(false)
+              } else if (registerBackToList) {
+                setRegisterBackToList(false)
+                setPerformerFlow('myRegistrations')
               } else {
                 setPerformerFlow('hub')
               }
@@ -320,6 +362,7 @@ export function FestivalApp() {
       case 'registerComplete':
         return (
           <RegisterCompleteScreen
+            onViewList={() => setPerformerFlow('myRegistrations')}
             onTop={() => {
               writeAppPersona('visitor')
               setPersonaState('visitor')
@@ -328,8 +371,10 @@ export function FestivalApp() {
               setLastSubmittedRegId(null)
               setRegisterEditId(null)
               setPerformerEntryFromVisitor(false)
+              setRegisterBackToList(false)
             }}
             onReEdit={() => {
+              setRegisterBackToList(false)
               if (lastSubmittedRegId) setRegisterEditId(lastSubmittedRegId)
               setPerformerFlow('register')
             }}
@@ -340,7 +385,7 @@ export function FestivalApp() {
     }
   }
 
-  const rootClass = `fe-root fe-root--${persona}`
+  const rootClass = `fe-root fe-root--${persona}${persona === 'visitor' && visitorTab === 'home' ? ' fe-root--visitor-home' : ''}`
 
   return (
     <div className={rootClass} lang="ja">
@@ -378,8 +423,17 @@ export function FestivalApp() {
                     closeDetail()
                     focusMapForPerformer(detailPerformer)
                   }}
+                  onWatchStream={(id) => openLiveStream(id, false)}
+                  onSupportStream={(id) => openLiveStream(id, true)}
                 />
               </div>
+            ) : null}
+            {liveStreamPerformer ? (
+              <LiveStreamScreen
+                performer={liveStreamPerformer}
+                focusTipOnMount={streamOpenFocusTip}
+                onClose={closeLiveStream}
+              />
             ) : null}
           </>
         ) : null}
@@ -393,9 +447,11 @@ export function FestivalApp() {
               onHub={() => setPerformerFlow('hub')}
               onEntry={() => {
                 setPerformerEntryFromVisitor(false)
+                setRegisterBackToList(false)
                 setRegisterEditId(null)
                 setPerformerFlow('register')
               }}
+              onList={() => setPerformerFlow('myRegistrations')}
             />
           </>
         ) : null}
@@ -403,7 +459,7 @@ export function FestivalApp() {
         {persona === 'admin' ? (
           <>
             <TopBar persona="admin" onExitPerformerOrAdmin={goVisitorHome} />
-            <AdminRegistrationsScreen onExit={goVisitorHome} />
+            <AdminDashboardScreen onExit={goVisitorHome} />
           </>
         ) : null}
       </div>

@@ -1,6 +1,8 @@
 import type { Performer } from './types'
 import { TODAYS_PICK_IDS as SCHEDULE_TODAY_PICKS } from './data/scheduleData'
 
+const WEB_TIP_BASE = 'https://checkout.stripe.com/c/pay/demo'
+
 export const PERFORMERS: Performer[] = [
   {
     id: '1',
@@ -11,12 +13,18 @@ export const PERFORMERS: Performer[] = [
     tagline: 'Classical lines, neon nights.',
     gradient: 'linear-gradient(145deg, #0b1020 0%, #2a1f4a 38%, #c9a227 62%, #00e8c8 100%)',
     locale: 'Tokyo',
+    country: '日本 · 東京',
     likes: 12800,
     saves: 2400,
     heat: 98,
     genre: '音楽 × 空中',
+    approvalStatus: 'approved',
+    canStream: true,
+    isLive: true,
+    streamTitle: '夜空のヴァイオリン · ライブ from Tokyo',
+    supportUrl: `${WEB_TIP_BASE}?artist=luna`,
     photoUrl: 'https://picsum.photos/seed/daidougei-luna/720/900',
-    bio: 'クラシックの骨格に、ネオンとストリートの呼吸を重ねたデュオ。ヴァイオリンと空中動線で「歩道が劇場になる」瞬間をつくります。',
+    bio: 'クラシックの骨格に、ネオンとストリートの呼吸を重ねたデュオ。世界中から配信で「歩道が劇場になる」瞬間を届けます。',
     achievementsDetail:
       '海外ストリートフェス出演多数 / 横浜開港記念イベント メインアクト / 配信ライブ累計 120 万再生（デモ数値）',
     snsList: [
@@ -24,9 +32,7 @@ export const PERFORMERS: Performer[] = [
       { label: 'YouTube', url: 'https://youtube.com' },
     ],
     tipLinks: [
-      { id: 't1', label: 'PayPay', labelJa: 'PayPay', url: 'https://paypay.ne.jp', kind: 'paypay' },
-      { id: 't2', label: 'Stripe', labelJa: 'Stripe', url: 'https://stripe.com', kind: 'stripe' },
-      { id: 't3', label: 'OFUSE', labelJa: 'OFUSE', url: 'https://ofuse.io', kind: 'ofuse' },
+      { id: 't1', label: 'WEB投げ銭', labelJa: 'WEB投げ銭', url: `${WEB_TIP_BASE}?artist=luna`, kind: 'stripe' },
     ],
   },
   {
@@ -38,20 +44,26 @@ export const PERFORMERS: Performer[] = [
     tagline: 'Controlled chaos on the plaza.',
     gradient: 'linear-gradient(145deg, #120801 0%, #3a1200 40%, #ff6b00 68%, #ffd700 100%)',
     locale: 'Osaka',
+    country: '日本 · 大阪',
     likes: 18400,
     saves: 5100,
     heat: 100,
     genre: 'ファイア / ダンス',
+    approvalStatus: 'approved',
+    canStream: true,
+    isLive: true,
+    streamTitle: 'Fire Circle LIVE · Osaka Night Session',
+    supportUrl: `${WEB_TIP_BASE}?artist=kairo`,
+    introVideoUrl: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     photoUrl: 'https://picsum.photos/seed/daidougei-kairo/720/900',
-    bio: '炎の輪と身体のリズムで広場の空気を一気に沸かすチーム。安全設計とドラマ性の両立を最優先にしています。',
-    achievementsDetail: '大阪・関西万博関連イベント（デモ） / ナイトマーケット常連ヘッドライナー / 消防協力公演モデルケース',
+    bio: '炎の輪と身体のリズムで広場の空気を一気に沸かすチーム。グローバル配信で熱量をそのまま届けます。',
+    achievementsDetail: '大阪・関西万博関連イベント（デモ） / ナイトマーケット常連ヘッドライナー',
     snsList: [
-      { label: 'TikTok', url: 'https://tiktok.com' },
+      { label: 'Clips', url: 'https://tiktok.com' },
       { label: 'X', url: 'https://x.com' },
     ],
     tipLinks: [
-      { id: 't1', label: 'Square', labelJa: 'Square', url: 'https://squareup.com', kind: 'square' },
-      { id: 't2', label: 'Custom', labelJa: '公式投げ銭', url: 'https://example.com/tip-kairo', kind: 'other' },
+      { id: 't1', label: 'WEB投げ銭', labelJa: 'WEB投げ銭', url: `${WEB_TIP_BASE}?artist=kairo`, kind: 'stripe' },
     ],
   },
   {
@@ -63,15 +75,21 @@ export const PERFORMERS: Performer[] = [
     tagline: 'No words, full signal.',
     gradient: 'linear-gradient(145deg, #0a0a0a 0%, #2a2a2a 45%, #cfcfcf 70%, #7b68ee 100%)',
     locale: 'Paris × Nagoya',
+    country: 'フランス · パリ × 日本',
     likes: 9200,
     saves: 3100,
     heat: 91,
     genre: 'マイム / サイレント',
+    approvalStatus: 'approved',
+    canStream: true,
+    isLive: false,
+    streamTitle: 'Silent Stories — 次回配信予告',
+    supportUrl: `${WEB_TIP_BASE}?artist=mime`,
     photoUrl: 'https://picsum.photos/seed/daidougei-mime/720/900',
-    bio: '言葉を使わずに物語を立ち上げる実験室。オブジェと光のコントラストで、子どもから観光客まで幅広く届きます。',
-    achievementsDetail: 'アヴィニョンオフ（デモ表記） / 名古屋クラフトフェス招待 / サイレントシアター教材監修',
+    bio: '言葉を使わずに物語を立ち上げる実験室。配信では光とオブジェの静かなドラマを届けます。',
+    achievementsDetail: 'アヴィニョンオフ（デモ表記） / 名古屋クラフトフェス招待',
     snsList: [{ label: 'Instagram', url: 'https://instagram.com' }],
-    tipLinks: [{ id: 't1', label: 'Ko-fi', labelJa: 'Ko-fi', url: 'https://ko-fi.com', kind: 'other' }],
+    tipLinks: [{ id: 't1', label: 'WEB投げ銭', labelJa: 'WEB投げ銭', url: `${WEB_TIP_BASE}?artist=mime`, kind: 'other' }],
   },
   {
     id: '4',
@@ -82,18 +100,21 @@ export const PERFORMERS: Performer[] = [
     tagline: 'Crystal orbits in slow motion.',
     gradient: 'linear-gradient(145deg, #000510 0%, #003a4a 48%, #00d4ff 78%, #c9a227 100%)',
     locale: 'Sapporo',
+    country: '日本 · 札幌',
     likes: 7600,
     saves: 1800,
     heat: 87,
     genre: 'ジャグリング',
+    approvalStatus: 'approved',
+    canStream: true,
+    isLive: false,
+    streamTitle: 'Crystal Orbit — 配信準備中',
+    supportUrl: `${WEB_TIP_BASE}?artist=orbit`,
     photoUrl: 'https://picsum.photos/seed/daidougei-orbit/720/900',
-    bio: '透明球体の軌道が夕暮れの空と重なる。スローモーションの美学と、歓声が乗るテンポ設計が得意です。',
+    bio: '透明球体の軌道が夕暮れの空と重なる。スローモーションの美学を配信でも。',
     achievementsDetail: '雪まつりストリート部門（デモ） / コンタクト専門ワークショップ全国ツアー',
     snsList: [{ label: 'YouTube', url: 'https://youtube.com' }],
-    tipLinks: [
-      { id: 't1', label: 'PayPal', labelJa: 'PayPal', url: 'https://paypal.com', kind: 'other' },
-      { id: 't2', label: 'Stripe', labelJa: 'Stripe', url: 'https://stripe.com', kind: 'stripe' },
-    ],
+    tipLinks: [{ id: 't1', label: 'WEB投げ銭', labelJa: 'WEB投げ銭', url: `${WEB_TIP_BASE}?artist=orbit`, kind: 'other' }],
   },
   {
     id: '5',
@@ -104,32 +125,34 @@ export const PERFORMERS: Performer[] = [
     tagline: 'Human architecture, velvet light.',
     gradient: 'linear-gradient(145deg, #14081f 0%, #4a1538 42%, #d4af37 72%, #ff2fb3 100%)',
     locale: 'Yokohama',
+    country: '日本 · 横浜',
     likes: 15300,
     saves: 4200,
     heat: 95,
     genre: 'アクロバット',
+    approvalStatus: 'pending',
+    canStream: false,
+    isLive: false,
+    streamTitle: '審査通過後に配信開始',
+    supportUrl: `${WEB_TIP_BASE}?artist=velvet`,
     photoUrl: 'https://picsum.photos/seed/daidougei-velvet/720/900',
-    bio: '二人で組み上げる「人間の建築」。ベルベットの照明と金のラインが、みなとみらいの夜景と相性抜群です。',
-    achievementsDetail: '横浜赤レンガストリート常連 / 企業キックオフ演出多数 / TV バラエティ出演（デモ）',
+    bio: '二人で組み上げる「人間の建築」。配信審査通過後、世界中のファンへ届けます。',
+    achievementsDetail: '横浜赤レンガストリート常連 / 企業キックオフ演出多数',
     snsList: [
       { label: 'Instagram', url: 'https://instagram.com' },
-      { label: 'TikTok', url: 'https://tiktok.com' },
+      { label: 'Clips', url: 'https://tiktok.com' },
     ],
-    tipLinks: [
-      { id: 't1', label: 'OFUSE', labelJa: 'OFUSE', url: 'https://ofuse.io', kind: 'ofuse' },
-      { id: 't2', label: 'PayPay', labelJa: 'PayPay', url: 'https://paypay.ne.jp', kind: 'paypay' },
-    ],
+    tipLinks: [{ id: 't1', label: 'WEB投げ銭', labelJa: 'WEB投げ銭', url: `${WEB_TIP_BASE}?artist=velvet`, kind: 'ofuse' }],
   },
 ]
 
-/** 本日のおすすめ（ダミー選定） */
 export const TODAYS_PICK_IDS: string[] = [...SCHEDULE_TODAY_PICKS]
 
 export const SPOTLIGHT_IDS = ['1', '5', '3'] as const
 
-/** 人気ランキング用（heat 降順で並べ替えた ID） */
 export const HOT_RANK_IDS = [...PERFORMERS].sort((a, b) => b.heat - a.heat).map((p) => p.id)
 
+/** @deprecated 静的ID参照 — 配信状態は getPerformerById を推奨 */
 export function performerById(id: string) {
   return PERFORMERS.find((p) => p.id === id)
 }

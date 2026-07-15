@@ -26,18 +26,16 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
   const consumedFocusRef = useRef<string | null>(null)
   const [userVenueId, setUserVenueId] = useState<string | null>(null)
   const [stickyOpenId, setStickyOpenId] = useState<string | null>(null)
-  const [syncedFocusKey, setSyncedFocusKey] = useState<string | null>(null)
   const today = demoTodayDateString()
 
   const validFocus =
     focusVenueId && VENUE_AREAS.some((v) => v.id === focusVenueId) ? focusVenueId : null
 
-  if (validFocus !== syncedFocusKey) {
-    setSyncedFocusKey(validFocus)
+  useEffect(() => {
     if (validFocus) {
       setStickyOpenId(validFocus)
     }
-  }
+  }, [validFocus])
 
   const openVenueId = validFocus ?? userVenueId ?? stickyOpenId
 
@@ -83,7 +81,6 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
   const closeSheet = () => {
     setUserVenueId(null)
     setStickyOpenId(null)
-    setSyncedFocusKey(null)
   }
 
   return (

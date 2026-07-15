@@ -33,6 +33,7 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         email: v.email.trim(),
         phone: v.phone.trim(),
         genre: v.genre.trim(),
+        activityBase: v.activityBase.trim(),
         profile: v.profile.trim(),
         achievements: v.achievements.trim(),
         snsUrl: v.snsUrl.trim(),
@@ -40,6 +41,9 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         photoUrl: v.photoUrl.trim(),
         tipUrl: v.tipUrl.trim(),
         preferredDates: v.preferredDates.trim(),
+        preferredStage: v.preferredStage.trim(),
+        videoUrl: v.videoUrl.trim(),
+        staffNote: v.staffNote.trim(),
         notes: v.notes.trim(),
       })
     },
@@ -67,6 +71,10 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         <input className="fe-input" type="tel" value={v.phone} onChange={patch('phone')} />
       </label>
       <label className="fe-field">
+        <span className="fe-label">活動拠点</span>
+        <input className="fe-input" value={v.activityBase} onChange={patch('activityBase')} />
+      </label>
+      <label className="fe-field">
         <span className="fe-label">ジャンル</span>
         <input className="fe-input" value={v.genre} onChange={patch('genre')} required />
       </label>
@@ -75,7 +83,7 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         <textarea className="fe-textarea" rows={4} value={v.profile} onChange={patch('profile')} required />
       </label>
       <label className="fe-field">
-        <span className="fe-label">主な実績</span>
+        <span className="fe-label">過去出演歴</span>
         <textarea className="fe-textarea" rows={3} value={v.achievements} onChange={patch('achievements')} />
       </label>
       <label className="fe-field">
@@ -91,12 +99,24 @@ export function RegistrationEditForm({ initial, onSave, onCancel }: Registration
         <input className="fe-input" type="url" value={v.photoUrl} onChange={patch('photoUrl')} />
       </label>
       <label className="fe-field">
-        <span className="fe-label">投げ銭</span>
+        <span className="fe-label">動画URL</span>
+        <input className="fe-input" type="url" value={v.videoUrl} onChange={patch('videoUrl')} />
+      </label>
+      <label className="fe-field">
+        <span className="fe-label">サポートURL</span>
         <input className="fe-input" type="url" value={v.tipUrl} onChange={patch('tipUrl')} />
       </label>
       <label className="fe-field">
         <span className="fe-label">出演希望日</span>
         <textarea className="fe-textarea" rows={2} value={v.preferredDates} onChange={patch('preferredDates')} />
+      </label>
+      <label className="fe-field">
+        <span className="fe-label">希望ステージ</span>
+        <input className="fe-input" value={v.preferredStage} onChange={patch('preferredStage')} />
+      </label>
+      <label className="fe-field">
+        <span className="fe-label">運営への連絡事項</span>
+        <textarea className="fe-textarea" rows={2} value={v.staffNote} onChange={patch('staffNote')} />
       </label>
       <label className="fe-field">
         <span className="fe-label">備考</span>

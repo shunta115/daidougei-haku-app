@@ -2,10 +2,36 @@
 export type AppPersona = 'visitor' | 'performer' | 'admin'
 
 /** 来場者モードの下部ナビ */
-export type VisitorTab = 'home' | 'performers' | 'timetable' | 'map' | 'tips' | 'library'
+export type VisitorTab = 'home' | 'performers' | 'timetable' | 'map' | 'tips' | 'oshi'
 
 /** 出演者モード内の画面遷移（将来ログイン後のダッシュボードに拡張） */
-export type PerformerFlow = 'hub' | 'register' | 'registerComplete'
+export type PerformerFlow =
+  | 'hub'
+  | 'register'
+  | 'registerComplete'
+  | 'myRegistrations'
+  | 'streamRegister'
+  | 'streamRegisterComplete'
+
+/** 配信希望パフォーマー登録（事務局審査） */
+export type StreamApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export type StreamPerformerApplication = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  status: StreamApprovalStatus
+  performerName: string
+  realName: string
+  email: string
+  activityRegion: string
+  genre: string
+  snsUrl: string
+  streamDescription: string
+  reviewMessage: string
+  /** 承認時に既存パフォーマーIDへ紐づけ（任意） */
+  linkedPerformerId?: string
+}
 
 /** 登録データのうち id / 作成日時以外（管理画面編集用） */
 export type EditableRegistrationFields = Omit<PerformerRegistration, 'id' | 'createdAt' | 'updatedAt'>
@@ -63,6 +89,9 @@ export type VenueArea = {
   crowd?: 'low' | 'mid' | 'high'
 }
 
+/** 配信パフォーマーの事務局審査 */
+export type PerformerApprovalStatus = 'pending' | 'approved' | 'rejected'
+
 export type Performer = {
   id: string
   name: string
@@ -72,9 +101,17 @@ export type Performer = {
   tagline: string
   gradient: string
   locale: string
+  /** 国・地域（配信UI用） */
+  country: string
   likes: number
   saves: number
   heat: number
+  approvalStatus: PerformerApprovalStatus
+  canStream: boolean
+  isLive: boolean
+  streamTitle?: string
+  /** WEB完結投げ銭（外部決済） */
+  supportUrl: string
   /** 宣材写真（URL）。将来は Supabase Storage / CDN に差し替え */
   photoUrl?: string
   /** 長めのプロフィール */
@@ -83,6 +120,8 @@ export type Performer = {
   achievementsDetail?: string
   /** ジャンル（検索・フィルタ用） */
   genre?: string
+  /** 30秒紹介動画（URL）。未設定時はプレースホルダー表示 */
+  introVideoUrl?: string
   snsList?: SnsLink[]
   tipLinks?: TipLink[]
 }
@@ -117,6 +156,8 @@ export type PerformerRegistration = {
   email: string
   phone: string
   genre: string
+  /** 活動拠点 */
+  activityBase: string
   profile: string
   achievements: string
   snsUrl: string
@@ -124,6 +165,12 @@ export type PerformerRegistration = {
   photoUrl: string
   tipUrl: string
   preferredDates: string
+  /** 希望ステージ（フリーテキスト） */
+  preferredStage: string
+  /** 動画URL */
+  videoUrl: string
+  /** 運営への連絡事項 */
+  staffNote: string
   notes: string
 }
 
@@ -134,3 +181,18 @@ export type FutureCapability = {
   titleEn: string
   hint: string
 }
+
+/** Phase1 来場者コア（NOW / NEXT / 推し / MAP）— 詳細は phase1/types.ts */
+export type {
+  MapVenuePin,
+  NextUpCardData,
+  NowPlayingCardData,
+  Phase1FavoriteEntry,
+  Phase1HomeFeed,
+  Phase1MapTarget,
+  Phase1NavTarget,
+  Phase1NextUp,
+  Phase1NowPlaying,
+  Phase1PlaybackBundle,
+  Phase1ScheduleStatus,
+} from './phase1/types'

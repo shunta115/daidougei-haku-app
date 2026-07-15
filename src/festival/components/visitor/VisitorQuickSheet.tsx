@@ -21,11 +21,11 @@ export function VisitorQuickSheet({ open, onClose, onTab }: VisitorQuickSheetPro
           <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('map'); onClose() }}>
             会場マップ
           </button>
-          <button type="button" className="fe-qsheet__btn fe-qsheet__btn--gold" onClick={() => { onTab('tips'); onClose() }}>
-            投げ銭
+          <button type="button" className="fe-qsheet__btn fe-qsheet__btn--support" onClick={() => { onTab('tips'); onClose() }}>
+            応援
           </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('library'); onClose() }}>
-            お気に入り
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('oshi'); onClose() }}>
+            推しリスト
           </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('performers'); onClose() }}>
             アーティスト
