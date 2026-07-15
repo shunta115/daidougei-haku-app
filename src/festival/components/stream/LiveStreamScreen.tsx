@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Performer } from '../../types'
+import {
+  BETA_SUPPORT_MESSAGE,
+  canProcessOnlineSupport,
+  isValidHttpUrl,
+} from '../../lib/productionGuard'
 
 const PRESET_AMOUNTS = [500, 1000, 3000, 5000] as const
 
@@ -18,9 +23,10 @@ type LiveStreamScreenProps = {
   performer: Performer
   focusTipOnMount?: boolean
   onClose: () => void
+  onBetaSupport?: () => void
 }
 
-export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveStreamScreenProps) {
+export function LiveStreamScreen({ performer, focusTipOnMount, onClose, onBetaSupport }: LiveStreamScreenProps) {
   const [chatInput, setChatInput] = useState('')
   const [cheerInput, setCheerInput] = useState('')
   const [chat, setChat] = useState(SEED_CHAT)
@@ -30,6 +36,8 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
 
   const displayName = performer.nameJa || performer.name
   const tipSectionId = useMemo(() => 'fe-live-tip', [])
+  const watchUrl = isValidHttpUrl(performer.streamUrl) ? performer.streamUrl : undefined
+  const supportEnabled = canProcessOnlineSupport()
 
   useEffect(() => {
     if (!focusTipOnMount) return
@@ -55,12 +63,17 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
 
   const openWebTip = useCallback(
     (amount: number) => {
-      const base = performer.supportUrl || performer.tipLinks?.[0]?.url || 'https://example.com/tip'
+      if (!supportEnabled) {
+        onBetaSupport?.()
+        return
+      }
+      const base = performer.supportUrl || performer.tipLinks?.[0]?.url
+      if (!isValidHttpUrl(base)) return
       const url = `${base}${base.includes('?') ? '&' : '?'}amount=${amount}`
       window.open(url, '_blank', 'noopener,noreferrer')
       setThanks({ amount })
     },
-    [performer],
+    [performer, supportEnabled, onBetaSupport],
   )
 
   return (
@@ -84,10 +97,27 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
         <section className="fe-live-player" aria-label="配信画面">
           <div className="fe-live-player__frame" style={{ background: performer.gradient }}>
             <div className="fe-live-player__scanlines" aria-hidden="true" />
-            <p className="fe-live-player__prep">独自ライブ配信システム準備中</p>
-            <p className="fe-live-player__hint">
-              {performer.streamTitle ?? 'グローバル配信セッション'}
-            </p>
+            {watchUrl ? (
+              <>
+                <p className="fe-live-player__prep">配信を開く</p>
+                <p className="fe-live-player__hint">{performer.streamTitle ?? 'グローバル配信セッション'}</p>
+                <a
+                  className="fe-btn fe-btn--primary"
+                  href={watchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  配信ページを開く
+                </a>
+              </>
+            ) : (
+              <>
+                <p className="fe-live-player__prep">配信準備中</p>
+                <p className="fe-live-player__hint">
+                  {performer.streamTitle ?? '独自ライブ配信システム準備中'}
+                </p>
+              </>
+            )}
             <p className="fe-live-player__globe" aria-hidden="true">
               🌍
             </p>
@@ -151,7 +181,9 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
         >
           <h2 className="fe-live-tip__title">WEB完結投げ銭</h2>
           <p className="fe-live-tip__lead">
-            お支払いは外部の安全な決済ページで行います。アプリ内課金はありません。
+            {supportEnabled
+              ? 'お支払いは外部の安全な決済ページで行います。アプリ内課金はありません。'
+              : BETA_SUPPORT_MESSAGE}
           </p>
           <div className="fe-live-tip__grid">
             {PRESET_AMOUNTS.map((yen) => (
@@ -182,7 +214,7 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
               disabled={!customAmount || Number(customAmount) < 100}
               onClick={() => openWebTip(Number(customAmount))}
             >
-              外部サイトで応援する
+              {supportEnabled ? '外部サイトで応援する' : 'β版準備中'}
             </button>
           </div>
           <p className="fe-live-tip__note">
@@ -190,7 +222,7 @@ export function LiveStreamScreen({ performer, focusTipOnMount, onClose }: LiveSt
           </p>
         </section>
 
-        {thanks ? (
+        {thanks && supportEnabled ? (
           <div className="fe-live-thanks" role="dialog" aria-labelledby="fe-live-thanks-title">
             <div className="fe-live-thanks__card">
               <p className="fe-live-thanks__k" lang="en">

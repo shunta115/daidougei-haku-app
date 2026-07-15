@@ -110,6 +110,8 @@ export type Performer = {
   canStream: boolean
   isLive: boolean
   streamTitle?: string
+  /** 配信視聴URL（http/https のみ有効） */
+  streamUrl?: string
   /** WEB完結投げ銭（外部決済） */
   supportUrl: string
   /** 宣材写真（URL）。将来は Supabase Storage / CDN に差し替え */

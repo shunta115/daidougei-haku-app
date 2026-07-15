@@ -3,6 +3,7 @@ import { initials } from '../../lib/initials'
 import { readFavorites, toggleFavorite } from '../../lib/favoritesStorage'
 import { getDemoNow } from '../../lib/demoClock'
 import { demoTodayDateString, nextSlotForPerformerFromNow, slotEndAsDate, todaySlotsForPerformer } from '../../lib/scheduleEngine'
+import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
 
 type OshiListScreenProps = {
   performers: Performer[]
@@ -11,6 +12,7 @@ type OshiListScreenProps = {
   onOpenPerformer?: (id: string) => void
   onWatchStream?: (id: string) => void
   onSupportStream?: (id: string) => void
+  onBetaSupport?: () => void
 }
 
 function isStreamReady(p: Performer) {
@@ -47,6 +49,7 @@ export function OshiListScreen({
   onOpenPerformer,
   onWatchStream,
   onSupportStream,
+  onBetaSupport,
 }: OshiListScreenProps) {
   const ids = readFavorites()
   const saved = performers.filter((p) => ids.includes(p.id)).sort(sortOshi)
@@ -60,7 +63,7 @@ export function OshiListScreen({
         </p>
         <h1 className="fe-page-head__title">推しリスト</h1>
         <p className="fe-page-head__lead">
-          推しの配信がいちばん上。視聴は無料 · 応援はWEB完結です。
+          推しの配信がいちばん上。視聴は無料 · 応援は{canProcessOnlineSupport() ? 'WEB完結' : '準備中'}です。
         </p>
       </header>
 
@@ -74,16 +77,20 @@ export function OshiListScreen({
           </p>
           {onWatchStream ? (
             <div className="fe-oshi-live-banner__actions">
-              {liveOshi.map((p) => (
+              {liveOshi.map((p) => {
+                const watchable = canWatchLiveStream(p)
+                return (
                 <button
                   key={p.id}
                   type="button"
                   className="fe-oshi-live-banner__btn"
-                  onClick={() => onWatchStream(p.id)}
+                  disabled={!watchable}
+                  onClick={() => watchable && onWatchStream(p.id)}
                 >
-                  {p.nameJa} を見る
+                  {watchable ? `${p.nameJa} を見る` : `${p.nameJa} · 配信準備中`}
                 </button>
-              ))}
+                )
+              })}
             </div>
           ) : null}
         </section>
@@ -100,6 +107,7 @@ export function OshiListScreen({
             {saved.map((p) => {
               const live = isLiveNow(p)
               const ready = isStreamReady(p)
+              const watchable = canWatchLiveStream(p)
               return (
                 <li key={p.id} className={`fe-oshi-card${live ? ' fe-oshi-card--live' : ''}`}>
                   <button
@@ -130,16 +138,26 @@ export function OshiListScreen({
                   <div className="fe-oshi-card__side">
                     {live && onWatchStream && onSupportStream ? (
                       <div className="fe-oshi-card__stream">
-                        <button type="button" className="fe-oshi-card__watch" onClick={() => onWatchStream(p.id)}>
-                          視聴
+                        <button
+                          type="button"
+                          className="fe-oshi-card__watch"
+                          disabled={!watchable}
+                          onClick={() => watchable && onWatchStream(p.id)}
+                        >
+                          {watchable ? '視聴' : '準備中'}
                         </button>
                         <button type="button" className="fe-oshi-card__support" onClick={() => onSupportStream(p.id)}>
                           応援
                         </button>
                       </div>
                     ) : ready && onWatchStream ? (
-                      <button type="button" className="fe-oshi-card__open" onClick={() => onWatchStream(p.id)}>
-                        配信ページ
+                      <button
+                        type="button"
+                        className="fe-oshi-card__open"
+                        disabled={!watchable}
+                        onClick={() => watchable && onWatchStream(p.id)}
+                      >
+                        {watchable ? '配信ページ' : '配信準備中'}
                       </button>
                     ) : null}
                     <button
@@ -165,14 +183,16 @@ export function OshiListScreen({
         <h2 id="fe-oshi-tip-h" className="fe-lib-h">
           WEB完結投げ銭
         </h2>
-        <p className="fe-lib-tip">外部決済へ自然に誘導します。合計金額は表示しません。</p>
+        <p className="fe-lib-tip">
+          {canProcessOnlineSupport()
+            ? '外部決済へ自然に誘導します。合計金額は表示しません。'
+            : 'β版ではオンライン応援機能を準備中です。'}
+        </p>
         {saved.length === 0 ? (
           <p className="fe-lib-empty">推しを追加するとリンクが並びます。</p>
         ) : (
           <ul className="fe-lib-tip-list">
-            {saved.map((p) => {
-              const supportUrl = p.supportUrl || p.tipLinks?.[0]?.url
-              return (
+            {saved.map((p) => (
                 <li key={p.id} className="fe-lib-tip-card">
                   <p className="fe-lib-tip-card__name">{p.nameJa}</p>
                   <div className="fe-lib-tip-card__links">
@@ -181,17 +201,22 @@ export function OshiListScreen({
                         配信で応援
                       </button>
                     ) : null}
-                    {supportUrl ? (
-                      <a className="fe-btn fe-btn--glass fe-btn--compact" href={supportUrl} target="_blank" rel="noopener noreferrer">
-                        WEB投げ銭
-                      </a>
-                    ) : (
-                      <span className="fe-lib-muted">リンク未設定</span>
-                    )}
+                    <button
+                      type="button"
+                      className="fe-btn fe-btn--glass fe-btn--compact"
+                      onClick={() => {
+                        if (!canProcessOnlineSupport()) {
+                          onBetaSupport?.()
+                          return
+                        }
+                        onSupportStream?.(p.id)
+                      }}
+                    >
+                      WEB投げ銭
+                    </button>
                   </div>
                 </li>
-              )
-            })}
+              ))}
           </ul>
         )}
       </section>

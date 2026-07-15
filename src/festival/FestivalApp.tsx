@@ -34,11 +34,20 @@ import {
   slotsByPerformer,
 } from './lib/scheduleEngine'
 import { shareFestival } from './lib/share'
+import {
+  BETA_SUPPORT_MESSAGE,
+  canAccessPerformerAreas,
+  canAccessStaffAreas,
+  canProcessOnlineSupport,
+  canWatchLiveStream,
+  sanitizePersonaForProduction,
+} from './lib/productionGuard'
 import { readAppPersona, writeAppPersona } from './session/appPersona'
+import { BetaPrepNotice } from './components/shared/BetaPrepNotice'
 import type { AppPersona, Performer, PerformerFlow, VisitorTab } from './types'
 
 export function FestivalApp() {
-  const [persona, setPersonaState] = useState<AppPersona>(() => readAppPersona())
+  const [personaState, setPersonaState] = useState<AppPersona>(() => sanitizePersonaForProduction(readAppPersona()))
   const [visitorTab, setVisitorTab] = useState<VisitorTab>(() => 'home')
   const [performerFlow, setPerformerFlow] = useState<PerformerFlow>(() => 'hub')
   const [favTick, setFavTick] = useState(0)
@@ -53,11 +62,20 @@ export function FestivalApp() {
   const [registerBackToList, setRegisterBackToList] = useState(false)
   const [liveStreamId, setLiveStreamId] = useState<string | null>(null)
   const [streamOpenFocusTip, setStreamOpenFocusTip] = useState(false)
+  const [betaNotice, setBetaNotice] = useState<string | null>(null)
   const performers = getPerformers()
+  const persona = sanitizePersonaForProduction(personaState)
 
   useEffect(() => {
-    seedStreamApplicationsIfEmpty()
+    if (canAccessStaffAreas()) seedStreamApplicationsIfEmpty()
   }, [])
+
+  useEffect(() => {
+    if (personaState !== persona) {
+      writeAppPersona('visitor')
+      setPersonaState('visitor')
+    }
+  }, [personaState, persona])
 
   const { live, next } = buildMarkedPulses(performers)
   const liveArtist = live ? getPerformerById(live.performerId) : undefined
@@ -77,11 +95,33 @@ export function FestivalApp() {
 
   const openLiveStream = useCallback((id: string, focusTip = false) => {
     const p = getPerformerById(id)
-    if (!p?.canStream || p.approvalStatus !== 'approved') return
+    if (!canWatchLiveStream(p)) return
     setDetailId(null)
     setStreamOpenFocusTip(focusTip)
     setLiveStreamId(id)
     window.history.replaceState(null, '', `#live-${id}`)
+  }, [])
+
+  const handleWatchStream = useCallback(
+    (id: string) => {
+      openLiveStream(id, false)
+    },
+    [openLiveStream],
+  )
+
+  const handleSupportStream = useCallback(
+    (id: string) => {
+      if (!canProcessOnlineSupport()) {
+        setBetaNotice(BETA_SUPPORT_MESSAGE)
+        return
+      }
+      openLiveStream(id, true)
+    },
+    [openLiveStream],
+  )
+
+  const showBetaSupport = useCallback(() => {
+    setBetaNotice(BETA_SUPPORT_MESSAGE)
   }, [])
 
   const closeLiveStream = useCallback(() => {
@@ -120,25 +160,57 @@ export function FestivalApp() {
   const consumeMapFocus = useCallback(() => setMapFocusVenueId(null), [])
 
   useEffect(() => {
+    const clearBadHash = () => {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+
     const syncHash = () => {
-      const liveMatch = window.location.hash.match(/^#live-(.+)$/)
-      const liveId = liveMatch?.[1]
-      if (liveId && getPerformerById(liveId)) {
-        writeAppPersona('visitor')
-        setPersonaState('visitor')
-        setVisitorTab('home')
-        setDetailId(null)
-        const p = getPerformerById(liveId)
-        if (p?.canStream && p.approvalStatus === 'approved') {
-          setStreamOpenFocusTip(false)
-          setLiveStreamId(liveId)
+      const hash = window.location.hash
+
+      if (hash.match(/^#(admin|performer)/)) {
+        if (!canAccessStaffAreas() && !canAccessPerformerAreas()) {
+          clearBadHash()
+          writeAppPersona('visitor')
+          setPersonaState('visitor')
+          setVisitorTab('home')
+          setDetailId(null)
+          setLiveStreamId(null)
         }
         return
       }
 
-      const m = window.location.hash.match(/^#artist-(.+)$/)
+      const liveMatch = hash.match(/^#live-(.+)$/)
+      const liveId = liveMatch?.[1]
+      if (liveId) {
+        const p = getPerformerById(liveId)
+        if (!p || !canWatchLiveStream(p)) {
+          clearBadHash()
+          setLiveStreamId(null)
+          setStreamOpenFocusTip(false)
+          writeAppPersona('visitor')
+          setPersonaState('visitor')
+          setVisitorTab('home')
+          setDetailId(null)
+          return
+        }
+        writeAppPersona('visitor')
+        setPersonaState('visitor')
+        setVisitorTab('home')
+        setDetailId(null)
+        setStreamOpenFocusTip(false)
+        setLiveStreamId(liveId)
+        return
+      }
+
+      const m = hash.match(/^#artist-(.+)$/)
       const id = m?.[1]
-      if (id && performerById(id)) {
+      if (id) {
+        if (!getPerformerById(id) && !performerById(id)) {
+          clearBadHash()
+          setDetailId(null)
+          setVisitorTab('home')
+          return
+        }
         writeAppPersona('visitor')
         setPersonaState('visitor')
         setVisitorTab('performers')
@@ -171,6 +243,7 @@ export function FestivalApp() {
   }, [])
 
   const openStreamRegisterFromVisitor = useCallback(() => {
+    if (!canAccessPerformerAreas()) return
     setPerformerEntryFromVisitor(true)
     writeAppPersona('performer')
     setPersonaState('performer')
@@ -178,6 +251,7 @@ export function FestivalApp() {
   }, [])
 
   const enterAdminPortal = useCallback(() => {
+    if (!canAccessStaffAreas()) return
     writeAppPersona('admin')
     setPersonaState('admin')
   }, [])
@@ -195,7 +269,10 @@ export function FestivalApp() {
     .slice(0, 4)
 
   const detailPerformer = detailId ? getPerformerById(detailId) : undefined
-  const liveStreamPerformer = liveStreamId ? getPerformerById(liveStreamId) : undefined
+  const liveStreamPerformer =
+    liveStreamId && canWatchLiveStream(getPerformerById(liveStreamId))
+      ? getPerformerById(liveStreamId)
+      : undefined
 
   const renderVisitorBody = (): ReactNode => {
     switch (visitorTab) {
@@ -211,8 +288,8 @@ export function FestivalApp() {
             pickPerformers={primePicksForHome}
             hotVenue={hotVenue}
             goVenueId={goVenueId}
-            onWatchStream={(id) => openLiveStream(id, false)}
-            onSupportStream={(id) => openLiveStream(id, true)}
+            onWatchStream={handleWatchStream}
+            onSupportStream={handleSupportStream}
             onOpenDetail={openDetail}
             onOpenMap={() => setVisitorTab('map')}
             onNearShows={() => {
@@ -224,6 +301,8 @@ export function FestivalApp() {
             onShare={() => void shareFestival()}
             onStreamRegister={openStreamRegisterFromVisitor}
             onAdmin={enterAdminPortal}
+            showStaffEntry={canAccessStaffAreas()}
+            showStreamRegisterEntry={canAccessPerformerAreas()}
           />
         )
       case 'performers':
@@ -232,8 +311,8 @@ export function FestivalApp() {
             performers={performers}
             favTick={favTick}
             onOpenDetail={openDetail}
-            onWatchStream={(id) => openLiveStream(id, false)}
-            onSupportStream={(id) => openLiveStream(id, true)}
+            onWatchStream={handleWatchStream}
+            onSupportStream={handleSupportStream}
             onToggleFavorite={(id) => {
               const was = readFavorites().includes(id)
               toggleFavorite(id)
@@ -254,8 +333,9 @@ export function FestivalApp() {
             performers={performers}
             onOpenPerformer={openDetail}
             onXpBump={bumpGame}
-            onWatchStream={(id) => openLiveStream(id, false)}
-            onSupportStream={(id) => openLiveStream(id, true)}
+            onWatchStream={handleWatchStream}
+            onSupportStream={handleSupportStream}
+            onBetaSupport={showBetaSupport}
           />
         )
       case 'oshi':
@@ -265,8 +345,9 @@ export function FestivalApp() {
             favTick={favTick}
             onFavoritesChange={bumpFav}
             onOpenPerformer={openDetail}
-            onWatchStream={(id) => openLiveStream(id, false)}
-            onSupportStream={(id) => openLiveStream(id, true)}
+            onWatchStream={handleWatchStream}
+            onSupportStream={handleSupportStream}
+            onBetaSupport={showBetaSupport}
           />
         )
       default:
@@ -423,8 +504,9 @@ export function FestivalApp() {
                     closeDetail()
                     focusMapForPerformer(detailPerformer)
                   }}
-                  onWatchStream={(id) => openLiveStream(id, false)}
-                  onSupportStream={(id) => openLiveStream(id, true)}
+                  onWatchStream={handleWatchStream}
+                  onSupportStream={handleSupportStream}
+                  onBetaSupport={showBetaSupport}
                 />
               </div>
             ) : null}
@@ -433,12 +515,14 @@ export function FestivalApp() {
                 performer={liveStreamPerformer}
                 focusTipOnMount={streamOpenFocusTip}
                 onClose={closeLiveStream}
+                onBetaSupport={showBetaSupport}
               />
             ) : null}
+            {betaNotice ? <BetaPrepNotice message={betaNotice} onClose={() => setBetaNotice(null)} /> : null}
           </>
         ) : null}
 
-        {persona === 'performer' ? (
+        {persona === 'performer' && canAccessPerformerAreas() ? (
           <>
             <TopBar persona="performer" onExitPerformerOrAdmin={goVisitorHome} />
             {renderPerformerBody()}
@@ -456,7 +540,7 @@ export function FestivalApp() {
           </>
         ) : null}
 
-        {persona === 'admin' ? (
+        {persona === 'admin' && canAccessStaffAreas() ? (
           <>
             <TopBar persona="admin" onExitPerformerOrAdmin={goVisitorHome} />
             <AdminDashboardScreen onExit={goVisitorHome} />

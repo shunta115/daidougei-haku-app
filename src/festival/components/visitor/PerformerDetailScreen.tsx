@@ -11,6 +11,7 @@ import {
 import { sharePerformer } from '../../lib/share'
 import { recordCheerMoment } from '../../lib/cheerMomentStorage'
 import { isOnWatchlist, toggleWatchlist } from '../../lib/watchlistStorage'
+import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
 import { PerformerDetailProfile } from './performer/PerformerDetailProfile'
 import { PerformerDetailSchedule } from './performer/PerformerDetailSchedule'
 import { PerformerDetailVideo } from './performer/PerformerDetailVideo'
@@ -25,6 +26,7 @@ type PerformerDetailScreenProps = {
   onOpenMap?: () => void
   onWatchStream?: (id: string) => void
   onSupportStream?: (id: string) => void
+  onBetaSupport?: () => void
 }
 
 export function PerformerDetailScreen({
@@ -37,6 +39,7 @@ export function PerformerDetailScreen({
   onOpenMap,
   onWatchStream,
   onSupportStream,
+  onBetaSupport,
 }: PerformerDetailScreenProps) {
   const schedule = slotsByPerformer(p.id)
   const tips = p.tipLinks ?? []
@@ -49,7 +52,7 @@ export function PerformerDetailScreen({
 
   const streamReady = p.approvalStatus === 'approved' && p.canStream
   const isLive = streamReady && p.isLive
-  const supportUrl = p.supportUrl || tips[0]?.url
+  const watchable = canWatchLiveStream(p)
 
   useEffect(() => {
     setWatch(isOnWatchlist(p.id))
@@ -121,8 +124,13 @@ export function PerformerDetailScreen({
             {isLive ? 'いまライブ配信中' : '配信可能なパフォーマーです'}
           </p>
           <div className="fe-detail-stream-cta__row">
-            <button type="button" className="fe-detail-stream-cta__watch" onClick={() => onWatchStream(p.id)}>
-              {isLive ? '視聴する' : '配信ページを開く'}
+            <button
+              type="button"
+              className="fe-detail-stream-cta__watch"
+              disabled={!watchable}
+              onClick={() => watchable && onWatchStream(p.id)}
+            >
+              {watchable ? (isLive ? '視聴する' : '配信ページを開く') : '配信準備中'}
             </button>
             <button type="button" className="fe-detail-stream-cta__support" onClick={() => onSupportStream(p.id)}>
               応援する
@@ -229,25 +237,41 @@ export function PerformerDetailScreen({
             WEB完結投げ銭
           </h2>
           <p className="fe-detail-lead">
-            お支払いは外部の安全な決済ページへ。アプリ内課金はありません。合計金額の表示もしません。
+            {canProcessOnlineSupport()
+              ? 'お支払いは外部の安全な決済ページへ。アプリ内課金はありません。合計金額の表示もしません。'
+              : 'β版ではオンライン応援機能を準備中です。決済は行われません。'}
           </p>
           {streamReady && onSupportStream ? (
             <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={() => onSupportStream(p.id)}>
               配信画面で応援する
             </button>
-          ) : null}
-          {supportUrl ? (
+          ) : (
+            <button
+              type="button"
+              className="fe-btn fe-btn--primary fe-btn--block"
+              onClick={() => {
+                if (!canProcessOnlineSupport()) {
+                  onBetaSupport?.()
+                  return
+                }
+                onSupportStream?.(p.id)
+              }}
+            >
+              WEBで応援する
+            </button>
+          )}
+          {canProcessOnlineSupport() && (p.supportUrl || tips[0]?.url) ? (
             <div className="fe-tip-grid" style={{ marginTop: streamReady ? 10 : 0 }}>
               <a
                 className="fe-btn fe-btn--glass fe-btn--block fe-btn--support-primary"
-                href={supportUrl}
+                href={p.supportUrl || tips[0]!.url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 外部サイトで応援する
               </a>
               {tips
-                .filter((t) => t.url !== supportUrl)
+                .filter((t) => t.url !== (p.supportUrl || tips[0]?.url))
                 .map((t) => (
                   <a
                     key={t.id}
@@ -260,9 +284,7 @@ export function PerformerDetailScreen({
                   </a>
                 ))}
             </div>
-          ) : (
-            <p className="fe-detail-muted">投げ銭リンク未登録（デモ）</p>
-          )}
+          ) : null}
         </section>
       </main>
     </div>

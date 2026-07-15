@@ -1,6 +1,7 @@
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { bumpXp } from '../../lib/gamificationStorage'
+import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
 
 type TipsScreenProps = {
   performers: Performer[]
@@ -8,6 +9,7 @@ type TipsScreenProps = {
   onXpBump: () => void
   onWatchStream?: (id: string) => void
   onSupportStream?: (id: string) => void
+  onBetaSupport?: () => void
 }
 
 function isLiveNow(p: Performer) {
@@ -20,11 +22,22 @@ export function TipsScreen({
   onXpBump,
   onWatchStream,
   onSupportStream,
+  onBetaSupport,
 }: TipsScreenProps) {
   const ordered = [...performers].sort((a, b) => {
     const rank = (p: Performer) => (isLiveNow(p) ? 0 : p.approvalStatus === 'approved' && p.canStream ? 1 : 2)
     return rank(a) - rank(b) || b.heat - a.heat
   })
+
+  const handleSupport = (id: string) => {
+    if (!canProcessOnlineSupport()) {
+      onBetaSupport?.()
+      return
+    }
+    bumpXp(6)
+    onXpBump()
+    onSupportStream?.(id)
+  }
 
   return (
     <main className="fe-main fe-main--sub fe-main--tips">
@@ -34,14 +47,16 @@ export function TipsScreen({
         </p>
         <h1 className="fe-page-head__title">応援 &amp; WEB投げ銭</h1>
         <p className="fe-page-head__lead">
-          お支払いは外部の安全なページで完結。アプリ内課金はありません。合計金額も表示しません。
+          {canProcessOnlineSupport()
+            ? 'お支払いは外部の安全なページで完結。アプリ内課金はありません。合計金額も表示しません。'
+            : 'β版ではオンライン応援機能を準備中です。金額の選択はできますが、決済は行われません。'}
         </p>
       </header>
 
       <ul className="fe-tips-list">
         {ordered.map((p) => {
-          const supportUrl = p.supportUrl || p.tipLinks?.[0]?.url
           const live = isLiveNow(p)
+          const watchable = canWatchLiveStream(p)
           return (
             <li key={p.id} className={`fe-tips-card${live ? ' fe-tips-card--live' : ''}`}>
               <button type="button" className="fe-tips-card__head" onClick={() => onOpenPerformer(p.id)}>
@@ -76,37 +91,29 @@ export function TipsScreen({
                   <button
                     type="button"
                     className="fe-btn fe-btn--primary fe-tips-card__support"
-                    onClick={() => onWatchStream(p.id)}
+                    disabled={!watchable}
+                    onClick={() => watchable && onWatchStream(p.id)}
                   >
-                    視聴する
+                    {watchable ? '視聴する' : '配信準備中'}
                   </button>
                 ) : null}
                 {live && onSupportStream ? (
                   <button
                     type="button"
                     className="fe-btn fe-btn--glass fe-tips-card__support fe-btn--support-primary"
-                    onClick={() => {
-                      bumpXp(6)
-                      onXpBump()
-                      onSupportStream(p.id)
-                    }}
+                    onClick={() => handleSupport(p.id)}
                   >
                     WEBで応援
                   </button>
-                ) : supportUrl ? (
-                  <a
+                ) : (
+                  <button
+                    type="button"
                     className="fe-btn fe-btn--glass fe-tips-card__support fe-btn--support-primary"
-                    href={supportUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      bumpXp(6)
-                      onXpBump()
-                    }}
+                    onClick={() => handleSupport(p.id)}
                   >
                     WEB投げ銭
-                  </a>
-                ) : null}
+                  </button>
+                )}
               </div>
             </li>
           )

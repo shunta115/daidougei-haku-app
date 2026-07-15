@@ -4,7 +4,7 @@ import type { Performer, PerformerApprovalStatus } from '../types'
 const OVERRIDE_KEY = 'daidougei-stream-performer-overrides-v1'
 
 type PerformerOverride = Partial<
-  Pick<Performer, 'approvalStatus' | 'canStream' | 'isLive' | 'streamTitle' | 'supportUrl' | 'country'>
+  Pick<Performer, 'approvalStatus' | 'canStream' | 'isLive' | 'streamTitle' | 'streamUrl' | 'supportUrl' | 'country'>
 >
 
 function readOverrides(): Record<string, PerformerOverride> {

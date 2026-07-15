@@ -1,4 +1,5 @@
 import { readFavorites } from '../../lib/favoritesStorage'
+import { canWatchLiveStream } from '../../lib/productionGuard'
 import type { Performer } from '../../types'
 
 type HomeTipsTeaserProps = {
@@ -11,6 +12,8 @@ type HomeTipsTeaserProps = {
 export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: HomeTipsTeaserProps) {
   const favIds = readFavorites()
   const liveOshi = liveStreamers.filter((p) => favIds.includes(p.id))
+  const watchTarget = liveOshi.find((p) => canWatchLiveStream(p)) ?? liveOshi[0]
+  const watchable = watchTarget ? canWatchLiveStream(watchTarget) : false
 
   return (
     <section className="fe-home-tips" id="fe-home-tips" aria-labelledby="fe-home-tips-h">
@@ -28,13 +31,14 @@ export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: H
               {liveOshi.map((p) => p.nameJa).join(' / ')} — 視聴は無料 · 応援はWEBで完結。
             </p>
             <div className="fe-home-tips__actions">
-              {onWatchOshiLive ? (
+              {onWatchOshiLive && watchTarget ? (
                 <button
                   type="button"
                   className="fe-btn fe-btn--primary"
-                  onClick={() => onWatchOshiLive(liveOshi[0]!.id)}
+                  disabled={!watchable}
+                  onClick={() => watchable && onWatchOshiLive(watchTarget.id)}
                 >
-                  今すぐ見る
+                  {watchable ? '今すぐ見る' : '配信準備中'}
                 </button>
               ) : null}
               <button type="button" className="fe-btn fe-btn--glass" onClick={onOpenOshi}>

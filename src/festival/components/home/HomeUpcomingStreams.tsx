@@ -1,4 +1,5 @@
 import type { Performer } from '../../types'
+import { canWatchLiveStream } from '../../lib/productionGuard'
 
 export type HomeUpcomingStreamsProps = {
   performers: readonly Performer[]
@@ -22,7 +23,9 @@ export function HomeUpcomingStreams({ performers, onOpen, onOpenDetail }: HomeUp
         <p className="fe-stream-soon__sub">承認済みパフォーマーの次の配信をお楽しみに。</p>
       </header>
       <ul className="fe-stream-soon__list">
-        {performers.map((p) => (
+        {performers.map((p) => {
+          const watchable = canWatchLiveStream(p)
+          return (
           <li key={p.id}>
             <article className="fe-stream-soon__card">
               <button type="button" className="fe-stream-soon__hit" onClick={() => onOpenDetail(p.id)}>
@@ -32,12 +35,18 @@ export function HomeUpcomingStreams({ performers, onOpen, onOpenDetail }: HomeUp
                 </span>
                 {p.streamTitle ? <span className="fe-stream-soon__title-line">{p.streamTitle}</span> : null}
               </button>
-              <button type="button" className="fe-stream-soon__open" onClick={() => onOpen(p.id)}>
-                配信ページ
+              <button
+                type="button"
+                className="fe-stream-soon__open"
+                disabled={!watchable}
+                onClick={() => watchable && onOpen(p.id)}
+              >
+                {watchable ? '配信ページ' : '配信準備中'}
               </button>
             </article>
           </li>
-        ))}
+          )
+        })}
       </ul>
     </section>
   )

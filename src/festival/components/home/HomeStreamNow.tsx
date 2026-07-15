@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { Performer } from '../../types'
+import { canWatchLiveStream } from '../../lib/productionGuard'
 
 export type HomeStreamNowProps = {
   livePerformers: readonly Performer[]
@@ -30,7 +31,9 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport }: HomeStream
         </div>
       ) : (
         <ul className="fe-stream-hero__list">
-          {livePerformers.map((p) => (
+          {livePerformers.map((p) => {
+            const watchable = canWatchLiveStream(p)
+            return (
             <li key={p.id}>
               <article
                 className="fe-stream-card fe-stream-card--live"
@@ -59,8 +62,13 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport }: HomeStream
                     配信ステータス · LIVE
                   </p>
                   <div className="fe-stream-card__actions">
-                    <button type="button" className="fe-stream-card__watch" onClick={() => onWatch(p.id)}>
-                      視聴する
+                    <button
+                      type="button"
+                      className="fe-stream-card__watch"
+                      disabled={!watchable}
+                      onClick={() => watchable && onWatch(p.id)}
+                    >
+                      {watchable ? '視聴する' : '配信準備中'}
                     </button>
                     <button type="button" className="fe-stream-card__support" onClick={() => onSupport(p.id)}>
                       応援する
@@ -69,7 +77,8 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport }: HomeStream
                 </div>
               </article>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </section>

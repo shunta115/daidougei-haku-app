@@ -33,6 +33,8 @@ export type HomeScreenProps = {
   onShare: () => void
   onStreamRegister: () => void
   onAdmin: () => void
+  showStaffEntry?: boolean
+  showStreamRegisterEntry?: boolean
 }
 
 export function HomeScreen({
@@ -55,6 +57,8 @@ export function HomeScreen({
   onShare,
   onStreamRegister,
   onAdmin,
+  showStaffEntry,
+  showStreamRegisterEntry,
 }: HomeScreenProps) {
   const [scheduleMode, setScheduleMode] = useState<TimetableScheduleMode>('normal')
   const rain = scheduleMode === 'rain'
@@ -103,7 +107,12 @@ export function HomeScreen({
           onWatchOshiLive={onWatchStream}
         />
       </Reveal>
-      <HomeOfficialEntry onStreamRegister={onStreamRegister} onAdmin={onAdmin} />
+      <HomeOfficialEntry
+        onStreamRegister={onStreamRegister}
+        onAdmin={onAdmin}
+        showStaffEntry={showStaffEntry}
+        showStreamRegisterEntry={showStreamRegisterEntry}
+      />
     </main>
   )
 }

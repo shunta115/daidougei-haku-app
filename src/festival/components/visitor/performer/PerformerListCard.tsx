@@ -1,6 +1,7 @@
 import type { Performer } from '../../../types'
 import { initials } from '../../../lib/initials'
 import { formatPerformerScheduleSummary } from '../../../lib/performerScheduleLabel'
+import { canWatchLiveStream } from '../../../lib/productionGuard'
 
 type PerformerListCardProps = {
   performer: Performer
@@ -23,6 +24,7 @@ export function PerformerListCard({
   const genre = p.genre ?? p.actJa
   const streamReady = p.approvalStatus === 'approved' && p.canStream
   const isLive = streamReady && p.isLive
+  const watchable = canWatchLiveStream(p)
 
   return (
     <article className={`fe-plist-card${isLive ? ' fe-plist-card--live' : ''}`}>
@@ -60,8 +62,13 @@ export function PerformerListCard({
 
         {isLive && onWatchStream && onSupportStream ? (
           <div className="fe-plist-card__stream">
-            <button type="button" className="fe-plist-card__watch" onClick={() => onWatchStream(p.id)}>
-              視聴する
+            <button
+              type="button"
+              className="fe-plist-card__watch"
+              disabled={!watchable}
+              onClick={() => watchable && onWatchStream(p.id)}
+            >
+              {watchable ? '視聴する' : '配信準備中'}
             </button>
             <button type="button" className="fe-plist-card__support" onClick={() => onSupportStream(p.id)}>
               応援する

@@ -1,11 +1,12 @@
 import type { AppPersona } from '../types'
+import { IS_DEV } from '../lib/productionGuard'
 
 const KEY = 'daidougei-haku-persona-v1'
 
 export function readAppPersona(): AppPersona {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw === 'performer' || raw === 'admin') return raw
+    if (IS_DEV && (raw === 'performer' || raw === 'admin')) return raw
   } catch {
     /* ignore */
   }
@@ -13,5 +14,6 @@ export function readAppPersona(): AppPersona {
 }
 
 export function writeAppPersona(persona: AppPersona) {
+  if (!IS_DEV && persona !== 'visitor') return
   localStorage.setItem(KEY, persona)
 }
