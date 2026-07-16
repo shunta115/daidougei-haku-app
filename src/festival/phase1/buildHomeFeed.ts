@@ -27,7 +27,7 @@ export function mapTargetFromVenueId(venueId: string, performerId?: string): Pha
 function buildNowPlaying(pulse: ProgramPulse, performer: Performer): Phase1NowPlaying {
   const venue = venueById(pulse.venueId ?? '')
   if (!venue) {
-    console.log('[phase1] buildNowPlaying: venue not found', { venueId: pulse.venueId, slotId: pulse.id })
+    if (import.meta.env.DEV) console.debug('[phase1] buildNowPlaying: venue not found', { venueId: pulse.venueId, slotId: pulse.id })
   }
   return {
     kind: 'now',
@@ -49,7 +49,7 @@ function buildNowPlaying(pulse: ProgramPulse, performer: Performer): Phase1NowPl
 function buildNextUp(pulse: ProgramPulse, performer: Performer): Phase1NextUp {
   const venue = venueById(pulse.venueId ?? '')
   if (!venue) {
-    console.log('[phase1] buildNextUp: venue not found', { venueId: pulse.venueId, slotId: pulse.id })
+    if (import.meta.env.DEV) console.debug('[phase1] buildNextUp: venue not found', { venueId: pulse.venueId, slotId: pulse.id })
   }
   return {
     kind: 'next',
@@ -80,14 +80,14 @@ export function buildPhase1HomeFeed(performers: Performer[], performerById: (id:
   if (live) {
     const p = performerById(live.performerId)
     if (p) nowPlaying = buildNowPlaying(live, p)
-    else console.log('[phase1] buildPhase1HomeFeed: live performer missing', live.performerId)
+    else if (import.meta.env.DEV) console.debug('[phase1] buildPhase1HomeFeed: live performer missing', live.performerId)
   }
 
   let nextUp: Phase1NextUp | null = null
   if (next) {
     const p = performerById(next.performerId)
     if (p) nextUp = buildNextUp(next, p)
-    else console.log('[phase1] buildPhase1HomeFeed: next performer missing', next.performerId)
+    else if (import.meta.env.DEV) console.debug('[phase1] buildPhase1HomeFeed: next performer missing', next.performerId)
   }
 
   const defaultMapTarget =
@@ -99,7 +99,7 @@ export function buildPhase1HomeFeed(performers: Performer[], performerById: (id:
   try {
     favoritePerformerIds = readFavorites()
   } catch (e) {
-    console.log('[phase1] buildPhase1HomeFeed: readFavorites failed', e)
+    if (import.meta.env.DEV) console.debug('[phase1] buildPhase1HomeFeed: readFavorites failed', e)
   }
 
   return {

@@ -85,17 +85,17 @@ export function buildNowPlayingCard(performers: Performer[]): NowPlayingCardData
   const now = getDemoNow()
   const { live } = buildMarkedPulses(performers)
   if (!live) {
-    console.log('[phase1] buildNowPlayingCard: no live pulse in schedule')
+    if (import.meta.env.DEV) console.debug('[phase1] buildNowPlayingCard: no live pulse in schedule')
     return null
   }
   const performer = performers.find((p) => p.id === live.performerId) ?? performerById(live.performerId)
   if (!performer) {
-    console.log('[phase1] buildNowPlayingCard: performer missing', live.performerId)
+    if (import.meta.env.DEV) console.debug('[phase1] buildNowPlayingCard: performer missing', live.performerId)
     return null
   }
   const slot = currentLiveSlot()
   if (slot && slotEndAsDate(slot) < now) {
-    console.log('[phase1] buildNowPlayingCard: live slot already ended', slot.id)
+    if (import.meta.env.DEV) console.debug('[phase1] buildNowPlayingCard: live slot already ended', slot.id)
     return null
   }
   return pulseToNowCard(live, performer, now)
@@ -106,17 +106,17 @@ export function buildNextUpCard(performers: Performer[]): NextUpCardData | null 
   const now = getDemoNow()
   const { next } = buildMarkedPulses(performers)
   if (!next) {
-    console.log('[phase1] buildNextUpCard: no next pulse in schedule')
+    if (import.meta.env.DEV) console.debug('[phase1] buildNextUpCard: no next pulse in schedule')
     return null
   }
   const performer = performers.find((p) => p.id === next.performerId) ?? performerById(next.performerId)
   if (!performer) {
-    console.log('[phase1] buildNextUpCard: performer missing', next.performerId)
+    if (import.meta.env.DEV) console.debug('[phase1] buildNextUpCard: performer missing', next.performerId)
     return null
   }
   const slot = currentNextSlot()
   if (slot && slotAsDate(slot) < now) {
-    console.log('[phase1] buildNextUpCard: next slot already started', slot.id)
+    if (import.meta.env.DEV) console.debug('[phase1] buildNextUpCard: next slot already started', slot.id)
     return null
   }
   return pulseToNextCard(next, performer, now)
@@ -127,7 +127,7 @@ export function readPhase1FavoriteIds(): string[] {
   try {
     return readFavorites()
   } catch (e) {
-    console.log('[phase1] readPhase1FavoriteIds: storage read failed', e)
+    if (import.meta.env.DEV) console.debug('[phase1] readPhase1FavoriteIds: storage read failed', e)
     return []
   }
 }

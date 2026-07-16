@@ -13,7 +13,7 @@ export function buildPhase1FavoriteEntries(
   try {
     ids = readFavorites()
   } catch (e) {
-    console.log('[phase1] buildPhase1FavoriteEntries: readFavorites failed', e)
+    if (import.meta.env.DEV) console.debug('[phase1] buildPhase1FavoriteEntries: readFavorites failed', e)
     return []
   }
 
@@ -23,7 +23,7 @@ export function buildPhase1FavoriteEntries(
   for (const performerId of ids) {
     const performer = performerById(performerId)
     if (!performer) {
-      console.log('[phase1] buildPhase1FavoriteEntries: performer missing', performerId)
+      if (import.meta.env.DEV) console.debug('[phase1] buildPhase1FavoriteEntries: performer missing', performerId)
       continue
     }
     const slot = nextSlotForPerformerFromNow(performerId, now)
