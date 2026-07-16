@@ -1,6 +1,11 @@
 import { isDemoMode } from '../config/runtimeConfig'
 import { sanitizeVenueCrowd } from '../services/festivalRepository'
 import type { ScheduleSlot, VenueArea } from '../types'
+import {
+  PUBLIC_SCHEDULE_SLOTS,
+  PUBLIC_TODAYS_PICK_IDS,
+  PUBLIC_VENUES,
+} from './public'
 
 /** デモ会場（デモモード専用） */
 const DEMO_VENUE_AREAS: VenueArea[] = [
@@ -205,13 +210,8 @@ const DEMO_SCHEDULE_SLOTS: ScheduleSlot[] = [
 
 const DEMO_TODAYS_PICK_IDS = ['1', '4', '5'] as const
 
-/** 公開モード: 実開催データ未登録のため空 */
-const PUBLIC_VENUE_AREAS: VenueArea[] = []
-const PUBLIC_SCHEDULE_SLOTS: ScheduleSlot[] = []
-const PUBLIC_TODAYS_PICK_IDS = [] as const
-
 export const VENUE_AREAS: VenueArea[] = sanitizeVenueCrowd(
-  isDemoMode ? DEMO_VENUE_AREAS : PUBLIC_VENUE_AREAS,
+  isDemoMode ? DEMO_VENUE_AREAS : PUBLIC_VENUES,
 )
 export const SCHEDULE_SLOTS: ScheduleSlot[] = isDemoMode ? DEMO_SCHEDULE_SLOTS : PUBLIC_SCHEDULE_SLOTS
 export const TODAYS_PICK_IDS = isDemoMode ? DEMO_TODAYS_PICK_IDS : PUBLIC_TODAYS_PICK_IDS

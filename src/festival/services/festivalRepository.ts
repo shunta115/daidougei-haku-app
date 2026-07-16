@@ -1,4 +1,5 @@
 import { isDemoMode, enableMockCrowdLevels } from '../config/runtimeConfig'
+import { PUBLIC_EVENT_META } from '../data/public/eventMeta'
 import type { Performer, ScheduleSlot, VenueArea } from '../types'
 
 /**
@@ -35,10 +36,12 @@ export function getEventHeaderMeta(hasActiveLiveShow: boolean): EventHeaderMeta 
       showLivePill: true,
     }
   }
+  const dateLabel = PUBLIC_EVENT_META.dateLabel.trim() || PUBLIC_EVENT_COPY.datesPending
+  const placeLabel = PUBLIC_EVENT_META.placeLabel.trim()
   return {
-    dateLabel: PUBLIC_EVENT_COPY.datesPending,
-    placeLabel: '',
-    showLivePill: hasActiveLiveShow,
+    dateLabel,
+    placeLabel,
+    showLivePill: PUBLIC_EVENT_META.allowLivePill && hasActiveLiveShow,
   }
 }
 

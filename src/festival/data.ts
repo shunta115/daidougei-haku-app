@@ -1,6 +1,7 @@
 import { isDemoMode } from './config/runtimeConfig'
 import type { Performer } from './types'
 import { TODAYS_PICK_IDS as SCHEDULE_TODAY_PICKS } from './data/scheduleData'
+import { PUBLIC_PERFORMERS, PUBLIC_SPOTLIGHT_IDS, PUBLIC_TODAYS_PICK_IDS } from './data/public'
 
 const WEB_TIP_BASE = 'https://checkout.stripe.com/c/pay/demo'
 
@@ -148,14 +149,11 @@ const DEMO_PERFORMERS: Performer[] = [
   },
 ]
 
-/** 公開モード: 実出演者未登録 */
-const PUBLIC_PERFORMERS: Performer[] = []
-
 export const PERFORMERS: Performer[] = isDemoMode ? DEMO_PERFORMERS : PUBLIC_PERFORMERS
 
-export const TODAYS_PICK_IDS: string[] = isDemoMode ? [...SCHEDULE_TODAY_PICKS] : []
+export const TODAYS_PICK_IDS: string[] = isDemoMode ? [...SCHEDULE_TODAY_PICKS] : [...PUBLIC_TODAYS_PICK_IDS]
 
-export const SPOTLIGHT_IDS = (isDemoMode ? (['1', '5', '3'] as const) : ([] as const))
+export const SPOTLIGHT_IDS = (isDemoMode ? (['1', '5', '3'] as const) : PUBLIC_SPOTLIGHT_IDS)
 
 export const HOT_RANK_IDS = [...PERFORMERS].sort((a, b) => b.heat - a.heat).map((p) => p.id)
 
