@@ -95,6 +95,9 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
             : PUBLIC_EVENT_COPY.venuePending}
         </p>
       </header>
+      <p className="fe-home-loc-note" role="note">
+        現在地（GPS）案内は準備中です。会場をタップして公演を確認できます。
+      </p>
 
       {VENUE_AREAS.length === 0 ? (
         <p className="fe-public-prep" role="status">
@@ -145,7 +148,9 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
             </header>
             <p className="fe-map-sheet__lead">{openVenue.blurbJa}</p>
             <ul className="fe-map-sheet__list">
-              {openSlots.length === 0 ? <li className="fe-map-sheet__empty">このエリアに演目はありません（デモ）</li> : null}
+              {openSlots.length === 0 ? (
+                <li className="fe-map-sheet__empty">このエリアに演目はありません</li>
+              ) : null}
               {openSlots.map((s) => {
                 const p = performerById(s.performerId)
                 return (
