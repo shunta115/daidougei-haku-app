@@ -326,6 +326,47 @@
   line-height: 1.5;
 }
 
+.fe-error-fallback {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  background: #050506;
+  color: #f2f2f2;
+}
+
+.fe-error-fallback__k {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: rgba(43, 255, 221, 0.7);
+}
+
+.fe-error-fallback__title {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.fe-error-fallback__body {
+  margin: 0 0 8px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.5;
+}
+
+/* Ensure primary tap targets stay usable on phones */
+.fe-vnav__btn,
+.fe-pnav__btn,
+.fe-btn,
+.fe-stream-card__watch,
+.fe-stream-card__support,
+.fe-plist-card__watch,
+.fe-plist-card__support {
+  min-height: 44px;
+}
+
 .fe-staff-btn {
   appearance: none;
   cursor: pointer;
@@ -5057,7 +5098,7 @@
 
 /* --- native shell: dash home --- */
 .fe-root--visitor .fe-shell {
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 .fe-main--dashhome {
@@ -5809,7 +5850,7 @@
 
 /* --- tips screen --- */
 .fe-main--tips {
-  padding-bottom: 100px;
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
 .fe-tips-list {
