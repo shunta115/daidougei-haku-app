@@ -1,7 +1,8 @@
 import type { AppPersona } from '../types'
 import { IS_DEV } from '../lib/productionGuard'
+import { modeScopedStorageKey } from '../lib/storageScope'
 
-const KEY = 'daidougei-haku-persona-v1'
+const KEY = modeScopedStorageKey('daidougei-haku-persona-v1')
 
 export function readAppPersona(): AppPersona {
   try {
@@ -15,5 +16,9 @@ export function readAppPersona(): AppPersona {
 
 export function writeAppPersona(persona: AppPersona) {
   if (!IS_DEV && persona !== 'visitor') return
-  localStorage.setItem(KEY, persona)
+  try {
+    localStorage.setItem(KEY, persona)
+  } catch {
+    /* ignore */
+  }
 }

@@ -2,6 +2,7 @@ import type { Performer } from '../../../types'
 import { initials } from '../../../lib/initials'
 import { formatPerformerScheduleSummary } from '../../../lib/performerScheduleLabel'
 import { canWatchLiveStream } from '../../../lib/productionGuard'
+import { shouldShowAsLiveStream } from '../../../lib/streamPresence'
 
 type PerformerListCardProps = {
   performer: Performer
@@ -22,8 +23,7 @@ export function PerformerListCard({
 }: PerformerListCardProps) {
   const schedule = formatPerformerScheduleSummary(p.id)
   const genre = p.genre ?? p.actJa
-  const streamReady = p.approvalStatus === 'approved' && p.canStream
-  const isLive = streamReady && p.isLive
+  const isLive = shouldShowAsLiveStream(p)
   const watchable = canWatchLiveStream(p)
 
   return (

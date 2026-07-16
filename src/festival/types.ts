@@ -1,3 +1,6 @@
+/** 配信・LIVE 表示の統一ステータス（公開 / デモ共通） */
+export type StreamPresenceStatus = 'live' | 'upcoming' | 'preparing' | 'ended' | 'offline'
+
 /** 来場者 / 出演者・関係者 / 運営 — 将来はロールクレームで置き換え可能 */
 export type AppPersona = 'visitor' | 'performer' | 'admin'
 

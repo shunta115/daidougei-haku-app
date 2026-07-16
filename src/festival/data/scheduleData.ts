@@ -1,6 +1,9 @@
+import { isDemoMode } from '../config/runtimeConfig'
+import { sanitizeVenueCrowd } from '../services/festivalRepository'
 import type { ScheduleSlot, VenueArea } from '../types'
 
-export const VENUE_AREAS: VenueArea[] = [
+/** デモ会場（デモモード専用） */
+const DEMO_VENUE_AREAS: VenueArea[] = [
   {
     id: 'main-lawn',
     nameJa: 'メイン芝生',
@@ -40,10 +43,10 @@ export const VENUE_AREAS: VenueArea[] = [
 ]
 
 /**
- * ダミースケジュール。`status: live | next` はデモ用の目立ち演目。
- * 将来は Supabase + 運営CMS で差し替え。
+ * デモ用スケジュール。`status: live | next` はデモ用の目立ち演目。
+ * 公開モードでは空配列（実開催データ未登録）。
  */
-export const SCHEDULE_SLOTS: ScheduleSlot[] = [
+const DEMO_SCHEDULE_SLOTS: ScheduleSlot[] = [
   {
     id: 'd1-1',
     date: '2026-11-07',
@@ -200,7 +203,18 @@ export const SCHEDULE_SLOTS: ScheduleSlot[] = [
   },
 ]
 
-export const TODAYS_PICK_IDS = ['1', '4', '5'] as const
+const DEMO_TODAYS_PICK_IDS = ['1', '4', '5'] as const
+
+/** 公開モード: 実開催データ未登録のため空 */
+const PUBLIC_VENUE_AREAS: VenueArea[] = []
+const PUBLIC_SCHEDULE_SLOTS: ScheduleSlot[] = []
+const PUBLIC_TODAYS_PICK_IDS = [] as const
+
+export const VENUE_AREAS: VenueArea[] = sanitizeVenueCrowd(
+  isDemoMode ? DEMO_VENUE_AREAS : PUBLIC_VENUE_AREAS,
+)
+export const SCHEDULE_SLOTS: ScheduleSlot[] = isDemoMode ? DEMO_SCHEDULE_SLOTS : PUBLIC_SCHEDULE_SLOTS
+export const TODAYS_PICK_IDS = isDemoMode ? DEMO_TODAYS_PICK_IDS : PUBLIC_TODAYS_PICK_IDS
 
 export const FUTURE_CAPABILITIES = [
   { id: 'i18n', titleJa: '多言語', titleEn: 'i18n', hint: 'JA / EN 切替 + 自動翻訳レイヤー' },

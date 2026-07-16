@@ -1,19 +1,28 @@
+import { getEventHeaderMeta } from '../../services/festivalRepository'
+
 type EventStripHeaderProps = {
   onShare: () => void
+  hasActiveLiveShow?: boolean
 }
 
-export function EventStripHeader({ onShare }: EventStripHeaderProps) {
+export function EventStripHeader({ onShare, hasActiveLiveShow = false }: EventStripHeaderProps) {
+  const meta = getEventHeaderMeta(hasActiveLiveShow)
+
   return (
     <header className="fe-strip">
       <div className="fe-strip__brand">
         <span className="fe-strip__dot" aria-hidden="true" />
         <span className="fe-strip__name">大道芸博</span>
-        <span className="fe-strip__pill">LIVE</span>
+        {meta.showLivePill ? <span className="fe-strip__pill">LIVE</span> : null}
       </div>
       <div className="fe-strip__meta">
-        <span>11.07–11.09</span>
-        <span className="fe-strip__sep">·</span>
-        <span>みなとみらい</span>
+        <span>{meta.dateLabel}</span>
+        {meta.placeLabel ? (
+          <>
+            <span className="fe-strip__sep">·</span>
+            <span>{meta.placeLabel}</span>
+          </>
+        ) : null}
       </div>
       <button type="button" className="fe-strip__share" onClick={() => void onShare()} aria-label="シェア">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">

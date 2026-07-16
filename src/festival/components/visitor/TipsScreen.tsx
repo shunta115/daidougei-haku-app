@@ -2,6 +2,7 @@ import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { bumpXp } from '../../lib/gamificationStorage'
 import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 
 type TipsScreenProps = {
   performers: Performer[]
@@ -13,7 +14,7 @@ type TipsScreenProps = {
 }
 
 function isLiveNow(p: Performer) {
-  return p.approvalStatus === 'approved' && p.canStream && p.isLive
+  return shouldShowAsLiveStream(p)
 }
 
 export function TipsScreen({
@@ -52,6 +53,12 @@ export function TipsScreen({
             : 'β版ではオンライン応援機能を準備中です。金額の選択はできますが、決済は行われません。'}
         </p>
       </header>
+
+      {ordered.length === 0 ? (
+        <p className="fe-public-prep" role="status">
+          出演情報は順次公開します。
+        </p>
+      ) : null}
 
       <ul className="fe-tips-list">
         {ordered.map((p) => {

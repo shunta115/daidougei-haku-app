@@ -9,6 +9,8 @@ import {
   sortSlotsChronological,
   slotsByDate,
 } from '../../lib/scheduleEngine'
+import { PUBLIC_EVENT_COPY } from '../../services/festivalRepository'
+import { isPublicMode } from '../../config/runtimeConfig'
 
 type HomeScheduleRailProps = {
   scheduleMode: TimetableScheduleMode
@@ -50,7 +52,9 @@ export function HomeScheduleRail({ scheduleMode, onOpenDetail, onOpenTimetable }
       </div>
       <div className="fe-h6-rail__scroll" role="list">
         {rows.length === 0 ? (
-          <p className="fe-h6-rail__empty">該当する公演がありません</p>
+          <p className="fe-h6-rail__empty">
+            {isPublicMode ? PUBLIC_EVENT_COPY.noLiveShows : '該当する公演がありません'}
+          </p>
         ) : null}
         {rows.map(({ slot, performer, aud }) => {
           const isLive = aud === 'live_now' || slot.status === 'live'

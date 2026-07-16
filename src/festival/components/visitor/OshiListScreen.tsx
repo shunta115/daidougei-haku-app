@@ -4,6 +4,7 @@ import { readFavorites, toggleFavorite } from '../../lib/favoritesStorage'
 import { getDemoNow } from '../../lib/demoClock'
 import { demoTodayDateString, nextSlotForPerformerFromNow, slotEndAsDate, todaySlotsForPerformer } from '../../lib/scheduleEngine'
 import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 
 type OshiListScreenProps = {
   performers: Performer[]
@@ -20,7 +21,7 @@ function isStreamReady(p: Performer) {
 }
 
 function isLiveNow(p: Performer) {
-  return isStreamReady(p) && p.isLive
+  return shouldShowAsLiveStream(p)
 }
 
 function nextLineForPerformer(p: Performer): string {

@@ -1,4 +1,6 @@
-const KEY = 'daidougei-haku-admin-ops-v1'
+import { modeScopedStorageKey } from './storageScope'
+
+const KEY = modeScopedStorageKey('daidougei-haku-admin-ops-v1')
 
 export type AdminOpsState = {
   /** 来場者トップに出すお知らせ（短文） */

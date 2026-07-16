@@ -302,6 +302,30 @@
   margin-left: auto;
 }
 
+.fe-demo-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 197, 71, 0.35);
+  color: rgba(232, 197, 71, 0.9);
+  background: rgba(232, 197, 71, 0.08);
+  white-space: nowrap;
+}
+
+.fe-public-prep {
+  margin: 0 14px 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .fe-staff-btn {
   appearance: none;
   cursor: pointer;

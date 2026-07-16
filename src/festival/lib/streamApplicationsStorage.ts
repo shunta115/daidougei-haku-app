@@ -1,6 +1,8 @@
 import type { StreamApprovalStatus, StreamPerformerApplication } from '../types'
+import { enableDemoSeedData } from '../config/runtimeConfig'
+import { modeScopedStorageKey } from './storageScope'
 
-const STORAGE_KEY = 'daidougei-stream-applications-v1'
+const STORAGE_KEY = modeScopedStorageKey('daidougei-stream-applications-v1')
 
 function safeParse(raw: string | null): StreamPerformerApplication[] {
   if (!raw) return []
@@ -74,6 +76,7 @@ export function setStreamApplicationStatus(
 
 /** 初回シード（デモ用・1件審査中） */
 export function seedStreamApplicationsIfEmpty() {
+  if (!enableDemoSeedData) return
   if (readStreamApplications().length > 0) return
   const now = new Date().toISOString()
   writeAll([

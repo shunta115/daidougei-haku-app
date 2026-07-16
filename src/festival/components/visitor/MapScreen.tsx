@@ -8,6 +8,7 @@ import {
   statusLabelJa,
   demoTodayDateString,
 } from '../../lib/scheduleEngine'
+import { PUBLIC_EVENT_COPY } from '../../services/festivalRepository'
 
 export type MapScreenProps = {
   focusVenueId?: string | null
@@ -88,9 +89,18 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
       <header className="fe-page-head fe-page-head--tight">
         <p className="fe-page-head__eyebrow">Venue</p>
         <h1 className="fe-page-head__title">会場マップ</h1>
-        <p className="fe-page-head__lead">タップで演目一覧 · LIVE / NEXT / CROWD / HOT</p>
+        <p className="fe-page-head__lead">
+          {VENUE_AREAS.length > 0
+            ? 'タップで演目一覧 · LIVE / NEXT / CROWD / HOT'
+            : PUBLIC_EVENT_COPY.venuePending}
+        </p>
       </header>
 
+      {VENUE_AREAS.length === 0 ? (
+        <p className="fe-public-prep" role="status">
+          {PUBLIC_EVENT_COPY.datesPending}
+        </p>
+      ) : (
       <div className="fe-mapgrid" aria-label="会場エリアマップ">
         {VENUE_AREAS.map((v) => {
           const pos = MAP_LAYOUT[v.id] ?? { row: 1, col: 1 }
@@ -122,6 +132,7 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
           )
         })}
       </div>
+      )}
 
       {openVenue ? (
         <div className="fe-map-sheet" role="dialog" aria-modal="true" aria-labelledby="fe-map-sheet-title">

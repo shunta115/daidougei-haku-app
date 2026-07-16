@@ -1,6 +1,7 @@
 import type { EditableRegistrationFields, PerformerRegistration, RegistrationStatus } from '../types'
+import { modeScopedStorageKey } from './storageScope'
 
-const STORAGE_KEY = 'daidougei-haku-performer-registrations-v1'
+const STORAGE_KEY = modeScopedStorageKey('daidougei-haku-performer-registrations-v1')
 
 function normalizeRow(row: PerformerRegistration): PerformerRegistration {
   return {

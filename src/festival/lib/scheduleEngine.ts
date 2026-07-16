@@ -1,6 +1,7 @@
 import type { Performer, ProgramPulse, ScheduleSlot, VenueArea } from '../types'
 import { SCHEDULE_SLOTS, VENUE_AREAS } from '../data/scheduleData'
-import { getDemoNow } from './demoClock'
+import { formatTokyoDate, getDemoNow, tokyoWallDate } from './demoClock'
+import { PREP_VENUE } from '../services/festivalRepository'
 
 export function venueById(id: string): VenueArea | undefined {
   return VENUE_AREAS.find((v) => v.id === id)
@@ -138,15 +139,11 @@ export function currentNextSlot(): ScheduleSlot | undefined {
 }
 
 export function slotAsDate(slot: ScheduleSlot): Date {
-  const [y, m, d] = slot.date.split('-').map(Number)
-  const [hh, mm] = slot.start.split(':').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0)
+  return tokyoWallDate(slot.date, slot.start)
 }
 
 export function slotEndAsDate(slot: ScheduleSlot): Date {
-  const [y, m, d] = slot.date.split('-').map(Number)
-  const [hh, mm] = slot.end.split(':').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0)
+  return tokyoWallDate(slot.date, slot.end)
 }
 
 export type AudienceTimeStatus =
@@ -245,18 +242,16 @@ export function audienceStatusLabelEn(s: AudienceTimeStatus): string {
 }
 
 export function demoTodayDateString(): string {
-  const d = getDemoNow()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  return formatTokyoDate(getDemoNow())
 }
 
 /** ダッシュボード用：LIVE 会場 → NEXT 会場 → 混雑が高いエリア */
 export function hotVenueForDashboard(): VenueArea {
   const live = currentLiveSlot()
-  if (live) return venueById(live.venueId) ?? VENUE_AREAS[0]!
+  if (live) return venueById(live.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
   const next = currentNextSlot()
-  if (next) return venueById(next.venueId) ?? VENUE_AREAS[0]!
-  return VENUE_AREAS.find((v) => v.crowd === 'high') ?? VENUE_AREAS[0]!
+  if (next) return venueById(next.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
+  return VENUE_AREAS.find((v) => v.crowd === 'high') ?? VENUE_AREAS[0] ?? PREP_VENUE
 }
 
 export function topHeatPerformerId(performers: Performer[]): string | undefined {

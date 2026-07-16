@@ -42,6 +42,7 @@ import {
   canWatchLiveStream,
   sanitizePersonaForProduction,
 } from './lib/productionGuard'
+import { enableDemoSeedData } from './config/runtimeConfig'
 import { readAppPersona, writeAppPersona } from './session/appPersona'
 import { BetaPrepNotice } from './components/shared/BetaPrepNotice'
 import type { AppPersona, Performer, PerformerFlow, VisitorTab } from './types'
@@ -67,7 +68,7 @@ export function FestivalApp() {
   const persona = sanitizePersonaForProduction(personaState)
 
   useEffect(() => {
-    if (canAccessStaffAreas()) seedStreamApplicationsIfEmpty()
+    if (canAccessStaffAreas() && enableDemoSeedData) seedStreamApplicationsIfEmpty()
   }, [])
 
   useEffect(() => {

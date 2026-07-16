@@ -1,9 +1,11 @@
+import { isDemoMode } from './config/runtimeConfig'
 import type { Performer } from './types'
 import { TODAYS_PICK_IDS as SCHEDULE_TODAY_PICKS } from './data/scheduleData'
 
 const WEB_TIP_BASE = 'https://checkout.stripe.com/c/pay/demo'
 
-export const PERFORMERS: Performer[] = [
+/** デモ出演者・配信・picsum / Stripe デモURLを含む。公開モードでは使わない。 */
+const DEMO_PERFORMERS: Performer[] = [
   {
     id: '1',
     name: 'Luna & Strings',
@@ -146,9 +148,14 @@ export const PERFORMERS: Performer[] = [
   },
 ]
 
-export const TODAYS_PICK_IDS: string[] = [...SCHEDULE_TODAY_PICKS]
+/** 公開モード: 実出演者未登録 */
+const PUBLIC_PERFORMERS: Performer[] = []
 
-export const SPOTLIGHT_IDS = ['1', '5', '3'] as const
+export const PERFORMERS: Performer[] = isDemoMode ? DEMO_PERFORMERS : PUBLIC_PERFORMERS
+
+export const TODAYS_PICK_IDS: string[] = isDemoMode ? [...SCHEDULE_TODAY_PICKS] : []
+
+export const SPOTLIGHT_IDS = (isDemoMode ? (['1', '5', '3'] as const) : ([] as const))
 
 export const HOT_RANK_IDS = [...PERFORMERS].sort((a, b) => b.heat - a.heat).map((p) => p.id)
 

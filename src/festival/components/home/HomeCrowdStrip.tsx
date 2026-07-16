@@ -1,4 +1,6 @@
 import { VENUE_AREAS } from '../../data/scheduleData'
+import { enableMockCrowdLevels, isPublicMode } from '../../config/runtimeConfig'
+import { PUBLIC_EVENT_COPY } from '../../services/festivalRepository'
 import type { VenueArea } from '../../types'
 
 type HomeCrowdStripProps = {
@@ -20,6 +22,19 @@ function crowdLabel(crowd: VenueArea['crowd']) {
 }
 
 export function HomeCrowdStrip({ hotVenueId, onOpenMap }: HomeCrowdStripProps) {
+  if (!VENUE_AREAS.length || !enableMockCrowdLevels) {
+    return (
+      <section className="fe-h6-crowd" aria-label="会場の混雑度">
+        <div className="fe-h6-crowd__head">
+          <h2 className="fe-h6-crowd__title">会場の混雑度</h2>
+        </div>
+        <p className="fe-h6-crowd__hint">
+          {isPublicMode ? PUBLIC_EVENT_COPY.venuePending : '混雑度データはありません'}
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section className="fe-h6-crowd" aria-label="会場の混雑度">
       <div className="fe-h6-crowd__head">

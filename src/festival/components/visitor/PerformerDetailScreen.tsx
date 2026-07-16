@@ -12,6 +12,7 @@ import { sharePerformer } from '../../lib/share'
 import { recordCheerMoment } from '../../lib/cheerMomentStorage'
 import { isOnWatchlist, toggleWatchlist } from '../../lib/watchlistStorage'
 import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 import { PerformerDetailProfile } from './performer/PerformerDetailProfile'
 import { PerformerDetailSchedule } from './performer/PerformerDetailSchedule'
 import { PerformerDetailVideo } from './performer/PerformerDetailVideo'
@@ -51,7 +52,7 @@ export function PerformerDetailScreen({
   const [cheerHint, setCheerHint] = useState<string | null>(null)
 
   const streamReady = p.approvalStatus === 'approved' && p.canStream
-  const isLive = streamReady && p.isLive
+  const isLive = shouldShowAsLiveStream(p)
   const watchable = canWatchLiveStream(p)
 
   useEffect(() => {

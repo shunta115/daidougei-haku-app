@@ -65,8 +65,13 @@ export function HomeScreen({
 
   return (
     <main className={`fe-main fe-main--home fe-main--h6 fe-main--stream-home${rain ? ' fe-main--h6-rain' : ''}`}>
-      <EventStripHeader onShare={onShare} />
+      <EventStripHeader onShare={onShare} hasActiveLiveShow={liveStreamers.length > 0 || Boolean(live)} />
       <HomeStreamNow livePerformers={liveStreamers} onWatch={onWatchStream} onSupport={onSupportStream} />
+      {pickPerformers.length === 0 && liveStreamers.length === 0 && !live ? (
+        <p className="fe-public-prep" role="status">
+          出演情報は順次公開します。現在開催中の公演はありません。
+        </p>
+      ) : null}
       <HomeUpcomingStreams
         performers={upcomingStreamers}
         onOpen={onWatchStream}
