@@ -315,6 +315,13 @@
   white-space: nowrap;
 }
 
+.fe-home-loc-note {
+  margin: -4px 14px 16px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.4;
+}
+
 .fe-public-prep {
   margin: 0 14px 16px;
   padding: 12px 14px;

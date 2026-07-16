@@ -298,6 +298,7 @@ export function FestivalApp() {
               setVisitorTab('map')
             }}
             onOpenTimetable={() => setVisitorTab('timetable')}
+            onOpenPerformers={() => setVisitorTab('performers')}
             onOpenOshi={() => setVisitorTab('oshi')}
             onShare={() => void shareFestival()}
             onStreamRegister={openStreamRegisterFromVisitor}

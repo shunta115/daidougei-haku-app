@@ -1,4 +1,5 @@
 import type { TimetableScheduleMode } from '../../lib/timetableConstants'
+import { isDemoMode } from '../../config/runtimeConfig'
 
 type HomeWeatherToggleProps = {
   mode: TimetableScheduleMode
@@ -29,9 +30,17 @@ export function HomeWeatherToggle({ mode, onChange }: HomeWeatherToggleProps) {
         </button>
       </div>
       {rain ? (
-        <p className="fe-h6-weather__note">屋内移動・遅延・中止枠を強調表示（デモ）</p>
+        <p className="fe-h6-weather__note">
+          {isDemoMode
+            ? '屋内移動・遅延・中止枠を強調表示（デモ）'
+            : '雨天時は屋内移動・変更枠を優先表示します'}
+        </p>
       ) : (
-        <p className="fe-h6-weather__note">屋外ステージは通常どおり。変更はリアルタイム反映（デモ）</p>
+        <p className="fe-h6-weather__note">
+          {isDemoMode
+            ? '屋外ステージは通常どおり。変更はリアルタイム反映（デモ）'
+            : '開催情報は準備が整い次第、ここに反映されます'}
+        </p>
       )}
     </section>
   )
