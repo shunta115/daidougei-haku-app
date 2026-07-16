@@ -1,9 +1,11 @@
 {
-  "name": "大道芸博 · Street Performance Expo",
+  "name": "大道芸博",
   "short_name": "大道芸博",
-  "description": "来場者向けストリートフェス体験アプリ（デモ）。タイムテーブル・マップ・応援とサポート。",
+  "description": "来場者向けストリートフェス体験アプリ（公開β）。タイムテーブル・マップ・出演者情報。",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#050506",
   "theme_color": "#050506",
   "lang": "ja",
@@ -11,6 +13,12 @@
     {
       "src": "/favicon.svg",
       "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "180x180",
       "type": "image/svg+xml",
       "purpose": "any"
     }
