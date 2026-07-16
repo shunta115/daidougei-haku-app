@@ -1,73 +1,75 @@
-# React + TypeScript + Vite
+# 大道芸博アプリ（公開β）
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+来場者向けのストリートフェス体験 SPA（React + Vite + TypeScript）です。
 
-Currently, two official plugins are available:
+## 開発
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+開発サーバーはデフォルトで **デモモード**（固定時計・デモ出演者）です。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## ビルド
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# 本番相当（公開モード）
+npm run build
+
+# 明示的にモード指定
+VITE_APP_MODE=public npm run build
+VITE_APP_MODE=demo npm run build
+
+npm run preview
+npm run typecheck
 ```
+
+## 公開データの編集
+
+実開催情報は `src/festival/data/public/` に集約しています。  
+手順は [src/festival/data/public/README.md](src/festival/data/public/README.md) を参照。
+
+## 環境変数
+
+`.env.example` をコピーして `.env` / `.env.local` を作成できます。
+
+| 変数 | 説明 |
+|------|------|
+| `VITE_APP_MODE` | `demo` または `public`。未設定時は DEV→demo / 本番ビルド→public |
+
+秘密鍵や Stripe / Supabase の本番キーは不要（このβでは未接続）です。
+
+## Vercel への公開手順
+
+1. GitHub 等に `release/public-beta`（または main）を push
+2. [Vercel](https://vercel.com) で Import Project
+3. Framework Preset: **Vite**
+4. Build Command: `npm run build`
+5. Output Directory: `dist`
+6. Node.js Version: **20.x** 以上
+7. Environment Variables（任意）:
+   - `VITE_APP_MODE` = `public`
+8. Deploy
+
+`vercel.json` により SPA の直接 URL アクセスは `index.html` にフォールバックします。
+
+### CLI でデプロイする場合
+
+```bash
+npx vercel login   # 初回のみ・ブラウザ認証が必要
+npx vercel         # プレビュー
+npx vercel --prod  # 本番
+```
+
+ログインやチーム選択はユーザー操作が必要です。
+
+## リリースチェック
+
+[docs/RELEASE_CANDIDATE_CHECKLIST.md](docs/RELEASE_CANDIDATE_CHECKLIST.md)
+
+## ライセンス / 注意
+
+- 管理画面・出演者内部画面は本番ビルドでは非公開です
+- オンライン応援・独自配信基盤は準備中表示です
+- デモデータを本番情報として公開しないでください
