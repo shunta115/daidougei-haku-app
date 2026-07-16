@@ -9,9 +9,9 @@ import {
 const PRESET_AMOUNTS = [500, 1000, 3000, 5000] as const
 
 const SEED_CHAT = [
-  { id: 'c1', user: 'Guest · Tokyo', text: 'ルナさんの音、最高です…！' },
+  { id: 'c1', user: 'Guest · Tokyo', text: '音が澄んでいて最高です…！' },
   { id: 'c2', user: 'Guest · Osaka', text: '画面越しでも鳥肌立った' },
-  { id: 'c3', user: 'Guest · Paris', text: 'Bon courage depuis la France 🇫🇷' },
+  { id: 'c3', user: 'Guest · Paris', text: 'Bon courage depuis la France' },
 ]
 
 const SEED_CHEERS = [
