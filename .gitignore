@@ -27,3 +27,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+package-lock 2.json
+

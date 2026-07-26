@@ -1,13 +1,13 @@
 {
   "name": "大道芸博",
   "short_name": "大道芸博",
-  "description": "来場者向けストリートフェス体験アプリ（公開β）。タイムテーブル・マップ・出演者情報。",
+  "description": "ストリートパフォーマーとファンをつなぐ投げ銭プラットフォーム（β）。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#050506",
-  "theme_color": "#050506",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
   "lang": "ja",
   "icons": [
     {

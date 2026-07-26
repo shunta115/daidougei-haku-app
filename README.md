@@ -1,75 +1,60 @@
-# 大道芸博アプリ（公開β）
+# 大道芸博 — Platform β
 
-来場者向けのストリートフェス体験 SPA（React + Vite + TypeScript）です。
+ストリートパフォーマーとファンをつなぎ、ライブ配信と投げ銭で収益化するプラットフォーム（β）。
+
+旧フェスティバル来場者アプリは `src/festival/` に残しています。エントリは `src/platform/` です。
+
+## 必須セットアップ
+
+1. **Supabase** プロジェクトを作成
+2. SQL Editor で `supabase/migrations/20260726_platform_beta.sql` を実行
+3. Authentication → Providers → Email を有効化（βは Confirm email をオフ推奨）
+4. Storage バケット `avatars` は migration で作成済み
+5. 最初の管理者: 通常登録後、SQL で昇格
+
+```sql
+update public.profiles
+set role = 'admin', status = 'active'
+where email = 'you@example.com';
+```
+
+6. **Stripe** Connect を有効化し、Webhook を `https://YOUR_DOMAIN/api/stripe/webhook` に設定  
+   Events: `checkout.session.completed`, `account.updated`
+
+## 環境変数
+
+`.env.example` を参照。
+
+| 変数 | 用途 |
+|------|------|
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | フロント |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | `/api`（サーバーのみ） |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | 投げ銭・Connect |
+| `APP_URL` | 本番オリジン（Checkout / Connect 戻り先） |
 
 ## 開発
 
 ```bash
 npm install
 npm run dev
-```
-
-開発サーバーはデフォルトで **デモモード**（固定時計・デモ出演者）です。
-
-## ビルド
-
-```bash
-# 本番相当（公開モード）
-npm run build
-
-# 明示的にモード指定
-VITE_APP_MODE=public npm run build
-VITE_APP_MODE=demo npm run build
-
-npm run preview
 npm run typecheck
+npm run build
 ```
 
-## 公開データの編集
+## βに含まれる機能
 
-実開催情報は `src/festival/data/public/` に集約しています。  
-手順は [src/festival/data/public/README.md](src/festival/data/public/README.md) を参照。
+- Auth（ファン / パフォーマー / 管理）
+- プロフィール・画像・ライブ開始終了・現在地共有・履歴
+- 検索・フォロー・投げ銭（Stripe Connect）・通知
+- 管理ダッシュボード（登録・ライブ・投げ銭・手数料・DAU/MAU）・承認・停止・削除
+- PWA
 
-## 環境変数
+## βで作らないもの
 
-`.env.example` をコピーして `.env` / `.env.local` を作成できます。
+世界MAP / ランキング / ファンレベル / イベント / 出演依頼 / 企業案件 / AI / チャット / コメント / グッズ / チケット
 
-| 変数 | 説明 |
-|------|------|
-| `VITE_APP_MODE` | `demo` または `public`。未設定時は DEV→demo / 本番ビルド→public |
+## Vercel
 
-秘密鍵や Stripe / Supabase の本番キーは不要（このβでは未接続）です。
+Framework: Vite · Build: `npm run build` · Output: `dist` · Node 20+
 
-## Vercel への公開手順
-
-1. GitHub 等に `release/public-beta`（または main）を push
-2. [Vercel](https://vercel.com) で Import Project
-3. Framework Preset: **Vite**
-4. Build Command: `npm run build`
-5. Output Directory: `dist`
-6. Node.js Version: **20.x** 以上
-7. Environment Variables（任意）:
-   - `VITE_APP_MODE` = `public`
-8. Deploy
-
-`vercel.json` により SPA の直接 URL アクセスは `index.html` にフォールバックします。
-
-### CLI でデプロイする場合
-
-```bash
-npx vercel login   # 初回のみ・ブラウザ認証が必要
-npx vercel         # プレビュー
-npx vercel --prod  # 本番
-```
-
-ログインやチーム選択はユーザー操作が必要です。
-
-## リリースチェック
-
-[docs/RELEASE_CANDIDATE_CHECKLIST.md](docs/RELEASE_CANDIDATE_CHECKLIST.md)
-
-## ライセンス / 注意
-
-- 管理画面・出演者内部画面は本番ビルドでは非公開です
-- オンライン応援・独自配信基盤は準備中表示です
-- デモデータを本番情報として公開しないでください
+上記の環境変数を Vercel Project Settings に設定してから本番デプロイしてください。
