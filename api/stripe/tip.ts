@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe } from './_shared'
+import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

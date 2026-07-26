@@ -3,6 +3,7 @@ import {
   approvePerformer,
   fetchAdminMetrics,
   listPendingPerformers,
+  listUsers,
   softDeleteUser,
   suspendUser,
 } from '../lib/api'
@@ -112,7 +113,6 @@ export function AdminUsersScreen() {
 
   const reload = async () => {
     try {
-      const { listUsers } = await import('../lib/api')
       setRows(await listUsers())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed')

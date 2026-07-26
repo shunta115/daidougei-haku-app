@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type Stripe from 'stripe'
-import { getAdminSupabase, getStripe } from './_shared'
+import { getAdminSupabase, getStripe } from './_shared.js'
 
 export const config = {
   api: { bodyParser: false },
