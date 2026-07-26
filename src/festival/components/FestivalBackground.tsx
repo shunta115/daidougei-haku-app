@@ -7,7 +7,11 @@ export function FestivalBackground() {
         <span className="fe-bg__orb fe-bg__orb--b" />
         <span className="fe-bg__orb fe-bg__orb--c" />
       </div>
-      <div className="fe-bg__grid" />
+      <div className="fe-bg__beams" aria-hidden="true">
+        <span className="fe-bg__beam fe-bg__beam--1" />
+        <span className="fe-bg__beam fe-bg__beam--2" />
+        <span className="fe-bg__beam fe-bg__beam--3" />
+      </div>
       <div className="fe-bg__vignette" />
       <div className="fe-bg__grain" />
     </div>

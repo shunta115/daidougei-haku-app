@@ -1,73 +1,60 @@
-# React + TypeScript + Vite
+# 大道芸博 — Platform β
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ストリートパフォーマーとファンをつなぎ、ライブ配信と投げ銭で収益化するプラットフォーム（β）。
 
-Currently, two official plugins are available:
+旧フェスティバル来場者アプリは `src/festival/` に残しています。エントリは `src/platform/` です。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 必須セットアップ
 
-## React Compiler
+1. **Supabase** プロジェクトを作成
+2. SQL Editor で `supabase/migrations/20260726_platform_beta.sql` を実行
+3. Authentication → Providers → Email を有効化（βは Confirm email をオフ推奨）
+4. Storage バケット `avatars` は migration で作成済み
+5. 最初の管理者: 通常登録後、SQL で昇格
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sql
+update public.profiles
+set role = 'admin', status = 'active'
+where email = 'you@example.com';
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+6. **Stripe** Connect を有効化し、Webhook を `https://YOUR_DOMAIN/api/stripe/webhook` に設定  
+   Events: `checkout.session.completed`, `account.updated`
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 環境変数
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+`.env.example` を参照。
+
+| 変数 | 用途 |
+|------|------|
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | フロント |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | `/api`（サーバーのみ） |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | 投げ銭・Connect |
+| `APP_URL` | 本番オリジン（Checkout / Connect 戻り先） |
+
+## 開発
+
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run build
 ```
+
+## βに含まれる機能
+
+- Auth（ファン / パフォーマー / 管理）
+- プロフィール・画像・ライブ開始終了・現在地共有・履歴
+- 検索・フォロー・投げ銭（Stripe Connect）・通知
+- 管理ダッシュボード（登録・ライブ・投げ銭・手数料・DAU/MAU）・承認・停止・削除
+- PWA
+
+## βで作らないもの
+
+世界MAP / ランキング / ファンレベル / イベント / 出演依頼 / 企業案件 / AI / チャット / コメント / グッズ / チケット
+
+## Vercel
+
+Framework: Vite · Build: `npm run build` · Output: `dist` · Node 20+
+
+上記の環境変数を Vercel Project Settings に設定してから本番デプロイしてください。

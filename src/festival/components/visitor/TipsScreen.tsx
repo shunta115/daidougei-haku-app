@@ -1,28 +1,71 @@
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { bumpXp } from '../../lib/gamificationStorage'
+import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 
 type TipsScreenProps = {
   performers: Performer[]
   onOpenPerformer: (id: string) => void
   onXpBump: () => void
+  onWatchStream?: (id: string) => void
+  onSupportStream?: (id: string) => void
+  onBetaSupport?: () => void
 }
 
-export function TipsScreen({ performers, onOpenPerformer, onXpBump }: TipsScreenProps) {
+function isLiveNow(p: Performer) {
+  return shouldShowAsLiveStream(p)
+}
+
+export function TipsScreen({
+  performers,
+  onOpenPerformer,
+  onXpBump,
+  onWatchStream,
+  onSupportStream,
+  onBetaSupport,
+}: TipsScreenProps) {
+  const ordered = [...performers].sort((a, b) => {
+    const rank = (p: Performer) => (isLiveNow(p) ? 0 : p.approvalStatus === 'approved' && p.canStream ? 1 : 2)
+    return rank(a) - rank(b) || b.heat - a.heat
+  })
+
+  const handleSupport = (id: string) => {
+    if (!canProcessOnlineSupport()) {
+      onBetaSupport?.()
+      return
+    }
+    bumpXp(6)
+    onXpBump()
+    onSupportStream?.(id)
+  }
+
   return (
     <main className="fe-main fe-main--sub fe-main--tips">
       <header className="fe-page-head">
-        <p className="fe-page-head__eyebrow">Support</p>
-        <h1 className="fe-page-head__title">応援 · 投げ銭</h1>
-        <p className="fe-page-head__lead">外部リンク方式。タップで決済サービスへ（デモURL）。</p>
+        <p className="fe-page-head__eyebrow" lang="en">
+          WEB TIP · SUPPORT
+        </p>
+        <h1 className="fe-page-head__title">応援 &amp; WEB投げ銭</h1>
+        <p className="fe-page-head__lead">
+          {canProcessOnlineSupport()
+            ? 'お支払いは外部の安全なページで完結。アプリ内課金はありません。合計金額も表示しません。'
+            : 'β版ではオンライン応援機能を準備中です。金額の選択はできますが、決済は行われません。'}
+        </p>
       </header>
 
+      {ordered.length === 0 ? (
+        <p className="fe-public-prep" role="status">
+          出演情報は順次公開します。
+        </p>
+      ) : null}
+
       <ul className="fe-tips-list">
-        {performers.map((p) => {
-          const tips = p.tipLinks ?? []
-          const first = tips[0]
+        {ordered.map((p) => {
+          const live = isLiveNow(p)
+          const watchable = canWatchLiveStream(p)
           return (
-            <li key={p.id} className="fe-tips-card">
+            <li key={p.id} className={`fe-tips-card${live ? ' fe-tips-card--live' : ''}`}>
               <button type="button" className="fe-tips-card__head" onClick={() => onOpenPerformer(p.id)}>
                 <span
                   className={`fe-tips-card__av${p.photoUrl ? ' fe-tips-card__av--photo' : ''}`}
@@ -35,46 +78,49 @@ export function TipsScreen({ performers, onOpenPerformer, onXpBump }: TipsScreen
                   {!p.photoUrl ? initials(p.name) : null}
                 </span>
                 <span className="fe-tips-card__who">
-                  <span className="fe-tips-card__name">{p.nameJa}</span>
-                  <span className="fe-tips-card__act">{p.actJa}</span>
+                  <span className="fe-tips-card__name">
+                    {p.nameJa}
+                    {live ? (
+                      <span className="fe-tips-card__live" lang="en">
+                        LIVE
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="fe-tips-card__act">
+                    {p.country ? `${p.country} · ` : ''}
+                    {p.genre ?? p.actJa}
+                  </span>
                 </span>
                 <span className="fe-tips-card__chev">›</span>
               </button>
               <div className="fe-tips-card__actions">
-                {first ? (
-                  <a
+                {live && onWatchStream ? (
+                  <button
+                    type="button"
                     className="fe-btn fe-btn--primary fe-tips-card__support"
-                    href={first.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      bumpXp(6)
-                      onXpBump()
-                    }}
+                    disabled={!watchable}
+                    onClick={() => watchable && onWatchStream(p.id)}
                   >
-                    応援する
-                  </a>
+                    {watchable ? '視聴する' : '配信準備中'}
+                  </button>
                 ) : null}
-                {tips.map((t) => (
-                  <a
-                    key={t.id}
-                    className="fe-tips-link"
-                    href={t.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      bumpXp(2)
-                      onXpBump()
-                    }}
+                {live && onSupportStream ? (
+                  <button
+                    type="button"
+                    className="fe-btn fe-btn--glass fe-tips-card__support fe-btn--support-primary"
+                    onClick={() => handleSupport(p.id)}
                   >
-                    {t.labelJa}
-                  </a>
-                ))}
-                {p.snsList?.[0] ? (
-                  <a className="fe-tips-link fe-tips-link--ghost" href={p.snsList[0].url} target="_blank" rel="noopener noreferrer">
-                    SNS
-                  </a>
-                ) : null}
+                    WEBで応援
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="fe-btn fe-btn--glass fe-tips-card__support fe-btn--support-primary"
+                    onClick={() => handleSupport(p.id)}
+                  >
+                    WEB投げ銭
+                  </button>
+                )}
               </div>
             </li>
           )

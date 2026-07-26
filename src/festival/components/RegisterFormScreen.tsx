@@ -12,6 +12,7 @@ const emptyDraft: RegistrationDraft = {
   email: '',
   phone: '',
   genre: '',
+  activityBase: '',
   profile: '',
   achievements: '',
   snsUrl: '',
@@ -19,14 +20,15 @@ const emptyDraft: RegistrationDraft = {
   photoUrl: '',
   tipUrl: '',
   preferredDates: '',
+  preferredStage: '',
+  videoUrl: '',
+  staffNote: '',
   notes: '',
 }
 
 type RegisterFormScreenProps = {
-  /** 送信後に掲載完了画面へ渡す ID */
   onSuccess: (registrationId: string) => void
   onBack: () => void
-  /** 直前の送信を再編集するときの登録 ID */
   editRegistrationId?: string | null
 }
 
@@ -39,6 +41,7 @@ function draftFromRegistrationId(id: string): RegistrationDraft | null {
     email: r.email,
     phone: r.phone,
     genre: r.genre,
+    activityBase: r.activityBase ?? '',
     profile: r.profile,
     achievements: r.achievements,
     snsUrl: r.snsUrl,
@@ -46,6 +49,9 @@ function draftFromRegistrationId(id: string): RegistrationDraft | null {
     photoUrl: r.photoUrl,
     tipUrl: r.tipUrl,
     preferredDates: r.preferredDates,
+    preferredStage: r.preferredStage ?? '',
+    videoUrl: r.videoUrl ?? '',
+    staffNote: r.staffNote ?? '',
     notes: r.notes,
   }
 }
@@ -74,6 +80,7 @@ export function RegisterFormScreen({ onSuccess, onBack, editRegistrationId }: Re
           email: v.email.trim(),
           phone: v.phone.trim(),
           genre: v.genre.trim(),
+          activityBase: v.activityBase.trim(),
           profile: v.profile.trim(),
           achievements: v.achievements.trim(),
           snsUrl: v.snsUrl.trim(),
@@ -81,6 +88,9 @@ export function RegisterFormScreen({ onSuccess, onBack, editRegistrationId }: Re
           photoUrl: v.photoUrl.trim(),
           tipUrl: v.tipUrl.trim(),
           preferredDates: v.preferredDates.trim(),
+          preferredStage: v.preferredStage.trim(),
+          videoUrl: v.videoUrl.trim(),
+          staffNote: v.staffNote.trim(),
           notes: v.notes.trim(),
         }
         if (editRegistrationId) {
@@ -107,11 +117,11 @@ export function RegisterFormScreen({ onSuccess, onBack, editRegistrationId }: Re
           ← 戻る
         </button>
         <p className="fe-page-head__eyebrow" lang="en">
-          Official registration
+          OFFICIAL ENTRY
         </p>
-        <h1 className="fe-page-head__title">出演者登録</h1>
+        <h1 className="fe-page-head__title">パフォーマー登録</h1>
         <p className="fe-page-head__lead">
-          大道芸博への出演希望を受け付けます。送信後、運営が内容を確認し、承認された情報が公式アプリに掲載されます。
+          大道芸博への出演希望。送信後は運営ダッシュボードで確認・編集できます（この端末の localStorage · デモ）。
         </p>
         <p className="fe-form-note">
           <span className="fe-req">*</span> は必須です。
@@ -119,235 +129,123 @@ export function RegisterFormScreen({ onSuccess, onBack, editRegistrationId }: Re
       </header>
 
       <form className="fe-form" onSubmit={onSubmit}>
-        <section className="fe-form-section" aria-labelledby="fe-reg-basic">
-          <h2 id="fe-reg-basic" className="fe-form-section__title">
-            基本情報
+        <section className="fe-form-section" aria-labelledby="fe-reg-a">
+          <h2 id="fe-reg-a" className="fe-form-section__title">
+            アーティスト
           </h2>
-
           <label className="fe-field">
             <span className="fe-label">
               アーティスト名 <span className="fe-req">*</span>
             </span>
-            <input
-              className="fe-input"
-              name="artistName"
-              value={v.artistName}
-              onChange={patchField('artistName')}
-              required
-              autoComplete="nickname"
-              placeholder="ステージ上のお名前"
-              enterKeyHint="next"
-            />
+            <input className="fe-input" value={v.artistName} onChange={patchField('artistName')} required placeholder="ステージ名" />
           </label>
-
-          <label className="fe-field">
-            <span className="fe-label">
-              代表者名 <span className="fe-req">*</span>
-            </span>
-            <input
-              className="fe-input"
-              name="realName"
-              value={v.realName}
-              onChange={patchField('realName')}
-              required
-              autoComplete="name"
-              placeholder="氏名（運営連絡用）"
-              enterKeyHint="next"
-            />
-          </label>
-
-          <label className="fe-field">
-            <span className="fe-label">
-              メールアドレス <span className="fe-req">*</span>
-            </span>
-            <input
-              className="fe-input"
-              type="email"
-              inputMode="email"
-              name="email"
-              value={v.email}
-              onChange={patchField('email')}
-              required
-              autoComplete="email"
-              placeholder="contact@example.com"
-              enterKeyHint="next"
-            />
-          </label>
-
-          <label className="fe-field">
-            <span className="fe-label">
-              電話番号 <span className="fe-req">*</span>
-            </span>
-            <input
-              className="fe-input"
-              type="tel"
-              inputMode="tel"
-              name="phone"
-              value={v.phone}
-              onChange={patchField('phone')}
-              required
-              autoComplete="tel"
-              placeholder="090-0000-0000"
-              enterKeyHint="next"
-            />
-          </label>
-
           <label className="fe-field">
             <span className="fe-label">
               ジャンル <span className="fe-req">*</span>
             </span>
-            <input
-              className="fe-input"
-              name="genre"
-              value={v.genre}
-              onChange={patchField('genre')}
-              required
-              placeholder="例: ジャグリング / マイム / 大道芸"
-              enterKeyHint="next"
-            />
+            <input className="fe-input" value={v.genre} onChange={patchField('genre')} required placeholder="例: ジャグリング / マイム" />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">
+              活動拠点 <span className="fe-req">*</span>
+            </span>
+            <input className="fe-input" value={v.activityBase} onChange={patchField('activityBase')} required placeholder="例: 横浜 / 関東圏" />
           </label>
         </section>
 
-        <section className="fe-form-section" aria-labelledby="fe-reg-profile">
-          <h2 id="fe-reg-profile" className="fe-form-section__title">
-            プロフィール・実績
+        <section className="fe-form-section" aria-labelledby="fe-reg-b">
+          <h2 id="fe-reg-b" className="fe-form-section__title">
+            プロフィール
           </h2>
-
           <label className="fe-field">
             <span className="fe-label">
               プロフィール <span className="fe-req">*</span>
             </span>
-            <textarea
-              className="fe-textarea"
-              name="profile"
-              value={v.profile}
-              onChange={patchField('profile')}
-              required
-              rows={5}
-              placeholder="活動歴、スタイル、見どころなど"
-            />
+            <textarea className="fe-textarea" rows={5} value={v.profile} onChange={patchField('profile')} required />
           </label>
-
           <label className="fe-field">
             <span className="fe-label">
-              主な実績 <span className="fe-req">*</span>
+              過去出演歴 <span className="fe-req">*</span>
             </span>
-            <textarea
-              className="fe-textarea"
-              name="achievements"
-              value={v.achievements}
-              onChange={patchField('achievements')}
-              required
-              rows={4}
-              placeholder="受賞歴、海外公演、メディア出演など"
-            />
+            <textarea className="fe-textarea" rows={4} value={v.achievements} onChange={patchField('achievements')} required />
           </label>
         </section>
 
-        <section className="fe-form-section" aria-labelledby="fe-reg-links">
-          <h2 id="fe-reg-links" className="fe-form-section__title">
-            リンク・宣材
+        <section className="fe-form-section" aria-labelledby="fe-reg-c">
+          <h2 id="fe-reg-c" className="fe-form-section__title">
+            宣材 · リンク
           </h2>
-
-          <label className="fe-field">
-            <span className="fe-label">
-              SNSリンク <span className="fe-req">*</span>
-            </span>
-            <input
-              className="fe-input"
-              type="url"
-              inputMode="url"
-              name="snsUrl"
-              value={v.snsUrl}
-              onChange={patchField('snsUrl')}
-              required
-              placeholder="https://instagram.com/…"
-              enterKeyHint="next"
-            />
-          </label>
-
-          <label className="fe-field">
-            <span className="fe-label">
-              公式サイト <span className="fe-req">*</span>
-            </span>
-            <input
-              className="fe-input"
-              type="url"
-              inputMode="url"
-              name="website"
-              value={v.website}
-              onChange={patchField('website')}
-              required
-              placeholder="https://"
-              enterKeyHint="next"
-            />
-          </label>
-
           <label className="fe-field">
             <span className="fe-label">
               宣材写真URL <span className="fe-req">*</span>
             </span>
-            <input
-              className="fe-input"
-              type="url"
-              inputMode="url"
-              name="photoUrl"
-              value={v.photoUrl}
-              onChange={patchField('photoUrl')}
-              required
-              placeholder="画像直リンク or クラウドURL"
-              enterKeyHint="next"
-            />
+            <input className="fe-input" type="url" value={v.photoUrl} onChange={patchField('photoUrl')} required />
           </label>
-
           <label className="fe-field">
             <span className="fe-label">
-              投げ銭リンク <span className="fe-req">*</span>
+              SNS <span className="fe-req">*</span>
             </span>
-            <input
-              className="fe-input"
-              type="url"
-              inputMode="url"
-              name="tipUrl"
-              value={v.tipUrl}
-              onChange={patchField('tipUrl')}
-              required
-              placeholder="PayPal / Kyash / 投げ銭サービスURL"
-              enterKeyHint="next"
-            />
+            <input className="fe-input" type="url" value={v.snsUrl} onChange={patchField('snsUrl')} required />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">
+              公式サイト <span className="fe-req">*</span>
+            </span>
+            <input className="fe-input" type="url" value={v.website} onChange={patchField('website')} required />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">動画URL</span>
+            <input className="fe-input" type="url" value={v.videoUrl} onChange={patchField('videoUrl')} placeholder="https://…" />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">サポート用URL（任意）</span>
+            <input className="fe-input" type="url" value={v.tipUrl} onChange={patchField('tipUrl')} placeholder="応援リンクがある場合" />
           </label>
         </section>
 
-        <section className="fe-form-section" aria-labelledby="fe-reg-extra">
-          <h2 id="fe-reg-extra" className="fe-form-section__title">
-            出演・その他
+        <section className="fe-form-section" aria-labelledby="fe-reg-d">
+          <h2 id="fe-reg-d" className="fe-form-section__title">
+            出演希望
           </h2>
-
           <label className="fe-field">
             <span className="fe-label">
-              出演希望日 <span className="fe-req">*</span>
+              希望出演日 <span className="fe-req">*</span>
             </span>
-            <textarea
-              className="fe-textarea"
-              name="preferredDates"
-              value={v.preferredDates}
-              onChange={patchField('preferredDates')}
-              required
-              rows={3}
-              placeholder="例: 11/8 午後希望、全日可 など"
-            />
+            <textarea className="fe-textarea" rows={3} value={v.preferredDates} onChange={patchField('preferredDates')} required />
           </label>
-
           <label className="fe-field">
-            <span className="fe-label">備考</span>
-            <textarea
-              className="fe-textarea"
-              name="notes"
-              value={v.notes}
-              onChange={patchField('notes')}
-              rows={3}
-              placeholder="機材・スペース・時間など、伝えておきたいことがあれば"
-            />
+            <span className="fe-label">
+              希望ステージ <span className="fe-req">*</span>
+            </span>
+            <input className="fe-input" value={v.preferredStage} onChange={patchField('preferredStage')} required />
+          </label>
+        </section>
+
+        <section className="fe-form-section" aria-labelledby="fe-reg-e">
+          <h2 id="fe-reg-e" className="fe-form-section__title">
+            運営連絡
+          </h2>
+          <label className="fe-field">
+            <span className="fe-label">代表者名（任意）</span>
+            <input className="fe-input" value={v.realName} onChange={patchField('realName')} />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">メール（任意）</span>
+            <input className="fe-input" type="email" value={v.email} onChange={patchField('email')} />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">電話（任意）</span>
+            <input className="fe-input" type="tel" value={v.phone} onChange={patchField('phone')} />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">
+              運営への連絡事項 <span className="fe-req">*</span>
+            </span>
+            <textarea className="fe-textarea" rows={3} value={v.staffNote} onChange={patchField('staffNote')} required />
+          </label>
+          <label className="fe-field">
+            <span className="fe-label">その他メモ（任意）</span>
+            <textarea className="fe-textarea" rows={2} value={v.notes} onChange={patchField('notes')} />
           </label>
         </section>
 

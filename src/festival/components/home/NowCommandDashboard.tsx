@@ -1,6 +1,6 @@
 import type { Performer, ProgramPulse, VenueArea } from '../../types'
 import { currentLiveSlot, venueById } from '../../lib/scheduleEngine'
-import { stampCheckIn, stampProgress, readXp } from '../../lib/gamificationStorage'
+import { stampCheckIn, stampProgress } from '../../lib/gamificationStorage'
 import { shareFestival } from '../../lib/share'
 
 export type NowCommandDashboardProps = {
@@ -42,14 +42,13 @@ export function NowCommandDashboard({
   const liveSlot = currentLiveSlot()
   const stampTargetId = liveSlot?.performerId
   const prog = stampProgress()
-  const xp = readXp()
   const goName = goVenueId ? (venueById(goVenueId)?.nameJa ?? hotVenue.nameJa) : hotVenue.nameJa
 
   return (
     <section className="fe-dash" aria-label="いまの状況">
       <div className="fe-dash__hot">
         <div className="fe-dash__hot-head">
-          <span className="fe-dash__hot-label">HOT AREA</span>
+          <span className="fe-dash__hot-label">FOCUS</span>
           <span className={`fe-dash__crowd fe-dash__crowd--${hotVenue.crowd ?? 'mid'}`}>
             CROWD {hotVenue.crowd ?? '—'}
           </span>
@@ -58,7 +57,7 @@ export function NowCommandDashboard({
         <p className="fe-dash__hot-en" lang="en">
           {hotVenue.nameEn}
         </p>
-        <p className="fe-dash__hot-hint">今行くべき場所 · 熱量が集まっているエリア</p>
+        <p className="fe-dash__hot-hint">今夜の回遊の目安 · 会場ムードのフォーカス（デモ）</p>
       </div>
 
       <div className="fe-dash__pulse">
@@ -97,8 +96,8 @@ export function NowCommandDashboard({
         <button type="button" className="fe-dash__chip" onClick={onOpenMap}>
           地図で見る
         </button>
-        <button type="button" className="fe-dash__chip fe-dash__chip--gold" onClick={onOpenTips}>
-          投げ銭する
+        <button type="button" className="fe-dash__chip fe-dash__chip--accent" onClick={onOpenTips}>
+          エールを送る
         </button>
         <button type="button" className="fe-dash__chip" onClick={onOpenTimetable}>
           タイム
@@ -120,7 +119,7 @@ export function NowCommandDashboard({
         <div>
           <p className="fe-dash__stamp-title">スタンプラリー（デモ）</p>
           <p className="fe-dash__stamp-meta">
-            {prog.count} / 3 組 · XP {xp} · {prog.badgeUnlocked ? 'バッジ獲得！' : 'あと ' + Math.max(0, 3 - prog.count) + ' 組'}
+            {prog.count} / 3 箇所 · {prog.badgeUnlocked ? 'コンプリート' : 'あと ' + Math.max(0, 3 - prog.count) + ' 箇所'}
           </p>
         </div>
         <button
@@ -139,7 +138,9 @@ export function NowCommandDashboard({
 
       <div className="fe-dash__support">
         <p className="fe-dash__support-title">感動したら応援</p>
-        <p className="fe-dash__support-text">演目が終わったあとも、投げ銭タブからすぐ外部リンクへ飛べます。</p>
+        <p className="fe-dash__support-text">
+          余韻のまま、各アーティストが用意した外部のサポート導線へ。静かなワンタップでエールを届けられます。
+        </p>
         <button type="button" className="fe-btn fe-btn--glass fe-dash__support-btn" onClick={onOpenTips}>
           応援ページへ
         </button>

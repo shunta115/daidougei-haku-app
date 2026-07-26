@@ -1,25 +1,23 @@
-/**
- * アプリ入口（ペルソナ）の切替。
- * 現状は sessionStorage。将来の認証導入時は、ここを AuthProvider / session API へ差し替える想定。
- */
 import type { AppPersona } from '../types'
+import { IS_DEV } from '../lib/productionGuard'
+import { modeScopedStorageKey } from '../lib/storageScope'
 
-const STORAGE_KEY = 'daidougei-haku-app-persona-v1'
-const VALID = new Set<AppPersona>(['visitor', 'performer', 'admin'])
+const KEY = modeScopedStorageKey('daidougei-haku-persona-v1')
 
 export function readAppPersona(): AppPersona {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (raw && VALID.has(raw as AppPersona)) return raw as AppPersona
+    const raw = localStorage.getItem(KEY)
+    if (IS_DEV && (raw === 'performer' || raw === 'admin')) return raw
   } catch {
-    /* private mode 等 */
+    /* ignore */
   }
   return 'visitor'
 }
 
 export function writeAppPersona(persona: AppPersona) {
+  if (!IS_DEV && persona !== 'visitor') return
   try {
-    sessionStorage.setItem(STORAGE_KEY, persona)
+    localStorage.setItem(KEY, persona)
   } catch {
     /* ignore */
   }

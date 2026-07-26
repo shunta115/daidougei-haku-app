@@ -1,15 +1,12 @@
 import type { AppPersona } from '../types'
+import { showDemoBadge } from '../config/runtimeConfig'
 
 type TopBarProps = {
   persona: AppPersona
-  /** 来場者モードのときのみ意味を持つ（将来: 通知バッジ等） */
   visitorContext?: string
   onExitPerformerOrAdmin: () => void
 }
 
-/**
- * 将来: visitorContext を Auth の displayName に、退出ボタンをログアウトに差し替え。
- */
 export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopBarProps) {
   const isVisitor = persona === 'visitor'
 
@@ -26,6 +23,11 @@ export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopB
       </div>
 
       <div className="fe-topbar__actions">
+        {showDemoBadge ? (
+          <span className="fe-demo-badge" title="固定時刻・ダミー出演者などを含むデモ表示です">
+            デモデータ
+          </span>
+        ) : null}
         {!isVisitor ? (
           <button type="button" className="fe-staff-btn fe-staff-btn--exit" onClick={onExitPerformerOrAdmin}>
             来場者モードへ

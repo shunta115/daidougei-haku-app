@@ -8,6 +8,7 @@ import {
   statusLabelJa,
   demoTodayDateString,
 } from '../../lib/scheduleEngine'
+import { PUBLIC_EVENT_COPY } from '../../services/festivalRepository'
 
 export type MapScreenProps = {
   focusVenueId?: string | null
@@ -26,18 +27,16 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
   const consumedFocusRef = useRef<string | null>(null)
   const [userVenueId, setUserVenueId] = useState<string | null>(null)
   const [stickyOpenId, setStickyOpenId] = useState<string | null>(null)
-  const [syncedFocusKey, setSyncedFocusKey] = useState<string | null>(null)
   const today = demoTodayDateString()
 
   const validFocus =
     focusVenueId && VENUE_AREAS.some((v) => v.id === focusVenueId) ? focusVenueId : null
 
-  if (validFocus !== syncedFocusKey) {
-    setSyncedFocusKey(validFocus)
+  useEffect(() => {
     if (validFocus) {
       setStickyOpenId(validFocus)
     }
-  }
+  }, [validFocus])
 
   const openVenueId = validFocus ?? userVenueId ?? stickyOpenId
 
@@ -83,7 +82,6 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
   const closeSheet = () => {
     setUserVenueId(null)
     setStickyOpenId(null)
-    setSyncedFocusKey(null)
   }
 
   return (
@@ -91,9 +89,21 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
       <header className="fe-page-head fe-page-head--tight">
         <p className="fe-page-head__eyebrow">Venue</p>
         <h1 className="fe-page-head__title">会場マップ</h1>
-        <p className="fe-page-head__lead">タップで演目一覧 · LIVE / NEXT / CROWD / HOT</p>
+        <p className="fe-page-head__lead">
+          {VENUE_AREAS.length > 0
+            ? 'タップで演目一覧 · LIVE / NEXT / CROWD / HOT'
+            : PUBLIC_EVENT_COPY.venuePending}
+        </p>
       </header>
+      <p className="fe-home-loc-note" role="note">
+        現在地（GPS）案内は準備中です。会場をタップして公演を確認できます。
+      </p>
 
+      {VENUE_AREAS.length === 0 ? (
+        <p className="fe-public-prep" role="status">
+          {PUBLIC_EVENT_COPY.datesPending}
+        </p>
+      ) : (
       <div className="fe-mapgrid" aria-label="会場エリアマップ">
         {VENUE_AREAS.map((v) => {
           const pos = MAP_LAYOUT[v.id] ?? { row: 1, col: 1 }
@@ -125,6 +135,7 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
           )
         })}
       </div>
+      )}
 
       {openVenue ? (
         <div className="fe-map-sheet" role="dialog" aria-modal="true" aria-labelledby="fe-map-sheet-title">
@@ -137,7 +148,9 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
             </header>
             <p className="fe-map-sheet__lead">{openVenue.blurbJa}</p>
             <ul className="fe-map-sheet__list">
-              {openSlots.length === 0 ? <li className="fe-map-sheet__empty">このエリアに演目はありません（デモ）</li> : null}
+              {openSlots.length === 0 ? (
+                <li className="fe-map-sheet__empty">このエリアに演目はありません</li>
+              ) : null}
               {openSlots.map((s) => {
                 const p = performerById(s.performerId)
                 return (

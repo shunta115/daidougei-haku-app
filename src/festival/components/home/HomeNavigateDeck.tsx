@@ -6,7 +6,7 @@ type HomeNavigateDeckProps = {
 }
 
 /**
- * ホーム上段の大型導線 — マップ / タイムテーブル / 投げ銭（ライブラリ）
+ * ホーム上段の大型導線 — マップ / タイムテーブル / 応援・サポート
  */
 export function HomeNavigateDeck({ onTab, onScrollTips }: HomeNavigateDeckProps) {
   return (
@@ -22,10 +22,10 @@ export function HomeNavigateDeck({ onTab, onScrollTips }: HomeNavigateDeckProps)
           <span className="fe-home-deck__label">タイムテーブル</span>
           <span className="fe-home-deck__sub">日付 / 会場 / 出演者</span>
         </button>
-        <button type="button" className="fe-home-deck__card fe-home-deck__card--tip" onClick={onScrollTips}>
+        <button type="button" className="fe-home-deck__card fe-home-deck__card--support" onClick={onScrollTips}>
           <span className="fe-home-deck__glow" aria-hidden="true" />
-          <span className="fe-home-deck__label">投げ銭</span>
-          <span className="fe-home-deck__sub">PayPay / Stripe ほか</span>
+          <span className="fe-home-deck__label">応援する</span>
+          <span className="fe-home-deck__sub">エール · サポーター導線</span>
         </button>
       </div>
     </section>

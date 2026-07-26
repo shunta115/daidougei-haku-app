@@ -20,12 +20,12 @@ export function ParkPromenadeStrip({ onTab, onScrollGuide, onScrollTips }: ParkP
           会場マップ
         </button>
         <span className="fe-promenade__dot" aria-hidden="true" />
-        <button type="button" className="fe-promenade__btn fe-promenade__btn--tip" onClick={onScrollTips}>
-          投げ銭
+        <button type="button" className="fe-promenade__btn fe-promenade__btn--support" onClick={onScrollTips}>
+          エール
         </button>
         <span className="fe-promenade__dot" aria-hidden="true" />
-        <button type="button" className="fe-promenade__btn" onClick={() => onTab('library')}>
-          お気に入り
+        <button type="button" className="fe-promenade__btn" onClick={() => onTab('oshi')}>
+          推し
         </button>
         <span className="fe-promenade__dot" aria-hidden="true" />
         <button type="button" className="fe-promenade__btn fe-promenade__btn--ghost" onClick={onScrollGuide}>

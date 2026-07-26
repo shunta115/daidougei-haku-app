@@ -6,14 +6,14 @@ export function ExperienceSection() {
           <span className="fe-section-title__eyebrow">Festival OS</span>
           <span className="fe-section-title__main">Experience layers</span>
         </h2>
-        <p className="fe-section-title__sub">Maps · timetable · tips — wiring next</p>
+        <p className="fe-section-title__sub">Maps · timetable · support — wiring next</p>
       </div>
 
       <div className="fe-xp__grid">
         <article className="fe-xp-card">
           <h3>Visitor flow</h3>
           <p>
-            下部ナビの <strong>Time / Map / Save</strong> でタイムテーブル・会場マップ・お気に入りと投げ銭導線にアクセス。出演者登録・運営管理はトップの公式導線から。
+            下部ナビの <strong>Time / Map / Save</strong> でタイムテーブル・会場マップ・お気に入りと応援導線にアクセス。出演者登録・運営管理はトップの公式導線から。
           </p>
         </article>
         <article className="fe-xp-card">

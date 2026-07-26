@@ -10,7 +10,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
   return (
     <nav className="fe-vnav" aria-label="来場者ナビ">
       <div className="fe-vnav__inner fe-vnav__inner--six">
-        <NavBtn active={tab === 'home'} onClick={() => onChange('home')} label="Home" aria="ホーム">
+        <NavBtn active={tab === 'home'} onClick={() => onChange('home')} label="ホーム" aria="ホーム">
           <path
             d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
             stroke="currentColor"
@@ -18,7 +18,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
             strokeLinejoin="round"
           />
         </NavBtn>
-        <NavBtn active={tab === 'performers'} onClick={() => onChange('performers')} label="Acts" aria="パフォーマー">
+        <NavBtn active={tab === 'performers'} onClick={() => onChange('performers')} label="出演" aria="パフォーマー">
           <>
             <path
               d="M12 3c4.5 4.2 7 8.05 7 11.25A7 7 0 1 1 5 14.25C5 11.05 7.5 7.2 12 3Z"
@@ -29,7 +29,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
             <path d="M12 14.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" stroke="currentColor" strokeWidth="1.6" />
           </>
         </NavBtn>
-        <NavBtn active={tab === 'timetable'} onClick={() => onChange('timetable')} label="Time" aria="タイムテーブル">
+        <NavBtn active={tab === 'timetable'} onClick={() => onChange('timetable')} label="時間" aria="タイムテーブル">
           <path
             d="M8 2v4M16 2v4M4 10h16M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"
             stroke="currentColor"
@@ -37,7 +37,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
             strokeLinejoin="round"
           />
         </NavBtn>
-        <NavBtn active={tab === 'map'} onClick={() => onChange('map')} label="Map" aria="会場マップ">
+        <NavBtn active={tab === 'map'} onClick={() => onChange('map')} label="マップ" aria="会場マップ">
           <path
             d="M9 3 3 6v15l6-3 6 3 6-3V6l-6-3-6 3-6-3Z"
             stroke="currentColor"
@@ -45,7 +45,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
             strokeLinejoin="round"
           />
         </NavBtn>
-        <NavBtn active={tab === 'tips'} onClick={() => onChange('tips')} label="Tip" aria="応援・投げ銭">
+        <NavBtn active={tab === 'tips'} onClick={() => onChange('tips')} label="応援" aria="応援・サポート">
           <path
             d="M12 2v20M8 8h8M8 14h6"
             stroke="currentColor"
@@ -54,7 +54,7 @@ export function VisitorBottomNav({ tab, onChange }: VisitorBottomNavProps) {
             strokeLinejoin="round"
           />
         </NavBtn>
-        <NavBtn active={tab === 'library'} onClick={() => onChange('library')} label="Save" aria="お気に入り">
+        <NavBtn active={tab === 'oshi'} onClick={() => onChange('oshi')} label="推し" aria="推しリスト">
           <path
             d="M12 21s-7-4.35-7-10a7 7 0 1 1 14 0c0 5.65-7 10-7 10Z"
             stroke="currentColor"

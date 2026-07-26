@@ -1,6 +1,14 @@
+import { isDemoMode } from '../config/runtimeConfig'
+import { sanitizeVenueCrowd } from '../services/festivalRepository'
 import type { ScheduleSlot, VenueArea } from '../types'
+import {
+  PUBLIC_SCHEDULE_SLOTS,
+  PUBLIC_TODAYS_PICK_IDS,
+  PUBLIC_VENUES,
+} from './public'
 
-export const VENUE_AREAS: VenueArea[] = [
+/** デモ会場（デモモード専用） */
+const DEMO_VENUE_AREAS: VenueArea[] = [
   {
     id: 'main-lawn',
     nameJa: 'メイン芝生',
@@ -16,7 +24,7 @@ export const VENUE_AREAS: VenueArea[] = [
     nameEn: 'Street A',
     blurbJa: '歩行者動線に寄り添うクラシック大道エリア。',
     blurbEn: 'Classic street pitch energy along the promenade.',
-    gradient: 'linear-gradient(160deg, #120a1a 0%, #3a1f55 45%, #e8c547 85%)',
+    gradient: 'linear-gradient(160deg, #120a1a 0%, #2a1f44 45%, #6e8cff 85%)',
     crowd: 'low',
   },
   {
@@ -40,10 +48,10 @@ export const VENUE_AREAS: VenueArea[] = [
 ]
 
 /**
- * ダミースケジュール。`status: live | next` はデモ用の目立ち演目。
- * 将来は Supabase + 運営CMS で差し替え。
+ * デモ用スケジュール。`status: live | next` はデモ用の目立ち演目。
+ * 公開モードでは空配列（実開催データ未登録）。
  */
-export const SCHEDULE_SLOTS: ScheduleSlot[] = [
+const DEMO_SCHEDULE_SLOTS: ScheduleSlot[] = [
   {
     id: 'd1-1',
     date: '2026-11-07',
@@ -129,6 +137,18 @@ export const SCHEDULE_SLOTS: ScheduleSlot[] = [
     windowJa: '12分後',
     windowEn: 'Starts in 12m',
   },
+  /** デモ時刻 15:12 付近で「まもなく開始」レールに載る枠 */
+  {
+    id: 'd2-soon-a',
+    date: '2026-11-08',
+    start: '15:20',
+    end: '15:55',
+    performerId: '3',
+    venueId: 'street-a',
+    stageJa: 'ストリートA',
+    stageEn: 'Street A',
+    status: 'scheduled',
+  },
   {
     id: 'd2-5',
     date: '2026-11-08',
@@ -188,7 +208,13 @@ export const SCHEDULE_SLOTS: ScheduleSlot[] = [
   },
 ]
 
-export const TODAYS_PICK_IDS = ['1', '4', '5'] as const
+const DEMO_TODAYS_PICK_IDS = ['1', '4', '5'] as const
+
+export const VENUE_AREAS: VenueArea[] = sanitizeVenueCrowd(
+  isDemoMode ? DEMO_VENUE_AREAS : PUBLIC_VENUES,
+)
+export const SCHEDULE_SLOTS: ScheduleSlot[] = isDemoMode ? DEMO_SCHEDULE_SLOTS : PUBLIC_SCHEDULE_SLOTS
+export const TODAYS_PICK_IDS = isDemoMode ? DEMO_TODAYS_PICK_IDS : PUBLIC_TODAYS_PICK_IDS
 
 export const FUTURE_CAPABILITIES = [
   { id: 'i18n', titleJa: '多言語', titleEn: 'i18n', hint: 'JA / EN 切替 + 自動翻訳レイヤー' },
@@ -196,11 +222,11 @@ export const FUTURE_CAPABILITIES = [
   { id: 'push', titleJa: 'プッシュ通知', titleEn: 'Push', hint: '開演 / 変更 / 雨天アラート' },
   { id: 'crowd', titleJa: '混雑ヒート', titleEn: 'Crowd', hint: 'エリア別混雑の可視化' },
   { id: 'stamp', titleJa: 'スタンプラリー', titleEn: 'Stamps', hint: 'チェックイン型体験' },
-  { id: 'vote', titleJa: '観客投票', titleEn: 'Voting', hint: 'ライブ結果をランキングに反映' },
+  { id: 'vote', titleJa: '観客投票', titleEn: 'Voting', hint: 'ライブ結果をキュレーションに反映' },
   { id: 'sponsor', titleJa: 'スポンサー枠', titleEn: 'Sponsors', hint: 'ネイティブ枠 + 計測' },
   { id: 'goods', titleJa: 'グッズ', titleEn: 'Merch', hint: 'EC / QRピックアップ' },
   { id: 'tickets', titleJa: 'チケット販売', titleEn: 'Tickets', hint: '有料席 · Seat map + Apple Wallet' },
-  { id: 'tiktok', titleJa: 'TikTok LIVE', titleEn: 'TikTok', hint: '投げ銭・ギフト連携' },
+  { id: 'live', titleJa: 'ライブ映像', titleEn: 'Live', hint: 'アーティスト選定の配信プロトコル' },
   { id: 'supabase', titleJa: 'Supabase', titleEn: 'Supabase', hint: 'DB + Auth + Storage' },
   { id: 'upload', titleJa: '画像アップロード', titleEn: 'Uploads', hint: '宣材の直アップロード' },
   { id: 'p-login', titleJa: 'パフォーマーログイン', titleEn: 'Artist login', hint: 'プロフィール自己管理' },

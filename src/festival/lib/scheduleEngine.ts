@@ -1,6 +1,7 @@
 import type { Performer, ProgramPulse, ScheduleSlot, VenueArea } from '../types'
 import { SCHEDULE_SLOTS, VENUE_AREAS } from '../data/scheduleData'
-import { getDemoNow } from './demoClock'
+import { formatTokyoDate, getDemoNow, tokyoWallDate } from './demoClock'
+import { PREP_VENUE } from '../services/festivalRepository'
 
 export function venueById(id: string): VenueArea | undefined {
   return VENUE_AREAS.find((v) => v.id === id)
@@ -38,6 +39,15 @@ export function buildMarkedPulses(performers: Performer[]): {
 
 export function slotsSorted(): ScheduleSlot[] {
   return [...SCHEDULE_SLOTS].sort((a, b) => {
+    const da = a.date.localeCompare(b.date)
+    if (da !== 0) return da
+    return a.start.localeCompare(b.start)
+  })
+}
+
+/** 開始時刻順（タイムテーブル一覧用） */
+export function sortSlotsChronological(slots: ScheduleSlot[]): ScheduleSlot[] {
+  return [...slots].sort((a, b) => {
     const da = a.date.localeCompare(b.date)
     if (da !== 0) return da
     return a.start.localeCompare(b.start)
@@ -129,15 +139,11 @@ export function currentNextSlot(): ScheduleSlot | undefined {
 }
 
 export function slotAsDate(slot: ScheduleSlot): Date {
-  const [y, m, d] = slot.date.split('-').map(Number)
-  const [hh, mm] = slot.start.split(':').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0)
+  return tokyoWallDate(slot.date, slot.start)
 }
 
 export function slotEndAsDate(slot: ScheduleSlot): Date {
-  const [y, m, d] = slot.date.split('-').map(Number)
-  const [hh, mm] = slot.end.split(':').map(Number)
-  return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0)
+  return tokyoWallDate(slot.date, slot.end)
 }
 
 export type AudienceTimeStatus =
@@ -236,18 +242,16 @@ export function audienceStatusLabelEn(s: AudienceTimeStatus): string {
 }
 
 export function demoTodayDateString(): string {
-  const d = getDemoNow()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  return formatTokyoDate(getDemoNow())
 }
 
 /** ダッシュボード用：LIVE 会場 → NEXT 会場 → 混雑が高いエリア */
 export function hotVenueForDashboard(): VenueArea {
   const live = currentLiveSlot()
-  if (live) return venueById(live.venueId) ?? VENUE_AREAS[0]!
+  if (live) return venueById(live.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
   const next = currentNextSlot()
-  if (next) return venueById(next.venueId) ?? VENUE_AREAS[0]!
-  return VENUE_AREAS.find((v) => v.crowd === 'high') ?? VENUE_AREAS[0]!
+  if (next) return venueById(next.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
+  return VENUE_AREAS.find((v) => v.crowd === 'high') ?? VENUE_AREAS[0] ?? PREP_VENUE
 }
 
 export function topHeatPerformerId(performers: Performer[]): string | undefined {
@@ -271,5 +275,69 @@ export function uniqueGenresFromPerformers(performers: Performer[]): string[] {
     if (p.genre?.trim()) g.add(p.genre.trim())
   }
   return [...g].sort((a, b) => a.localeCompare(b, 'ja'))
+}
+
+/** 本日のスケジュール由来の雨天・変更アラート（運営メモは別途マージ） */
+export function todayBuiltInScheduleAlerts(): string[] {
+  const today = demoTodayDateString()
+  const lines: string[] = []
+  for (const s of slotsByDate(today)) {
+    if (s.status === 'cancelled' || s.status === 'delayed' || s.status === 'indoor_moved') {
+      const bit = s.noteJa ?? statusLabelJa(s.status)
+      lines.push(`${s.stageJa} · ${bit}`)
+    }
+  }
+  return lines
+}
+
+/** まもなく開演に入った最初の枠（回遊・通知UI用） */
+export function firstStartsSoonSlot(
+  performers: Performer[],
+  now: Date = getDemoNow(),
+): { slot: ScheduleSlot; performer: Performer } | undefined {
+  const today = demoTodayDateString()
+  for (const s of slotsByDate(today)) {
+    if (derivedAudienceTimeStatus(s, now) !== 'starts_soon') continue
+    const performer = performers.find((x) => x.id === s.performerId)
+    if (performer) return { slot: s, performer }
+  }
+  return undefined
+}
+
+/** 開演までの分数（未開演: 正、開演後: 負） */
+export function minutesBeforeSlotStart(slot: ScheduleSlot, now: Date): number {
+  return (slotAsDate(slot).getTime() - now.getTime()) / 60_000
+}
+
+/**
+ * 開演の N 分前以内の枠（未 LIVE・未終了）。ホーム「まもなく開始」レール用。
+ * 中止・遅延・屋内移動は除外。
+ */
+export function slotsStartingWithinMinutes(
+  performers: Performer[],
+  now: Date = getDemoNow(),
+  withinMinutes = 15,
+): Array<{ slot: ScheduleSlot; performer: Performer }> {
+  const today = demoTodayDateString()
+  const out: Array<{ slot: ScheduleSlot; performer: Performer }> = []
+  for (const slot of slotsByDate(today)) {
+    if (slot.status === 'cancelled') continue
+    const st = derivedAudienceTimeStatus(slot, now)
+    if (st === 'live_now' || st === 'finished' || st === 'cancelled' || st === 'delayed' || st === 'moved') continue
+    const mins = minutesBeforeSlotStart(slot, now)
+    if (mins > 0 && mins <= withinMinutes) {
+      const performer = performers.find((x) => x.id === slot.performerId)
+      if (performer) out.push({ slot, performer })
+    }
+  }
+  return out.sort((a, b) => slotAsDate(a.slot).getTime() - slotAsDate(b.slot).getTime())
+}
+
+/** 親コンポーネント用：まもなく開演チップの演者・ラベル */
+export function computeSoonHint(performers: Performer[], now: Date = getDemoNow()) {
+  const row = firstStartsSoonSlot(performers, now)
+  if (!row) return { performer: undefined as Performer | undefined, label: undefined as string | undefined }
+  const st = derivedAudienceTimeStatus(row.slot, now)
+  return { performer: row.performer, label: audienceStatusLabelJa(st) }
 }
 

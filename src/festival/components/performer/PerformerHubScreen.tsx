@@ -1,12 +1,14 @@
 type PerformerHubScreenProps = {
   onOpenEntry: () => void
+  onOpenStreamRegister: () => void
   onBrowseActs: () => void
+  onOpenList: () => void
 }
 
 /**
  * 出演者モードのホーム。将来ここにダッシュボード・認証状態を載せる。
  */
-export function PerformerHubScreen({ onOpenEntry, onBrowseActs }: PerformerHubScreenProps) {
+export function PerformerHubScreen({ onOpenEntry, onOpenStreamRegister, onBrowseActs, onOpenList }: PerformerHubScreenProps) {
   return (
     <main className="fe-main fe-main--perf-hub">
       <header className="fe-page-head">
@@ -18,14 +20,20 @@ export function PerformerHubScreen({ onOpenEntry, onBrowseActs }: PerformerHubSc
       </header>
 
       <section className="fe-perf-hub">
-        <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={onOpenEntry}>
-          出演者登録フォームを開く
+        <button type="button" className="fe-btn fe-btn--primary fe-btn--block fe-perf-hub__stream" onClick={onOpenStreamRegister}>
+          配信希望パフォーマー登録
+        </button>
+        <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onOpenEntry}>
+          出演登録フォーム（会場出演）
+        </button>
+        <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onOpenList}>
+          登録一覧を見る
         </button>
         <button type="button" className="fe-btn fe-btn--glass fe-btn--block" onClick={onBrowseActs}>
           一般向けパフォーマー一覧を見る
         </button>
         <p className="fe-perf-hub__note">
-          一般向け一覧を開くと、閲覧用に来場者モードへ切り替わります（下部ナビがフェス標準に戻ります）。
+          申請の確認は「登録一覧」から。一般向け一覧を開くと来場者モードへ切り替わります。
         </p>
       </section>
     </main>

@@ -15,12 +15,12 @@ export function ForYouSection({ favorites, recommended, onOpen }: ForYouSectionP
           <span className="fe-section-title__eyebrow">For you</span>
           <span className="fe-section-title__main">あなたへのおすすめ</span>
         </h2>
-        <p className="fe-section-title__sub">お気に入りと熱量シグナルをブレンド（デモロジック）</p>
+        <p className="fe-section-title__sub">推しと編集部ピックでつなぐ、あなた専用の回遊リスト（デモ）</p>
       </div>
 
       {favorites.length ? (
         <div className="fe-foryou__block">
-          <p className="fe-foryou__label">お気に入りから</p>
+          <p className="fe-foryou__label">推しから</p>
           <ul className="fe-foryou__list">
             {favorites.map((p) => (
               <li key={p.id}>
@@ -47,7 +47,7 @@ export function ForYouSection({ favorites, recommended, onOpen }: ForYouSectionP
                   {initials(p.name)}
                 </span>
                 <span className="fe-foryou__name">{p.nameJa}</span>
-                <span className="fe-foryou__meta">HEAT {p.heat}</span>
+                <span className="fe-foryou__meta">Pick</span>
               </button>
             </li>
           ))}

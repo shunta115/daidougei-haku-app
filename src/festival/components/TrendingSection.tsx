@@ -1,6 +1,5 @@
 import type { Performer } from '../types'
 import { initials } from '../lib/initials'
-import { formatCompact } from '../lib/format'
 
 type TrendingSectionProps = {
   performers: Performer[]
@@ -12,10 +11,12 @@ export function TrendingSection({ performers, onOpenPerformer }: TrendingSection
     <section className="fe-trend" aria-labelledby="fe-trend-heading">
       <div className="fe-trend__head">
         <h2 id="fe-trend-heading" className="fe-section-title">
-          <span className="fe-section-title__eyebrow">HOT PERFORMER</span>
-          <span className="fe-section-title__main">人気ランキング</span>
+          <span className="fe-section-title__eyebrow" lang="en">
+            Tonight&apos;s drift
+          </span>
+          <span className="fe-section-title__main">今夜の気配</span>
         </h2>
-        <p className="fe-section-title__sub">HEAT 指標によるデモランキング · 投票連携は将来接続</p>
+        <p className="fe-section-title__sub">編集部と会場シグナルでつくる、今夜のライトアップ（デモ）</p>
       </div>
 
       <ol className="fe-trend__list">
@@ -26,26 +27,25 @@ export function TrendingSection({ performers, onOpenPerformer }: TrendingSection
               className={`fe-trend-row${onOpenPerformer ? ' fe-trend-row--btn' : ''}`}
               onClick={() => onOpenPerformer?.(p.id)}
             >
-            <span className="fe-trend-row__rank" aria-label={`Rank ${idx + 1}`}>
-              {idx + 1}
-              {idx < 3 ? <span className="fe-trend-row__hot">HOT</span> : null}
-            </span>
-            <div className="fe-trend-row__avatar" style={{ background: p.gradient }} aria-hidden="true">
-              <span>{initials(p.name)}</span>
-            </div>
-            <div className="fe-trend-row__body">
-              <p className="fe-trend-row__name">{p.name}</p>
-              <p className="fe-trend-row__meta">
-                {p.act} · {p.locale}
-              </p>
-            </div>
-            <div className="fe-trend-row__meter" aria-hidden="true">
-              <span className="fe-trend-row__meter-fill" style={{ width: `${p.heat}%` }} />
-            </div>
-            <div className="fe-trend-row__stats">
-              <span className="fe-trend-row__heat">{p.heat}</span>
-              <span className="fe-trend-row__likes">{formatCompact(p.likes)} likes</span>
-            </div>
+              <span className="fe-trend-row__rank" aria-label={`キュレーション ${idx + 1}`}>
+                {idx + 1}
+                {idx < 3 ? <span className="fe-trend-row__hot">NOW</span> : null}
+              </span>
+              <div className="fe-trend-row__avatar" style={{ background: p.gradient }} aria-hidden="true">
+                <span>{initials(p.name)}</span>
+              </div>
+              <div className="fe-trend-row__body">
+                <p className="fe-trend-row__name">{p.name}</p>
+                <p className="fe-trend-row__meta">
+                  {p.act} · {p.locale}
+                </p>
+              </div>
+              <div className="fe-trend-row__meter" aria-hidden="true" title="会場での注目度（イメージ）">
+                <span className="fe-trend-row__meter-fill" style={{ width: `${p.heat}%` }} />
+              </div>
+              <div className="fe-trend-row__stats fe-trend-row__stats--soft">
+                <span className="fe-trend-row__signal">Momentum</span>
+              </div>
             </button>
           </li>
         ))}
