@@ -56,13 +56,22 @@ function PlatformShell() {
   useEffect(() => {
     const url = new URL(window.location.href)
     const tip = url.searchParams.get('tip')
+    const sessionId = url.searchParams.get('session_id')
     if (tip === 'success') {
       setTipFlash('Tip sent successfully.')
+      if (sessionId) {
+        void fetch('/api/stripe/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        }).catch(() => undefined)
+      }
     } else if (tip === 'cancel') {
       setTipFlash('Tip was cancelled.')
     }
     if (tip) {
       url.searchParams.delete('tip')
+      url.searchParams.delete('session_id')
       url.searchParams.delete('performerId')
       url.searchParams.delete('stripe')
       window.history.replaceState({}, '', url.pathname + url.search)

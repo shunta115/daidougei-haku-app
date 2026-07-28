@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const origin = getAppUrl(req)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${origin}/?tip=success`,
+      success_url: `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/?tip=cancel`,
       line_items: [
         {
