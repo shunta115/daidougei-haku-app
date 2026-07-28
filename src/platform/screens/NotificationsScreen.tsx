@@ -10,9 +10,16 @@ export function NotificationsScreen() {
 
   useEffect(() => {
     if (!user) return
-    listNotifications(user.id)
-      .then(setRows)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
+    const load = async () => {
+      const next = await listNotifications(user.id)
+      setRows(next)
+      setError(null)
+    }
+    load().catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
+    const timer = window.setInterval(() => {
+      load().catch(() => undefined)
+    }, 5000)
+    return () => window.clearInterval(timer)
   }, [user])
 
   const open = async (n: NotificationRow) => {

@@ -25,9 +25,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(404).json({ error: 'Performer not found' })
       return
     }
-    if (!performer.stripe_account_id || !performer.stripe_onboarding_complete) {
+    if (!performer.stripe_account_id) {
       res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
       return
+    }
+
+    const stripe = getStripe()
+    if (!performer.stripe_onboarding_complete) {
+      const acct = await stripe.accounts.retrieve(performer.stripe_account_id)
+      const active = Boolean(acct.charges_enabled && acct.details_submitted)
+      if (!active) {
+        res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
+        return
+      }
+      await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', performerId)
     }
 
     const fee = calcPlatformFee(amountYen)
@@ -45,7 +56,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single()
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
 
-    const stripe = getStripe()
     const origin = getAppUrl(req)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',

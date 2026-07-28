@@ -42,6 +42,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const session = event.data.object as Stripe.Checkout.Session
       const tipId = session.metadata?.tip_id
       if (tipId) {
+        const { data: currentTip } = await sb.from('tips').select('status').eq('id', tipId).maybeSingle()
+        const alreadySucceeded = currentTip?.status === 'succeeded'
+
         await sb
           .from('tips')
           .update({
@@ -53,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const performerId = session.metadata?.performer_id
         const amount = session.amount_total ?? 0
-        if (performerId) {
+        if (performerId && !alreadySucceeded) {
           await sb.from('notifications').insert({
             user_id: performerId,
             title: 'New tip',

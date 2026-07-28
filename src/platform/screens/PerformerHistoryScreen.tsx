@@ -11,9 +11,16 @@ export function PerformerHistoryScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (!performer) return
-    listLiveHistory(performer.id)
-      .then(setRows)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
+    const load = async () => {
+      const next = await listLiveHistory(performer.id)
+      setRows(next)
+      setError(null)
+    }
+    load().catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
+    const timer = window.setInterval(() => {
+      load().catch(() => undefined)
+    }, 5000)
+    return () => window.clearInterval(timer)
   }, [performer])
 
   return (

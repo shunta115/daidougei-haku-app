@@ -10,8 +10,17 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory }: { onEdit: () 
 
   useEffect(() => {
     if (!performer) return
-    listLiveHistory(performer.id).then((rows) => setRecent(rows.slice(0, 3))).catch(() => setRecent([]))
-  }, [performer])
+    const load = async () => {
+      const rows = await listLiveHistory(performer.id)
+      setRecent(rows.slice(0, 3))
+      await refreshProfile()
+    }
+    load().catch(() => setRecent([]))
+    const timer = window.setInterval(() => {
+      load().catch(() => undefined)
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [performer, refreshProfile])
 
   if (!performer || !profile) return <p className="pl-muted">Loading…</p>
 

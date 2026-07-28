@@ -51,6 +51,23 @@ function PlatformShell() {
   const { ready, configured, user, profile } = useAuth()
   const [screen, setScreen] = useState<PlatformScreen>('welcome')
   const [performerId, setPerformerId] = useState<string | null>(null)
+  const [tipFlash, setTipFlash] = useState<string | null>(null)
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const tip = url.searchParams.get('tip')
+    if (tip === 'success') {
+      setTipFlash('Tip sent successfully.')
+    } else if (tip === 'cancel') {
+      setTipFlash('Tip was cancelled.')
+    }
+    if (tip) {
+      url.searchParams.delete('tip')
+      url.searchParams.delete('performerId')
+      url.searchParams.delete('stripe')
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }, [])
 
   useEffect(() => {
     if (!ready) return
@@ -191,6 +208,11 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className="pl-shell">
+        {tipFlash ? (
+          <div className="pl-card" style={{ marginBottom: 12 }}>
+            <div className="pl-muted">{tipFlash}</div>
+          </div>
+        ) : null}
         {body}
       </div>
       {showNav ? (
