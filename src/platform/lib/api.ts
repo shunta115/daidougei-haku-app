@@ -1,5 +1,5 @@
 import { requireSupabase } from './supabase'
-import type { AdminMetrics, LiveSession, NotificationRow, Performer } from './types'
+import type { AdminMetrics, LiveSession, NotificationRow, Performer, TipRow, TipSummary } from './types'
 
 export async function searchPerformers(query: string): Promise<Performer[]> {
   const sb = requireSupabase()
@@ -91,6 +91,28 @@ export async function listLiveHistory(performerId: string): Promise<LiveSession[
     .limit(30)
   if (error) throw error
   return (data as LiveSession[]) ?? []
+}
+
+export async function listTipsForPerformer(performerId: string): Promise<TipRow[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('tips')
+    .select('*')
+    .eq('performer_id', performerId)
+    .eq('status', 'succeeded')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return (data as TipRow[]) ?? []
+}
+
+export async function tipSummaryForPerformer(performerId: string): Promise<TipSummary> {
+  const tips = await listTipsForPerformer(performerId)
+  return {
+    count: tips.length,
+    amount_total: tips.reduce((sum, t) => sum + (t.amount_cents || 0), 0),
+    fee_total: tips.reduce((sum, t) => sum + (t.platform_fee_cents || 0), 0),
+  }
 }
 
 export async function isFollowing(fanId: string, performerId: string): Promise<boolean> {

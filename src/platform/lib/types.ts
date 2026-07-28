@@ -46,6 +46,26 @@ export type LiveSession = {
   tip_amount_total: number
 }
 
+export type TipRow = {
+  id: string
+  fan_id: string | null
+  performer_id: string
+  amount_cents: number
+  currency: string
+  platform_fee_cents: number
+  status: TipStatus
+  stripe_session_id: string | null
+  stripe_payment_intent: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TipSummary = {
+  count: number
+  amount_total: number
+  fee_total: number
+}
+
 export type NotificationRow = {
   id: string
   user_id: string
