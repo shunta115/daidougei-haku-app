@@ -193,12 +193,11 @@ create policy profiles_select_own_or_admin on public.profiles
 create policy profiles_update_own on public.profiles
   for update using (id = auth.uid() or public.is_admin());
 
--- performers: public can read approved+active; owner/admin write
+-- performers: anyone can read approved; owner/admin always
+-- (Do not join profiles here — profiles RLS would hide rows from fans.)
 create policy performers_public_read on public.performers
   for select using (
-    (is_approved = true and exists (
-      select 1 from public.profiles pr where pr.id = performers.id and pr.status = 'active'
-    ))
+    is_approved = true
     or id = auth.uid()
     or public.is_admin()
   );

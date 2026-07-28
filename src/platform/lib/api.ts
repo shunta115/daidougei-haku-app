@@ -3,14 +3,22 @@ import type { AdminMetrics, LiveSession, NotificationRow, Performer } from './ty
 
 export async function searchPerformers(query: string): Promise<Performer[]> {
   const sb = requireSupabase()
-  let q = sb.from('performers').select('*').eq('is_approved', true).order('is_live', { ascending: false })
-  const trimmed = query.trim()
-  if (trimmed) {
-    q = q.or(`stage_name.ilike.%${trimmed}%,genre.ilike.%${trimmed}%,city.ilike.%${trimmed}%,country.ilike.%${trimmed}%`)
-  }
-  const { data, error } = await q.limit(50)
+  // Fetch approved performers, then filter client-side.
+  // (PostgREST `.or()` + spaces is fragile; RLS must allow approved rows.)
+  const { data, error } = await sb
+    .from('performers')
+    .select('*')
+    .eq('is_approved', true)
+    .order('is_live', { ascending: false })
+    .limit(100)
   if (error) throw error
-  return (data as Performer[]) ?? []
+  const rows = (data as Performer[]) ?? []
+  const trimmed = query.trim().toLowerCase()
+  if (!trimmed) return rows
+  return rows.filter((p) => {
+    const hay = [p.stage_name, p.genre, p.city, p.country].join(' ').toLowerCase()
+    return hay.includes(trimmed)
+  })
 }
 
 export async function getPerformer(id: string): Promise<Performer | null> {
