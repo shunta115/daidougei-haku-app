@@ -3,8 +3,7 @@ import type { AdminMetrics, LiveSession, NotificationRow, Performer } from './ty
 
 export async function searchPerformers(query: string): Promise<Performer[]> {
   const sb = requireSupabase()
-  // Fetch approved performers, then filter client-side.
-  // (PostgREST `.or()` + spaces is fragile; RLS must allow approved rows.)
+  // Approved performers only. Filter client-side (PostgREST or+spaces is fragile).
   const { data, error } = await sb
     .from('performers')
     .select('*')
@@ -15,9 +14,10 @@ export async function searchPerformers(query: string): Promise<Performer[]> {
   const rows = (data as Performer[]) ?? []
   const trimmed = query.trim().toLowerCase()
   if (!trimmed) return rows
+  const words = trimmed.split(/\s+/).filter(Boolean)
   return rows.filter((p) => {
-    const hay = [p.stage_name, p.genre, p.city, p.country].join(' ').toLowerCase()
-    return hay.includes(trimmed)
+    const hay = [p.stage_name, p.genre, p.city, p.country, p.bio].join(' ').toLowerCase()
+    return words.every((w) => hay.includes(w))
   })
 }
 
@@ -155,9 +155,17 @@ export async function listPendingPerformers(): Promise<Performer[]> {
 
 export async function approvePerformer(id: string) {
   const sb = requireSupabase()
-  const { error } = await sb.from('performers').update({ is_approved: true }).eq('id', id)
+  const { data, error } = await sb
+    .from('performers')
+    .update({ is_approved: true })
+    .eq('id', id)
+    .select('id')
   if (error) throw error
-  await sb.from('profiles').update({ status: 'active' }).eq('id', id)
+  if (!data?.length) throw new Error('Approve failed: performer row not updated (check RLS/grants)')
+
+  const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
+  if (perr) throw perr
+
   await sb.from('notifications').insert({
     user_id: id,
     title: 'Approved',

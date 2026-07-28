@@ -31,7 +31,11 @@ export function SearchScreen({ onOpenPerformer }: SearchProps) {
         onChange={(e) => setQ(e.target.value)}
       />
       {error ? <p className="pl-error">{error}</p> : null}
-      {!error && rows.length === 0 ? <div className="pl-empty">No performers found.</div> : null}
+      {!error && rows.length === 0 ? (
+        <div className="pl-empty">
+          {q.trim() ? 'No performers match that search.' : 'No approved performers yet.'}
+        </div>
+      ) : null}
       {rows.map((p) => (
         <button
           key={p.id}
