@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { BottomNav } from './components/BottomNav'
+import { PlatformBackground } from './components/PlatformBackground'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
 import { SearchScreen } from './screens/SearchScreen'
@@ -34,6 +35,11 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
       <p className="pl-brand">大道芸博</p>
       <h1 className="pl-h1">Street performers. Fans. Tips.</h1>
       <p className="pl-muted">Go live. Get tipped. Grow your work — worldwide.</p>
+      <div className="pl-card" style={{ marginTop: 20 }}>
+        <p className="pl-muted" style={{ margin: 0 }}>
+          Live · Follow · Tip · Connect. Built for performers who work the street every day.
+        </p>
+      </div>
       <button type="button" className="pl-btn pl-btn--block" onClick={onAuth}>
         Get started
       </button>
@@ -241,6 +247,7 @@ function PlatformShell() {
 export function PlatformApp() {
   return (
     <AuthProvider>
+      <PlatformBackground />
       <PlatformShell />
     </AuthProvider>
   )
