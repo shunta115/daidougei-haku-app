@@ -27,6 +27,7 @@ export type Performer = {
   is_approved: boolean
   is_live: boolean
   live_started_at: string | null
+  live_title: string | null
   stream_url: string | null
   share_location: boolean
   lat: number | null
@@ -42,8 +43,20 @@ export type LiveSession = {
   started_at: string
   ended_at: string | null
   stream_url: string | null
+  title: string | null
   tip_count: number
   tip_amount_total: number
+  viewer_peak: number
+}
+
+export type LiveComment = {
+  id: string
+  performer_id: string
+  live_session_id: string | null
+  user_id: string
+  display_name: string
+  body: string
+  created_at: string
 }
 
 export type TipRow = {
@@ -100,6 +113,7 @@ export type PlatformScreen =
   | 'performer-edit'
   | 'performer-live'
   | 'performer-history'
+  | 'live-watch'
   | 'tip'
   | 'admin'
   | 'admin-users'

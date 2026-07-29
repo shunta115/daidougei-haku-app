@@ -7,7 +7,9 @@
 ## 必須セットアップ
 
 1. **Supabase** プロジェクトを作成
-2. SQL Editor で `supabase/migrations/20260726_platform_beta.sql` を実行
+2. SQL Editor で次を実行
+   - `supabase/migrations/20260726_platform_beta.sql`
+   - `supabase/migrations/20260729_native_livekit.sql`
 3. Authentication → Providers → Email を有効化（βは Confirm email をオフ推奨）
 4. Storage バケット `avatars` は migration で作成済み
 5. 最初の管理者: 通常登録後、SQL で昇格
@@ -18,8 +20,20 @@ set role = 'admin', status = 'active'
 where email = 'you@example.com';
 ```
 
-6. **Stripe** Connect を有効化し、Webhook を `https://YOUR_DOMAIN/api/stripe/webhook` に設定  
+6. **LiveKit Cloud**（ネイティブ配信）を作成し、API Key / Secret / WebSocket URL を取得  
+7. **Stripe** Connect を有効化し、Webhook を `https://YOUR_DOMAIN/api/stripe/webhook` に設定  
    Events: `checkout.session.completed`, `account.updated`
+
+## 配信基盤: LiveKit を選定
+
+| 候補 | 遅延 | βコスト | 判定 |
+|------|------|---------|------|
+| **LiveKit** | WebRTCで1秒前後 | 小さい枠から可 | **採用** |
+| Agora | 優秀 | 高め・契約重め | 将来スケール候補 |
+| Amazon IVS | LLでも数秒寄り | AWS運用コスト | 大規模向け |
+| Cloudflare Stream | HLS寄りで遅めやすい | 中 | VOD向き |
+
+Instagram Live級の「今すぐ配信/視聴」には WebRTC の LiveKit が最適です。
 
 ## 環境変数
 
@@ -29,6 +43,8 @@ where email = 'you@example.com';
 |------|------|
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | フロント |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | `/api`（サーバーのみ） |
+| `VITE_LIVEKIT_URL` / `LIVEKIT_URL` | LiveKit WebSocket URL |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | トークン発行（サーバーのみ） |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | 投げ銭・Connect |
 | `APP_URL` | 本番オリジン（Checkout / Connect 戻り先） |
 

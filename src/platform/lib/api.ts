@@ -1,5 +1,5 @@
 import { requireSupabase } from './supabase'
-import type { AdminMetrics, LiveSession, NotificationRow, Performer, TipRow, TipSummary } from './types'
+import type { AdminMetrics, LiveComment, LiveSession, NotificationRow, Performer, TipRow, TipSummary } from './types'
 
 export async function searchPerformers(query: string): Promise<Performer[]> {
   const sb = requireSupabase()
@@ -46,26 +46,38 @@ export async function updatePerformer(id: string, patch: Partial<Performer>) {
   if (error) throw error
 }
 
-export async function startLive(performerId: string, streamUrl?: string) {
+export async function startLive(performerId: string, title?: string) {
   const sb = requireSupabase()
   const now = new Date().toISOString()
+  const liveTitle = title?.trim() || null
   const { error: uerr } = await sb
     .from('performers')
-    .update({ is_live: true, live_started_at: now, stream_url: streamUrl || null })
+    .update({
+      is_live: true,
+      live_started_at: now,
+      live_title: liveTitle,
+      stream_url: null,
+    })
     .eq('id', performerId)
   if (uerr) throw uerr
-  const { error } = await sb.from('live_sessions').insert({
-    performer_id: performerId,
-    stream_url: streamUrl || null,
-  })
+  const { data, error } = await sb
+    .from('live_sessions')
+    .insert({
+      performer_id: performerId,
+      stream_url: null,
+      title: liveTitle,
+    })
+    .select('id')
+    .single()
   if (error) throw error
+  return (data?.id as string) ?? null
 }
 
 export async function endLive(performerId: string) {
   const sb = requireSupabase()
   const { error: uerr } = await sb
     .from('performers')
-    .update({ is_live: false, live_started_at: null })
+    .update({ is_live: false, live_started_at: null, live_title: null })
     .eq('id', performerId)
   if (uerr) throw uerr
   const { data: open } = await sb
@@ -91,6 +103,72 @@ export async function listLiveHistory(performerId: string): Promise<LiveSession[
     .limit(30)
   if (error) throw error
   return (data as LiveSession[]) ?? []
+}
+
+export async function listLiveComments(performerId: string): Promise<LiveComment[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_comments')
+    .select('*')
+    .eq('performer_id', performerId)
+    .order('created_at', { ascending: false })
+    .limit(80)
+  if (error) throw error
+  return ((data as LiveComment[]) ?? []).reverse()
+}
+
+export async function postLiveComment(input: {
+  performerId: string
+  userId: string
+  displayName: string
+  body: string
+  liveSessionId?: string | null
+}) {
+  const sb = requireSupabase()
+  const text = input.body.trim().slice(0, 200)
+  if (!text) throw new Error('Comment is empty')
+  const { error } = await sb.from('live_comments').insert({
+    performer_id: input.performerId,
+    user_id: input.userId,
+    display_name: input.displayName || 'Fan',
+    body: text,
+    live_session_id: input.liveSessionId ?? null,
+  })
+  if (error) throw error
+}
+
+export function subscribeLiveComments(performerId: string, onInsert: (row: LiveComment) => void) {
+  const sb = requireSupabase()
+  const channel = sb
+    .channel(`live-comments-${performerId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
+      (payload) => {
+        onInsert(payload.new as LiveComment)
+      },
+    )
+    .subscribe()
+  return () => {
+    void sb.removeChannel(channel)
+  }
+}
+
+export function subscribePerformerLive(performerId: string, onChange: (row: Partial<Performer>) => void) {
+  const sb = requireSupabase()
+  const channel = sb
+    .channel(`performer-live-${performerId}`)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'performers', filter: `id=eq.${performerId}` },
+      (payload) => {
+        onChange(payload.new as Performer)
+      },
+    )
+    .subscribe()
+  return () => {
+    void sb.removeChannel(channel)
+  }
 }
 
 export async function listTipsForPerformer(performerId: string): Promise<TipRow[]> {

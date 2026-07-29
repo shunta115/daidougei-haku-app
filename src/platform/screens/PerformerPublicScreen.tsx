@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { follow, getPerformer, isFollowing, unfollow } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { isValidHttpUrl } from '../lib/url'
 import type { Performer } from '../lib/types'
 
 type Props = {
   performerId: string
   onTip: () => void
   onBack: () => void
+  onWatchLive: () => void
 }
 
-export function PerformerPublicScreen({ performerId, onTip, onBack }: Props) {
+export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive }: Props) {
   const { user, profile } = useAuth()
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
@@ -46,7 +46,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack }: Props) {
   if (!p && !error) return <p className="pl-muted">Loading…</p>
   if (!p) return <p className="pl-error">{error}</p>
 
-  const watchable = isValidHttpUrl(p.stream_url ?? undefined)
+  const watchable = Boolean(p.is_live)
 
   return (
     <>
@@ -64,16 +64,17 @@ export function PerformerPublicScreen({ performerId, onTip, onBack }: Props) {
           {p.city ? ` · ${p.city}` : ''}
           {p.country ? ` · ${p.country}` : ''}
         </p>
+        {p.is_live && p.live_title ? <p className="pl-muted">{p.live_title}</p> : null}
         <p style={{ marginTop: 12, lineHeight: 1.5 }}>{p.bio || 'No bio yet.'}</p>
         {p.share_location && p.lat != null && p.lng != null ? (
           <p className="pl-muted">Approx. location shared while live.</p>
         ) : null}
       </div>
 
-      {p.is_live && watchable ? (
-        <a className="pl-btn pl-btn--block pl-btn--live" href={p.stream_url!} target="_blank" rel="noopener noreferrer">
-          Watch live
-        </a>
+      {watchable ? (
+        <button type="button" className="pl-btn pl-btn--block pl-btn--live" onClick={onWatchLive}>
+          アプリで見る
+        </button>
       ) : null}
 
       {profile?.role === 'fan' ? (

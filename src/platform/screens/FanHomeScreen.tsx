@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listFollowedPerformers, searchPerformers, listLivePerformers } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { isValidHttpUrl } from '../lib/url'
 import type { Performer } from '../lib/types'
 import '../../festival/festival.css'
 import './fanHome.css'
 
 type FanHomeProps = {
   onOpenPerformer: (id: string) => void
+  onWatchLive: (id: string) => void
   onOpenSearch: () => void
   onTip: (id: string) => void
 }
@@ -25,7 +25,7 @@ function shareApp() {
   void navigator.clipboard?.writeText(url)
 }
 
-export function FanHomeScreen({ onOpenPerformer, onOpenSearch, onTip }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTip }: FanHomeProps) {
   const { user } = useAuth()
   const [mode, setMode] = useState<EventMode>(() => {
     const saved = window.localStorage.getItem('pl-event-mode')
@@ -246,53 +246,43 @@ export function FanHomeScreen({ onOpenPerformer, onOpenSearch, onTip }: FanHomeP
           </div>
         ) : (
           <ul className="fe-stream-hero__list">
-            {live.map((p) => {
-              const watchable = isValidHttpUrl(p.stream_url)
-              return (
-                <li key={p.id}>
-                  <article className="fe-stream-card fe-stream-card--live">
-                    <div className="fe-stream-card__visual" aria-hidden="true">
-                      {p.photo_url ? (
-                        <img className="fe-stream-card__photo" src={p.photo_url} alt="" loading="lazy" />
-                      ) : null}
-                      <span className="fe-stream-card__live-badge" lang="en">
-                        LIVE
+            {live.map((p) => (
+              <li key={p.id}>
+                <article className="fe-stream-card fe-stream-card--live">
+                  <div className="fe-stream-card__visual" aria-hidden="true">
+                    {p.photo_url ? (
+                      <img className="fe-stream-card__photo" src={p.photo_url} alt="" loading="lazy" />
+                    ) : null}
+                    <span className="fe-stream-card__live-badge" lang="en">
+                      LIVE
+                    </span>
+                  </div>
+                  <div className="fe-stream-card__body">
+                    <p className="fe-stream-card__name">{p.stage_name}</p>
+                    <p className="fe-stream-card__meta">
+                      <span>{p.country || 'World'}</span>
+                      <span className="fe-stream-card__dot" aria-hidden="true">
+                        ·
                       </span>
+                      <span>{p.genre || 'Street'}</span>
+                    </p>
+                    {p.live_title ? <p className="fe-stream-card__title">{p.live_title}</p> : null}
+                    <p className="fe-stream-card__status" lang="en">
+                      <span className="fe-stream-card__status-dot" aria-hidden="true" />
+                      配信ステータス · LIVE
+                    </p>
+                    <div className="fe-stream-card__actions">
+                      <button type="button" className="fe-stream-card__watch" onClick={() => onWatchLive(p.id)}>
+                        視聴する
+                      </button>
+                      <button type="button" className="fe-stream-card__support" onClick={() => onTip(p.id)}>
+                        応援する
+                      </button>
                     </div>
-                    <div className="fe-stream-card__body">
-                      <p className="fe-stream-card__name">{p.stage_name}</p>
-                      <p className="fe-stream-card__meta">
-                        <span>{p.country || 'World'}</span>
-                        <span className="fe-stream-card__dot" aria-hidden="true">
-                          ·
-                        </span>
-                        <span>{p.genre || 'Street'}</span>
-                      </p>
-                      <p className="fe-stream-card__status" lang="en">
-                        <span className="fe-stream-card__status-dot" aria-hidden="true" />
-                        配信ステータス · LIVE
-                      </p>
-                      <div className="fe-stream-card__actions">
-                        <button
-                          type="button"
-                          className="fe-stream-card__watch"
-                          disabled={!watchable}
-                          onClick={() => {
-                            if (watchable && p.stream_url) window.open(p.stream_url, '_blank', 'noopener,noreferrer')
-                            else onOpenPerformer(p.id)
-                          }}
-                        >
-                          {watchable ? '視聴する' : 'プロフィール'}
-                        </button>
-                        <button type="button" className="fe-stream-card__support" onClick={() => onTip(p.id)}>
-                          応援する
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                </li>
-              )
-            })}
+                  </div>
+                </article>
+              </li>
+            ))}
           </ul>
         )}
       </section>

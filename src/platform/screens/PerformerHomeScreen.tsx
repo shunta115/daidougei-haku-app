@@ -71,7 +71,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory }: { onEdit: () 
       ) : null}
 
       <button type="button" className="pl-btn pl-btn--block pl-btn--live" onClick={onLive}>
-        {performer.is_live ? 'Manage live' : 'Go live'}
+        {performer.is_live ? 'Manage LIVE' : 'LIVE開始'}
       </button>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onEdit}>
         Edit profile

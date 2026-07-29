@@ -11,6 +11,7 @@ import { PerformerEditScreen } from './screens/PerformerEditScreen'
 import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
 import { NotificationsScreen } from './screens/NotificationsScreen'
+import { LiveWatchScreen } from './screens/LiveWatchScreen'
 import { TipScreen } from './screens/TipScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
 import { AdminDashboardScreen, AdminUsersScreen } from './screens/AdminScreens'
@@ -58,6 +59,7 @@ function PlatformShell() {
   const [screen, setScreen] = useState<PlatformScreen>('welcome')
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [tipFlash, setTipFlash] = useState<string | null>(null)
+  const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -146,16 +148,46 @@ function PlatformShell() {
 
   const role = profile?.role ?? 'fan'
   const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : 'fan'
-  const showNav = !['tip', 'performer-history'].includes(screen) && !performerId
+  const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen) && !(performerId && screen === 'profile')
 
   const openPerformer = (id: string) => {
     setPerformerId(id)
     setScreen('profile')
   }
 
+  const openWatch = (id: string) => {
+    setPerformerId(id)
+    setScreen('live-watch')
+  }
+
   let body: ReactNode = null
 
-  if (performerId && screen !== 'tip') {
+  if (screen === 'live-watch' && performerId) {
+    body = (
+      <LiveWatchScreen
+        performerId={performerId}
+        onBack={() => {
+          setPerformerId(null)
+          setScreen(homeForRole(role))
+        }}
+        onTip={() => {
+          setTipReturn('live-watch')
+          setScreen('tip')
+        }}
+      />
+    )
+  } else if (performerId && screen === 'tip') {
+    body = (
+      <TipScreen
+        performerId={performerId}
+        onBack={() => setScreen(tipReturn)}
+        onDone={() => {
+          setPerformerId(null)
+          setScreen(homeForRole(role))
+        }}
+      />
+    )
+  } else if (performerId && screen !== 'tip') {
     body = (
       <PerformerPublicScreen
         performerId={performerId}
@@ -163,18 +195,11 @@ function PlatformShell() {
           setPerformerId(null)
           setScreen(homeForRole(role))
         }}
-        onTip={() => setScreen('tip')}
-      />
-    )
-  } else if (screen === 'tip' && performerId) {
-    body = (
-      <TipScreen
-        performerId={performerId}
-        onBack={() => setScreen('profile')}
-        onDone={() => {
-          setPerformerId(null)
-          setScreen(homeForRole(role))
+        onTip={() => {
+          setTipReturn('profile')
+          setScreen('tip')
         }}
+        onWatchLive={() => setScreen('live-watch')}
       />
     )
   } else {
@@ -183,9 +208,11 @@ function PlatformShell() {
         body = (
           <FanHomeScreen
             onOpenPerformer={openPerformer}
+            onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onTip={(id) => {
               setPerformerId(id)
+              setTipReturn('fan-home')
               setScreen('tip')
             }}
           />
@@ -228,9 +255,11 @@ function PlatformShell() {
         body = (
           <FanHomeScreen
             onOpenPerformer={openPerformer}
+            onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onTip={(id) => {
               setPerformerId(id)
+              setTipReturn('fan-home')
               setScreen('tip')
             }}
           />
