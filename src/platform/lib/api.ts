@@ -138,6 +138,17 @@ export async function follow(fanId: string, performerId: string) {
   })
 }
 
+export async function listFollowedPerformers(fanId: string): Promise<Performer[]> {
+  const sb = requireSupabase()
+  const { data: follows, error } = await sb.from('follows').select('performer_id').eq('fan_id', fanId)
+  if (error) throw error
+  const ids = (follows ?? []).map((f) => f.performer_id as string)
+  if (ids.length === 0) return []
+  const { data, error: perr } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  if (perr) throw perr
+  return (data as Performer[]) ?? []
+}
+
 export async function unfollow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').delete().eq('fan_id', fanId).eq('performer_id', performerId)

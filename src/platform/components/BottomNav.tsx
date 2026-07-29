@@ -20,7 +20,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
             { key: 'notifications', label: 'Alerts' },
           ]
         : [
-            { key: 'fan-home', label: 'Live' },
+            { key: 'fan-home', label: 'Home' },
             { key: 'search', label: 'Search' },
             { key: 'notifications', label: 'Alerts' },
             { key: 'profile', label: 'You' },

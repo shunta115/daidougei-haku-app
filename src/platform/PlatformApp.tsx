@@ -180,7 +180,16 @@ function PlatformShell() {
   } else {
     switch (screen) {
       case 'fan-home':
-        body = <FanHomeScreen onOpenPerformer={openPerformer} />
+        body = (
+          <FanHomeScreen
+            onOpenPerformer={openPerformer}
+            onOpenSearch={() => setScreen('search')}
+            onTip={(id) => {
+              setPerformerId(id)
+              setScreen('tip')
+            }}
+          />
+        )
         break
       case 'search':
         body = <SearchScreen onOpenPerformer={openPerformer} />
@@ -216,7 +225,16 @@ function PlatformShell() {
         body = <AdminUsersScreen />
         break
       default:
-        body = <FanHomeScreen onOpenPerformer={openPerformer} />
+        body = (
+          <FanHomeScreen
+            onOpenPerformer={openPerformer}
+            onOpenSearch={() => setScreen('search')}
+            onTip={(id) => {
+              setPerformerId(id)
+              setScreen('tip')
+            }}
+          />
+        )
     }
   }
 
