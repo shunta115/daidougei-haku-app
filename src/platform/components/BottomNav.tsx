@@ -15,12 +15,13 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
       : role === 'performer'
         ? [
             { key: 'performer-home', label: 'Home' },
-            { key: 'performer-live', label: 'Live' },
-            { key: 'performer-edit', label: 'Profile' },
+            { key: 'live-list', label: 'LIVE' },
+            { key: 'performer-live', label: '配信' },
             { key: 'notifications', label: 'Alerts' },
           ]
         : [
             { key: 'fan-home', label: 'Home' },
+            { key: 'live-list', label: 'LIVE' },
             { key: 'search', label: 'Search' },
             { key: 'notifications', label: 'Alerts' },
             { key: 'profile', label: 'You' },

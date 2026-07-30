@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
-import { endLive, listLiveComments, postLiveComment, startLive, subscribeLiveComments, updatePerformer } from '../lib/api'
+import {
+  endLive,
+  listLiveComments,
+  postLiveComment,
+  startLive,
+  subscribeLiveComments,
+  updateLiveViewerPeak,
+  updatePerformer,
+} from '../lib/api'
 import { useAuth } from '../lib/auth'
 import {
   applyNetworkAdaptation,
@@ -29,7 +37,7 @@ function formatDuration(sec: number) {
 export function PerformerLiveScreen({ onBack }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const [title, setTitle] = useState(performer?.live_title ?? '')
-  const [phase, setPhase] = useState<'ready' | 'live'>('ready')
+  const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [viewers, setViewers] = useState(0)
@@ -38,20 +46,38 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [draft, setDraft] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
-  const startedAtRef = useRef<number>(Date.now())
+  const startedAtRef = useRef<number>(
+    performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
+  )
+  const endingRef = useRef(false)
+  const peakRef = useRef(0)
+  const reconnectAttempted = useRef(false)
 
   useEffect(() => {
-    if (performer?.is_live) setPhase('live')
-  }, [performer?.is_live])
+    if (performer?.is_live) {
+      setPhase('live')
+      if (performer.live_started_at) {
+        startedAtRef.current = new Date(performer.live_started_at).getTime()
+      }
+      if (performer.live_title) setTitle(performer.live_title)
+    }
+  }, [performer?.is_live, performer?.live_started_at, performer?.live_title])
 
   useEffect(() => {
     if (phase !== 'live') return
     const t = window.setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000))
-      if (roomRef.current) setViewers(Math.max(0, countViewers(roomRef.current) - 1))
+      if (roomRef.current) {
+        const n = Math.max(0, countViewers(roomRef.current) - 1)
+        setViewers(n)
+        if (n > peakRef.current) {
+          peakRef.current = n
+          if (performer) void updateLiveViewerPeak(performer.id, n).catch(() => undefined)
+        }
+      }
     }, 1000)
     return () => window.clearInterval(t)
-  }, [phase])
+  }, [phase, performer])
 
   useEffect(() => {
     if (!performer || phase !== 'live') return
@@ -60,6 +86,61 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setComments((prev) => [...prev.slice(-79), row])
     })
   }, [performer, phase])
+
+  const attachLocalPreview = (room: Room) => {
+    const pub = [...room.localParticipant.trackPublications.values()].find((p) => p.kind === 'video')
+    const track = pub?.track
+    if (track && videoRef.current) track.attach(videoRef.current)
+  }
+
+  const wireRoom = (room: Room) => {
+    roomRef.current = room
+    room.on(RoomEvent.ParticipantConnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
+    room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
+    room.on(RoomEvent.ConnectionQualityChanged, () => {
+      applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
+    })
+    attachLocalPreview(room)
+  }
+
+  const connectHostRoom = async () => {
+    if (!performer) throw new Error('No performer')
+    const status = await fetchLiveKitStatus()
+    if (!status.configured) {
+      throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
+    }
+    const { token, url } = await fetchLiveKitToken(performer.id, true)
+    const room = await connectAsHost(url, token)
+    wireRoom(room)
+    return room
+  }
+
+  // Rejoin camera if DB says live but room is gone (e.g. remount / refresh).
+  useEffect(() => {
+    if (!performer?.is_live || reconnectAttempted.current) return
+    if (roomRef.current) return
+    reconnectAttempted.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        setBusy(true)
+        setError(null)
+        await connectHostRoom()
+        if (!cancelled) setPhase('live')
+      } catch (e) {
+        if (!cancelled) {
+          if (e instanceof LiveKitClientError) setError(e.message)
+          else setError(liveKitErrorMessage('connection', e instanceof Error ? e.message : undefined))
+        }
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot rejoin
+  }, [performer?.id, performer?.is_live])
 
   useEffect(() => {
     return () => {
@@ -71,14 +152,6 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
   if (!performer || !profile) return <p className="pl-muted">Loading…</p>
 
-  const attachLocalPreview = (room: Room) => {
-    const pub = [...room.localParticipant.trackPublications.values()].find((p) => p.kind === 'video')
-    const track = pub?.track
-    if (track && videoRef.current) {
-      track.attach(videoRef.current)
-    }
-  }
-
   const goLive = async () => {
     if (!performer.is_approved) {
       setError('管理者の承認後にLIVEできます')
@@ -86,13 +159,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
     setBusy(true)
     setError(null)
+    endingRef.current = false
     try {
-      const status = await fetchLiveKitStatus()
-      if (!status.configured) {
-        throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
-      }
-
-      // Permissions + camera via LiveKit
       let lat: number | null = null
       let lng: number | null = null
       if (performer.share_location && 'geolocation' in navigator) {
@@ -113,18 +181,17 @@ export function PerformerLiveScreen({ onBack }: Props) {
         location_updated_at: lat != null ? new Date().toISOString() : null,
       })
 
-      const { token, url } = await fetchLiveKitToken(performer.id, true)
-      const room = await connectAsHost(url, token)
-      roomRef.current = room
-      room.on(RoomEvent.ParticipantConnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
-      room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
-      room.on(RoomEvent.ConnectionQualityChanged, () => {
-        applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
-      })
-      attachLocalPreview(room)
+      if (!roomRef.current) {
+        await connectHostRoom()
+      } else {
+        attachLocalPreview(roomRef.current)
+      }
 
       await startLive(performer.id, title)
-      startedAtRef.current = Date.now()
+      if (!performer.is_live) {
+        startedAtRef.current = Date.now()
+        peakRef.current = 0
+      }
       setPhase('live')
       await refreshProfile()
     } catch (e) {
@@ -141,6 +208,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const stopLive = async () => {
     setBusy(true)
     setError(null)
+    endingRef.current = true
     try {
       const room = roomRef.current
       roomRef.current = null
@@ -150,7 +218,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setPhase('ready')
       setElapsed(0)
       setViewers(0)
+      peakRef.current = 0
+      reconnectAttempted.current = false
     } catch (e) {
+      endingRef.current = false
       setError(e instanceof Error ? e.message : 'LIVE終了に失敗しました')
     } finally {
       setBusy(false)
@@ -176,14 +247,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
     <div className="pl-live">
       <div className="pl-live__stage">
         <video ref={videoRef} className="pl-live__video" playsInline muted autoPlay />
-        {!phase || phase === 'ready' ? <div className="pl-live__placeholder">カメラ準備</div> : null}
+        {phase === 'ready' ? <div className="pl-live__placeholder">カメラ準備</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
             Back
           </button>
           {phase === 'live' ? (
             <div className="pl-live__stats">
-              <span className="pl-live__pill">LIVE</span>
+              <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
             </div>
@@ -212,6 +283,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
         </div>
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
+          {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
           <div className="pl-live__comments">
             {comments.map((c) => (
               <div key={c.id} className="pl-live__comment">

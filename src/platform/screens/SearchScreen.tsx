@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { LiveBadge } from '../components/LiveBadge'
 import { searchPerformers } from '../lib/api'
 import type { Performer } from '../lib/types'
 
 type SearchProps = {
   onOpenPerformer: (id: string) => void
+  onWatchLive?: (id: string) => void
 }
 
-export function SearchScreen({ onOpenPerformer }: SearchProps) {
+export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -42,11 +44,14 @@ export function SearchScreen({ onOpenPerformer }: SearchProps) {
           type="button"
           className="pl-card pl-row"
           style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
-          onClick={() => onOpenPerformer(p.id)}
+          onClick={() => {
+            if (p.is_live && onWatchLive) onWatchLive(p.id)
+            else onOpenPerformer(p.id)
+          }}
         >
           <Avatar url={p.photo_url} name={p.stage_name} />
           <div>
-            {p.is_live ? <div className="pl-badge">LIVE</div> : null}
+            {p.is_live ? <LiveBadge /> : null}
             <div style={{ fontWeight: 700 }}>{p.stage_name}</div>
             <div className="pl-muted">
               {p.genre}

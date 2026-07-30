@@ -190,7 +190,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
             Back
           </button>
           <div className="pl-live__stats">
-            {p?.is_live ? <span className="pl-live__pill">LIVE</span> : <span className="pl-live__pill pl-live__pill--off">END</span>}
+            {p?.is_live ? <span className="pl-live__pill">LIVE中</span> : <span className="pl-live__pill pl-live__pill--off">END</span>}
             <span>{formatDuration(elapsed)}</span>
             <span>👁 {viewers}</span>
             <span>{quality}</span>

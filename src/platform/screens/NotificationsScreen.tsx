@@ -3,7 +3,22 @@ import { listNotifications, markNotificationRead } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { NotificationRow } from '../lib/types'
 
-export function NotificationsScreen() {
+type Props = {
+  onOpenLive?: (performerId: string) => void
+  onOpenPerformer?: (performerId: string) => void
+}
+
+function parseLink(link: string | null): { kind: 'live' | 'profile'; id: string } | null {
+  if (!link) return null
+  if (link.startsWith('live:')) return { kind: 'live', id: link.slice(5) }
+  const hashLive = link.match(/#?live\/([0-9a-f-]{36})/i)
+  if (hashLive) return { kind: 'live', id: hashLive[1] }
+  const profile = link.match(/#?profile\/([0-9a-f-]{36})/i)
+  if (profile) return { kind: 'profile', id: profile[1] }
+  return null
+}
+
+export function NotificationsScreen({ onOpenLive, onOpenPerformer }: Props) {
   const { user } = useAuth()
   const [rows, setRows] = useState<NotificationRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +42,10 @@ export function NotificationsScreen() {
       await markNotificationRead(n.id)
       setRows((prev) => prev.map((r) => (r.id === n.id ? { ...r, read_at: new Date().toISOString() } : r)))
     }
+    const parsed = parseLink(n.link)
+    if (!parsed) return
+    if (parsed.kind === 'live') onOpenLive?.(parsed.id)
+    else onOpenPerformer?.(parsed.id)
   }
 
   return (

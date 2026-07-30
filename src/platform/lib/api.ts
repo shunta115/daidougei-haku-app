@@ -40,6 +40,70 @@ export async function listLivePerformers(): Promise<Performer[]> {
   return (data as Performer[]) ?? []
 }
 
+export type LiveRankRow = {
+  performer: Performer
+  session: LiveSession | null
+  tip_amount_total: number
+  tip_count: number
+  viewer_peak: number
+}
+
+/** Currently-live ranking by tips, then viewer peak, then start time. */
+export async function listLiveRanking(): Promise<LiveRankRow[]> {
+  const live = await listLivePerformers()
+  if (live.length === 0) return []
+  const sb = requireSupabase()
+  const ids = live.map((p) => p.id)
+  const { data, error } = await sb
+    .from('live_sessions')
+    .select('*')
+    .in('performer_id', ids)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+  if (error) throw error
+  const sessions = (data as LiveSession[]) ?? []
+  const latestByPerformer = new Map<string, LiveSession>()
+  for (const s of sessions) {
+    if (!latestByPerformer.has(s.performer_id)) latestByPerformer.set(s.performer_id, s)
+  }
+  const rows: LiveRankRow[] = live.map((performer) => {
+    const session = latestByPerformer.get(performer.id) ?? null
+    return {
+      performer,
+      session,
+      tip_amount_total: session?.tip_amount_total ?? 0,
+      tip_count: session?.tip_count ?? 0,
+      viewer_peak: session?.viewer_peak ?? 0,
+    }
+  })
+  rows.sort((a, b) => {
+    if (b.tip_amount_total !== a.tip_amount_total) return b.tip_amount_total - a.tip_amount_total
+    if (b.viewer_peak !== a.viewer_peak) return b.viewer_peak - a.viewer_peak
+    const at = a.performer.live_started_at ? new Date(a.performer.live_started_at).getTime() : 0
+    const bt = b.performer.live_started_at ? new Date(b.performer.live_started_at).getTime() : 0
+    return bt - at
+  })
+  return rows
+}
+
+export async function updateLiveViewerPeak(performerId: string, viewers: number) {
+  const peak = Math.max(0, Math.floor(viewers))
+  if (peak <= 0) return
+  const sb = requireSupabase()
+  const { data: open } = await sb
+    .from('live_sessions')
+    .select('id, viewer_peak')
+    .eq('performer_id', performerId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!open?.id) return
+  const current = open.viewer_peak ?? 0
+  if (peak <= current) return
+  await sb.from('live_sessions').update({ viewer_peak: peak }).eq('id', open.id)
+}
+
 export async function updatePerformer(id: string, patch: Partial<Performer>) {
   const sb = requireSupabase()
   const { error } = await sb.from('performers').update(patch).eq('id', id)
@@ -50,37 +114,8 @@ export async function startLive(performerId: string, title?: string) {
   const sb = requireSupabase()
   const now = new Date().toISOString()
   const liveTitle = title?.trim() || null
-  const { error: uerr } = await sb
-    .from('performers')
-    .update({
-      is_live: true,
-      live_started_at: now,
-      live_title: liveTitle,
-      stream_url: null,
-    })
-    .eq('id', performerId)
-  if (uerr) throw uerr
-  const { data, error } = await sb
-    .from('live_sessions')
-    .insert({
-      performer_id: performerId,
-      stream_url: null,
-      title: liveTitle,
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  return (data?.id as string) ?? null
-}
 
-export async function endLive(performerId: string) {
-  const sb = requireSupabase()
-  const { error: uerr } = await sb
-    .from('performers')
-    .update({ is_live: false, live_started_at: null, live_title: null })
-    .eq('id', performerId)
-  if (uerr) throw uerr
-  const { data: open } = await sb
+  const { data: existing } = await sb
     .from('live_sessions')
     .select('id')
     .eq('performer_id', performerId)
@@ -88,8 +123,89 @@ export async function endLive(performerId: string) {
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (open?.id) {
-    await sb.from('live_sessions').update({ ended_at: new Date().toISOString() }).eq('id', open.id)
+
+  const { data: performerRow } = await sb
+    .from('performers')
+    .select('is_live, stage_name, live_title')
+    .eq('id', performerId)
+    .maybeSingle()
+
+  const alreadyLive = Boolean(performerRow?.is_live && existing?.id)
+
+  const patch: Partial<Performer> & { stream_url: null } = {
+    is_live: true,
+    live_title: liveTitle ?? (performerRow?.live_title as string | null) ?? null,
+    stream_url: null,
+  }
+  if (!alreadyLive) {
+    patch.live_started_at = now
+  }
+
+  const { error: uerr } = await sb.from('performers').update(patch).eq('id', performerId)
+  if (uerr) throw uerr
+
+  // Rejoin: keep open session, refresh title only — avoid duplicate sessions.
+  if (alreadyLive && existing?.id) {
+    if (liveTitle) {
+      await sb.from('live_sessions').update({ title: liveTitle }).eq('id', existing.id)
+    }
+    return existing.id as string
+  }
+
+  // Close any stale open sessions before opening a fresh one.
+  if (existing?.id) {
+    await sb.from('live_sessions').update({ ended_at: now }).eq('id', existing.id)
+  }
+
+  const { data, error } = await sb
+    .from('live_sessions')
+    .insert({
+      performer_id: performerId,
+      stream_url: null,
+      title: liveTitle,
+      started_at: now,
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+
+  const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
+  await notifyFollowersLiveStart(performerId, stageName, liveTitle)
+
+  return (data?.id as string) ?? null
+}
+
+export async function endLive(performerId: string) {
+  const sb = requireSupabase()
+  const now = new Date().toISOString()
+  const { error: uerr } = await sb
+    .from('performers')
+    .update({ is_live: false, live_started_at: null, live_title: null })
+    .eq('id', performerId)
+  if (uerr) throw uerr
+  // Close every open session (guards against duplicates from older builds).
+  await sb
+    .from('live_sessions')
+    .update({ ended_at: now })
+    .eq('performer_id', performerId)
+    .is('ended_at', null)
+}
+
+async function notifyFollowersLiveStart(performerId: string, stageName: string, title: string | null) {
+  const sb = requireSupabase()
+  const { data: follows } = await sb.from('follows').select('fan_id').eq('performer_id', performerId)
+  const fanIds = [...new Set((follows ?? []).map((f) => f.fan_id as string).filter(Boolean))]
+  if (fanIds.length === 0) return
+  const body = title?.trim() ? `${stageName} が「${title.trim()}」を配信開始しました` : `${stageName} がライブ配信を開始しました`
+  const rows = fanIds.map((fanId) => ({
+    user_id: fanId,
+    title: 'LIVE開始',
+    body,
+    link: `live:${performerId}`,
+  }))
+  // Chunk to avoid oversized inserts
+  for (let i = 0; i < rows.length; i += 50) {
+    await sb.from('notifications').insert(rows.slice(i, i + 50))
   }
 }
 

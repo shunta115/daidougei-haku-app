@@ -12,6 +12,7 @@ import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
 import { NotificationsScreen } from './screens/NotificationsScreen'
 import { LiveWatchScreen } from './screens/LiveWatchScreen'
+import { LiveListScreen } from './screens/LiveListScreen'
 import { TipScreen } from './screens/TipScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
 import { AdminDashboardScreen, AdminUsersScreen } from './screens/AdminScreens'
@@ -210,6 +211,7 @@ function PlatformShell() {
             onOpenPerformer={openPerformer}
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
+            onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
               setPerformerId(id)
               setTipReturn('fan-home')
@@ -218,11 +220,24 @@ function PlatformShell() {
           />
         )
         break
+      case 'live-list':
+        body = (
+          <LiveListScreen
+            onWatchLive={openWatch}
+            onOpenPerformer={openPerformer}
+          />
+        )
+        break
       case 'search':
-        body = <SearchScreen onOpenPerformer={openPerformer} />
+        body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'notifications':
-        body = <NotificationsScreen />
+        body = (
+          <NotificationsScreen
+            onOpenLive={openWatch}
+            onOpenPerformer={openPerformer}
+          />
+        )
         break
       case 'profile':
         body = <FanProfileScreen />
@@ -257,6 +272,7 @@ function PlatformShell() {
             onOpenPerformer={openPerformer}
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
+            onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
               setPerformerId(id)
               setTipReturn('fan-home')

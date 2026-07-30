@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { LiveBadge } from '../components/LiveBadge'
 import { follow, getPerformer, isFollowing, unfollow } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { Performer } from '../lib/types'
@@ -55,7 +56,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
       </button>
       <div className="pl-card" style={{ marginTop: 12, textAlign: 'center' }}>
         <Avatar url={p.photo_url} name={p.stage_name} large />
-        {p.is_live ? <p className="pl-badge" style={{ justifyContent: 'center', marginTop: 12 }}>LIVE</p> : null}
+        {p.is_live ? (
+          <p style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+            <LiveBadge />
+          </p>
+        ) : null}
         <h1 className="pl-h1" style={{ marginTop: 12 }}>
           {p.stage_name}
         </h1>

@@ -9,6 +9,7 @@ type FanHomeProps = {
   onOpenPerformer: (id: string) => void
   onWatchLive: (id: string) => void
   onOpenSearch: () => void
+  onOpenLiveList: () => void
   onTip: (id: string) => void
 }
 
@@ -25,7 +26,7 @@ function shareApp() {
   void navigator.clipboard?.writeText(url)
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTip }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onTip }: FanHomeProps) {
   const { user } = useAuth()
   const [mode, setMode] = useState<EventMode>(() => {
     const saved = window.localStorage.getItem('pl-event-mode')
@@ -88,7 +89,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
         <div className="fe-strip__brand">
           <span className="fe-strip__dot" aria-hidden="true" />
           <span className="fe-strip__name">大道芸博</span>
-          {live.length > 0 ? <span className="fe-strip__pill">LIVE</span> : null}
+          {live.length > 0 ? <span className="fe-strip__pill">LIVE中</span> : null}
         </div>
         <div className="fe-strip__meta">
           <span>ストリート · 毎日</span>
@@ -160,7 +161,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
                     : undefined
                 }
               >
-                <span className="fe-h6-live__livepill">LIVE</span>
+                <span className="fe-h6-live__livepill">LIVE中</span>
               </div>
               <div className="fe-h6-live__info">
                 <p className="fe-h6-live__genre">{featuredLive.genre || 'Street'}</p>
@@ -220,7 +221,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
                 <span className="fe-h6-rail__time">{p.is_live ? 'NOW' : 'TODAY'}</span>
                 <span className="fe-h6-rail__name">{p.stage_name}</span>
                 <span className="fe-h6-rail__stage">{p.genre || p.city || 'Street'}</span>
-                {p.is_live ? <span className="fe-h6-rail__badge fe-h6-rail__badge--live">LIVE</span> : null}
+                {p.is_live ? <span className="fe-h6-rail__badge fe-h6-rail__badge--live">LIVE中</span> : null}
               </button>
             ))}
           </div>
@@ -230,9 +231,14 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
       <section className="fe-stream-hero" aria-labelledby="fe-stream-hero-title">
         <div className="fe-stream-hero__glow" aria-hidden="true" />
         <header className="fe-stream-hero__head">
-          <p className="fe-stream-hero__eyebrow" lang="en">
-            LIVE NOW
-          </p>
+          <div className="pl-live-row__top" style={{ marginBottom: 8 }}>
+            <p className="fe-stream-hero__eyebrow" lang="en" style={{ margin: 0 }}>
+              LIVE NOW
+            </p>
+            <button type="button" className="pl-btn pl-btn--ghost" style={{ minHeight: 32, padding: '0 10px' }} onClick={onOpenLiveList}>
+              すべて見る
+            </button>
+          </div>
           <h2 id="fe-stream-hero-title" className="fe-stream-hero__title">
             今、世界のどこかで大道芸が始まっている
           </h2>
@@ -253,8 +259,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
                     {p.photo_url ? (
                       <img className="fe-stream-card__photo" src={p.photo_url} alt="" loading="lazy" />
                     ) : null}
-                    <span className="fe-stream-card__live-badge" lang="en">
-                      LIVE
+                    <span className="fe-stream-card__live-badge" lang="ja">
+                      LIVE中
                     </span>
                   </div>
                   <div className="fe-stream-card__body">
@@ -307,7 +313,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
           <div className="pl-map-panel__list">
             {mapRows.map((p) => (
               <button key={p.id} type="button" className="pl-map-panel__card" onClick={() => onOpenPerformer(p.id)}>
-                <span className="pl-map-panel__live">LIVE</span>
+                <span className="pl-map-panel__live">LIVE中</span>
                 <span className="pl-map-panel__name">{p.stage_name}</span>
                 <span className="pl-map-panel__meta">
                   {p.city || 'Street'} · {p.lat?.toFixed(2)}, {p.lng?.toFixed(2)}
@@ -377,7 +383,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onTi
               <button key={p.id} type="button" className="pl-oshi-rail__card" onClick={() => onOpenPerformer(p.id)}>
                 {p.photo_url ? <img src={p.photo_url} alt="" className="pl-oshi-rail__av" /> : <span className="pl-oshi-rail__av pl-oshi-rail__av--ph" />}
                 <span className="pl-oshi-rail__name">{p.stage_name}</span>
-                {p.is_live ? <span className="pl-oshi-rail__live">LIVE</span> : null}
+                {p.is_live ? <span className="pl-oshi-rail__live">LIVE中</span> : null}
               </button>
             ))}
           </div>

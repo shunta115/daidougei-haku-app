@@ -107,6 +107,7 @@ export type PlatformScreen =
   | 'auth'
   | 'fan-home'
   | 'search'
+  | 'live-list'
   | 'profile'
   | 'notifications'
   | 'performer-home'
