@@ -12,6 +12,7 @@ import {
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import {
+  applyNetworkAdaptation,
   attachRemoteTrack,
   connectAsViewer,
   countViewers,
@@ -19,7 +20,7 @@ import {
   fetchLiveKitToken,
   LiveKitClientError,
   liveKitErrorMessage,
-  preferAudioOnWeakNetwork,
+  preferAudioOnly,
   watchRemoteMedia,
 } from '../lib/livekit'
 import type { LiveComment, Performer } from '../lib/types'
@@ -108,12 +109,23 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
         setViewers(countViewers(room))
         room.on(RoomEvent.ParticipantConnected, () => setViewers(countViewers(room)))
         room.on(RoomEvent.ParticipantDisconnected, () => setViewers(countViewers(room)))
+        let lostSince: number | null = null
         room.on(RoomEvent.ConnectionQualityChanged, () => {
           const q = room.localParticipant.connectionQuality
-          const weak = q === ConnectionQuality.Poor || q === ConnectionQuality.Lost
-          preferAudioOnWeakNetwork(room, weak)
-          setQuality(weak ? 'AUDIO+' : 'AUTO')
+          if (q === ConnectionQuality.Lost) {
+            if (lostSince == null) lostSince = Date.now()
+            // Keep trying 480p briefly; if still Lost >4s, keep audio only.
+            if (Date.now() - lostSince > 4000) {
+              preferAudioOnly(room)
+              setQuality('AUDIO+')
+              return
+            }
+          } else {
+            lostSince = null
+          }
+          setQuality(applyNetworkAdaptation(room, q))
         })
+        setQuality(applyNetworkAdaptation(room, room.localParticipant.connectionQuality))
         watchRemoteMedia(room, (track) => {
           attachRemoteTrack(track, videoRef.current, audioRef.current)
         })

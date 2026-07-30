@@ -3,6 +3,7 @@ import { RoomEvent, type Room } from 'livekit-client'
 import { endLive, listLiveComments, postLiveComment, startLive, subscribeLiveComments, updatePerformer } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import {
+  applyNetworkAdaptation,
   connectAsHost,
   countViewers,
   fetchLiveKitStatus,
@@ -117,6 +118,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
       roomRef.current = room
       room.on(RoomEvent.ParticipantConnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
       room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
+      room.on(RoomEvent.ConnectionQualityChanged, () => {
+        applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
+      })
       attachLocalPreview(room)
 
       await startLive(performer.id, title)
