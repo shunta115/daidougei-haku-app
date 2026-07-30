@@ -9,8 +9,33 @@ import {
 } from 'livekit-client'
 import { supabase } from './supabase'
 
+export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
+
+export class LiveKitClientError extends Error {
+  kind: LiveKitErrorKind
+  constructor(kind: LiveKitErrorKind, message: string) {
+    super(message)
+    this.name = 'LiveKitClientError'
+    this.kind = kind
+  }
+}
+
+export function liveKitErrorMessage(kind: LiveKitErrorKind, detail?: string) {
+  switch (kind) {
+    case 'not_configured':
+      return 'LiveKit未設定です。サーバーの LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET を確認してください'
+    case 'auth':
+      return detail || '認証失敗です。ログインし直してから再度お試しください'
+    case 'connection':
+      return detail || '接続失敗です。通信環境を確認して再度お試しください'
+    default:
+      return detail || 'ライブ接続に失敗しました'
+  }
+}
+
+/** Soft hint only — connection URL always comes from the token API (server-side). */
 export function isLiveKitConfigured() {
-  return Boolean(import.meta.env.VITE_LIVEKIT_URL)
+  return true
 }
 
 export function liveRoomName(performerId: string) {
@@ -24,19 +49,61 @@ async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(await authHeader()),
+function classifyTokenFailure(status: number, errorText: string): LiveKitClientError {
+  const lower = errorText.toLowerCase()
+  if (
+    status === 500 &&
+    (lower.includes('not configured') || lower.includes('livekit is not configured') || lower.includes('livekit_url'))
+  ) {
+    return new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
   }
-  const res = await fetch('/api/livekit/token', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ performerId, asHost }),
-  })
-  const json = (await res.json()) as { token?: string; url?: string; room?: string; error?: string }
+  if (status === 401 || status === 403) {
+    return new LiveKitClientError('auth', liveKitErrorMessage('auth', errorText || undefined))
+  }
+  if (status === 404 || status === 400) {
+    return new LiveKitClientError('unknown', errorText || liveKitErrorMessage('unknown'))
+  }
+  if (status >= 500) {
+    return new LiveKitClientError('connection', liveKitErrorMessage('connection', errorText || undefined))
+  }
+  return new LiveKitClientError('unknown', errorText || liveKitErrorMessage('unknown'))
+}
+
+export async function fetchLiveKitStatus() {
+  try {
+    const res = await fetch('/api/livekit/status')
+    if (!res.ok) return { configured: false as const }
+    return (await res.json()) as { configured: boolean; hasUrl?: boolean; hasKey?: boolean; hasSecret?: boolean }
+  } catch {
+    return { configured: false as const }
+  }
+}
+
+export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
+  let res: Response
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(await authHeader()),
+    }
+    res = await fetch('/api/livekit/token', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ performerId, asHost }),
+    })
+  } catch {
+    throw new LiveKitClientError('connection', liveKitErrorMessage('connection', 'トークンAPIに到達できませんでした'))
+  }
+
+  let json: { token?: string; url?: string; room?: string; error?: string } = {}
+  try {
+    json = (await res.json()) as typeof json
+  } catch {
+    throw new LiveKitClientError('connection', liveKitErrorMessage('connection', 'トークンAPIの応答が不正です'))
+  }
+
   if (!res.ok || !json.token || !json.url) {
-    throw new Error(json.error || 'Could not get live token')
+    throw classifyTokenFailure(res.status, json.error || '')
   }
   return json as { token: string; url: string; room: string }
 }
@@ -56,9 +123,19 @@ export async function connectAsHost(url: string, token: string) {
       red: true,
     },
   })
-  await room.connect(url, token)
-  await room.localParticipant.setMicrophoneEnabled(true)
-  await room.localParticipant.setCameraEnabled(true)
+  try {
+    await room.connect(url, token)
+    await room.localParticipant.setMicrophoneEnabled(true)
+    await room.localParticipant.setCameraEnabled(true)
+  } catch (e) {
+    try {
+      await room.disconnect()
+    } catch {
+      /* ignore */
+    }
+    const detail = e instanceof Error ? e.message : undefined
+    throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
+  }
   return room
 }
 
@@ -67,7 +144,17 @@ export async function connectAsViewer(url: string, token: string) {
     adaptiveStream: true,
     dynacast: true,
   })
-  await room.connect(url, token)
+  try {
+    await room.connect(url, token)
+  } catch (e) {
+    try {
+      await room.disconnect()
+    } catch {
+      /* ignore */
+    }
+    const detail = e instanceof Error ? e.message : undefined
+    throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
+  }
   return room
 }
 

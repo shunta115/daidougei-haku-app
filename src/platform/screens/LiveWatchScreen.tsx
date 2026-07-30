@@ -15,8 +15,10 @@ import {
   attachRemoteTrack,
   connectAsViewer,
   countViewers,
+  fetchLiveKitStatus,
   fetchLiveKitToken,
-  isLiveKitConfigured,
+  LiveKitClientError,
+  liveKitErrorMessage,
   preferAudioOnWeakNetwork,
   watchRemoteMedia,
 } from '../lib/livekit'
@@ -81,13 +83,20 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
 
   useEffect(() => {
     if (!p?.is_live) return
-    if (!isLiveKitConfigured()) {
-      setError('LiveKit未設定です')
+    if (!user) {
+      setError(liveKitErrorMessage('auth', '視聴にはログインが必要です'))
       return
     }
     let cancelled = false
     ;(async () => {
       try {
+        setError(null)
+        const status = await fetchLiveKitStatus()
+        if (cancelled) return
+        if (!status.configured) {
+          setError(liveKitErrorMessage('not_configured'))
+          return
+        }
         const { token, url } = await fetchLiveKitToken(performerId, false)
         if (cancelled) return
         const room = await connectAsViewer(url, token)
@@ -109,7 +118,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           attachRemoteTrack(track, videoRef.current, audioRef.current)
         })
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '視聴に失敗しました')
+        if (cancelled) return
+        if (e instanceof LiveKitClientError) setError(e.message)
+        else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : undefined))
       }
     })()
     return () => {
@@ -118,7 +129,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, performerId])
+  }, [p?.is_live, performerId, user])
 
   useEffect(() => {
     if (!p?.live_started_at || !p.is_live) return

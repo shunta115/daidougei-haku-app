@@ -1,5 +1,5 @@
 /* Platform β offline shell */
-const CACHE = 'daidougei-platform-v1'
+const CACHE = 'daidougei-platform-v2-livekit'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html']
 
 self.addEventListener('install', (event) => {

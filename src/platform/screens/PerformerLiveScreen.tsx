@@ -5,8 +5,10 @@ import { useAuth } from '../lib/auth'
 import {
   connectAsHost,
   countViewers,
+  fetchLiveKitStatus,
   fetchLiveKitToken,
-  isLiveKitConfigured,
+  LiveKitClientError,
+  liveKitErrorMessage,
 } from '../lib/livekit'
 import type { LiveComment } from '../lib/types'
 import './live.css'
@@ -81,13 +83,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setError('管理者の承認後にLIVEできます')
       return
     }
-    if (!isLiveKitConfigured()) {
-      setError('LiveKit未設定です。VITE_LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET を追加してください')
-      return
-    }
     setBusy(true)
     setError(null)
     try {
+      const status = await fetchLiveKitStatus()
+      if (!status.configured) {
+        throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
+      }
+
       // Permissions + camera via LiveKit
       let lat: number | null = null
       let lng: number | null = null
@@ -124,7 +127,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
       const room = roomRef.current
       roomRef.current = null
       if (room) void room.disconnect()
-      setError(e instanceof Error ? e.message : 'LIVE開始に失敗しました')
+      if (e instanceof LiveKitClientError) setError(e.message)
+      else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : 'LIVE開始に失敗しました'))
     } finally {
       setBusy(false)
     }
