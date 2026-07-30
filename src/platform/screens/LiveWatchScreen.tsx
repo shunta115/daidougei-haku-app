@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
+import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   follow,
   getPerformer,
@@ -23,6 +24,9 @@ import {
   preferAudioOnly,
   watchRemoteMedia,
 } from '../lib/livekit'
+import { useFullscreen } from '../lib/useFullscreen'
+import { useLiveLayout } from '../lib/useLiveLayout'
+import { useVideoAspect } from '../lib/useVideoAspect'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 
@@ -40,6 +44,7 @@ function formatDuration(sec: number) {
 
 export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   const { user, profile } = useAuth()
+  const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
@@ -48,9 +53,21 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   const [draft, setDraft] = useState('')
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
+  const [chromeVisible, setChromeVisible] = useState(true)
+  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('contain')
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
+  const [calmMotion, setCalmMotion] = useState(
+    () =>
+      localStorage.getItem('pl-gift-calm') === '1' ||
+      (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+  )
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const roomRef = useRef<Room | null>(null)
+  const hideTimer = useRef<number | null>(null)
+  const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
+  const fs = useFullscreen(stageRef)
 
   useEffect(() => {
     getPerformer(performerId)
@@ -114,7 +131,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           const q = room.localParticipant.connectionQuality
           if (q === ConnectionQuality.Lost) {
             if (lostSince == null) lostSince = Date.now()
-            // Keep trying 480p briefly; if still Lost >4s, keep audio only.
             if (Date.now() - lostSince > 4000) {
               preferAudioOnly(room)
               setQuality('AUDIO+')
@@ -152,6 +168,33 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
     return () => window.clearInterval(id)
   }, [p?.live_started_at, p?.is_live])
 
+  useEffect(() => {
+    localStorage.setItem('pl-gift-sound', soundOn ? '1' : '0')
+  }, [soundOn])
+  useEffect(() => {
+    localStorage.setItem('pl-gift-calm', calmMotion ? '1' : '0')
+  }, [calmMotion])
+
+  const bumpChrome = () => {
+    setChromeVisible(true)
+    if (hideTimer.current) window.clearTimeout(hideTimer.current)
+    if (isOverlayChrome) {
+      hideTimer.current = window.setTimeout(() => setChromeVisible(false), 3500)
+    }
+  }
+
+  useEffect(() => {
+    if (!isOverlayChrome) {
+      setChromeVisible(true)
+      return
+    }
+    bumpChrome()
+    return () => {
+      if (hideTimer.current) window.clearTimeout(hideTimer.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOverlayChrome])
+
   const toggleFollow = async () => {
     if (!user) return
     try {
@@ -180,29 +223,85 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
 
   if (!p && !error) return <p className="pl-muted">Loading…</p>
 
+  const stageClass = [
+    'pl-live__stage',
+    fs.fallback ? 'pl-live__stage--fs-fallback' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div className="pl-live pl-live--watch">
-      <div className="pl-live__stage">
+    <div
+      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}`}
+      data-layout={mode}
+      style={
+        {
+          '--video-aspect': String(ratio),
+          '--video-fit': objectFit,
+        } as CSSProperties
+      }
+    >
+      <div
+        ref={stageRef}
+        className={stageClass}
+        onClick={() => {
+          if (isOverlayChrome) bumpChrome()
+        }}
+      >
         <video ref={videoRef} className="pl-live__video" playsInline autoPlay />
         <audio ref={audioRef} autoPlay />
-        <div className="pl-live__hud-top">
+        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} />
+
+        <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
             Back
           </button>
-          <div className="pl-live__stats">
-            {p?.is_live ? <span className="pl-live__pill">LIVE中</span> : <span className="pl-live__pill pl-live__pill--off">END</span>}
-            <span>{formatDuration(elapsed)}</span>
-            <span>👁 {viewers}</span>
-            <span>{quality}</span>
+          <div className="pl-live__hud-actions">
+            <div className="pl-live__stats">
+              {p?.is_live ? <span className="pl-live__pill">LIVE中</span> : <span className="pl-live__pill pl-live__pill--off">END</span>}
+              <span>{formatDuration(elapsed)}</span>
+              <span>👁 {viewers}</span>
+              <span>{quality}</span>
+              <span>{videoOrient === 'landscape' ? '横映像' : videoOrient === 'portrait' ? '縦映像' : '映像'}</span>
+            </div>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost pl-live__chip"
+              onClick={(e) => {
+                e.stopPropagation()
+                setObjectFit((f) => (f === 'contain' ? 'cover' : 'contain'))
+              }}
+            >
+              {objectFit === 'contain' ? 'Fit' : 'Fill'}
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost pl-live__chip"
+              onClick={(e) => {
+                e.stopPropagation()
+                void fs.toggle()
+              }}
+            >
+              {fs.active ? '全画面解除' : '全画面'}
+            </button>
           </div>
         </div>
-        <div className="pl-live__titlebar">
-          <strong>{p?.stage_name}</strong>
-          <span>{p?.live_title || p?.genre || ''}</span>
-        </div>
+
+        {!isOverlayChrome ? (
+          <div className="pl-live__titlebar">
+            <strong>{p?.stage_name}</strong>
+            <span>{p?.live_title || p?.genre || ''}</span>
+          </div>
+        ) : null}
       </div>
 
-      <div className="pl-live__panel pl-live__panel--live">
+      <div className="pl-live__panel pl-live__panel--live" data-dim={isOverlayChrome && !chromeVisible}>
+        {mode === 'desktop' || mode.startsWith('tablet') ? (
+          <div>
+            <strong>{p?.stage_name}</strong>
+            <div className="pl-muted">{p?.live_title || p?.genre || ''}</div>
+          </div>
+        ) : null}
         <div className="pl-live__comments">
           {comments.map((c) => (
             <div key={c.id} className="pl-live__comment">
@@ -225,6 +324,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
             placeholder="コメント"
             value={draft}
             disabled={!user}
+            onFocus={bumpChrome}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void sendComment()
@@ -233,6 +333,16 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           <button type="button" className="pl-btn" disabled={!user} onClick={() => void sendComment()}>
             Send
           </button>
+        </div>
+        <div className="pl-live__prefs">
+          <label>
+            <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+            ギフト音
+          </label>
+          <label>
+            <input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} />
+            演出を抑える
+          </label>
         </div>
       </div>
       {error ? <p className="pl-error">{error}</p> : null}

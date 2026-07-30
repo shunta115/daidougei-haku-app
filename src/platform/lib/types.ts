@@ -49,6 +49,21 @@ export type LiveSession = {
   viewer_peak: number
 }
 
+export type LiveTipEvent = {
+  id: string
+  tip_id: string
+  performer_id: string
+  live_session_id: string | null
+  fan_id: string | null
+  display_name: string
+  avatar_url: string | null
+  amount_cents: number
+  gift_label: string
+  is_anonymous: boolean
+  tier: 'normal' | 'premium' | 'special'
+  created_at: string
+}
+
 export type LiveComment = {
   id: string
   performer_id: string

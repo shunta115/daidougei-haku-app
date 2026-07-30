@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, getStripe } from './_shared.js'
+import { publishLiveTipEvent } from './_tipEvents.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -26,6 +27,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const tipId = session.metadata?.tip_id
     const performerId = session.metadata?.performer_id
+    const fanId = session.metadata?.fan_id ?? null
+    const anonymous = session.metadata?.anonymous === '1'
     const amount = session.amount_total ?? 0
     if (!tipId) {
       res.status(400).json({ error: 'tip metadata missing' })
@@ -72,6 +75,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
           .eq('id', open.id)
       }
+
+      await publishLiveTipEvent(sb, {
+        tipId,
+        performerId,
+        fanId,
+        amountYen: amount,
+        isAnonymous: anonymous,
+      })
     }
 
     res.status(200).json({ ok: true, tipId, amount, already })

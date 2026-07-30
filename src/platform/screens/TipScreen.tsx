@@ -9,9 +9,10 @@ type TipProps = {
   performerId: string
   onBack: () => void
   onDone: () => void
+  returnToLive?: boolean
 }
 
-export function TipScreen({ performerId, onBack, onDone }: TipProps) {
+export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProps) {
   const { user } = useAuth()
   const [p, setP] = useState<Performer | null>(null)
   const [amount, setAmount] = useState<number>(TIP_PRESETS_JPY[1])
@@ -37,6 +38,7 @@ export function TipScreen({ performerId, onBack, onDone }: TipProps) {
           performerId,
           fanId: user.id,
           amountYen: amount,
+          returnTo: returnToLive ? 'live' : undefined,
         }),
       })
       const json = (await res.json()) as { url?: string; error?: string }

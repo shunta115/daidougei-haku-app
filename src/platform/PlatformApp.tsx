@@ -66,6 +66,8 @@ function PlatformShell() {
     const url = new URL(window.location.href)
     const tip = url.searchParams.get('tip')
     const sessionId = url.searchParams.get('session_id')
+    const ret = url.searchParams.get('return')
+    const pid = url.searchParams.get('performerId')
     if (tip === 'success') {
       setTipFlash('Tip sent successfully.')
       if (sessionId) {
@@ -75,13 +77,20 @@ function PlatformShell() {
           body: JSON.stringify({ sessionId }),
         }).catch(() => undefined)
       }
+      if (ret === 'live' && pid) {
+        window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
+      }
     } else if (tip === 'cancel') {
       setTipFlash('Tip was cancelled.')
+      if (ret === 'live' && pid) {
+        window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
+      }
     }
     if (tip) {
       url.searchParams.delete('tip')
       url.searchParams.delete('session_id')
       url.searchParams.delete('performerId')
+      url.searchParams.delete('return')
       url.searchParams.delete('stripe')
       window.history.replaceState({}, '', url.pathname + url.search)
     }
@@ -99,6 +108,21 @@ function PlatformShell() {
     }
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
       return
+    }
+    const raw = window.sessionStorage.getItem('pl-tip-return')
+    if (raw) {
+      window.sessionStorage.removeItem('pl-tip-return')
+      try {
+        const parsed = JSON.parse(raw) as { screen?: string; performerId?: string }
+        if (parsed.performerId && parsed.screen === 'live-watch') {
+          setPerformerId(parsed.performerId)
+          setTipReturn('live-watch')
+          setScreen('live-watch')
+          return
+        }
+      } catch {
+        /* ignore */
+      }
     }
     setScreen((s) => {
       if (s === 'welcome' || s === 'auth' || s === 'setup') return homeForRole(profile?.role)
@@ -150,6 +174,7 @@ function PlatformShell() {
   const role = profile?.role ?? 'fan'
   const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : 'fan'
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen) && !(performerId && screen === 'profile')
+  const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
   const openPerformer = (id: string) => {
     setPerformerId(id)
@@ -181,6 +206,7 @@ function PlatformShell() {
     body = (
       <TipScreen
         performerId={performerId}
+        returnToLive={tipReturn === 'live-watch'}
         onBack={() => setScreen(tipReturn)}
         onDone={() => {
           setPerformerId(null)
@@ -285,7 +311,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
-      <div className="pl-shell">
+      <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
         {tipFlash ? (
           <div className="pl-card" style={{ marginBottom: 12 }}>
             <div className="pl-muted">{tipFlash}</div>

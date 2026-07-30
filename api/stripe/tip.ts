@@ -8,10 +8,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { performerId, fanId, amountYen } = req.body as {
+    const { performerId, fanId, amountYen, returnTo, anonymous } = req.body as {
       performerId?: string
       fanId?: string
       amountYen?: number
+      returnTo?: string
+      anonymous?: boolean
     }
 
     if (!performerId || !fanId || !amountYen || amountYen < 100) {
@@ -57,10 +59,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
 
     const origin = getAppUrl(req)
+    const safeReturn = returnTo === 'live'
+    const successUrl = safeReturn
+      ? `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}&return=live&performerId=${encodeURIComponent(performerId)}`
+      : `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}`
+    const cancelUrl = safeReturn
+      ? `${origin}/?tip=cancel&return=live&performerId=${encodeURIComponent(performerId)}`
+      : `${origin}/?tip=cancel`
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      success_url: `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?tip=cancel`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       line_items: [
         {
           quantity: 1,
@@ -82,12 +92,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           tip_id: tip.id,
           performer_id: performerId,
           fan_id: fanId,
+          anonymous: anonymous ? '1' : '0',
         },
       },
       metadata: {
         tip_id: tip.id,
         performer_id: performerId,
         fan_id: fanId,
+        anonymous: anonymous ? '1' : '0',
       },
     })
 

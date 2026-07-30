@@ -191,8 +191,12 @@ export async function connectAsHost(url: string, token: string) {
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
+    const landscape =
+      typeof window !== 'undefined' && window.innerWidth > window.innerHeight
     await room.localParticipant.setCameraEnabled(true, {
-      resolution: CAPTURE_1080P30,
+      resolution: landscape
+        ? { width: 1920, height: 1080, frameRate: 30, aspectRatio: 16 / 9 }
+        : CAPTURE_1080P30,
       facingMode: 'user',
     })
   } catch (e) {

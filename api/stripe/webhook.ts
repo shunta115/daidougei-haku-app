@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type Stripe from 'stripe'
 import { getAdminSupabase, getStripe } from './_shared.js'
+import { publishLiveTipEvent } from './_tipEvents.js'
 
 export const config = {
   api: { bodyParser: false },
@@ -55,6 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('id', tipId)
 
         const performerId = session.metadata?.performer_id
+        const fanId = session.metadata?.fan_id ?? null
+        const anonymous = session.metadata?.anonymous === '1'
         const amount = session.amount_total ?? 0
         if (performerId && !alreadySucceeded) {
           await sb.from('notifications').insert({
@@ -80,6 +83,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               })
               .eq('id', open.id)
           }
+
+          await publishLiveTipEvent(sb, {
+            tipId,
+            performerId,
+            fanId,
+            amountYen: amount,
+            isAnonymous: anonymous,
+          })
         }
       }
     }

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
+import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   endLive,
   listLiveComments,
@@ -19,6 +20,8 @@ import {
   LiveKitClientError,
   liveKitErrorMessage,
 } from '../lib/livekit'
+import { useLiveLayout } from '../lib/useLiveLayout'
+import { useVideoAspect } from '../lib/useVideoAspect'
 import type { LiveComment } from '../lib/types'
 import './live.css'
 
@@ -36,6 +39,7 @@ function formatDuration(sec: number) {
 
 export function PerformerLiveScreen({ onBack }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
+  const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [title, setTitle] = useState(performer?.live_title ?? '')
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [error, setError] = useState<string | null>(null)
@@ -44,8 +48,15 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [elapsed, setElapsed] = useState(0)
   const [comments, setComments] = useState<LiveComment[]>([])
   const [draft, setDraft] = useState('')
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
+  const [calmMotion, setCalmMotion] = useState(
+    () =>
+      localStorage.getItem('pl-gift-calm') === '1' ||
+      (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+  )
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
+  const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
   )
@@ -244,9 +255,16 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }
 
   return (
-    <div className="pl-live">
+    <div
+      className={`pl-live${isOverlayChrome ? ' pl-live--immersive' : ''}`}
+      data-layout={mode}
+      style={{ '--video-aspect': String(ratio), '--video-fit': 'contain' } as CSSProperties}
+    >
       <div className="pl-live__stage">
         <video ref={videoRef} className="pl-live__video" playsInline muted autoPlay />
+        {phase === 'live' && performer ? (
+          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} />
+        ) : null}
         {phase === 'ready' ? <div className="pl-live__placeholder">カメラ準備</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
@@ -257,6 +275,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
               <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
+              <span>{videoOrient === 'landscape' || deviceOrient === 'landscape' ? '横向き配信中' : '縦向き配信中'}</span>
             </div>
           ) : null}
         </div>
@@ -305,6 +324,16 @@ export function PerformerLiveScreen({ onBack }: Props) {
             <button type="button" className="pl-btn" onClick={() => void sendComment()}>
               Send
             </button>
+          </div>
+          <div className="pl-live__prefs">
+            <label>
+              <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+              ギフト音
+            </label>
+            <label>
+              <input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} />
+              演出を抑える
+            </label>
           </div>
           <button type="button" className="pl-btn pl-btn--block pl-btn--danger" disabled={busy} onClick={() => void stopLive()}>
             ライブ終了

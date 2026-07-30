@@ -1,5 +1,14 @@
 import { requireSupabase } from './supabase'
-import type { AdminMetrics, LiveComment, LiveSession, NotificationRow, Performer, TipRow, TipSummary } from './types'
+import type {
+  AdminMetrics,
+  LiveComment,
+  LiveSession,
+  LiveTipEvent,
+  NotificationRow,
+  Performer,
+  TipRow,
+  TipSummary,
+} from './types'
 
 export async function searchPerformers(query: string): Promise<Performer[]> {
   const sb = requireSupabase()
@@ -285,6 +294,35 @@ export function subscribePerformerLive(performerId: string, onChange: (row: Part
   return () => {
     void sb.removeChannel(channel)
   }
+}
+
+export function subscribeLiveTipEvents(performerId: string, onInsert: (row: LiveTipEvent) => void) {
+  const sb = requireSupabase()
+  const channel = sb
+    .channel(`live-tips-${performerId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'live_tip_events', filter: `performer_id=eq.${performerId}` },
+      (payload) => {
+        onInsert(payload.new as LiveTipEvent)
+      },
+    )
+    .subscribe()
+  return () => {
+    void sb.removeChannel(channel)
+  }
+}
+
+export async function listRecentLiveTipEvents(performerId: string, limit = 20): Promise<LiveTipEvent[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_tip_events')
+    .select('*')
+    .eq('performer_id', performerId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return ((data as LiveTipEvent[]) ?? []).reverse()
 }
 
 export async function listTipsForPerformer(performerId: string): Promise<TipRow[]> {
