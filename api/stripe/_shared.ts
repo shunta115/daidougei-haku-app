@@ -1,6 +1,6 @@
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
-import type { VercelRequest } from '@vercel/node'
+import { createClient, type User } from '@supabase/supabase-js'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const PLATFORM_FEE_BPS = 1000
 
@@ -23,4 +23,31 @@ export function getAppUrl(req: VercelRequest) {
 
 export function calcPlatformFee(amountYen: number) {
   return Math.floor((amountYen * PLATFORM_FEE_BPS) / 10000)
+}
+
+function userClient(authHeader: string) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!url || !anon) throw new Error('Supabase env missing')
+  return createClient(url, anon, {
+    global: { headers: { Authorization: authHeader } },
+  })
+}
+
+export async function requireAuthUser(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<User | null> {
+  const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
+  if (!authHeader) {
+    res.status(401).json({ error: 'Authorization required' })
+    return null
+  }
+  const sb = userClient(authHeader)
+  const { data, error } = await sb.auth.getUser()
+  if (error || !data.user) {
+    res.status(401).json({ error: 'Invalid session' })
+    return null
+  }
+  return data.user
 }

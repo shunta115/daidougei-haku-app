@@ -21,3 +21,10 @@ export function requireSupabase(): SupabaseClient {
   }
   return supabase
 }
+
+export async function supabaseAuthHeaders(): Promise<Record<string, string>> {
+  if (!supabase) return {}
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}

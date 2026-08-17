@@ -179,7 +179,15 @@ export async function startLive(performerId: string, title?: string) {
   if (error) throw error
 
   const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
-  await notifyFollowersLiveStart(performerId, stageName, liveTitle)
+  const { error: nerr } = await sb.rpc('notify_followers_live_start', {
+    p_performer_id: performerId,
+    p_stage_name: stageName,
+    p_title: liveTitle,
+  })
+  if (nerr) {
+    // Live must still start if the notification migration is not applied yet.
+    console.warn('notify_followers_live_start', nerr.message)
+  }
 
   return (data?.id as string) ?? null
 }
@@ -198,24 +206,6 @@ export async function endLive(performerId: string) {
     .update({ ended_at: now })
     .eq('performer_id', performerId)
     .is('ended_at', null)
-}
-
-async function notifyFollowersLiveStart(performerId: string, stageName: string, title: string | null) {
-  const sb = requireSupabase()
-  const { data: follows } = await sb.from('follows').select('fan_id').eq('performer_id', performerId)
-  const fanIds = [...new Set((follows ?? []).map((f) => f.fan_id as string).filter(Boolean))]
-  if (fanIds.length === 0) return
-  const body = title?.trim() ? `${stageName} が「${title.trim()}」を配信開始しました` : `${stageName} がライブ配信を開始しました`
-  const rows = fanIds.map((fanId) => ({
-    user_id: fanId,
-    title: 'LIVE開始',
-    body,
-    link: `live:${performerId}`,
-  }))
-  // Chunk to avoid oversized inserts
-  for (let i = 0; i < rows.length; i += 50) {
-    await sb.from('notifications').insert(rows.slice(i, i + 50))
-  }
 }
 
 export async function listLiveHistory(performerId: string): Promise<LiveSession[]> {
@@ -362,12 +352,6 @@ export async function follow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').insert({ fan_id: fanId, performer_id: performerId })
   if (error) throw error
-  await sb.from('notifications').insert({
-    user_id: performerId,
-    title: 'New follower',
-    body: 'Someone started following you.',
-    link: `/#profile/${fanId}`,
-  })
 }
 
 export async function listFollowedPerformers(fanId: string): Promise<Performer[]> {
@@ -430,12 +414,6 @@ export async function approvePerformer(id: string) {
 
   const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
   if (perr) throw perr
-
-  await sb.from('notifications').insert({
-    user_id: id,
-    title: 'Approved',
-    body: 'Your performer profile is now public.',
-  })
 }
 
 export async function suspendUser(id: string) {

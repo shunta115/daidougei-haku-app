@@ -17,6 +17,7 @@ import { TipScreen } from './screens/TipScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
 import { AdminDashboardScreen, AdminUsersScreen } from './screens/AdminScreens'
 import type { PlatformScreen } from './lib/types'
+import { supabaseAuthHeaders } from './lib/supabase'
 import './platform.css'
 
 function SetupScreen() {
@@ -70,13 +71,7 @@ function PlatformShell() {
     const pid = url.searchParams.get('performerId')
     if (tip === 'success') {
       setTipFlash('Tip sent successfully.')
-      if (sessionId) {
-        void fetch('/api/stripe/confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        }).catch(() => undefined)
-      }
+      if (sessionId) window.sessionStorage.setItem('pl-tip-confirm', sessionId)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
@@ -95,6 +90,21 @@ function PlatformShell() {
       window.history.replaceState({}, '', url.pathname + url.search)
     }
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    const sessionId = window.sessionStorage.getItem('pl-tip-confirm')
+    if (!sessionId) return
+    window.sessionStorage.removeItem('pl-tip-confirm')
+    void (async () => {
+      const headers = await supabaseAuthHeaders()
+      await fetch('/api/stripe/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ sessionId }),
+      }).catch(() => undefined)
+    })()
+  }, [user])
 
   useEffect(() => {
     if (!ready) return

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe } from './_shared.js'
+import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -8,6 +8,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const user = await requireAuthUser(req, res)
+    if (!user) return
+
     const { performerId, fanId, amountYen, returnTo, anonymous } = req.body as {
       performerId?: string
       fanId?: string
@@ -16,8 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       anonymous?: boolean
     }
 
-    if (!performerId || !fanId || !amountYen || amountYen < 100) {
-      res.status(400).json({ error: 'performerId, fanId, and amountYen (>=100) required' })
+    if (fanId && fanId !== user.id) {
+      res.status(403).json({ error: 'fanId must match the signed-in user' })
+      return
+    }
+
+    const payerId = user.id
+    if (!performerId || !amountYen || amountYen < 100) {
+      res.status(400).json({ error: 'performerId and amountYen (>=100) required' })
       return
     }
 
@@ -47,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: tip, error: tipErr } = await sb
       .from('tips')
       .insert({
-        fan_id: fanId,
+        fan_id: payerId,
         performer_id: performerId,
         amount_cents: amountYen,
         currency: 'jpy',
@@ -67,10 +76,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${origin}/?tip=cancel&return=live&performerId=${encodeURIComponent(performerId)}`
       : `${origin}/?tip=cancel`
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       line_items: [
         {
           quantity: 1,
@@ -91,17 +101,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata: {
           tip_id: tip.id,
           performer_id: performerId,
-          fan_id: fanId,
+          fan_id: payerId,
           anonymous: anonymous ? '1' : '0',
         },
       },
       metadata: {
         tip_id: tip.id,
         performer_id: performerId,
-        fan_id: fanId,
+        fan_id: payerId,
         anonymous: anonymous ? '1' : '0',
       },
-    })
+      },
+      { idempotencyKey: `tip-checkout-${tip.id}` },
+    )
 
     await sb.from('tips').update({ stripe_session_id: session.id }).eq('id', tip.id)
     res.status(200).json({ url: session.url })

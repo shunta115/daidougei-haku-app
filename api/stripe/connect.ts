@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getAppUrl, getStripe } from './_shared.js'
+import { getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -8,9 +8,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const user = await requireAuthUser(req, res)
+    if (!user) return
+
     const { performerId } = req.body as { performerId?: string }
     if (!performerId) {
       res.status(400).json({ error: 'performerId required' })
+      return
+    }
+    if (performerId !== user.id) {
+      res.status(403).json({ error: 'Only the performer can start Stripe Connect' })
       return
     }
 

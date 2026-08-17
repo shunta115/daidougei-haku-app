@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { formatYen, TIP_PRESETS_JPY } from '../lib/money'
 import { getPerformer } from '../lib/api'
+import { supabaseAuthHeaders } from '../lib/supabase'
 import { useEffect } from 'react'
 import type { Performer } from '../lib/types'
 
@@ -33,7 +34,7 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
     try {
       const res = await fetch('/api/stripe/tip', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
         body: JSON.stringify({
           performerId,
           fanId: user.id,

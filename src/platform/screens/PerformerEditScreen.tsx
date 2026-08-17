@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { updatePerformer, uploadAvatar } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { requireSupabase } from '../lib/supabase'
+import { requireSupabase, supabaseAuthHeaders } from '../lib/supabase'
 
 export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
   const { performer, profile, refreshProfile, signOut } = useAuth()
@@ -67,7 +67,7 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
     try {
       const res = await fetch('/api/stripe/connect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
         body: JSON.stringify({ performerId: performer.id }),
       })
       const json = (await res.json()) as { url?: string; error?: string }

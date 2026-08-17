@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type Stripe from 'stripe'
+import { finalizePaidTip } from './_finalizePaidTip.js'
 import { getAdminSupabase, getStripe } from './_shared.js'
-import { publishLiveTipEvent } from './_tipEvents.js'
 
 export const config = {
   api: { bodyParser: false },
@@ -41,57 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session
-      const tipId = session.metadata?.tip_id
-      if (tipId) {
-        const { data: currentTip } = await sb.from('tips').select('status').eq('id', tipId).maybeSingle()
-        const alreadySucceeded = currentTip?.status === 'succeeded'
-
-        await sb
-          .from('tips')
-          .update({
-            status: 'succeeded',
-            stripe_payment_intent:
-              typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null,
-          })
-          .eq('id', tipId)
-
-        const performerId = session.metadata?.performer_id
-        const fanId = session.metadata?.fan_id ?? null
-        const anonymous = session.metadata?.anonymous === '1'
-        const amount = session.amount_total ?? 0
-        if (performerId && !alreadySucceeded) {
-          await sb.from('notifications').insert({
-            user_id: performerId,
-            title: 'New tip',
-            body: `You received a tip of ¥${amount.toLocaleString('ja-JP')}.`,
-          })
-
-          const { data: open } = await sb
-            .from('live_sessions')
-            .select('id, tip_count, tip_amount_total')
-            .eq('performer_id', performerId)
-            .is('ended_at', null)
-            .order('started_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          if (open?.id) {
-            await sb
-              .from('live_sessions')
-              .update({
-                tip_count: (open.tip_count ?? 0) + 1,
-                tip_amount_total: (open.tip_amount_total ?? 0) + amount,
-              })
-              .eq('id', open.id)
-          }
-
-          await publishLiveTipEvent(sb, {
-            tipId,
-            performerId,
-            fanId,
-            amountYen: amount,
-            isAnonymous: anonymous,
-          })
-        }
+      if (session.payment_status === 'paid') {
+        await finalizePaidTip(sb, session)
       }
     }
 
