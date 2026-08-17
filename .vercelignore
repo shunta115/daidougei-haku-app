@@ -1,0 +1,13 @@
+# Finder duplicate copies — must not become serverless functions
+**/* 2.ts
+**/* 2.js
+**/* 2.tsx
+**/* 2.sql
+**/* 2.md
+**/* 2.json
+**/* 2.html
+**/* 2.svg
+**/* 2.css
+**/* 2.example
+.env.vercel.tmp
+.env.vercel.prod
