@@ -1,14 +1,14 @@
 import type { Performer } from '../types'
 import type { StreamPresenceStatus } from '../types'
 import { enableMockStreams, isPublicMode } from '../config/runtimeConfig'
-import { isValidHttpUrl } from './productionGuard'
+import { isInAppLivePath, isValidHttpUrl } from './productionGuard'
 
 export type { StreamPresenceStatus }
 
 export function getStreamPresenceStatus(p: Performer | undefined): StreamPresenceStatus {
   if (!p) return 'offline'
   if (p.approvalStatus !== 'approved' || !p.canStream) return 'offline'
-  const hasUrl = isValidHttpUrl(p.streamUrl)
+  const hasUrl = isValidHttpUrl(p.streamUrl) || isInAppLivePath(p.streamUrl)
   if (p.isLive) {
     if (hasUrl || enableMockStreams) return 'live'
     return 'preparing'

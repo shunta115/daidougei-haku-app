@@ -1,9 +1,10 @@
 /** タイムテーブル会場フィルター（実データの venueId に対応） */
 export const TIMETABLE_VENUE_CHIPS = [
   { id: 'all', labelJa: '全会場' },
-  { id: 'main-lawn', labelJa: 'メイン芝生', hintJa: '芝生エリア' },
-  { id: 'street-a', labelJa: 'ストリートA', hintJa: 'サブステージ' },
-  { id: 'queens-plaza', labelJa: 'クイーンズ前', hintJa: 'メインステージ' },
+  { id: 'nerima-joshi-park', labelJa: '練馬城址公園', hintJa: '本会場' },
+  { id: 'main-lawn', labelJa: 'メイン芝生', hintJa: 'デモ' },
+  { id: 'street-a', labelJa: 'ストリートA', hintJa: 'デモ' },
+  { id: 'queens-plaza', labelJa: 'クイーンズ前', hintJa: 'デモ' },
   { id: 'canal-walk', labelJa: '運河ウォーク' },
 ] as const
 

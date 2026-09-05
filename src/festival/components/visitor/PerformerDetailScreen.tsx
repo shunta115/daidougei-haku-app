@@ -11,8 +11,16 @@ import {
 import { sharePerformer } from '../../lib/share'
 import { recordCheerMoment } from '../../lib/cheerMomentStorage'
 import { isOnWatchlist, toggleWatchlist } from '../../lib/watchlistStorage'
+import { isDemoMode } from '../../config/runtimeConfig'
 import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
 import { shouldShowAsLiveStream } from '../../lib/streamPresence'
+import { getCatalogFeaturedEvent } from '../../../catalog/liveCatalog'
+import { useAuth } from '../../../platform/lib/auth'
+import { getMyVote, voteForPerformer } from '../../../platform/lib/api'
+import { useTrackView } from '../../../platform/lib/track'
+import { isSupabaseConfigured } from '../../../platform/lib/supabase'
+import { openPlatform } from '../../../app/routes'
+import { useLang } from '../../../i18n/LangProvider'
 import { PerformerDetailProfile } from './performer/PerformerDetailProfile'
 import { PerformerDetailSchedule } from './performer/PerformerDetailSchedule'
 import { PerformerDetailVideo } from './performer/PerformerDetailVideo'
@@ -42,6 +50,7 @@ export function PerformerDetailScreen({
   onSupportStream,
   onBetaSupport,
 }: PerformerDetailScreenProps) {
+  useTrackView('view_performer', { performerId: p.id })
   const schedule = slotsByPerformer(p.id)
   const tips = p.tipLinks ?? []
   const now = getDemoNow()
@@ -174,6 +183,8 @@ export function PerformerDetailScreen({
         </div>
       ) : null}
 
+      <PerformerVoteBlock performerId={p.id} />
+
       <main className="fe-detail__main">
         <PerformerDetailSchedule
           performer={p}
@@ -183,6 +194,7 @@ export function PerformerDetailScreen({
         />
         <PerformerDetailProfile performer={p} />
 
+        {isDemoMode ? (
         <section className="fe-detail-cheer" aria-label="応援">
           <h2 className="fe-detail-cheer__h">ライブ応援（端末内 · デモ）</h2>
           <p className="fe-detail-cheer__lead">拍手やメッセージは端末内のみ。本格的な応援はWEB投げ銭へ。</p>
@@ -232,6 +244,7 @@ export function PerformerDetailScreen({
           </div>
           {cheerHint ? <p className="fe-detail-cheer__toast">{cheerHint}</p> : null}
         </section>
+        ) : null}
 
         <section className="fe-detail-block" aria-labelledby="fe-d-tip">
           <h2 id="fe-d-tip" className="fe-detail-h">
@@ -240,7 +253,7 @@ export function PerformerDetailScreen({
           <p className="fe-detail-lead">
             {canProcessOnlineSupport()
               ? 'お支払いは外部の安全な決済ページへ。アプリ内課金はありません。合計金額の表示もしません。'
-              : 'β版ではオンライン応援機能を準備中です。決済は行われません。'}
+              : '投げ銭はログイン後に使えます。アカウント画面から続けてください。'}
           </p>
           {streamReady && onSupportStream ? (
             <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={() => onSupportStream(p.id)}>
@@ -289,5 +302,56 @@ export function PerformerDetailScreen({
         </section>
       </main>
     </div>
+  )
+}
+
+function PerformerVoteBlock({ performerId }: { performerId: string }) {
+  const { user } = useAuth()
+  const { t } = useLang()
+  const eventId = getCatalogFeaturedEvent()?.id
+  const [mine, setMine] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!eventId || !user || !isSupabaseConfigured) {
+      setMine(null)
+      return
+    }
+    void getMyVote(eventId, user.id)
+      .then(setMine)
+      .catch(() => setMine(null))
+  }, [eventId, user, performerId])
+
+  if (!eventId) return null
+
+  const votedHere = mine === performerId
+
+  return (
+    <section className="fe-detail-stream-cta" aria-label="投票">
+      <p className="fe-detail-stream-cta__status">
+        {votedHere ? t('votedHere') : t('voteHint')}
+      </p>
+      <button
+        type="button"
+        className="fe-detail-stream-cta__watch"
+        disabled={busy}
+        onClick={() => {
+          if (!user) {
+            openPlatform('?auth=1')
+            return
+          }
+          setBusy(true)
+          setNote(null)
+          void voteForPerformer(eventId, performerId, user.id)
+            .then(() => setMine(performerId))
+            .catch((e) => setNote(e instanceof Error ? e.message : '投票に失敗しました'))
+            .finally(() => setBusy(false))
+        }}
+      >
+        {votedHere ? t('voted') : t('vote')}
+      </button>
+      {note ? <p className="fe-detail-lead">{note}</p> : null}
+    </section>
   )
 }

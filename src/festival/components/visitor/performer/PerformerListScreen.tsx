@@ -3,7 +3,7 @@ import type { Performer } from '../../../types'
 import { readFavorites } from '../../../lib/favoritesStorage'
 import { filterPerformers } from '../../../lib/performerListFilters'
 import { shouldShowAsLiveStream } from '../../../lib/streamPresence'
-import { PUBLIC_EVENT_COPY } from '../../../services/festivalRepository'
+import { useLang } from '../../../../i18n/LangProvider'
 import { PerformerListCard } from './PerformerListCard'
 import { PerformerListSearch } from './PerformerListSearch'
 
@@ -34,6 +34,7 @@ export function PerformerListScreen({
   const [genreId, setGenreId] = useState('all')
   // eslint-disable-next-line react-hooks/exhaustive-deps -- favTick invalidates localStorage read
   const favIds = useMemo(() => readFavorites(), [favTick])
+  const { t } = useLang()
 
   const filtered = useMemo(() => {
     const rows = filterPerformers([...performers], query, genreId)
@@ -45,20 +46,20 @@ export function PerformerListScreen({
   return (
     <main className="fe-main fe-main--list fe-plist">
       <header className="fe-list-hero">
-        <p className="fe-list-hero__eyebrow">Global roster · LIVE ready</p>
-        <h1 className="fe-list-hero__title">出演 · 配信</h1>
+        <p className="fe-list-hero__eyebrow">{t('eventName')}</p>
+        <h1 className="fe-list-hero__title">{t('actsTitle')}</h1>
         <p className="fe-list-hero__sub">
           {performers.length === 0
-            ? PUBLIC_EVENT_COPY.rosterPending
+            ? t('comingSoonRoster')
             : liveCount > 0
-              ? `いま ${liveCount} 組がライブ配信中 — 視聴とWEB応援はここから`
-              : '承認されたパフォーマーの配信・会場出演を探せます'}
+              ? `${t('liveNow')} ${liveCount}`
+              : t('findActs')}
         </p>
       </header>
 
       {performers.length === 0 ? (
         <p className="fe-public-prep" role="status">
-          {PUBLIC_EVENT_COPY.noLiveShows}
+          {t('comingSoonRoster')}
         </p>
       ) : (
         <>
@@ -72,7 +73,7 @@ export function PerformerListScreen({
 
           <div className="fe-plist-stack">
             {filtered.length === 0 ? (
-              <p className="fe-plist-empty">該当する出演者がいません。検索語やジャンルを変えてみてください。</p>
+              <p className="fe-plist-empty">{t('noMatchActs')}</p>
             ) : null}
             {filtered.map((p) => (
               <PerformerListCard

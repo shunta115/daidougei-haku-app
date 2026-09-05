@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { Performer } from '../../types'
-import { VENUE_AREAS } from '../../data/scheduleData'
+import { getCatalogVenues } from '../../../catalog/liveCatalog'
 import { readWatchlist, toggleWatchlist } from '../../lib/watchlistStorage'
 import { readVisitedVenues, strollProgress, toggleVenueVisited } from '../../lib/venueStrollStorage'
 import { readSoonNotifyOn, toggleSoonNotify } from '../../lib/soonNotifyStorage'
@@ -24,7 +24,7 @@ export function ExplorerRallySection({
   const bump = useCallback(() => setT((n) => n + 1), [])
 
   const watch = readWatchlist()
-  const stroll = strollProgress(VENUE_AREAS.length)
+  const stroll = strollProgress(getCatalogVenues().length)
   const soonOn = readSoonNotifyOn()
   const visited = new Set(readVisitedVenues())
   const badge3 = stroll.visited >= 3
@@ -95,7 +95,7 @@ export function ExplorerRallySection({
       </div>
 
       <div className="fe-xpl__venues">
-        {VENUE_AREAS.map((v) => (
+        {getCatalogVenues().map((v) => (
           <button
             key={v.id}
             type="button"

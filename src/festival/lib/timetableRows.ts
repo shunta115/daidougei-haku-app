@@ -1,5 +1,5 @@
 import type { Performer, ScheduleSlot } from '../types'
-import { performerById } from '../data'
+import { getPerformerById } from './performerCatalog'
 import { derivedAudienceTimeStatus, slotsByDate, sortSlotsChronological } from './scheduleEngine'
 import type { TimetableScheduleMode } from './timetableConstants'
 
@@ -36,7 +36,7 @@ export function filterTimetableSlots(
     rows = rows.filter((s) => s.venueId === opts.venueId)
   }
   if (opts.genreId !== 'all') {
-    rows = rows.filter((s) => performerMatchesGenreFilter(performerById(s.performerId), opts.genreId))
+    rows = rows.filter((s) => performerMatchesGenreFilter(getPerformerById(s.performerId), opts.genreId))
   }
   if (opts.favoritesOnly) {
     rows = rows.filter((s) => opts.favIds.includes(s.performerId))
@@ -60,7 +60,7 @@ export function buildTimetableRows(
 ) {
   const rows = filterTimetableSlots(slotsByDate(date), opts)
   return rows.map((slot) => {
-    const performer = performerById(slot.performerId)
+    const performer = getPerformerById(slot.performerId)
     const aud = derivedAudienceTimeStatus(slot, now)
     return { slot, performer, aud }
   })

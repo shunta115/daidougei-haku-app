@@ -31,7 +31,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; min-height: 100%; }
+html, body, #root { margin: 0; min-height: 100%; overflow-x: hidden; max-width: 100%; }
 button, input, textarea, select { font: inherit; color: inherit; }
 a { color: var(--neon); }
 
@@ -151,10 +151,11 @@ a { color: var(--neon); }
 .pl-shell {
   position: relative;
   z-index: 2;
-  max-width: 520px;
+  max-width: min(520px, 100%);
   margin: 0 auto;
   min-height: 100dvh;
-  padding: calc(14px + var(--safe-t)) 18px calc(28px + var(--nav-h) + var(--safe-b));
+  padding: calc(14px + var(--safe-t)) max(12px, env(safe-area-inset-right, 0px)) calc(28px + var(--nav-h) + var(--safe-b))
+    max(12px, env(safe-area-inset-left, 0px));
 }
 
 .pl-shell--flush { padding-bottom: calc(20px + var(--safe-b)); }
@@ -259,6 +260,7 @@ a { color: var(--neon); }
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 13px 14px;
+  font-size: 16px;
   background: rgba(0, 0, 0, 0.35);
   color: var(--text);
   margin-bottom: 10px;
@@ -341,7 +343,7 @@ a { color: var(--neon); }
   appearance: none;
   border: none;
   background: transparent;
-  min-height: 46px;
+  min-height: 48px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;

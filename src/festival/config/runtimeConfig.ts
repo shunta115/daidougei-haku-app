@@ -1,8 +1,7 @@
 /**
  * デモ / 公開モードの一元管理。
- * VITE_APP_MODE=demo|public 未設定時は安全側：
- * - 開発サーバー → demo
- * - 本番ビルド → public
+ * VITE_APP_MODE=demo|public 未設定時は public（本番と同じデータ源）。
+ * デモ固定データは VITE_APP_MODE=demo のときだけ使う。
  *
  * import.meta.env を直接 === 比較し、Vite の定数畳み込みで
  * 未使用デモデータを本番バンドルから落とせるようにする。
@@ -12,11 +11,7 @@ export type AppRuntimeMode = 'demo' | 'public'
 export const APP_MODE: AppRuntimeMode =
   import.meta.env.VITE_APP_MODE === 'demo'
     ? 'demo'
-    : import.meta.env.VITE_APP_MODE === 'public'
-      ? 'public'
-      : import.meta.env.DEV
-        ? 'demo'
-        : 'public'
+    : 'public'
 
 export const isDemoMode = APP_MODE === 'demo'
 export const isPublicMode = APP_MODE === 'public'

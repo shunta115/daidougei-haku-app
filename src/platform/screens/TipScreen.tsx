@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
+import { useLang } from '../../i18n/LangProvider'
 import { formatYen, TIP_PRESETS_JPY } from '../lib/money'
 import { getPerformer } from '../lib/api'
 import { supabaseAuthHeaders } from '../lib/supabase'
-import { useEffect } from 'react'
+import { spaGo, PLATFORM_PATH } from '../../app/routes'
+import { trackProductEvent } from '../lib/track'
 import type { Performer } from '../lib/types'
 
 type TipProps = {
@@ -15,6 +17,7 @@ type TipProps = {
 
 export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProps) {
   const { user } = useAuth()
+  const { t } = useLang()
   const [p, setP] = useState<Performer | null>(null)
   const [amount, setAmount] = useState<number>(TIP_PRESETS_JPY[1])
   const [busy, setBusy] = useState(false)
@@ -26,11 +29,12 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
 
   const pay = async () => {
     if (!user) {
-      setError('Sign in to tip')
+      spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
       return
     }
     setBusy(true)
     setError(null)
+    trackProductEvent('tip_start', { performerId })
     try {
       const res = await fetch('/api/stripe/tip', {
         method: 'POST',
@@ -54,10 +58,12 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
   return (
     <>
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
-        Back
+        {t('back')}
       </button>
-      <h1 className="pl-h1">Tip {p?.stage_name ?? 'performer'}</h1>
-      <p className="pl-muted">{p?.support_blurb || 'Support this performer directly.'}</p>
+      <h1 className="pl-h1">
+        {t('tipHeading')} {p?.stage_name ?? ''}
+      </h1>
+      <p className="pl-muted">{p?.support_blurb || t('tipSecure')}</p>
 
       <div className="pl-chip-row">
         {TIP_PRESETS_JPY.map((yen) => (
@@ -74,7 +80,7 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
       </div>
 
       <label>
-        <span className="pl-label">Custom amount (JPY)</span>
+        <span className="pl-label">{t('customAmount')}</span>
         <input
           className="pl-input"
           type="number"
@@ -86,13 +92,22 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
       </label>
 
       <button type="button" className="pl-btn pl-btn--block" disabled={busy || amount < 100} onClick={() => void pay()}>
-        {busy ? 'Redirecting…' : `Pay ${formatYen(amount)}`}
+        {busy ? t('processing') : `${t('payNow')} ${formatYen(amount)}`}
       </button>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onDone}>
-        Cancel
+        {t('cancel')}
       </button>
+      {!user ? (
+        <button
+          type="button"
+          className="pl-btn pl-btn--block"
+          onClick={() => spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)}
+        >
+          {t('loginToContinue')}
+        </button>
+      ) : null}
       {error ? <p className="pl-error">{error}</p> : null}
-      <p className="pl-muted">Secure checkout via Stripe. Platform fee 10%.</p>
+      <p className="pl-muted">{t('tipSecure')}</p>
     </>
   )
 }

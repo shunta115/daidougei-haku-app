@@ -1,4 +1,6 @@
+import { BrandLogo } from '../../../brand/BrandLogo'
 import { getEventHeaderMeta } from '../../services/festivalRepository'
+import { useLang } from '../../../i18n/LangProvider'
 
 type EventStripHeaderProps = {
   onShare: () => void
@@ -7,12 +9,13 @@ type EventStripHeaderProps = {
 
 export function EventStripHeader({ onShare, hasActiveLiveShow = false }: EventStripHeaderProps) {
   const meta = getEventHeaderMeta(hasActiveLiveShow)
+  const { t } = useLang()
 
   return (
     <header className="fe-strip">
       <div className="fe-strip__brand">
-        <span className="fe-strip__dot" aria-hidden="true" />
-        <span className="fe-strip__name">大道芸博</span>
+        <BrandLogo size={22} />
+        <span className="fe-strip__name">{t('appName')}</span>
         {meta.showLivePill ? <span className="fe-strip__pill">LIVE</span> : null}
       </div>
       <div className="fe-strip__meta">

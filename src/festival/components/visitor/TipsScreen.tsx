@@ -1,3 +1,4 @@
+import { spaGo, PLATFORM_PATH } from '../../../app/routes'
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { bumpXp } from '../../lib/gamificationStorage'
@@ -50,9 +51,17 @@ export function TipsScreen({
         <p className="fe-page-head__lead">
           {canProcessOnlineSupport()
             ? 'お支払いは外部の安全なページで完結。アプリ内課金はありません。合計金額も表示しません。'
-            : 'β版ではオンライン応援機能を準備中です。金額の選択はできますが、決済は行われません。'}
+            : 'ライブ配信と投げ銭はログインして利用できます。'}
         </p>
       </header>
+
+      {!canProcessOnlineSupport() ? (
+        <p className="fe-public-prep" role="status">
+          <button type="button" className="fe-h6-maprow__primary" onClick={() => spaGo(PLATFORM_PATH)}>
+            配信・投げ銭を開く
+          </button>
+        </p>
+      ) : null}
 
       {ordered.length === 0 ? (
         <p className="fe-public-prep" role="status">

@@ -1,12 +1,17 @@
 import { useAuth } from '../lib/auth'
 import { Avatar } from '../components/Avatar'
+import { LanguageToggle, useLang } from '../../i18n/LangProvider'
 
 export function FanProfileScreen() {
+  const { t } = useLang()
   const { profile, user, signOut } = useAuth()
   if (!profile) return <p className="pl-muted">Loading…</p>
 
   return (
     <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <LanguageToggle />
+      </div>
       <div className="pl-card pl-row">
         <Avatar url={profile.avatar_url} name={profile.display_name} large />
         <div>
@@ -19,7 +24,7 @@ export function FanProfileScreen() {
         </div>
       </div>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>
-        Sign out
+        {t('signOut')}
       </button>
     </>
   )

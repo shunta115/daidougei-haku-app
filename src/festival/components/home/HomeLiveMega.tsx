@@ -9,6 +9,7 @@ import {
   slotAsDate,
   slotEndAsDate,
 } from '../../lib/scheduleEngine'
+import { useLang } from '../../../i18n/LangProvider'
 
 type HomeLiveMegaProps = {
   live: ProgramPulse | null
@@ -32,6 +33,7 @@ function remainingToEnd(end: Date, now: Date): string {
 }
 
 export function HomeLiveMega({ live, next, livePerformer, nextPerformer, onOpenDetail, onOpenMap }: HomeLiveMegaProps) {
+  const { t } = useLang()
   const demoEpoch = useMemo(() => getDemoNow().getTime(), [])
   const t0Ref = useRef<number | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -63,7 +65,7 @@ export function HomeLiveMega({ live, next, livePerformer, nextPerformer, onOpenD
         {hasLive && live ? (
           <p className="fe-h6-live__where">{live.stageJa}</p>
         ) : (
-          <p className="fe-h6-live__where">いま開催中のショーはありません</p>
+          <p className="fe-h6-live__where">{t('noLiveNow')}</p>
         )}
       </div>
 
@@ -99,7 +101,7 @@ export function HomeLiveMega({ live, next, livePerformer, nextPerformer, onOpenD
       ) : null}
 
       <button type="button" className="fe-h6-live__map" onClick={onOpenMap}>
-        会場マップで場所を確認
+        {t('openMapConfirm')}
       </button>
     </section>
   )

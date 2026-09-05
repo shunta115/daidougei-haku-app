@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
+import { getCatalogSlots, getCatalogVenues, getLiveCatalogVersion, subscribeLiveCatalog } from '../../../catalog/liveCatalog'
+import { getPerformers } from '../../lib/performerCatalog'
 import { getDemoNow } from '../../lib/demoClock'
-import { demoTodayDateString, nextHighlightSlotId, uniqueScheduleDates } from '../../lib/scheduleEngine'
-import { readFavorites, toggleFavorite } from '../../lib/favoritesStorage'
-import { TIMETABLE_GENRE_CHIPS, TIMETABLE_VENUE_CHIPS, type TimetableScheduleMode } from '../../lib/timetableConstants'
+import { demoTodayDateString, nextHighlightSlotId, uniqueGenresFromPerformers, uniqueScheduleDates } from '../../lib/scheduleEngine'
+import { readFavorites } from '../../lib/favoritesStorage'
+import { useAuth } from '../../../platform/lib/auth'
+import { toggleOshiOrLogin } from '../../lib/oshiActions'
+import { type TimetableScheduleMode } from '../../lib/timetableConstants'
 import { buildTimetableRows } from '../../lib/timetableRows'
-import { PUBLIC_EVENT_COPY } from '../../services/festivalRepository'
+import { useLang } from '../../../i18n/LangProvider'
 import { TimetableLiveNextBar } from './TimetableLiveNextBar'
 import { TimetableDateChips } from './timetable/TimetableDateChips'
 import { TimetableFilterChips } from './timetable/TimetableFilterChips'
@@ -18,7 +22,22 @@ export type TimetableScreenProps = {
 }
 
 export function TimetableScreen({ favTick, onOpenDetail, onFavChange }: TimetableScreenProps) {
-  const dates = useMemo(() => uniqueScheduleDates(), [])
+  const { user } = useAuth()
+  const { t } = useLang()
+  const catalogVersion = useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
+  const dates = useMemo(() => uniqueScheduleDates(), [catalogVersion])
+  const venueChips = useMemo(
+    () => [
+      { id: 'all', labelJa: '全会場' },
+      ...getCatalogVenues().map((v) => ({ id: v.id, labelJa: v.nameJa })),
+    ],
+    [catalogVersion],
+  )
+  const genreChips = useMemo(() => {
+    const fromActs = uniqueGenresFromPerformers(getPerformers())
+    if (fromActs.length === 0) return [{ id: 'all', labelJa: 'すべて' }]
+    return [{ id: 'all', labelJa: 'すべて' }, ...fromActs.map((g) => ({ id: g, labelJa: g }))]
+  }, [catalogVersion])
   const [date, setDate] = useState(() => dates[0] ?? demoTodayDateString())
   const [venueId, setVenueId] = useState('all')
   const [genreId, setGenreId] = useState('all')
@@ -43,28 +62,30 @@ export function TimetableScreen({ favTick, onOpenDetail, onFavChange }: Timetabl
   )
 
   const handleToggleFavorite = (performerId: string) => {
-    toggleFavorite(performerId)
-    onFavChange()
+    void toggleOshiOrLogin(user?.id, performerId).then((result) => {
+      if (result === 'login') return
+      onFavChange()
+    })
   }
 
   const rainMode = scheduleMode === 'rain'
-  const hasSchedule = dates.length > 0
+  const hasSchedule = getCatalogSlots().length > 0
 
   return (
     <main className={`fe-main fe-main--sub fe-ttv${rainMode ? ' fe-ttv--rain' : ''}`}>
       <header className="fe-page-head fe-page-head--tight">
         <p className="fe-page-head__eyebrow">Schedule</p>
-        <h1 className="fe-page-head__title">タイムテーブル</h1>
+        <h1 className="fe-page-head__title">{t('timetableTitle')}</h1>
         <p className="fe-page-head__lead">
           {hasSchedule
-            ? '誰が・何時に・どこで — 開始時間順。LIVE / NEXT を強調表示。'
-            : PUBLIC_EVENT_COPY.schedulePending}
+            ? t('timetableLead')
+            : t('comingSoonSchedule')}
         </p>
       </header>
 
       {!hasSchedule ? (
         <p className="fe-public-prep" role="status">
-          {PUBLIC_EVENT_COPY.datesPending}
+          {t('comingSoonSchedule')}
         </p>
       ) : (
         <>
@@ -76,14 +97,14 @@ export function TimetableScreen({ favTick, onOpenDetail, onFavChange }: Timetabl
 
           <TimetableFilterChips
             label="会場"
-            chips={TIMETABLE_VENUE_CHIPS}
+            chips={venueChips}
             value={venueId}
             onChange={setVenueId}
           />
 
           <TimetableFilterChips
             label="ジャンル"
-            chips={TIMETABLE_GENRE_CHIPS}
+            chips={genreChips}
             value={genreId}
             onChange={setGenreId}
             className="fe-ttv-filters--genre"
@@ -106,7 +127,7 @@ export function TimetableScreen({ favTick, onOpenDetail, onFavChange }: Timetabl
           <section className="fe-tt-foot" aria-label="補足">
             <p className="fe-tt-foot__text">カードの「詳細」または演者名タップでプロフィールへ。★でお気に入り登録。</p>
             <p className="fe-tt-foot__hint">
-              基準時刻{' '}
+              現在時刻{' '}
               {now.toLocaleString('ja-JP', {
                 timeZone: 'Asia/Tokyo',
                 month: 'short',

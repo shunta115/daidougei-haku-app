@@ -7,6 +7,9 @@ export const PLATFORM_FEE_BPS = 1000
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
+  if (key.startsWith('sk_live_') && process.env.STRIPE_ALLOW_LIVE !== 'true') {
+    throw new Error('Live Stripe keys are disabled until STRIPE_ALLOW_LIVE=true')
+  }
   return new Stripe(key)
 }
 
@@ -18,11 +21,29 @@ export function getAdminSupabase() {
 }
 
 export function getAppUrl(req: VercelRequest) {
-  return (process.env.APP_URL || `https://${req.headers.host}`).replace(/\/$/, '')
+  const envUrl = process.env.APP_URL?.replace(/\/$/, '')
+  if (envUrl && /^https?:\/\//i.test(envUrl)) {
+    try {
+      const parsed = new URL(envUrl)
+      if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+        return envUrl
+      }
+    } catch {
+      /* ignore invalid APP_URL */
+    }
+  }
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  if (process.env.VERCEL_ENV === 'production' && vercelProd) {
+    return `https://${vercelProd.replace(/^https?:\/\//, '')}`.replace(/\/$/, '')
+  }
+  const host = typeof req.headers.host === 'string' ? req.headers.host : ''
+  const proto = host.includes('localhost') || host.startsWith('127.') ? 'http' : 'https'
+  if (host) return `${proto}://${host}`.replace(/\/$/, '')
+  throw new Error('APP_URL is not set')
 }
 
-export function calcPlatformFee(amountYen: number) {
-  return Math.floor((amountYen * PLATFORM_FEE_BPS) / 10000)
+export function calcPlatformFee(amountYen: number, feeBps = PLATFORM_FEE_BPS) {
+  return Math.floor((amountYen * feeBps) / 10000)
 }
 
 function userClient(authHeader: string) {

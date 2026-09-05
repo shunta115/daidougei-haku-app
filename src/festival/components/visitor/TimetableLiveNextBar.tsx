@@ -1,11 +1,11 @@
-import { performerById } from '../../data'
+import { getPerformerById } from '../../lib/performerCatalog'
 import { currentLiveSlot, currentNextSlot } from '../../lib/scheduleEngine'
 
 export function TimetableLiveNextBar() {
   const live = currentLiveSlot()
   const next = currentNextSlot()
-  const liveP = live ? performerById(live.performerId) : undefined
-  const nextP = next ? performerById(next.performerId) : undefined
+  const liveP = live ? getPerformerById(live.performerId) : undefined
+  const nextP = next ? getPerformerById(next.performerId) : undefined
 
   if (!live && !next) return null
 

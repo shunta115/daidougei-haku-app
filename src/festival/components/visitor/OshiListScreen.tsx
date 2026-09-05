@@ -1,10 +1,17 @@
+import { useEffect, useState } from 'react'
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
-import { readFavorites, toggleFavorite } from '../../lib/favoritesStorage'
+import { readFavorites } from '../../lib/favoritesStorage'
 import { getDemoNow } from '../../lib/demoClock'
 import { demoTodayDateString, nextSlotForPerformerFromNow, slotEndAsDate, todaySlotsForPerformer } from '../../lib/scheduleEngine'
 import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
 import { shouldShowAsLiveStream } from '../../lib/streamPresence'
+import { useAuth } from '../../../platform/lib/auth'
+import { isSupabaseConfigured } from '../../../platform/lib/supabase'
+import { listOshiPerformers } from '../../../platform/lib/api'
+import { platformToFestival } from '../../../catalog/liveCatalog'
+import { toggleOshiOrLogin } from '../../lib/oshiActions'
+import { openPlatform } from '../../../app/routes'
 
 type OshiListScreenProps = {
   performers: Performer[]
@@ -52,19 +59,40 @@ export function OshiListScreen({
   onSupportStream,
   onBetaSupport,
 }: OshiListScreenProps) {
+  const { user } = useAuth()
+  const [remote, setRemote] = useState<Performer[]>([])
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) {
+      setRemote([])
+      return
+    }
+    let cancelled = false
+    void listOshiPerformers(user.id)
+      .then((rows) => {
+        if (!cancelled) setRemote(rows.map(platformToFestival))
+      })
+      .catch(() => {
+        if (!cancelled) setRemote([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user, favTick])
+
   const ids = readFavorites()
-  const saved = performers.filter((p) => ids.includes(p.id)).sort(sortOshi)
+  const fromCatalog = performers.filter((p) => ids.includes(p.id))
+  const merged = [...remote, ...fromCatalog.filter((p) => !remote.some((r) => r.id === p.id))]
+  const saved = merged.sort(sortOshi)
   const liveOshi = saved.filter(isLiveNow)
 
   return (
     <main className="fe-main fe-main--sub fe-main--oshi" data-fav-tick={favTick}>
       <header className="fe-page-head">
-        <p className="fe-page-head__eyebrow" lang="en">
-          OSHI · LIVE
-        </p>
+        <p className="fe-page-head__eyebrow">推し</p>
         <h1 className="fe-page-head__title">推しリスト</h1>
         <p className="fe-page-head__lead">
-          推しの配信がいちばん上。視聴は無料 · 応援は{canProcessOnlineSupport() ? 'WEB完結' : '準備中'}です。
+          推しの配信がいちばん上。視聴は無料。応援・投げ銭はアカウントから。
         </p>
       </header>
 
@@ -102,7 +130,19 @@ export function OshiListScreen({
           推し演者
         </h2>
         {saved.length === 0 ? (
-          <p className="fe-lib-empty">まだいません。出演タブで★をお気に入りに追加してください。</p>
+          <p className="fe-lib-empty">
+            {user
+              ? 'まだいません。出演者のプロフィールから推しに登録してください。'
+              : 'ログインすると推しを保存できます。'}
+            {!user ? (
+              <>
+                {' '}
+                <button type="button" className="fe-btn fe-btn--primary fe-btn--compact" onClick={() => openPlatform('?auth=1')}>
+                  ログイン
+                </button>
+              </>
+            ) : null}
+          </p>
         ) : (
           <ul className="fe-oshi-list">
             {saved.map((p) => {
@@ -165,8 +205,9 @@ export function OshiListScreen({
                       type="button"
                       className="fe-oshi-card__out"
                       onClick={() => {
-                        toggleFavorite(p.id)
-                        onFavoritesChange()
+                        void toggleOshiOrLogin(user?.id, p.id).then((result) => {
+                          if (result !== 'login') onFavoritesChange()
+                        })
                       }}
                       aria-label={`${p.nameJa} を推しから外す`}
                     >
@@ -187,7 +228,7 @@ export function OshiListScreen({
         <p className="fe-lib-tip">
           {canProcessOnlineSupport()
             ? '外部決済へ自然に誘導します。合計金額は表示しません。'
-            : 'β版ではオンライン応援機能を準備中です。'}
+            : '投げ銭はログイン後に使えます。LIVE からアカウントを開いてください。'}
         </p>
         {saved.length === 0 ? (
           <p className="fe-lib-empty">推しを追加するとリンクが並びます。</p>

@@ -1,7 +1,7 @@
 import type { Performer } from '../types'
 
 export async function shareFestival(): Promise<void> {
-  const text = '大道芸博 — みなとみらいのストリートフェス（デモアプリ）'
+  const text = '受賞者たち — 2026.10.10–12 東京 練馬城址公園 / Presented by 大道芸博 2026'
   const url = window.location.href
   if (navigator.share) {
     try {

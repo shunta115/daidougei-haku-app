@@ -1,4 +1,5 @@
 import { isDemoMode, enableMockCrowdLevels } from '../config/runtimeConfig'
+import { getCatalogFeaturedEvent } from '../../catalog/liveCatalog'
 import { PUBLIC_EVENT_META } from '../data/public/eventMeta'
 import type { Performer, ScheduleSlot, VenueArea } from '../types'
 
@@ -6,11 +7,11 @@ import type { Performer, ScheduleSlot, VenueArea } from '../types'
  * 開催ヘッダー等の公開向け文言（実開催情報が未登録のときの安全表示）。
  */
 export const PUBLIC_EVENT_COPY = {
-  datesPending: '次回開催情報は準備中です',
-  rosterPending: '出演情報は順次公開します',
-  noLiveShows: '現在開催中の公演はありません',
+  datesPending: '開催日程は準備中です',
+  rosterPending: '出演者情報は近日公開',
+  noLiveShows: '現在ライブ配信中の公演はありません',
   venuePending: '会場情報は準備中です',
-  schedulePending: 'タイムテーブルは準備中です',
+  schedulePending: 'タイムテーブルは近日公開',
 } as const
 
 export const PREP_VENUE: VenueArea = {
@@ -31,13 +32,14 @@ export type EventHeaderMeta = {
 export function getEventHeaderMeta(hasActiveLiveShow: boolean): EventHeaderMeta {
   if (isDemoMode) {
     return {
-      dateLabel: '11.07–11.09',
-      placeLabel: 'みなとみらい',
+      dateLabel: PUBLIC_EVENT_META.dateLabel,
+      placeLabel: PUBLIC_EVENT_META.placeLabel,
       showLivePill: true,
     }
   }
-  const dateLabel = PUBLIC_EVENT_META.dateLabel.trim() || PUBLIC_EVENT_COPY.datesPending
-  const placeLabel = PUBLIC_EVENT_META.placeLabel.trim()
+  const ev = getCatalogFeaturedEvent()
+  const dateLabel = (ev?.date_label || PUBLIC_EVENT_META.dateLabel).trim() || PUBLIC_EVENT_COPY.datesPending
+  const placeLabel = (ev?.place_label || PUBLIC_EVENT_META.placeLabel).trim()
   return {
     dateLabel,
     placeLabel,

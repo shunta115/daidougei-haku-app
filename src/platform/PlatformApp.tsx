@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { AuthProvider, useAuth } from './lib/auth'
+import { FESTIVAL_PATH, spaGo } from '../app/routes'
+import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
+import { useAuth } from './lib/auth'
+import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
 import { AuthScreen } from './screens/AuthScreen'
@@ -15,36 +18,55 @@ import { LiveWatchScreen } from './screens/LiveWatchScreen'
 import { LiveListScreen } from './screens/LiveListScreen'
 import { TipScreen } from './screens/TipScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
-import { AdminDashboardScreen, AdminUsersScreen } from './screens/AdminScreens'
+import { AdminDashboardScreen, AdminEventScreen, AdminUsersScreen } from './screens/AdminScreens'
+import { AdminOpsScreen } from './screens/AdminOpsScreen'
+import { OrganizerHomeScreen } from './screens/OrganizerHomeScreen'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
+import { trackProductEvent } from './lib/track'
 import './platform.css'
 
 function SetupScreen() {
+  const { t } = useLang()
   return (
     <div className="pl-shell pl-shell--flush">
-      <p className="pl-brand">大道芸博</p>
-      <h1 className="pl-h1">Setup required</h1>
-      <p className="pl-muted">
-        Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>, run the SQL migration, then redeploy.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <p className="pl-brand">{t('appName')}</p>
+        <LanguageToggle />
+      </div>
+      <h1 className="pl-h1">{t('setupNeeded')}</h1>
+      <p className="pl-muted">{t('setupHint')}</p>
+      <button type="button" className="pl-btn pl-btn--block" onClick={() => spaGo(FESTIVAL_PATH)}>
+        {t('seeEvent')}
+      </button>
     </div>
   )
 }
 
 function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
+  const { t } = useLang()
+  const meta = PUBLIC_EVENT_META
   return (
     <div className="pl-shell pl-shell--flush">
-      <p className="pl-brand">大道芸博</p>
-      <h1 className="pl-h1">Street performers. Fans. Tips.</h1>
-      <p className="pl-muted">Go live. Get tipped. Grow your work — worldwide.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <p className="pl-brand">{t('appName')}</p>
+        <LanguageToggle />
+      </div>
+      <h1 className="pl-h1">{t('welcomeTitle')}</h1>
+      <p className="pl-muted">
+        {meta.eventNameJa} {meta.dateLabel} · {meta.placeLabel}
+        {t('welcomeLead')}
+      </p>
       <div className="pl-card" style={{ marginTop: 20 }}>
         <p className="pl-muted" style={{ margin: 0 }}>
-          Live · Follow · Tip · Connect. Built for performers who work the street every day.
+          {t('welcomePublic')}
         </p>
       </div>
       <button type="button" className="pl-btn pl-btn--block" onClick={onAuth}>
-        Get started
+        {t('start')}
+      </button>
+      <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(FESTIVAL_PATH)}>
+        {t('seeEvent')}
       </button>
     </div>
   )
@@ -53,12 +75,24 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
 function homeForRole(role: string | undefined): PlatformScreen {
   if (role === 'admin') return 'admin'
   if (role === 'performer') return 'performer-home'
+  if (role === 'organizer') return 'organizer-home'
   return 'fan-home'
+}
+
+function initialGuestScreen(): PlatformScreen {
+  try {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('auth') === '1' || q.get('watch') || q.get('tipTo') || q.get('stripe') || q.get('live') === '1') return 'auth'
+  } catch {
+    /* ignore */
+  }
+  return 'welcome'
 }
 
 function PlatformShell() {
   const { ready, configured, user, profile } = useAuth()
-  const [screen, setScreen] = useState<PlatformScreen>('welcome')
+  const { t } = useLang()
+  const [screen, setScreen] = useState<PlatformScreen>(initialGuestScreen)
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [tipFlash, setTipFlash] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
@@ -69,24 +103,49 @@ function PlatformShell() {
     const sessionId = url.searchParams.get('session_id')
     const ret = url.searchParams.get('return')
     const pid = url.searchParams.get('performerId')
+    const watch = url.searchParams.get('watch')
+    const auth = url.searchParams.get('auth')
+    const tipTo = url.searchParams.get('tipTo')
+    const stripe = url.searchParams.get('stripe')
+    const liveList = url.searchParams.get('live')
+    if (watch) {
+      window.sessionStorage.setItem('pl-watch', watch)
+      url.searchParams.delete('watch')
+    }
+    if (tipTo) {
+      window.sessionStorage.setItem('pl-tip-to', tipTo)
+      url.searchParams.delete('tipTo')
+    }
+    if (liveList === '1') {
+      window.sessionStorage.setItem('pl-open-live-list', '1')
+    }
+    if (stripe === 'return' || stripe === 'refresh') {
+      window.sessionStorage.setItem('pl-stripe-connect', stripe)
+    }
+    if (auth === '1' || watch || tipTo || stripe || liveList === '1') {
+      setScreen('auth')
+      url.searchParams.delete('auth')
+    }
     if (tip === 'success') {
-      setTipFlash('Tip sent successfully.')
+      setTipFlash('tipSuccess')
+      trackProductEvent('tip_success', { performerId: pid })
       if (sessionId) window.sessionStorage.setItem('pl-tip-confirm', sessionId)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     } else if (tip === 'cancel') {
-      setTipFlash('Tip was cancelled.')
+      setTipFlash('tipCancelled')
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     }
-    if (tip) {
+    if (tip || watch || auth || tipTo || stripe || liveList) {
       url.searchParams.delete('tip')
       url.searchParams.delete('session_id')
       url.searchParams.delete('performerId')
       url.searchParams.delete('return')
       url.searchParams.delete('stripe')
+      url.searchParams.delete('live')
       window.history.replaceState({}, '', url.pathname + url.search)
     }
   }, [])
@@ -118,6 +177,35 @@ function PlatformShell() {
     }
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
       return
+    }
+    const watchId = window.sessionStorage.getItem('pl-watch')
+    if (watchId) {
+      window.sessionStorage.removeItem('pl-watch')
+      setPerformerId(watchId)
+      setScreen('live-watch')
+      return
+    }
+    const openLiveList = window.sessionStorage.getItem('pl-open-live-list')
+    if (openLiveList) {
+      window.sessionStorage.removeItem('pl-open-live-list')
+      setScreen('live-list')
+      return
+    }
+    const tipToId = window.sessionStorage.getItem('pl-tip-to')
+    if (tipToId) {
+      window.sessionStorage.removeItem('pl-tip-to')
+      setPerformerId(tipToId)
+      setTipReturn(homeForRole(profile?.role))
+      setScreen('tip')
+      return
+    }
+    const stripeConnect = window.sessionStorage.getItem('pl-stripe-connect')
+    if (stripeConnect) {
+      window.sessionStorage.removeItem('pl-stripe-connect')
+      if (profile?.role === 'performer') {
+        setScreen('performer-edit')
+        return
+      }
     }
     const raw = window.sessionStorage.getItem('pl-tip-return')
     if (raw) {
@@ -182,7 +270,7 @@ function PlatformShell() {
   }
 
   const role = profile?.role ?? 'fan'
-  const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : 'fan'
+  const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen) && !(performerId && screen === 'profile')
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
@@ -207,6 +295,7 @@ function PlatformShell() {
           setScreen(homeForRole(role))
         }}
         onTip={() => {
+          trackProductEvent('click_tip', { performerId })
           setTipReturn('live-watch')
           setScreen('tip')
         }}
@@ -224,7 +313,7 @@ function PlatformShell() {
         }}
       />
     )
-  } else if (performerId && screen !== 'tip') {
+  } else if (performerId && screen === 'profile') {
     body = (
       <PerformerPublicScreen
         performerId={performerId}
@@ -233,6 +322,7 @@ function PlatformShell() {
           setScreen(homeForRole(role))
         }}
         onTip={() => {
+          trackProductEvent('click_tip', { performerId })
           setTipReturn('profile')
           setScreen('tip')
         }}
@@ -249,6 +339,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
+              trackProductEvent('click_tip', { performerId: id })
               setPerformerId(id)
               setTipReturn('fan-home')
               setScreen('tip')
@@ -299,8 +390,17 @@ function PlatformShell() {
       case 'admin':
         body = <AdminDashboardScreen />
         break
+      case 'admin-event':
+        body = <AdminEventScreen />
+        break
       case 'admin-users':
         body = <AdminUsersScreen />
+        break
+      case 'admin-ops':
+        body = <AdminOpsScreen />
+        break
+      case 'organizer-home':
+        body = <OrganizerHomeScreen onOpenPerformer={openPerformer} />
         break
       default:
         body = (
@@ -310,6 +410,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
+              trackProductEvent('click_tip', { performerId: id })
               setPerformerId(id)
               setTipReturn('fan-home')
               setScreen('tip')
@@ -322,9 +423,14 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
+        {showNav ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <LanguageToggle />
+          </div>
+        ) : null}
         {tipFlash ? (
           <div className="pl-card" style={{ marginBottom: 12 }}>
-            <div className="pl-muted">{tipFlash}</div>
+            <div className="pl-muted">{tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' ? t(tipFlash) : tipFlash}</div>
           </div>
         ) : null}
         {body}
@@ -345,9 +451,9 @@ function PlatformShell() {
 
 export function PlatformApp() {
   return (
-    <AuthProvider>
+    <>
       <PlatformBackground />
       <PlatformShell />
-    </AuthProvider>
+    </>
   )
 }

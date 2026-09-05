@@ -1,9 +1,10 @@
 import { PERFORMERS } from '../data'
-import { enableMockStreams } from '../config/runtimeConfig'
+import { enableMockStreams, isDemoMode } from '../config/runtimeConfig'
 import type { Performer, PerformerApprovalStatus } from '../types'
+import { getCatalogPerformers } from '../../catalog/liveCatalog'
 import { modeScopedStorageKey } from './storageScope'
 import { resolvePerformerPhotoUrl, shouldShowAsLiveStream } from './streamPresence'
-import { isValidHttpUrl } from './productionGuard'
+import { isInAppLivePath, isValidHttpUrl } from './productionGuard'
 
 const OVERRIDE_KEY = modeScopedStorageKey('daidougei-stream-performer-overrides-v1')
 
@@ -30,7 +31,7 @@ function writeOverrides(map: Record<string, PerformerOverride>) {
 function sanitizePerformer(p: Performer): Performer {
   const photoUrl = resolvePerformerPhotoUrl(p.photoUrl)
   let isLive = Boolean(p.isLive)
-  if (!enableMockStreams && isLive && !isValidHttpUrl(p.streamUrl)) {
+  if (!enableMockStreams && isLive && !isValidHttpUrl(p.streamUrl) && !isInAppLivePath(p.streamUrl)) {
     isLive = false
   }
   return { ...p, photoUrl, isLive }
@@ -38,7 +39,8 @@ function sanitizePerformer(p: Performer): Performer {
 
 export function getPerformers(): Performer[] {
   const overrides = readOverrides()
-  return PERFORMERS.map((p) => sanitizePerformer({ ...p, ...overrides[p.id] }))
+  const base = isDemoMode ? PERFORMERS : getCatalogPerformers()
+  return base.map((p) => sanitizePerformer({ ...p, ...overrides[p.id] }))
 }
 
 export function getPerformerById(id: string): Performer | undefined {

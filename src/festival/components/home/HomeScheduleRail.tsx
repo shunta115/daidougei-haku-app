@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { performerById } from '../../data'
+import { getPerformerById } from '../../lib/performerCatalog'
 import { getDemoNow } from '../../lib/demoClock'
 import type { TimetableScheduleMode } from '../../lib/timetableConstants'
 import {
@@ -37,7 +37,7 @@ export function HomeScheduleRail({ scheduleMode, onOpenDetail, onOpenTimetable }
     }
     return slots.map((slot) => ({
       slot,
-      performer: performerById(slot.performerId),
+      performer: getPerformerById(slot.performerId),
       aud: derivedAudienceTimeStatus(slot, now),
     }))
   }, [today, rain, now])
@@ -53,7 +53,7 @@ export function HomeScheduleRail({ scheduleMode, onOpenDetail, onOpenTimetable }
       <div className="fe-h6-rail__scroll" role="list">
         {rows.length === 0 ? (
           <p className="fe-h6-rail__empty">
-            {isPublicMode ? PUBLIC_EVENT_COPY.noLiveShows : '該当する公演がありません'}
+            {isPublicMode ? PUBLIC_EVENT_COPY.schedulePending : '該当する公演がありません'}
           </p>
         ) : null}
         {rows.map(({ slot, performer, aud }) => {

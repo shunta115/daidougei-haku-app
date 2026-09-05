@@ -1,4 +1,4 @@
-export type UserRole = 'fan' | 'performer' | 'admin'
+export type UserRole = 'fan' | 'performer' | 'organizer' | 'admin'
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'deleted'
 export type TipStatus = 'pending' | 'succeeded' | 'failed' | 'refunded'
 
@@ -33,6 +33,10 @@ export type Performer = {
   lat: number | null
   lng: number | null
   location_updated_at: string | null
+  video_url?: string | null
+  awards?: string
+  appearances?: string
+  sns_json?: { label: string; url: string }[]
   created_at: string
   updated_at: string
 }
@@ -47,6 +51,8 @@ export type LiveSession = {
   tip_count: number
   tip_amount_total: number
   viewer_peak: number
+  event_id?: string | null
+  venue_id?: string | null
 }
 
 export type LiveTipEvent = {
@@ -133,4 +139,7 @@ export type PlatformScreen =
   | 'tip'
   | 'admin'
   | 'admin-users'
+  | 'admin-event'
+  | 'admin-ops'
+  | 'organizer-home'
   | 'setup'

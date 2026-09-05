@@ -105,6 +105,8 @@ export function AdminDashboardScreen() {
   )
 }
 
+export { AdminEventScreen } from './AdminEventOps'
+
 export function AdminUsersScreen() {
   const [rows, setRows] = useState<
     Array<{ id: string; display_name: string; role: string; status: string; email: string | null }>

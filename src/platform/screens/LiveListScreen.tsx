@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
-import { listLivePerformers, listLiveRanking, type LiveRankRow } from '../lib/api'
-import { formatYen } from '../lib/money'
-import type { Performer } from '../lib/types'
+import { listLivePerformers, listLiveRanking, getFeaturedEvent, listVoteRankingNamed, listEventSlots, listEventLiveSessions, listApprovedPerformers, type LiveRankRow, type EventSlotRow } from '../lib/api'
+import { useLang } from '../../i18n/LangProvider'
+import type { LiveSession, Performer } from '../lib/types'
 
-type Tab = 'list' | 'rank'
+type Tab = 'list' | 'rank' | 'votes'
 
 type Props = {
   onWatchLive: (id: string) => void
@@ -26,9 +26,14 @@ function liveDuration(startedAt: string | null) {
 }
 
 export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'list' }: Props) {
+  const { t } = useLang()
   const [tab, setTab] = useState<Tab>(initialTab)
   const [live, setLive] = useState<Performer[]>([])
   const [rank, setRank] = useState<LiveRankRow[]>([])
+  const [votes, setVotes] = useState<Array<{ performer: Performer; votes: number }>>([])
+  const [scheduled, setScheduled] = useState<EventSlotRow[]>([])
+  const [ended, setEnded] = useState<LiveSession[]>([])
+  const [acts, setActs] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -36,10 +41,32 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
     let cancelled = false
     const load = async () => {
       try {
-        const [liveRows, rankRows] = await Promise.all([listLivePerformers(), listLiveRanking()])
+        const [liveRows, rankRows, featured, approved] = await Promise.all([
+          listLivePerformers(),
+          listLiveRanking(),
+          getFeaturedEvent().catch(() => null),
+          listApprovedPerformers().catch(() => [] as Performer[]),
+        ])
         if (cancelled) return
         setLive(liveRows)
         setRank(rankRows)
+        setActs(approved)
+        if (featured) {
+          const [voteRows, slots, sessions] = await Promise.all([
+            listVoteRankingNamed(featured.id).catch(() => []),
+            listEventSlots(featured.id).catch(() => [] as EventSlotRow[]),
+            listEventLiveSessions(featured.id).catch(() => [] as LiveSession[]),
+          ])
+          if (cancelled) return
+          setVotes(voteRows)
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
+          setScheduled(
+            slots.filter(
+              (s) => s.is_stream && String(s.date).slice(0, 10) >= today && s.status !== 'cancelled',
+            ),
+          )
+          setEnded(sessions.filter((s) => Boolean(s.ended_at)))
+        }
         setError(null)
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : '読み込みに失敗しました')
@@ -60,14 +87,17 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
   return (
     <>
       <h1 className="pl-h1">LIVE</h1>
-      <p className="pl-muted">いま配信中のパフォーマー。タップですぐ視聴できます。</p>
+      <p className="pl-muted">{t('liveListLead')}</p>
 
       <div className="pl-live-tabs">
         <button type="button" className="pl-live-tabs__btn" data-active={tab === 'list'} onClick={() => setTab('list')}>
-          一覧 {live.length > 0 ? `(${live.length})` : ''}
+          {t('liveList')} {live.length > 0 ? `(${live.length})` : ''}
         </button>
         <button type="button" className="pl-live-tabs__btn" data-active={tab === 'rank'} onClick={() => setTab('rank')}>
-          ランキング
+          {t('liveRanking')}
+        </button>
+        <button type="button" className="pl-live-tabs__btn" data-active={tab === 'votes'} onClick={() => setTab('votes')}>
+          {t('votes')}
         </button>
       </div>
 
@@ -75,8 +105,9 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
       {loading ? <p className="pl-muted">Loading…</p> : null}
 
       {!loading && tab === 'list' ? (
-        live.length === 0 ? (
-          <div className="pl-empty">いま配信中のライブはありません。</div>
+        <>
+        {live.length === 0 ? (
+          <div className="pl-empty">{t('noLiveNow')}</div>
         ) : (
           live.map((p) => (
             <button
@@ -94,17 +125,60 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
                 </div>
                 <div style={{ fontWeight: 700 }}>{p.stage_name}</div>
                 <div className="pl-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.live_title || p.genre || p.city || 'ライブ配信中'}
+                  {p.live_title || p.genre || p.city || t('liveNow')}
                 </div>
               </div>
             </button>
           ))
-        )
+        )}
+        {scheduled.length > 0 ? (
+          <>
+            <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 20 }}>{t('streamSlot')}</h2>
+            {scheduled.map((s) => {
+              const act = acts.find((p) => p.id === s.performer_id)
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="pl-card"
+                  style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => (s.performer_id ? onOpenPerformer(s.performer_id) : undefined)}
+                >
+                  <div className="pl-muted">{t('liveScheduled')}</div>
+                  <div style={{ fontWeight: 700 }}>{act?.stage_name ?? s.performer_id}</div>
+                  <div className="pl-muted">
+                    {s.date} {String(s.start_time).slice(0, 5)}–{String(s.end_time).slice(0, 5)}
+                  </div>
+                </button>
+              )
+            })}
+          </>
+        ) : live.length === 0 ? (
+          <p className="pl-muted">{t('comingSoonSchedule')}</p>
+        ) : null}
+        {ended.length > 0 ? (
+          <>
+            <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 20 }}>{t('endedLives')}</h2>
+            {ended.slice(0, 8).map((s) => {
+              const act = acts.find((p) => p.id === s.performer_id)
+              return (
+                <div key={s.id} className="pl-card">
+                  <div className="pl-muted">{t('liveEnded')}</div>
+                  <div style={{ fontWeight: 700 }}>{act?.stage_name ?? s.performer_id}</div>
+                  <div className="pl-muted">
+                    {s.title || '—'} · 👁 {s.viewer_peak}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        ) : null}
+        </>
       ) : null}
 
       {!loading && tab === 'rank' ? (
         rank.length === 0 ? (
-          <div className="pl-empty">ランキング対象のライブがありません。</div>
+          <div className="pl-empty">{t('noLiveNow')}</div>
         ) : (
           rank.map((row, i) => (
             <button
@@ -129,8 +203,33 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
                 </div>
                 <div style={{ fontWeight: 700 }}>{row.performer.stage_name}</div>
                 <div className="pl-muted">
-                  投げ銭 {formatYen(row.tip_amount_total)} · {row.tip_count}件
+                  応援 {row.tip_count}件 · 視聴ピーク {row.viewer_peak}
                 </div>
+              </div>
+            </button>
+          ))
+        )
+      ) : null}
+
+      {!loading && tab === 'votes' ? (
+        votes.length === 0 ? (
+          <div className="pl-empty">{t('noVotesYet')}</div>
+        ) : (
+          votes.map((row, i) => (
+            <button
+              key={row.performer.id}
+              type="button"
+              className="pl-card pl-row pl-live-row"
+              style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
+              onClick={() => onOpenPerformer(row.performer.id)}
+            >
+              <div className="pl-rank-num" data-top={i < 3}>
+                {i + 1}
+              </div>
+              <Avatar url={row.performer.photo_url} name={row.performer.stage_name} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700 }}>{row.performer.stage_name}</div>
+                <div className="pl-muted">{row.votes}票</div>
               </div>
             </button>
           ))

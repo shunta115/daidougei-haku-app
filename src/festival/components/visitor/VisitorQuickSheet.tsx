@@ -4,9 +4,11 @@ type VisitorQuickSheetProps = {
   open: boolean
   onClose: () => void
   onTab: (t: VisitorTab) => void
+  onLive: () => void
+  onAccount: () => void
 }
 
-export function VisitorQuickSheet({ open, onClose, onTab }: VisitorQuickSheetProps) {
+export function VisitorQuickSheet({ open, onClose, onTab, onLive, onAccount }: VisitorQuickSheetProps) {
   if (!open) return null
   return (
     <div className="fe-qsheet" role="dialog" aria-modal="true" aria-label="クイックメニュー">
@@ -26,6 +28,12 @@ export function VisitorQuickSheet({ open, onClose, onTab }: VisitorQuickSheetPro
           </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('oshi'); onClose() }}>
             推しリスト
+          </button>
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onLive(); onClose() }}>
+            LIVE
+          </button>
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onAccount(); onClose() }}>
+            アカウント
           </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('performers'); onClose() }}>
             アーティスト

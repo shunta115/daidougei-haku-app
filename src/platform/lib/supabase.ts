@@ -3,7 +3,17 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-export const isSupabaseConfigured = Boolean(url && anon && !url.includes('YOUR_'))
+function isUsableHttpUrl(value: string | undefined): value is string {
+  if (!value || value.includes('YOUR_') || value === '[SENSITIVE]') return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export const isSupabaseConfigured = Boolean(isUsableHttpUrl(url) && anon && anon !== '[SENSITIVE]')
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url!, anon!, {

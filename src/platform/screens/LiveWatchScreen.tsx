@@ -10,8 +10,12 @@ import {
   subscribeLiveComments,
   subscribePerformerLive,
   unfollow,
+  updateLiveViewerPeak,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLang } from '../../i18n/LangProvider'
+import { spaGo, PLATFORM_PATH } from '../../app/routes'
+import { useTrackView } from '../lib/track'
 import {
   applyNetworkAdaptation,
   attachRemoteTrack,
@@ -44,6 +48,8 @@ function formatDuration(sec: number) {
 
 export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   const { user, profile } = useAuth()
+  const { t } = useLang()
+  useTrackView('live_view_start', { performerId }, Boolean(user))
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +85,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
     return subscribePerformerLive(performerId, (row) => {
       setP((prev) => (prev ? { ...prev, ...row } : prev))
       if (row.is_live === false) {
-        setError('このライブは終了しました')
+        setError(t('liveEndedMsg'))
         const room = roomRef.current
         roomRef.current = null
         if (room) void room.disconnect()
@@ -102,7 +108,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   useEffect(() => {
     if (!p?.is_live) return
     if (!user) {
-      setError(liveKitErrorMessage('auth', '視聴にはログインが必要です'))
+      setError(t('signInToWatch'))
       return
     }
     let cancelled = false
@@ -157,7 +163,12 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, performerId, user])
+  }, [p?.is_live, performerId, user, t])
+
+  useEffect(() => {
+    if (!p?.is_live || viewers <= 0) return
+    void updateLiveViewerPeak(performerId, viewers).catch(() => undefined)
+  }, [viewers, p?.is_live, performerId])
 
   useEffect(() => {
     if (!p?.live_started_at || !p.is_live) return
@@ -196,7 +207,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   }, [isOverlayChrome])
 
   const toggleFollow = async () => {
-    if (!user) return
+    if (!user) {
+      spaGo(`${PLATFORM_PATH}?auth=1`)
+      return
+    }
     try {
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
@@ -254,11 +268,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
 
         <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
-            Back
+            {t('back')}
           </button>
           <div className="pl-live__hud-actions">
             <div className="pl-live__stats">
-              {p?.is_live ? <span className="pl-live__pill">LIVE中</span> : <span className="pl-live__pill pl-live__pill--off">END</span>}
+              {p?.is_live ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
               <span>{quality}</span>
@@ -310,18 +324,28 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           ))}
         </div>
         <div className="pl-live__actions">
-          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()} disabled={!user}>
-            {following ? 'Following' : 'Follow'}
+          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()}>
+            {following ? t('following') : t('follow')}
           </button>
-          <button type="button" className="pl-btn" onClick={onTip}>
-            投げ銭
+          <button
+            type="button"
+            className="pl-btn"
+            onClick={() => {
+              if (!user) {
+                spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
+                return
+              }
+              onTip()
+            }}
+          >
+            {t('tip')}
           </button>
         </div>
         <div className="pl-live__composer">
           <input
             className="pl-input"
             style={{ marginBottom: 0 }}
-            placeholder="コメント"
+            placeholder={t('commentPlaceholder')}
             value={draft}
             disabled={!user}
             onFocus={bumpChrome}
@@ -331,7 +355,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
             }}
           />
           <button type="button" className="pl-btn" disabled={!user} onClick={() => void sendComment()}>
-            Send
+            {t('send')}
           </button>
         </div>
         <div className="pl-live__prefs">
@@ -345,7 +369,19 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           </label>
         </div>
       </div>
-      {error ? <p className="pl-error">{error}</p> : null}
+      {error ? (
+        <p className="pl-error">
+          {error}
+          {!user ? (
+            <>
+              {' '}
+              <button type="button" className="pl-btn" onClick={() => spaGo(`${PLATFORM_PATH}?auth=1`)}>
+                {t('signIn')}
+              </button>
+            </>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   )
 }

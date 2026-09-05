@@ -12,6 +12,9 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
   const [country, setCountry] = useState(performer?.country ?? '')
   const [city, setCity] = useState(performer?.city ?? '')
   const [blurb, setBlurb] = useState(performer?.support_blurb ?? '')
+  const [awards, setAwards] = useState(performer?.awards ?? '')
+  const [appearances, setAppearances] = useState(performer?.appearances ?? '')
+  const [videoUrl, setVideoUrl] = useState(performer?.video_url ?? '')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -30,6 +33,9 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
         country: country.trim(),
         city: city.trim(),
         support_blurb: blurb.trim(),
+        awards: awards.trim(),
+        appearances: appearances.trim(),
+        video_url: videoUrl.trim() || null,
       })
       await requireSupabase()
         .from('profiles')
@@ -120,6 +126,19 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
           onChange={(e) => setBlurb(e.target.value)}
           placeholder="Thanks for supporting my art"
         />
+      </label>
+
+      <label>
+        <span className="pl-label">受賞歴</span>
+        <textarea className="pl-textarea" value={awards} onChange={(e) => setAwards(e.target.value)} />
+      </label>
+      <label>
+        <span className="pl-label">出演歴</span>
+        <textarea className="pl-textarea" value={appearances} onChange={(e) => setAppearances(e.target.value)} />
+      </label>
+      <label>
+        <span className="pl-label">紹介動画 URL</span>
+        <input className="pl-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://" />
       </label>
 
       <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void save()}>

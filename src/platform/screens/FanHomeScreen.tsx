@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listFollowedPerformers, searchPerformers, listLivePerformers } from '../lib/api'
+import { FESTIVAL_PATH, spaGo } from '../../app/routes'
+import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
+import { getFeaturedEvent, listEventLineup, listFollowedPerformers, listOshiPerformers, searchPerformers, listLivePerformers } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useTrackView } from '../lib/track'
 import type { Performer } from '../lib/types'
 import '../../festival/festival.css'
 import './fanHome.css'
@@ -28,6 +31,7 @@ function shareApp() {
 
 export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onTip }: FanHomeProps) {
   const { user } = useAuth()
+  useTrackView('view_home')
   const [mode, setMode] = useState<EventMode>(() => {
     const saved = window.localStorage.getItem('pl-event-mode')
     return saved === 'rain' ? 'rain' : 'normal'
@@ -36,6 +40,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const [roster, setRoster] = useState<Performer[]>([])
   const [oshi, setOshi] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel })
 
   useEffect(() => {
     window.localStorage.setItem('pl-event-mode', mode)
@@ -43,12 +48,22 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
 
   useEffect(() => {
     const load = async () => {
-      const [liveRows, allRows] = await Promise.all([listLivePerformers(), searchPerformers('')])
+      const [liveRows, allRows, ev] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
+      if (ev) {
+        setEventLabel({ date: ev.date_label, place: ev.place_label })
+        const lineup = await listEventLineup(ev.id)
+        setRoster(lineup.length > 0 ? allRows.filter((p) => lineup.includes(p.id)) : [])
+      } else {
+        setRoster([])
+      }
       setLive(liveRows)
-      setRoster(allRows)
       if (user) {
-        const favs = await listFollowedPerformers(user.id)
-        setOshi(favs)
+        try {
+          const favs = await listOshiPerformers(user.id)
+          setOshi(favs.length > 0 ? favs : await listFollowedPerformers(user.id))
+        } catch {
+          setOshi(await listFollowedPerformers(user.id))
+        }
       } else {
         setOshi([])
       }
@@ -92,9 +107,13 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           {live.length > 0 ? <span className="fe-strip__pill">LIVE中</span> : null}
         </div>
         <div className="fe-strip__meta">
-          <span>ストリート · 毎日</span>
-          <span className="fe-strip__sep">·</span>
-          <span>β</span>
+          <span>{eventLabel.date || '開催日は準備中'}</span>
+          {eventLabel.place ? (
+            <>
+              <span className="fe-strip__sep">·</span>
+              <span>{eventLabel.place}</span>
+            </>
+          ) : null}
         </div>
         <button type="button" className="fe-strip__share" onClick={() => shareApp()} aria-label="シェア">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -108,6 +127,12 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           </svg>
         </button>
       </header>
+
+      <p className="fe-public-prep" role="note">
+        <button type="button" className="pl-btn pl-btn--ghost" onClick={() => spaGo(FESTIVAL_PATH)}>
+          開催情報・タイムテーブル・会場マップを見る
+        </button>
+      </p>
 
       <section className="fe-h6-weather" aria-label="開催モード">
         <p className="fe-h6-weather__k">開催モード</p>

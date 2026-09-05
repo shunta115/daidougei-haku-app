@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import type { Performer } from '../../types'
 import { canWatchLiveStream } from '../../lib/productionGuard'
 import { SafeImg } from '../shared/SafeImg'
+import { useLang } from '../../../i18n/LangProvider'
 
 export type HomeStreamNowProps = {
   livePerformers: readonly Performer[]
@@ -12,6 +13,7 @@ export type HomeStreamNowProps = {
 }
 
 export function HomeStreamNow({ livePerformers, onWatch, onSupport, hideWhenEmpty }: HomeStreamNowProps) {
+  const { t } = useLang()
   if (hideWhenEmpty && livePerformers.length === 0) return null
 
   return (
@@ -31,8 +33,8 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport, hideWhenEmpt
 
       {livePerformers.length === 0 ? (
         <div className="fe-stream-hero__empty">
-          <p className="fe-stream-hero__empty-t">現在ライブ配信中のパフォーマーはいません</p>
-          <p className="fe-stream-hero__empty-h">次の配信をお楽しみに — タイムテーブルもご確認ください</p>
+          <p className="fe-stream-hero__empty-t">{t('noLiveNow')}</p>
+          <p className="fe-stream-hero__empty-h">{t('comingSoonSchedule')}</p>
         </div>
       ) : (
         <ul className="fe-stream-hero__list">

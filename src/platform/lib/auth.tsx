@@ -19,7 +19,7 @@ type AuthState = {
   performer: Performer | null
   configured: boolean
   refreshProfile: () => Promise<void>
-  signUp: (email: string, password: string, role: 'fan' | 'performer', displayName: string) => Promise<string | null>
+  signUp: (email: string, password: string, role: 'fan' | 'performer' | 'organizer', displayName: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
   signOut: () => Promise<void>
 }
@@ -95,12 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = useCallback(async (email: string, password: string, role: UserRole, displayName: string) => {
     try {
       const sb = requireSupabase()
-      const { error } = await sb.auth.signUp({
+      const { data, error } = await sb.auth.signUp({
         email,
         password,
-        options: { data: { role, display_name: displayName } },
+        options: {
+          data: { role, display_name: displayName },
+          emailRedirectTo: `${window.location.origin}/live`,
+        },
       })
-      return error?.message ?? null
+      if (error) return error.message
+      if (!data.session) return 'check-email'
+      return null
     } catch (e) {
       return e instanceof Error ? e.message : 'Sign up failed'
     }

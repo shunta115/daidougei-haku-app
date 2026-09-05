@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
+import { PLATFORM_FEE_BPS, getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -52,7 +52,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', performerId)
     }
 
-    const fee = calcPlatformFee(amountYen)
+    const origin = getAppUrl(req)
+    const safeReturn = returnTo === 'live'
+    const successUrl = safeReturn
+      ? `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}&return=live&performerId=${encodeURIComponent(performerId)}`
+      : `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}`
+    const cancelUrl = safeReturn
+      ? `${origin}/live?tip=cancel&return=live&performerId=${encodeURIComponent(performerId)}`
+      : `${origin}/live?tip=cancel`
+
+    let feeBps = PLATFORM_FEE_BPS
+    try {
+      const { data: feeRow } = await sb.from('platform_settings').select('value').eq('key', 'tip_fee_bps').maybeSingle()
+      const n = Number(feeRow?.value)
+      if (Number.isFinite(n) && n >= 0 && n <= 5000) feeBps = Math.floor(n)
+    } catch {
+      /* keep default until migration is applied */
+    }
+    const fee = Math.floor((amountYen * feeBps) / 10000)
     const { data: tip, error: tipErr } = await sb
       .from('tips')
       .insert({
@@ -66,15 +83,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('id')
       .single()
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
-
-    const origin = getAppUrl(req)
-    const safeReturn = returnTo === 'live'
-    const successUrl = safeReturn
-      ? `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}&return=live&performerId=${encodeURIComponent(performerId)}`
-      : `${origin}/?tip=success&session_id={CHECKOUT_SESSION_ID}`
-    const cancelUrl = safeReturn
-      ? `${origin}/?tip=cancel&return=live&performerId=${encodeURIComponent(performerId)}`
-      : `${origin}/?tip=cancel`
 
     const session = await stripe.checkout.sessions.create(
       {

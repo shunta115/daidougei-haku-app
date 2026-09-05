@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import './festival.css'
 import { AdminDashboardScreen } from './components/AdminDashboardScreen'
 import { FestivalBackground } from './components/FestivalBackground'
@@ -18,13 +18,18 @@ import { TipsScreen } from './components/visitor/TipsScreen'
 import { VisitorBottomNav } from './components/visitor/VisitorBottomNav'
 import { VisitorFab, VisitorQuickSheet } from './components/visitor/VisitorQuickSheet'
 import { SPOTLIGHT_IDS, TODAYS_PICK_IDS, performerById } from './data'
-import { getPerformerById, getPerformers, liveStreamPerformers, approvedStreamers } from './lib/performerCatalog'
+import { getPerformerById, getPerformers, liveStreamPerformers } from './lib/performerCatalog'
+import { openLiveWatch, openPlatform, openTip } from '../app/routes'
+import { refreshLiveCatalog, subscribeLiveCatalog, getLiveCatalogVersion } from '../catalog/liveCatalog'
 import { seedStreamApplicationsIfEmpty } from './lib/streamApplicationsStorage'
 import { LiveStreamScreen } from './components/stream/LiveStreamScreen'
 import { StreamPerformerRegisterScreen } from './components/stream/StreamPerformerRegisterScreen'
 import { StreamPerformerRegisterCompleteScreen } from './components/stream/StreamPerformerRegisterCompleteScreen'
 import { getDemoNow } from './lib/demoClock'
-import { readFavorites, toggleFavorite } from './lib/favoritesStorage'
+import { readFavorites } from './lib/favoritesStorage'
+import { useAuth } from '../platform/lib/auth'
+import { isSupabaseConfigured } from '../platform/lib/supabase'
+import { syncOshiFromAccount, toggleOshiOrLogin } from './lib/oshiActions'
 import { bumpXp } from './lib/gamificationStorage'
 import {
   buildMarkedPulses,
@@ -32,23 +37,24 @@ import {
   hotVenueForDashboard,
   nextSlotForPerformerFromNow,
   slotsByPerformer,
+  upcomingStreamSlots,
 } from './lib/scheduleEngine'
 import { shareFestival } from './lib/share'
 import {
-  BETA_SUPPORT_MESSAGE,
   canAccessPerformerAreas,
   canAccessStaffAreas,
-  canProcessOnlineSupport,
   canWatchLiveStream,
   sanitizePersonaForProduction,
 } from './lib/productionGuard'
 import { enableDemoSeedData } from './config/runtimeConfig'
+import { useLang } from '../i18n/LangProvider'
 import { warnPublicDataIssuesInDev } from './data/public'
 import { readAppPersona, writeAppPersona } from './session/appPersona'
-import { BetaPrepNotice } from './components/shared/BetaPrepNotice'
 import type { AppPersona, Performer, PerformerFlow, VisitorTab } from './types'
 
 export function FestivalApp() {
+  const { lang } = useLang()
+  const { user } = useAuth()
   const [personaState, setPersonaState] = useState<AppPersona>(() => sanitizePersonaForProduction(readAppPersona()))
   const [visitorTab, setVisitorTab] = useState<VisitorTab>(() => 'home')
   const [performerFlow, setPerformerFlow] = useState<PerformerFlow>(() => 'hub')
@@ -64,14 +70,26 @@ export function FestivalApp() {
   const [registerBackToList, setRegisterBackToList] = useState(false)
   const [liveStreamId, setLiveStreamId] = useState<string | null>(null)
   const [streamOpenFocusTip, setStreamOpenFocusTip] = useState(false)
-  const [betaNotice, setBetaNotice] = useState<string | null>(null)
+  useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
   const performers = getPerformers()
   const persona = sanitizePersonaForProduction(personaState)
 
   useEffect(() => {
     warnPublicDataIssuesInDev()
     if (canAccessStaffAreas() && enableDemoSeedData) seedStreamApplicationsIfEmpty()
+    void refreshLiveCatalog()
+    const timer = window.setInterval(() => {
+      void refreshLiveCatalog()
+    }, 20000)
+    return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) return
+    void syncOshiFromAccount(user.id)
+      .then(() => setFavTick((n) => n + 1))
+      .catch(() => undefined)
+  }, [user])
 
   useEffect(() => {
     if (personaState !== persona) {
@@ -84,7 +102,8 @@ export function FestivalApp() {
   const liveArtist = live ? getPerformerById(live.performerId) : undefined
   const nextArtist = next ? getPerformerById(next.performerId) : undefined
   const liveStreamers = liveStreamPerformers()
-  const upcomingStreamers = approvedStreamers().filter((p) => !p.isLive)
+  const upcomingIds = new Set(upcomingStreamSlots().map((s) => s.performerId))
+  const upcomingStreamers = getPerformers().filter((p) => upcomingIds.has(p.id) && !p.isLive)
   const hotVenue = hotVenueForDashboard()
   const goVenueId = live?.venueId ?? next?.venueId ?? hotVenue.id
 
@@ -96,36 +115,17 @@ export function FestivalApp() {
     setDetailId(id)
   }, [])
 
-  const openLiveStream = useCallback((id: string, focusTip = false) => {
-    const p = getPerformerById(id)
-    if (!canWatchLiveStream(p)) return
-    setDetailId(null)
-    setStreamOpenFocusTip(focusTip)
-    setLiveStreamId(id)
-    window.history.replaceState(null, '', `#live-${id}`)
+  const handleWatchStream = useCallback((id: string) => {
+    openLiveWatch(id)
   }, [])
 
-  const handleWatchStream = useCallback(
-    (id: string) => {
-      openLiveStream(id, false)
-    },
-    [openLiveStream],
-  )
-
-  const handleSupportStream = useCallback(
-    (id: string) => {
-      if (!canProcessOnlineSupport()) {
-        setBetaNotice(BETA_SUPPORT_MESSAGE)
-        return
-      }
-      openLiveStream(id, true)
-    },
-    [openLiveStream],
-  )
+  const handleSupportStream = useCallback((id: string) => {
+    openTip(id)
+  }, [])
 
   const showBetaSupport = useCallback(() => {
-    setBetaNotice(BETA_SUPPORT_MESSAGE)
-  }, [])
+    openPlatform(user ? '' : '?auth=1')
+  }, [user])
 
   const closeLiveStream = useCallback(() => {
     setLiveStreamId(null)
@@ -185,23 +185,8 @@ export function FestivalApp() {
       const liveMatch = hash.match(/^#live-(.+)$/)
       const liveId = liveMatch?.[1]
       if (liveId) {
-        const p = getPerformerById(liveId)
-        if (!p || !canWatchLiveStream(p)) {
-          clearBadHash()
-          setLiveStreamId(null)
-          setStreamOpenFocusTip(false)
-          writeAppPersona('visitor')
-          setPersonaState('visitor')
-          setVisitorTab('home')
-          setDetailId(null)
-          return
-        }
-        writeAppPersona('visitor')
-        setPersonaState('visitor')
-        setVisitorTab('home')
-        setDetailId(null)
-        setStreamOpenFocusTip(false)
-        setLiveStreamId(liveId)
+        clearBadHash()
+        openLiveWatch(liveId)
         return
       }
 
@@ -267,9 +252,11 @@ export function FestivalApp() {
 
   const spotlight = SPOTLIGHT_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
   const todaysPicks = TODAYS_PICK_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
-  const primePicksForHome = [...spotlight, ...todaysPicks]
-    .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-    .slice(0, 4)
+  const fromCatalog = performers.filter((p) => p.approvalStatus === 'approved').slice(0, 4)
+  const primePicksForHome = (
+    [...spotlight, ...todaysPicks].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i).slice(0, 4)
+  )
+  const homePicks = primePicksForHome.length > 0 ? primePicksForHome : fromCatalog
 
   const detailPerformer = detailId ? getPerformerById(detailId) : undefined
   const liveStreamPerformer =
@@ -288,7 +275,7 @@ export function FestivalApp() {
             next={next}
             livePerformer={liveArtist}
             nextPerformer={nextArtist}
-            pickPerformers={primePicksForHome}
+            pickPerformers={homePicks}
             hotVenue={hotVenue}
             goVenueId={goVenueId}
             onWatchStream={handleWatchStream}
@@ -318,10 +305,11 @@ export function FestivalApp() {
             onWatchStream={handleWatchStream}
             onSupportStream={handleSupportStream}
             onToggleFavorite={(id) => {
-              const was = readFavorites().includes(id)
-              toggleFavorite(id)
-              if (!was) bumpXp(4)
-              bumpFav()
+              void toggleOshiOrLogin(user?.id, id).then((result) => {
+                if (result === 'login') return
+                if (result === 'on') bumpXp(4)
+                bumpFav()
+              })
             }}
           />
         )
@@ -473,7 +461,7 @@ export function FestivalApp() {
   const rootClass = `fe-root fe-root--${persona}${persona === 'visitor' && visitorTab === 'home' ? ' fe-root--visitor-home' : ''}`
 
   return (
-    <div className={rootClass} lang="ja">
+    <div className={rootClass} lang={lang}>
       <FestivalBackground />
 
       <div className="fe-shell">
@@ -481,9 +469,20 @@ export function FestivalApp() {
           <>
             <TopBar persona="visitor" onExitPerformerOrAdmin={goVisitorHome} visitorContext="Guest" />
             {renderVisitorBody()}
-            <VisitorBottomNav tab={visitorTab} onChange={setVisitorTab} />
+            <VisitorBottomNav
+              tab={visitorTab}
+              onChange={setVisitorTab}
+              onLive={() => openPlatform(user ? '?live=1' : '?auth=1&live=1')}
+              onAccount={() => openPlatform(user ? '' : '?auth=1')}
+            />
             <VisitorFab onOpen={() => setFabOpen(true)} />
-            <VisitorQuickSheet open={fabOpen} onClose={() => setFabOpen(false)} onTab={setVisitorTab} />
+            <VisitorQuickSheet
+              open={fabOpen}
+              onClose={() => setFabOpen(false)}
+              onTab={setVisitorTab}
+              onLive={() => openPlatform(user ? '?live=1' : '?auth=1&live=1')}
+              onAccount={() => openPlatform(user ? '' : '?auth=1')}
+            />
             {detailPerformer ? (
               <div className="fe-overlay">
                 <PerformerDetailScreen
@@ -491,10 +490,11 @@ export function FestivalApp() {
                   favorite={readFavorites().includes(detailPerformer.id)}
                   onClose={closeDetail}
                   onToggleFavorite={() => {
-                    const was = readFavorites().includes(detailPerformer.id)
-                    toggleFavorite(detailPerformer.id)
-                    if (!was) bumpXp(5)
-                    bumpFav()
+                    void toggleOshiOrLogin(user?.id, detailPerformer.id).then((result) => {
+                      if (result === 'login') return
+                      if (result === 'on') bumpXp(5)
+                      bumpFav()
+                    })
                   }}
                   onOpenTimetable={() => {
                     closeDetail()
@@ -522,7 +522,6 @@ export function FestivalApp() {
                 onBetaSupport={showBetaSupport}
               />
             ) : null}
-            {betaNotice ? <BetaPrepNotice message={betaNotice} onClose={() => setBetaNotice(null)} /> : null}
           </>
         ) : null}
 

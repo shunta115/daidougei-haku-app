@@ -77,6 +77,7 @@ export type ScheduleSlot = {
   status: ShowStatus
   noteJa?: string
   noteEn?: string
+  isStream?: boolean
   windowJa?: string
   windowEn?: string
 }
@@ -90,6 +91,8 @@ export type VenueArea = {
   gradient: string
   /** 将来: 混雑指標のプレースホルダー */
   crowd?: 'low' | 'mid' | 'high'
+  lat?: number
+  lng?: number
 }
 
 /** 配信パフォーマーの事務局審査 */

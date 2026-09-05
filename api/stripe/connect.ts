@@ -46,8 +46,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const origin = getAppUrl(req)
     const link = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${origin}/?stripe=refresh`,
-      return_url: `${origin}/?stripe=return`,
+      refresh_url: `${origin}/live?stripe=refresh`,
+      return_url: `${origin}/live?stripe=return`,
       type: 'account_onboarding',
     })
 

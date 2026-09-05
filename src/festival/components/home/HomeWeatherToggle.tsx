@@ -39,7 +39,7 @@ export function HomeWeatherToggle({ mode, onChange }: HomeWeatherToggleProps) {
         <p className="fe-h6-weather__note">
           {isDemoMode
             ? '屋外ステージは通常どおり。変更はリアルタイム反映（デモ）'
-            : '開催情報は準備が整い次第、ここに反映されます'}
+            : '屋外公演は通常どおり。変更があればタイムテーブルに反映します'}
         </p>
       )}
     </section>

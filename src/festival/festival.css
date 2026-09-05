@@ -29,12 +29,19 @@
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 .fe-shell {
   position: relative;
   z-index: 2;
-  max-width: 520px;
+  max-width: min(520px, 100%);
   margin: 0 auto;
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 18px 32px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-left, 0px)) 32px
+    max(12px, env(safe-area-inset-right, 0px));
 }
 
 .fe-main {
@@ -251,6 +258,13 @@
   overflow: hidden;
 }
 
+.fe-mark__logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .fe-mark__ring {
   width: 22px;
   height: 22px;
@@ -333,6 +347,81 @@
   line-height: 1.5;
 }
 
+.fe-public-prep a {
+  color: var(--neon, #2bffdd);
+}
+
+.fe-home-overview {
+  margin: 0 14px 16px;
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.fe-home-overview__k {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: rgba(43, 255, 221, 0.75);
+}
+
+.fe-home-overview__title {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+}
+
+.fe-home-overview__en {
+  margin: 4px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fe-home-overview__presenter {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(43, 255, 221, 0.8);
+}
+
+.fe-home-overview__dates,
+.fe-home-overview__place,
+.fe-home-overview__hours {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fe-home-overview__note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.fe-home-overview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.fe-home-overview__actions a.fe-h6-maprow__ghost {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fe-home-overview__official {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
 .fe-error-fallback {
   min-height: 100dvh;
   display: flex;
@@ -401,6 +490,31 @@
 .fe-staff-btn:focus-visible {
   outline: 2px solid var(--fe-gold);
   outline-offset: 2px;
+}
+
+.fe-lang,
+.pl-chip-row.fe-lang {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+.fe-lang__btn {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(43, 255, 221, 0.28);
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.25);
+}
+.fe-lang__btn[data-on='true'] {
+  color: #03120f;
+  background: #2bffdd;
+  border-color: #2bffdd;
 }
 
 .fe-live-pill {
@@ -2577,6 +2691,8 @@
   cursor: pointer;
   font: inherit;
   padding: 8px 2px;
+  min-height: 48px;
+  min-width: 44px;
   border-radius: 14px;
   display: flex;
   flex-direction: column;
@@ -3525,8 +3641,8 @@
 
 .fe-detail {
   min-height: 100%;
-  padding-bottom: 96px;
-  max-width: 520px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  max-width: min(520px, 100%);
   margin: 0 auto;
   background: linear-gradient(180deg, rgba(8, 9, 12, 0.2), #050506 18%);
 }
@@ -4593,13 +4709,13 @@
   z-index: 1;
   width: 100%;
   max-width: 520px;
-  max-height: 72vh;
+  max-height: min(72vh, calc(100dvh - 88px - env(safe-area-inset-bottom, 0px)));
   overflow: auto;
   border-radius: 22px 22px 0 0;
   border: 1px solid var(--fe-border);
   border-bottom: none;
   background: rgba(8, 9, 12, 0.96);
-  padding: 16px 16px 28px;
+  padding: 16px 16px calc(28px + env(safe-area-inset-bottom, 0px));
   animation: fe-sheet-up 0.35s cubic-bezier(0.2, 0.85, 0.2, 1) both;
 }
 
@@ -6160,6 +6276,7 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--fe-text);
   cursor: pointer;
+  text-decoration: none;
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
@@ -9067,6 +9184,11 @@
   font-size: 14px;
   cursor: pointer;
   border: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .fe-h6-maprow__primary {

@@ -23,6 +23,10 @@ export function readFavorites(): string[] {
   return readIds()
 }
 
+export function writeFavorites(ids: string[]) {
+  writeIds([...new Set(ids.filter((id) => typeof id === 'string' && id))])
+}
+
 export function isFavorite(performerId: string) {
   return readIds().includes(performerId)
 }

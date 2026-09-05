@@ -1,10 +1,18 @@
 import type { Performer, ProgramPulse, ScheduleSlot, VenueArea } from '../types'
-import { SCHEDULE_SLOTS, VENUE_AREAS } from '../data/scheduleData'
+import { getCatalogEventDates, getCatalogSlots, getCatalogVenues } from '../../catalog/liveCatalog'
 import { formatTokyoDate, getDemoNow, tokyoWallDate } from './demoClock'
 import { PREP_VENUE } from '../services/festivalRepository'
 
+function venues(): VenueArea[] {
+  return getCatalogVenues()
+}
+
+function slots(): ScheduleSlot[] {
+  return getCatalogSlots()
+}
+
 export function venueById(id: string): VenueArea | undefined {
-  return VENUE_AREAS.find((v) => v.id === id)
+  return venues().find((v) => v.id === id)
 }
 
 export function slotToPulse(slot: ScheduleSlot, performers: Performer[]): ProgramPulse | null {
@@ -29,8 +37,8 @@ export function buildMarkedPulses(performers: Performer[]): {
   live: ProgramPulse | null
   next: ProgramPulse | null
 } {
-  const liveSlot = SCHEDULE_SLOTS.find((s) => s.status === 'live')
-  const nextSlot = SCHEDULE_SLOTS.find((s) => s.status === 'next')
+  const liveSlot = slots().find((s) => s.status === 'live')
+  const nextSlot = slots().find((s) => s.status === 'next')
   return {
     live: liveSlot ? slotToPulse(liveSlot, performers) : null,
     next: nextSlot ? slotToPulse(nextSlot, performers) : null,
@@ -38,7 +46,7 @@ export function buildMarkedPulses(performers: Performer[]): {
 }
 
 export function slotsSorted(): ScheduleSlot[] {
-  return [...SCHEDULE_SLOTS].sort((a, b) => {
+  return [...slots()].sort((a, b) => {
     const da = a.date.localeCompare(b.date)
     if (da !== 0) return da
     return a.start.localeCompare(b.start)
@@ -67,11 +75,13 @@ export function slotsByPerformer(performerId: string) {
 }
 
 export function uniqueScheduleDates() {
-  return Array.from(new Set(SCHEDULE_SLOTS.map((s) => s.date))).sort()
+  const fromSlots = Array.from(new Set(slots().map((s) => s.date))).sort()
+  if (fromSlots.length > 0) return fromSlots
+  return getCatalogEventDates()
 }
 
 export function nextHighlightSlotId(): string | null {
-  const n = SCHEDULE_SLOTS.find((s) => s.status === 'next')
+  const n = slots().find((s) => s.status === 'next')
   return n?.id ?? null
 }
 
@@ -115,7 +125,7 @@ export function statusLabelEn(status: ScheduleSlot['status']) {
 
 export function liveSlotIdsForVenue(venueId: string): Set<string> {
   const ids = new Set<string>()
-  for (const s of SCHEDULE_SLOTS) {
+  for (const s of slots()) {
     if (s.venueId === venueId && s.status === 'live') ids.add(s.id)
   }
   return ids
@@ -124,18 +134,18 @@ export function liveSlotIdsForVenue(venueId: string): Set<string> {
 /** エリア別「次演目」スロット（ステータス next のみ） */
 export function nextSlotIdsForVenue(venueId: string): Set<string> {
   const ids = new Set<string>()
-  for (const s of SCHEDULE_SLOTS) {
+  for (const s of slots()) {
     if (s.venueId === venueId && s.status === 'next') ids.add(s.id)
   }
   return ids
 }
 
 export function currentLiveSlot(): ScheduleSlot | undefined {
-  return SCHEDULE_SLOTS.find((s) => s.status === 'live')
+  return slots().find((s) => s.status === 'live')
 }
 
 export function currentNextSlot(): ScheduleSlot | undefined {
-  return SCHEDULE_SLOTS.find((s) => s.status === 'next')
+  return slots().find((s) => s.status === 'next')
 }
 
 export function slotAsDate(slot: ScheduleSlot): Date {
@@ -245,13 +255,25 @@ export function demoTodayDateString(): string {
   return formatTokyoDate(getDemoNow())
 }
 
+/** Stream timetable rows that have not ended yet (admin-marked is_stream). */
+export function upcomingStreamSlots(now = getDemoNow()): ScheduleSlot[] {
+  const today = formatTokyoDate(now)
+  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return slotsSorted().filter((s) => {
+    if (!s.isStream || s.status === 'cancelled') return false
+    if (s.date > today) return true
+    if (s.date < today) return false
+    return s.end >= hm
+  })
+}
+
 /** ダッシュボード用：LIVE 会場 → NEXT 会場 → 混雑が高いエリア */
 export function hotVenueForDashboard(): VenueArea {
   const live = currentLiveSlot()
-  if (live) return venueById(live.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
+  if (live) return venueById(live.venueId) ?? venues()[0] ?? PREP_VENUE
   const next = currentNextSlot()
-  if (next) return venueById(next.venueId) ?? VENUE_AREAS[0] ?? PREP_VENUE
-  return VENUE_AREAS.find((v) => v.crowd === 'high') ?? VENUE_AREAS[0] ?? PREP_VENUE
+  if (next) return venueById(next.venueId) ?? venues()[0] ?? PREP_VENUE
+  return venues().find((v) => v.crowd === 'high') ?? venues()[0] ?? PREP_VENUE
 }
 
 export function topHeatPerformerId(performers: Performer[]): string | undefined {

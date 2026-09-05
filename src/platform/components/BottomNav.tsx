@@ -1,31 +1,46 @@
+import { spaGo, FESTIVAL_PATH } from '../../app/routes'
+import { useLang } from '../../i18n/LangProvider'
+
 type BottomNavProps = {
-  role: 'fan' | 'performer' | 'admin'
+  role: 'fan' | 'performer' | 'organizer' | 'admin'
   active: string
   onNavigate: (key: string) => void
 }
 
 export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
+  const { t } = useLang()
   const items =
     role === 'admin'
       ? [
-          { key: 'admin', label: 'Dashboard' },
+          { key: 'event-home', label: t('eventHome'), href: FESTIVAL_PATH },
+          { key: 'admin', label: 'Today' },
+          { key: 'admin-event', label: 'Event' },
           { key: 'admin-users', label: 'Users' },
-          { key: 'search', label: 'Search' },
+          { key: 'admin-ops', label: 'AI' },
         ]
       : role === 'performer'
         ? [
-            { key: 'performer-home', label: 'Home' },
-            { key: 'live-list', label: 'LIVE' },
-            { key: 'performer-live', label: '配信' },
-            { key: 'notifications', label: 'Alerts' },
+            { key: 'event-home', label: t('eventHome'), href: FESTIVAL_PATH },
+            { key: 'performer-home', label: t('home') },
+            { key: 'live-list', label: t('live') },
+            { key: 'performer-live', label: t('goLive') },
+            { key: 'notifications', label: t('notifications') },
           ]
-        : [
-            { key: 'fan-home', label: 'Home' },
-            { key: 'live-list', label: 'LIVE' },
-            { key: 'search', label: 'Search' },
-            { key: 'notifications', label: 'Alerts' },
-            { key: 'profile', label: 'You' },
-          ]
+        : role === 'organizer'
+          ? [
+              { key: 'event-home', label: t('eventHome'), href: FESTIVAL_PATH },
+              { key: 'organizer-home', label: 'Desk' },
+              { key: 'search', label: t('search') },
+              { key: 'notifications', label: t('notifications') },
+            ]
+          : [
+              { key: 'event-home', label: t('eventHome'), href: FESTIVAL_PATH },
+              { key: 'fan-home', label: t('home') },
+              { key: 'live-list', label: t('live') },
+              { key: 'search', label: t('search') },
+              { key: 'notifications', label: t('notifications') },
+              { key: 'profile', label: t('profile') },
+            ]
 
   return (
     <nav className="pl-nav" aria-label="Main">
@@ -36,7 +51,13 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
             type="button"
             className="pl-nav__btn"
             data-active={active === item.key}
-            onClick={() => onNavigate(item.key)}
+            onClick={() => {
+              if ('href' in item && item.href) {
+                spaGo(item.href)
+                return
+              }
+              onNavigate(item.key)
+            }}
           >
             {item.label}
           </button>
