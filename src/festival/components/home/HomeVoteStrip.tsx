@@ -19,20 +19,18 @@ export function HomeVoteStrip() {
       .catch(() => setRows([]))
   }, [])
 
+  if (rows.length === 0) return null
+
   return (
     <section className="fe-home-overview" aria-label={t('votes')}>
       <p className="fe-home-overview__k">{t('votes')}</p>
-      {rows.length === 0 ? (
-        <p className="fe-home-overview__note">{t('noVotesYet')}</p>
-      ) : (
-        <ol className="fe-home-overview__note" style={{ margin: 0, paddingLeft: 20 }}>
-          {rows.slice(0, 5).map((r) => (
-            <li key={r.name}>
-              {r.name} · {r.votes}
-            </li>
-          ))}
-        </ol>
-      )}
+      <ol className="fe-home-overview__note" style={{ margin: 0, paddingLeft: 20 }}>
+        {rows.slice(0, 5).map((r) => (
+          <li key={r.name}>
+            {r.name} · {r.votes}
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }

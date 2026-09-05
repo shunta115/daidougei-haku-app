@@ -329,7 +329,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           </button>
           <button
             type="button"
-            className="pl-btn"
+            className="pl-btn pl-btn--tip"
             onClick={() => {
               if (!user) {
                 spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)

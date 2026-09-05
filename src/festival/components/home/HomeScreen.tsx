@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import type { Performer, ProgramPulse, VenueArea } from '../../types'
 import type { TimetableScheduleMode } from '../../lib/timetableConstants'
 import { isPublicMode } from '../../config/runtimeConfig'
+import { getCatalogSlots, getLiveCatalogVersion, subscribeLiveCatalog } from '../../../catalog/liveCatalog'
 import { EventStripHeader } from './EventStripHeader'
 import { HomeEventOverview } from './HomeEventOverview'
 import { HomeCrowdStrip } from './HomeCrowdStrip'
@@ -74,18 +75,21 @@ export function HomeScreen({
   const [scheduleMode, setScheduleMode] = useState<TimetableScheduleMode>('normal')
   const { t } = useLang()
   useTrackView('view_home')
+  useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
   const rain = scheduleMode === 'rain'
   const hasVenuePulse = Boolean(live || next)
+  const hasSchedule = getCatalogSlots().length > 0
   const hasAnyContent = hasVenuePulse || liveStreamers.length > 0 || pickPerformers.length > 0
   const showStreamBlock = liveStreamers.length > 0
   const showUpcoming = upcomingStreamers.length > 0
+  const showVenueBlock = hasVenuePulse || hasSchedule
 
   return (
     <main className={`fe-main fe-main--home fe-main--h6 fe-main--stream-home${rain ? ' fe-main--h6-rain' : ''}`}>
       {/* 1. 開催状況 */}
       <EventStripHeader onShare={onShare} hasActiveLiveShow={liveStreamers.length > 0 || Boolean(live)} />
       <HomeEventOverview onOpenTimetable={onOpenTimetable} onOpenPerformers={onOpenPerformers} />
-      <HomeWeatherToggle mode={scheduleMode} onChange={setScheduleMode} />
+      {hasSchedule ? <HomeWeatherToggle mode={scheduleMode} onChange={setScheduleMode} /> : null}
 
       {!hasAnyContent ? (
         <p className="fe-public-prep" role="status">
@@ -93,27 +97,29 @@ export function HomeScreen({
         </p>
       ) : null}
 
-      {/* 2–3. 次の公演 / 現在開催中（会場スケジュール） */}
-      <section className="fe-home-venue-block" aria-labelledby="fe-home-venue-title">
-        <h2 id="fe-home-venue-title" className="fe-home-venue-block__title">
-          {t('venueNow')}
-        </h2>
-        <p className="fe-home-venue-block__sub">
-          {isPublicMode && !hasVenuePulse
-            ? t('comingSoonSchedule')
-            : 'フェス現地のライブ · スケジュール · 混雑'}
-        </p>
-        <HomeLiveMega
-          live={live}
-          next={next}
-          livePerformer={livePerformer}
-          nextPerformer={nextPerformer}
-          onOpenDetail={onOpenDetail}
-          onOpenMap={onNearShows}
-        />
-        {/* 4. 今日の公演 */}
-        <HomeScheduleRail scheduleMode={scheduleMode} onOpenDetail={onOpenDetail} onOpenTimetable={onOpenTimetable} />
-      </section>
+      {showVenueBlock ? (
+        <section className="fe-home-venue-block" aria-labelledby="fe-home-venue-title">
+          <h2 id="fe-home-venue-title" className="fe-home-venue-block__title">
+            {t('venueNow')}
+          </h2>
+          <p className="fe-home-venue-block__sub">
+            {isPublicMode && !hasVenuePulse
+              ? t('comingSoonSchedule')
+              : 'フェス現地のライブ · スケジュール · 混雑'}
+          </p>
+          <HomeLiveMega
+            live={live}
+            next={next}
+            livePerformer={livePerformer}
+            nextPerformer={nextPerformer}
+            onOpenDetail={onOpenDetail}
+            onOpenMap={onNearShows}
+          />
+          {hasSchedule ? (
+            <HomeScheduleRail scheduleMode={scheduleMode} onOpenDetail={onOpenDetail} onOpenTimetable={onOpenTimetable} />
+          ) : null}
+        </section>
+      ) : null}
 
       {/* 配信LIVEは会場LIVEと重複しやすいため、実データがあるときのみ */}
       {showStreamBlock ? (

@@ -1,8 +1,7 @@
-import { spaGo, PLATFORM_PATH } from '../../../app/routes'
 import type { Performer } from '../../types'
 import { initials } from '../../lib/initials'
 import { bumpXp } from '../../lib/gamificationStorage'
-import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { canWatchLiveStream } from '../../lib/productionGuard'
 import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 
 type TipsScreenProps = {
@@ -32,13 +31,13 @@ export function TipsScreen({
   })
 
   const handleSupport = (id: string) => {
-    if (!canProcessOnlineSupport()) {
-      onBetaSupport?.()
+    if (onSupportStream) {
+      bumpXp(6)
+      onXpBump()
+      onSupportStream(id)
       return
     }
-    bumpXp(6)
-    onXpBump()
-    onSupportStream?.(id)
+    onBetaSupport?.()
   }
 
   return (
@@ -49,19 +48,9 @@ export function TipsScreen({
         </p>
         <h1 className="fe-page-head__title">応援 &amp; WEB投げ銭</h1>
         <p className="fe-page-head__lead">
-          {canProcessOnlineSupport()
-            ? 'お支払いは外部の安全なページで完結。アプリ内課金はありません。合計金額も表示しません。'
-            : 'ライブ配信と投げ銭はログインして利用できます。'}
+          ライブ配信と投げ銭はここから。お支払いは外部の安全なページで完結します。
         </p>
       </header>
-
-      {!canProcessOnlineSupport() ? (
-        <p className="fe-public-prep" role="status">
-          <button type="button" className="fe-h6-maprow__primary" onClick={() => spaGo(PLATFORM_PATH)}>
-            配信・投げ銭を開く
-          </button>
-        </p>
-      ) : null}
 
       {ordered.length === 0 ? (
         <p className="fe-public-prep" role="status">

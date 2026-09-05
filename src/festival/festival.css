@@ -351,12 +351,41 @@ body {
   color: var(--neon, #2bffdd);
 }
 
-.fe-home-overview {
-  margin: 0 14px 16px;
-  padding: 16px 16px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+.fe-home-overview--hero {
+  position: relative;
+  overflow: hidden;
+  margin: 0 12px 18px;
+  padding: 22px 18px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(43, 255, 221, 0.18);
+  background:
+    radial-gradient(120% 80% at 12% 0%, rgba(43, 255, 221, 0.16), transparent 55%),
+    linear-gradient(165deg, rgba(8, 16, 22, 0.92), rgba(4, 8, 12, 0.98));
+}
+
+.fe-home-overview--hero .fe-home-overview__title {
+  font-size: clamp(1.7rem, 7vw, 2.15rem);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.fe-home-overview--hero .fe-home-overview__dates {
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.fe-h6-maprow__primary,
+.fe-h6-maprow__ghost,
+.fe-btn,
+.fe-detail__qbtn {
+  transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+}
+
+.fe-h6-maprow__primary:active,
+.fe-h6-maprow__ghost:active,
+.fe-btn:active,
+.fe-detail__qbtn:active {
+  transform: scale(0.98);
 }
 
 .fe-home-overview__k {
@@ -5607,6 +5636,23 @@ body {
   min-height: 120px;
   overflow: hidden;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fe-mapgrid__cell:active {
+  transform: scale(0.98);
+}
+
+.fe-mapgrid__cell--live {
+  box-shadow: 0 0 0 1px rgba(255, 78, 205, 0.55), 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.fe-mapgrid__cell--live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 85% 18%, rgba(255, 78, 205, 0.35), transparent 42%);
 }
 
 .fe-mapgrid__name {

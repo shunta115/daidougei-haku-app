@@ -4,6 +4,7 @@ import { AppErrorBoundary } from './festival/components/shared/AppErrorBoundary'
 import { FestivalApp } from './festival/FestivalApp'
 import { LangProvider } from './i18n/LangProvider'
 import { PlatformApp } from './platform/PlatformApp'
+import './platform/platform.css'
 import { AuthProvider } from './platform/lib/auth'
 
 function isKnownPath(pathname: string) {
@@ -12,16 +13,18 @@ function isKnownPath(pathname: string) {
 
 function NotFoundScreen() {
   return (
-    <div className="pl-app" style={{ minHeight: '100dvh', padding: 24 }}>
-      <p className="pl-brand">大道芸博</p>
-      <h1>ページが見つかりません</h1>
-      <p>このURLには画面がありません。</p>
-      <button type="button" onClick={() => spaGo(FESTIVAL_PATH)}>
-        開催情報へ
-      </button>
-      <button type="button" onClick={() => spaGo(PLATFORM_PATH)}>
-        LIVE・ログインへ
-      </button>
+    <div className="pl-app" style={{ minHeight: '100dvh' }}>
+      <div className="pl-shell">
+        <p className="pl-brand">大道芸博</p>
+        <h1 className="pl-h1">ページが見つかりません</h1>
+        <p className="pl-muted">このURLには画面がありません。</p>
+        <button type="button" className="pl-btn pl-btn--block" onClick={() => spaGo(FESTIVAL_PATH)}>
+          開催情報へ
+        </button>
+        <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => spaGo(PLATFORM_PATH)}>
+          LIVE・ログインへ
+        </button>
+      </div>
     </div>
   )
 }

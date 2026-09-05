@@ -41,7 +41,7 @@ export function HomeEventOverview({ onOpenTimetable, onOpenPerformers }: HomeEve
   const official = meta.officialUrl.trim()
 
   return (
-    <section className="fe-home-overview" aria-labelledby="fe-home-overview-title">
+    <section className="fe-home-overview fe-home-overview--hero" aria-labelledby="fe-home-overview-title">
       <p className="fe-home-overview__k" lang="en">
         {t('nextEvent')}
       </p>
@@ -57,16 +57,16 @@ export function HomeEventOverview({ onOpenTimetable, onOpenPerformers }: HomeEve
       {hours ? <p className="fe-home-overview__hours">{hours}</p> : null}
       <p className="fe-home-overview__note">{meta.weatherNote}</p>
       <div className="fe-home-overview__actions">
-        <button type="button" className="fe-h6-maprow__primary" onClick={onOpenTimetable}>
-          {t('timetableTitle')}
+        <button type="button" className="fe-h6-maprow__primary" onClick={() => (user ? spaGo(PLATFORM_PATH) : openPlatform('?auth=1'))}>
+          {t('live')} · {t('tip')}
         </button>
         {onOpenPerformers ? (
           <button type="button" className="fe-h6-maprow__ghost" onClick={onOpenPerformers}>
             {t('findActs')}
           </button>
         ) : null}
-        <button type="button" className="fe-h6-maprow__ghost" onClick={() => (user ? spaGo(PLATFORM_PATH) : openPlatform('?auth=1'))}>
-          {t('live')} · {t('tip')}
+        <button type="button" className="fe-h6-maprow__ghost" onClick={onOpenTimetable}>
+          {t('timetableTitle')}
         </button>
       </div>
       {official ? (

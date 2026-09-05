@@ -102,7 +102,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
       </div>
 
       {error ? <p className="pl-error">{error}</p> : null}
-      {loading ? <p className="pl-muted">Loading…</p> : null}
+      {loading ? <p className="pl-muted">{t('processing')}</p> : null}
 
       {!loading && tab === 'list' ? (
         <>
@@ -114,7 +114,18 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
               key={p.id}
               type="button"
               className="pl-card pl-row pl-live-row"
-              style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                cursor: 'pointer',
+                ...(p.photo_url
+                  ? {
+                      backgroundImage: `linear-gradient(90deg, rgba(5,8,10,0.92) 32%, rgba(5,8,10,0.55)), url(${p.photo_url})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
+                  : {}),
+              }}
               onClick={() => onWatchLive(p.id)}
             >
               <Avatar url={p.photo_url} name={p.stage_name} />

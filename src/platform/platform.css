@@ -233,6 +233,7 @@ a { color: var(--neon); }
   transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 .pl-btn:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(43, 255, 221, 0.4); }
+.pl-btn:active { transform: scale(0.98); }
 .pl-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 .pl-btn--ghost {
   background: rgba(255, 255, 255, 0.04);
@@ -406,8 +407,9 @@ a { color: var(--neon); }
   padding: 0 14px;
   cursor: pointer;
   backdrop-filter: blur(10px);
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
+.pl-chip:active { transform: scale(0.97); }
 .pl-chip[data-on='true'] {
   background: var(--neon-dim);
   color: var(--neon);
@@ -447,8 +449,8 @@ a { color: var(--neon); }
 }
 
 .pl-live-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 12px 0 16px;
 }
@@ -459,8 +461,10 @@ a { color: var(--neon); }
   color: var(--muted);
   border-radius: 14px;
   min-height: 42px;
+  padding: 0 12px;
   font-weight: 700;
   cursor: pointer;
+  flex: 1 1 88px;
 }
 .pl-live-tabs__btn[data-active='true'] {
   color: var(--neon);
@@ -495,6 +499,42 @@ a { color: var(--neon); }
   box-shadow: 0 0 14px rgba(43, 255, 221, 0.2);
 }
 
+.pl-btn--tip {
+  background: linear-gradient(135deg, #2bffdd, #7cf0ff);
+  color: #041014;
+  box-shadow: 0 0 22px rgba(43, 255, 221, 0.28);
+}
+
+.pl-tip-hero {
+  height: 140px;
+  border-radius: 18px;
+  margin: 8px 0 14px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pl-tip-flash {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 700;
+}
+
+.pl-tip-flash--ok {
+  border-color: rgba(43, 255, 221, 0.4);
+  background: rgba(43, 255, 221, 0.12);
+  color: #2bffdd;
+  animation: pl-tip-pop 0.28s ease;
+}
+
+@keyframes pl-tip-pop {
+  from { transform: scale(0.96); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 code {
   color: var(--neon);
   font-size: 0.92em;
@@ -505,7 +545,8 @@ code {
   .pl-bg__orb,
   .pl-bg__grid,
   .pl-btn--live,
-  .pl-live-badge::before {
+  .pl-live-badge::before,
+  .pl-tip-flash--ok {
     animation: none !important;
   }
 }

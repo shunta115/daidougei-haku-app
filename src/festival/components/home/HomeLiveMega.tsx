@@ -54,6 +54,9 @@ export function HomeLiveMega({ live, next, livePerformer, nextPerformer, onOpenD
   const nextStart = nextSlot ? slotAsDate(nextSlot) : null
   const liveOn = liveSlot ? derivedAudienceTimeStatus(liveSlot, now) === 'live_now' : false
   const hasLive = Boolean(live && livePerformer && liveSlot && liveEnd && liveOn)
+  const hasNext = Boolean(next && nextPerformer && nextStart)
+
+  if (!hasLive && !hasNext) return null
 
   return (
     <section className={`fe-h6-live${hasLive ? ' fe-h6-live--on' : ''}`} aria-label="ライブ配信中">

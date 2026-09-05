@@ -60,6 +60,12 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
         {t('back')}
       </button>
+      {p?.photo_url ? (
+        <div
+          className="pl-tip-hero"
+          style={{ backgroundImage: `linear-gradient(180deg, rgba(5,5,8,0.15), rgba(5,5,8,0.92)), url(${p.photo_url})` }}
+        />
+      ) : null}
       <h1 className="pl-h1">
         {t('tipHeading')} {p?.stage_name ?? ''}
       </h1>
@@ -107,7 +113,6 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
         </button>
       ) : null}
       {error ? <p className="pl-error">{error}</p> : null}
-      <p className="pl-muted">{t('tipSecure')}</p>
     </>
   )
 }

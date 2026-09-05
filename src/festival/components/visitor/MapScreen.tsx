@@ -155,7 +155,7 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
               <button
                 key={v.id}
                 type="button"
-                className="fe-mapgrid__cell"
+                className={`fe-mapgrid__cell${liveHere ? ' fe-mapgrid__cell--live' : ''}${nextHere ? ' fe-mapgrid__cell--next' : ''}`}
                 style={{ gridRow: pos.row, gridColumn: pos.col, background: v.gradient }}
                 onClick={() => setUserVenueId(v.id)}
               >

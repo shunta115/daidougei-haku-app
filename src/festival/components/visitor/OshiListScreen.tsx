@@ -4,7 +4,7 @@ import { initials } from '../../lib/initials'
 import { readFavorites } from '../../lib/favoritesStorage'
 import { getDemoNow } from '../../lib/demoClock'
 import { demoTodayDateString, nextSlotForPerformerFromNow, slotEndAsDate, todaySlotsForPerformer } from '../../lib/scheduleEngine'
-import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productionGuard'
+import { canWatchLiveStream } from '../../lib/productionGuard'
 import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 import { useAuth } from '../../../platform/lib/auth'
 import { isSupabaseConfigured } from '../../../platform/lib/supabase'
@@ -225,11 +225,7 @@ export function OshiListScreen({
         <h2 id="fe-oshi-tip-h" className="fe-lib-h">
           WEB完結投げ銭
         </h2>
-        <p className="fe-lib-tip">
-          {canProcessOnlineSupport()
-            ? '外部決済へ自然に誘導します。合計金額は表示しません。'
-            : '投げ銭はログイン後に使えます。LIVE からアカウントを開いてください。'}
-        </p>
+        <p className="fe-lib-tip">投げ銭はログイン後、LIVEから安全な決済ページで完了します。</p>
         {saved.length === 0 ? (
           <p className="fe-lib-empty">推しを追加するとリンクが並びます。</p>
         ) : (
@@ -247,11 +243,11 @@ export function OshiListScreen({
                       type="button"
                       className="fe-btn fe-btn--glass fe-btn--compact"
                       onClick={() => {
-                        if (!canProcessOnlineSupport()) {
-                          onBetaSupport?.()
+                        if (onSupportStream) {
+                          onSupportStream(p.id)
                           return
                         }
-                        onSupportStream?.(p.id)
+                        onBetaSupport?.()
                       }}
                     >
                       WEB投げ銭

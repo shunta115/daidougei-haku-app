@@ -429,8 +429,8 @@ function PlatformShell() {
           </div>
         ) : null}
         {tipFlash ? (
-          <div className="pl-card" style={{ marginBottom: 12 }}>
-            <div className="pl-muted">{tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' ? t(tipFlash) : tipFlash}</div>
+          <div className={`pl-tip-flash${tipFlash === 'tipSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
+            {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' ? t(tipFlash) : tipFlash}
           </div>
         ) : null}
         {body}

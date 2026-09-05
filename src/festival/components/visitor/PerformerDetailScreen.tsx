@@ -251,9 +251,7 @@ export function PerformerDetailScreen({
             WEB完結投げ銭
           </h2>
           <p className="fe-detail-lead">
-            {canProcessOnlineSupport()
-              ? 'お支払いは外部の安全な決済ページへ。アプリ内課金はありません。合計金額の表示もしません。'
-              : '投げ銭はログイン後に使えます。アカウント画面から続けてください。'}
+            投げ銭はログイン後、安全な決済ページで完了します。アプリ内課金はありません。
           </p>
           {streamReady && onSupportStream ? (
             <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={() => onSupportStream(p.id)}>
@@ -264,17 +262,17 @@ export function PerformerDetailScreen({
               type="button"
               className="fe-btn fe-btn--primary fe-btn--block"
               onClick={() => {
-                if (!canProcessOnlineSupport()) {
-                  onBetaSupport?.()
+                if (onSupportStream) {
+                  onSupportStream(p.id)
                   return
                 }
-                onSupportStream?.(p.id)
+                onBetaSupport?.()
               }}
             >
               WEBで応援する
             </button>
           )}
-          {canProcessOnlineSupport() && (p.supportUrl || tips[0]?.url) ? (
+          {(p.supportUrl || tips[0]?.url) && canProcessOnlineSupport() ? (
             <div className="fe-tip-grid" style={{ marginTop: streamReady ? 10 : 0 }}>
               <a
                 className="fe-btn fe-btn--glass fe-btn--block fe-btn--support-primary"
