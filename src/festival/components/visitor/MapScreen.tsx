@@ -99,14 +99,6 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
       ? `https://www.openstreetmap.org/?mlat=${openVenue.lat}&mlon=${openVenue.lng}#map=17/${openVenue.lat}/${openVenue.lng}`
       : null
 
-  const nearbySorted = useMemo(() => {
-    const withLoc = nearbyLive.filter((p) => p.share_location && p.lat != null && p.lng != null)
-    if (!here) return withLoc
-    return [...withLoc].sort(
-      (a, b) => haversineKm(here.lat, here.lng, a.lat as number, a.lng as number) - haversineKm(here.lat, here.lng, b.lat as number, b.lng as number),
-    )
-  }, [nearbyLive, here])
-
   const closeSheet = () => {
     setUserVenueId(null)
     setStickyOpenId(null)
@@ -115,27 +107,34 @@ export function MapScreen({ focusVenueId, onConsumedFocus }: MapScreenProps) {
   return (
     <main className="fe-main fe-main--sub fe-main--mapapp">
       <header className="fe-page-head fe-page-head--tight">
-        <p className="fe-page-head__eyebrow">Venue</p>
-        <h1 className="fe-page-head__title">{t('mapTitle')}</h1>
-        <p className="fe-page-head__lead">
-          {venues.length > 0 ? t('mapLead') : t('comingSoonVenue')}
+        <p className="fe-page-head__eyebrow" lang="en">
+          NOW
         </p>
-        <p className="fe-page-head__lead">{t('geoHint')}</p>
+        <h1 className="fe-page-head__title">{t('mapTitle')}</h1>
+        <p className="fe-page-head__lead">{t('mapLead')}</p>
       </header>
 
-      {nearbySorted.length > 0 ? (
-        <section className="fe-home-overview" style={{ marginBottom: 16 }}>
-          <p className="fe-home-overview__k">{t('nearby')} LIVE</p>
-          {nearbySorted.slice(0, 6).map((p) => (
+      {nearbyLive.length > 0 ? (
+        <section className="fe-map-now" aria-label="LIVE">
+          <p className="fe-map-now__k" lang="en">
+            LIVE
+          </p>
+          {nearbyLive.slice(0, 6).map((p) => (
             <button
               key={p.id}
               type="button"
-              className="fe-h6-maprow__primary"
-              style={{ display: 'block', width: '100%', marginBottom: 8 }}
+              className="fe-map-now__row"
               onClick={() => openLiveWatch(p.id)}
             >
-              {p.stage_name}
-              {here && p.lat != null && p.lng != null ? ` · ${haversineKm(here.lat, here.lng, p.lat, p.lng).toFixed(1)}km` : ''}
+              <span
+                className={`fe-map-now__photo${p.photo_url ? ' fe-map-now__photo--img' : ''}`}
+                style={p.photo_url ? { backgroundImage: `url(${p.photo_url})` } : undefined}
+              />
+              <span className="fe-map-now__body">
+                <span className="fe-map-now__live">LIVE</span>
+                <span className="fe-map-now__name">{p.stage_name}</span>
+                <span className="fe-map-now__meta">{p.live_title || p.genre || p.city}</span>
+              </span>
             </button>
           ))}
         </section>

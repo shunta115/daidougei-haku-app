@@ -1,5 +1,5 @@
 import { openPlatform } from '../../app/routes'
-import { addOshi, isOshi, listOshiPerformers, removeOshi } from '../../platform/lib/api'
+import { addOshi, follow, isOshi, listOshiPerformers, removeOshi } from '../../platform/lib/api'
 import { isSupabaseConfigured } from '../../platform/lib/supabase'
 import { readFavorites, writeFavorites } from './favoritesStorage'
 
@@ -28,6 +28,7 @@ export async function toggleOshiOrLogin(
     return 'off'
   }
   await addOshi(userId, performerId)
+  await follow(userId, performerId).catch(() => undefined)
   writeFavorites([...readFavorites(), performerId])
   return 'on'
 }

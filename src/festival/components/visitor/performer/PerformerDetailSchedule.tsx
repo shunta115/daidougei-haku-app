@@ -25,6 +25,22 @@ export function PerformerDetailSchedule({
   const finished = allSlots.filter((s) => isFinished(s, now))
   const cancelled = allSlots.filter((s) => s.status === 'cancelled' || s.status === 'delayed' || s.status === 'indoor_moved')
 
+  if (!todaySlots.length && !upcoming.length && !allSlots.length) {
+    return (
+      <section className="fe-detail-block" aria-labelledby="fe-d-today">
+        <h2 id="fe-d-today" className="fe-detail-h">
+          次の出演
+        </h2>
+        <p className="fe-detail-muted">
+          {isPublicMode ? PUBLIC_EVENT_COPY.schedulePending : 'スケジュール未設定'}
+        </p>
+        <button type="button" className="fe-detail-link" onClick={onOpenTimetable}>
+          タイムテーブルへ
+        </button>
+      </section>
+    )
+  }
+
   return (
     <>
       <section className="fe-detail-block" aria-labelledby="fe-d-today">

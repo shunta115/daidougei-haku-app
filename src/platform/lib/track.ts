@@ -35,20 +35,30 @@ export function trackProductEvent(
   if (!isSupabaseConfigured || !supabase) return
   const featuredId = opts?.eventId ?? null
   const path = typeof window !== 'undefined' ? window.location.pathname.slice(0, 200) : null
-  void supabase.auth
-    .getSession()
-    .then(({ data }) =>
-      supabase!.from('product_events').insert({
-        name,
-        session_id: sessionId(),
-        user_id: data.session?.user.id ?? null,
-        performer_id: opts?.performerId ?? null,
-        event_id: featuredId,
-        path,
-        props: opts?.props && typeof opts.props === 'object' ? opts.props : {},
-      }),
-    )
-    .catch(() => undefined)
+  const payload = {
+    name,
+    session_id: sessionId(),
+    user_id: null as string | null,
+    performer_id: opts?.performerId ?? null,
+    event_id: featuredId,
+    path,
+    props: opts?.props && typeof opts.props === 'object' ? opts.props : {},
+  }
+
+  void (async () => {
+    try {
+      const { data } = await supabase!.auth.getSession()
+      payload.user_id = data.session?.user.id ?? null
+    } catch {
+      payload.user_id = null
+    }
+    let { error } = await supabase!.from('product_events').insert(payload)
+    if (error && payload.user_id) {
+      payload.user_id = null
+      ;({ error } = await supabase!.from('product_events').insert(payload))
+    }
+    if (error) console.warn('product_event', name, error.message)
+  })()
 }
 
 export function useTrackView(

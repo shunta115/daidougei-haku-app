@@ -252,7 +252,7 @@ export function FestivalApp() {
 
   const spotlight = SPOTLIGHT_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
   const todaysPicks = TODAYS_PICK_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
-  const fromCatalog = performers.filter((p) => p.approvalStatus === 'approved').slice(0, 4)
+  const fromCatalog = performers.filter((p) => p.approvalStatus === 'approved').slice(0, 6)
   const primePicksForHome = (
     [...spotlight, ...todaysPicks].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i).slice(0, 4)
   )

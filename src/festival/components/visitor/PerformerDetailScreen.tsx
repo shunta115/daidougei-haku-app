@@ -16,11 +16,12 @@ import { canProcessOnlineSupport, canWatchLiveStream } from '../../lib/productio
 import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 import { getCatalogFeaturedEvent } from '../../../catalog/liveCatalog'
 import { useAuth } from '../../../platform/lib/auth'
-import { getMyVote, voteForPerformer } from '../../../platform/lib/api'
+import { follow, getMyVote, isFollowing, unfollow, voteForPerformer } from '../../../platform/lib/api'
 import { useTrackView } from '../../../platform/lib/track'
 import { isSupabaseConfigured } from '../../../platform/lib/supabase'
 import { openPlatform } from '../../../app/routes'
 import { useLang } from '../../../i18n/LangProvider'
+import { resolvePerformerPhotoUrl } from '../../lib/streamPresence'
 import { PerformerDetailProfile } from './performer/PerformerDetailProfile'
 import { PerformerDetailSchedule } from './performer/PerformerDetailSchedule'
 import { PerformerDetailVideo } from './performer/PerformerDetailVideo'
@@ -68,6 +69,15 @@ export function PerformerDetailScreen({
     setWatch(isOnWatchlist(p.id))
   }, [p.id])
 
+  const photo = resolvePerformerPhotoUrl(p.photoUrl)
+  const onTip = () => {
+    if (onSupportStream) {
+      onSupportStream(p.id)
+      return
+    }
+    onOpenTips?.()
+  }
+
   return (
     <div className="fe-detail fe-detail--native fe-detail--step5" role="dialog" aria-modal="true" aria-labelledby="fe-detail-title">
       <header className="fe-detail__bar">
@@ -92,20 +102,21 @@ export function PerformerDetailScreen({
             aria-pressed={favorite}
             onClick={onToggleFavorite}
           >
-            {favorite ? '★ お気に入り済み' : '☆ お気に入りに追加'}
+            {favorite ? '★ 推し' : '☆ 推し'}
           </button>
         </div>
       </header>
 
       <div
-        className={`fe-detail__hero fe-detail__hero--mega fe-detail__hero--step5${p.photoUrl ? ' fe-detail__hero--photo' : ''}${isLive ? ' fe-detail__hero--streaming' : ''}`}
+        className={`fe-detail__hero fe-detail__hero--mega fe-detail__hero--step5${photo ? ' fe-detail__hero--photo' : ''}${isLive ? ' fe-detail__hero--streaming' : ''}`}
         style={
-          p.photoUrl
-            ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(5,5,8,0.92) 100%), url(${p.photoUrl})` }
+          photo
+            ? { backgroundImage: `url(${photo})` }
             : { background: p.gradient }
         }
       >
-        {!p.photoUrl ? <span className="fe-detail__hero-mono">{initials(p.name)}</span> : null}
+        <div className="fe-detail__hero-shade" aria-hidden="true" />
+        {!photo ? <span className="fe-detail__hero-mono">{initials(p.name)}</span> : null}
         {isLive ? (
           <span className="fe-detail__live-badge" lang="en">
             LIVE
@@ -113,20 +124,23 @@ export function PerformerDetailScreen({
         ) : null}
         <div className="fe-detail__hero-text">
           {p.genre ? <p className="fe-detail__genre-pill">{p.genre}</p> : null}
-          <p className="fe-detail__eyebrow">{isLive ? 'LIVE STREAM' : 'Artist'}</p>
           <h1 id="fe-detail-title" className="fe-detail__title">
             {p.nameJa}
           </h1>
-          <p className="fe-detail__title-en" lang="en">
-            {p.name}
-          </p>
+          {p.name && p.name !== p.nameJa ? (
+            <p className="fe-detail__title-en" lang="en">
+              {p.name}
+            </p>
+          ) : null}
           <p className="fe-detail__acts">
             {p.country ? `${p.country} · ` : null}
-            {p.actJa} · <span lang="en">{p.act}</span>
+            {p.actJa}
           </p>
-          <p className="fe-detail__tagline">{isLive && p.streamTitle ? p.streamTitle : p.tagline}</p>
+          {isLive && p.streamTitle ? <p className="fe-detail__tagline">{p.streamTitle}</p> : null}
         </div>
       </div>
+
+      <FollowTipBar performerId={p.id} onTip={onSupportStream || onOpenTips ? onTip : undefined} />
 
       {streamReady && onWatchStream && onSupportStream ? (
         <div className="fe-detail-stream-cta" aria-label="ライブ配信">
@@ -142,9 +156,6 @@ export function PerformerDetailScreen({
             >
               {watchable ? (isLive ? '視聴する' : '配信ページを開く') : '配信準備中'}
             </button>
-            <button type="button" className="fe-detail-stream-cta__support" onClick={() => onSupportStream(p.id)}>
-              応援する
-            </button>
           </div>
         </div>
       ) : null}
@@ -155,15 +166,6 @@ export function PerformerDetailScreen({
         {onOpenMap ? (
           <button type="button" className="fe-detail__qbtn" onClick={onOpenMap}>
             地図
-          </button>
-        ) : null}
-        {streamReady && onSupportStream ? (
-          <button type="button" className="fe-detail__qbtn fe-detail__qbtn--support" onClick={() => onSupportStream(p.id)}>
-            WEB応援
-          </button>
-        ) : onOpenTips ? (
-          <button type="button" className="fe-detail__qbtn fe-detail__qbtn--support" onClick={onOpenTips}>
-            応援
           </button>
         ) : null}
         <button type="button" className="fe-detail__qbtn" onClick={() => void sharePerformer(p)}>
@@ -248,30 +250,24 @@ export function PerformerDetailScreen({
 
         <section className="fe-detail-block" aria-labelledby="fe-d-tip">
           <h2 id="fe-d-tip" className="fe-detail-h">
-            WEB完結投げ銭
+            投げ銭
           </h2>
           <p className="fe-detail-lead">
-            投げ銭はログイン後、安全な決済ページで完了します。アプリ内課金はありません。
+            ログイン後、安全な決済ページで応援できます。アプリ内課金はありません。
           </p>
-          {streamReady && onSupportStream ? (
-            <button type="button" className="fe-btn fe-btn--primary fe-btn--block" onClick={() => onSupportStream(p.id)}>
-              配信画面で応援する
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="fe-btn fe-btn--primary fe-btn--block"
-              onClick={() => {
-                if (onSupportStream) {
-                  onSupportStream(p.id)
-                  return
-                }
-                onBetaSupport?.()
-              }}
-            >
-              WEBで応援する
-            </button>
-          )}
+          <button
+            type="button"
+            className="fe-btn fe-btn--primary fe-btn--block"
+            onClick={() => {
+              if (onSupportStream) {
+                onSupportStream(p.id)
+                return
+              }
+              onBetaSupport?.()
+            }}
+          >
+            投げ銭する
+          </button>
           {(p.supportUrl || tips[0]?.url) && canProcessOnlineSupport() ? (
             <div className="fe-tip-grid" style={{ marginTop: streamReady ? 10 : 0 }}>
               <a
@@ -299,6 +295,52 @@ export function PerformerDetailScreen({
           ) : null}
         </section>
       </main>
+    </div>
+  )
+}
+
+function FollowTipBar({ performerId, onTip }: { performerId: string; onTip?: () => void }) {
+  const { user } = useAuth()
+  const { t } = useLang()
+  const [following, setFollowing] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) {
+      setFollowing(false)
+      return
+    }
+    void isFollowing(user.id, performerId)
+      .then(setFollowing)
+      .catch(() => setFollowing(false))
+  }, [user, performerId])
+
+  return (
+    <div className="fe-detail__cta">
+      <button
+        type="button"
+        className={`fe-detail__cta-follow${following ? ' fe-detail__cta-follow--on' : ''}`}
+        disabled={busy}
+        onClick={() => {
+          if (!user || !isSupabaseConfigured) {
+            openPlatform('?auth=1')
+            return
+          }
+          setBusy(true)
+          const run = following ? unfollow(user.id, performerId) : follow(user.id, performerId)
+          void run
+            .then(() => setFollowing(!following))
+            .catch(() => undefined)
+            .finally(() => setBusy(false))
+        }}
+      >
+        {following ? t('following') : t('follow')}
+      </button>
+      {onTip ? (
+        <button type="button" className="fe-detail__cta-tip" onClick={onTip}>
+          {t('tip')}
+        </button>
+      ) : null}
     </div>
   )
 }

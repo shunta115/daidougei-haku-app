@@ -204,8 +204,8 @@ export async function refreshLiveCatalog(): Promise<void> {
     const allPlatform = (performerRes.data ?? []) as PlatformPerformer[]
     const lineupIds = new Set(((lineupRes.data ?? []) as Array<{ performer_id: string }>).map((r) => r.performer_id))
     const mapped = allPlatform.map(platformToFestival)
-    // Event lineup is the public roster. Empty lineup = not announced yet (never dump the global catalog).
-    performers = lineupIds.size > 0 ? mapped.filter((p) => lineupIds.has(p.id)) : []
+    // Lineup is the announced roster. If admin has not filled it yet, still show real approved performers.
+    performers = lineupIds.size > 0 ? mapped.filter((p) => lineupIds.has(p.id)) : mapped
 
     const fromSlots = Array.from(new Set(slots.map((s) => s.date))).sort()
     if (fromSlots.length > 0) {

@@ -388,8 +388,8 @@ export async function isFollowing(fanId: string, performerId: string): Promise<b
 export async function follow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').insert({ fan_id: fanId, performer_id: performerId })
-  if (error) throw error
-  trackProductEvent('follow', { performerId })
+  if (error && error.code !== '23505') throw error
+  if (!error) trackProductEvent('follow', { performerId })
 }
 
 export async function listFollowedPerformers(fanId: string): Promise<Performer[]> {
@@ -535,9 +535,9 @@ export async function getFeaturedEvent(): Promise<FeaturedEvent | null> {
     .select('*')
     .eq('is_featured', true)
     .eq('status', 'published')
-    .maybeSingle()
+    .limit(1)
   if (error) throw error
-  return (data as FeaturedEvent) ?? null
+  return ((data?.[0] as FeaturedEvent | undefined) ?? null)
 }
 
 export async function saveFeaturedEventPatch(id: string, patch: Partial<FeaturedEvent>) {

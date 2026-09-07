@@ -15,7 +15,7 @@ type TipProps = {
   returnToLive?: boolean
 }
 
-export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProps) {
+export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
   const { user } = useAuth()
   const { t } = useLang()
   const [p, setP] = useState<Performer | null>(null)
@@ -56,21 +56,26 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
   }
 
   return (
-    <>
+    <div className="pl-tip">
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
         {t('back')}
       </button>
       {p?.photo_url ? (
         <div
           className="pl-tip-hero"
-          style={{ backgroundImage: `linear-gradient(180deg, rgba(5,5,8,0.15), rgba(5,5,8,0.92)), url(${p.photo_url})` }}
-        />
-      ) : null}
-      <h1 className="pl-h1">
-        {t('tipHeading')} {p?.stage_name ?? ''}
-      </h1>
+          style={{ backgroundImage: `url(${p.photo_url})` }}
+        >
+          <div className="pl-tip-hero__shade" />
+          <p className="pl-tip-hero__name">{p.stage_name}</p>
+        </div>
+      ) : (
+        <h1 className="pl-h1">
+          {t('tipHeading')} {p?.stage_name ?? ''}
+        </h1>
+      )}
       <p className="pl-muted">{p?.support_blurb || t('tipSecure')}</p>
 
+      <p className="pl-tip__amount">{formatYen(amount)}</p>
       <div className="pl-chip-row">
         {TIP_PRESETS_JPY.map((yen) => (
           <button
@@ -97,10 +102,10 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
         />
       </label>
 
-      <button type="button" className="pl-btn pl-btn--block" disabled={busy || amount < 100} onClick={() => void pay()}>
+      <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
         {busy ? t('processing') : `${t('payNow')} ${formatYen(amount)}`}
       </button>
-      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onDone}>
+      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onBack}>
         {t('cancel')}
       </button>
       {!user ? (
@@ -113,6 +118,6 @@ export function TipScreen({ performerId, onBack, onDone, returnToLive }: TipProp
         </button>
       ) : null}
       {error ? <p className="pl-error">{error}</p> : null}
-    </>
+    </div>
   )
 }

@@ -500,18 +500,55 @@ a { color: var(--neon); }
 }
 
 .pl-btn--tip {
-  background: linear-gradient(135deg, #2bffdd, #7cf0ff);
-  color: #041014;
-  box-shadow: 0 0 22px rgba(43, 255, 221, 0.28);
+  background: #f4f7f7;
+  color: #0a0c0d;
+  box-shadow: none;
+  font-weight: 800;
 }
 
 .pl-tip-hero {
-  height: 140px;
-  border-radius: 18px;
+  position: relative;
+  height: 220px;
+  border-radius: 22px;
   margin: 8px 0 14px;
+  overflow: hidden;
   background-size: cover;
   background-position: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: flex-end;
+}
+
+.pl-tip-hero__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5,6,8,0.1), rgba(5,6,8,0.88));
+}
+
+.pl-tip-hero__name {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 16px 18px;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.pl-tip__amount {
+  margin: 8px 0 14px;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pl-chip[data-on='true'] {
+  background: #f4f7f7;
+  color: #0a0c0d;
+  border-color: transparent;
+}
+
+.pl-empty {
+  padding: 28px 8px;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .pl-tip-flash {
