@@ -50,21 +50,21 @@ export function VisitorBottomNav({ tab, onChange, onLive, onAccount }: VisitorBo
           />
         </NavBtn>
         <NavBtn active={false} onClick={onLive} label={t('live')} aria="LIVE">
-          <path
-            d="M12 2v20M8 8h8M8 14h6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <>
+            <circle cx="12" cy="12" r="8.2" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M10 9.2 16 12l-6 2.8V9.2Z" fill="currentColor" />
+          </>
         </NavBtn>
         <NavBtn active={false} onClick={onAccount} label={t('account')} aria={t('account')}>
-          <path
-            d="M12 21s-7-4.35-7-10a7 7 0 1 1 14 0c0 5.65-7 10-7 10Z"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-          />
+          <>
+            <circle cx="12" cy="8.2" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M5.5 19.2c.7-3.2 3.2-5 6.5-5s5.8 1.8 6.5 5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </>
         </NavBtn>
       </div>
     </nav>

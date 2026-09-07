@@ -2712,12 +2712,12 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 2px;
-  padding: 6px 6px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 11, 14, 0.92);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  padding: 8px 4px 6px;
+  border-radius: 18px;
+  border: none;
+  background: rgba(12, 13, 16, 0.94);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
 }
 
 @media (min-width: 720px) {
@@ -2748,19 +2748,19 @@ body {
 }
 
 .fe-vnav__btn[data-active='true'] {
-  color: var(--fe-text);
-  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
   box-shadow: none;
 }
 
 .fe-vnav__btn[data-active='true'] .fe-vnav__icon {
-  color: var(--fe-neon);
+  color: #fff;
 }
 
 .fe-vnav__label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   text-transform: none;
 }
 
@@ -5937,7 +5937,7 @@ body {
 }
 
 .fe-vnav__inner--six .fe-vnav__label {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 /* --- timetable toolbar --- */
@@ -9930,9 +9930,10 @@ body {
 .fe-home-hero {
   position: relative;
   isolation: isolate;
-  min-height: min(78vw, 460px);
-  margin: 0 0 4px;
-  border-radius: 28px;
+  min-height: min(86vw, 520px);
+  width: calc(100% + 24px);
+  margin: -4px -12px 8px;
+  border-radius: 0 0 32px 32px;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
@@ -10155,10 +10156,18 @@ body {
 
 .fe-home-venue__k {
   margin: 0 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.42);
+}
+
+.fe-home-venue__pin {
+  display: block;
+  color: var(--fe-neon);
 }
 
 .fe-home-venue__title {
@@ -10245,7 +10254,10 @@ body {
 
 @media (min-width: 720px) {
   .fe-home-hero {
-    min-height: 480px;
+    width: 100%;
+    min-height: 520px;
+    margin: 0 0 8px;
+    border-radius: 32px;
   }
 
   .fe-home-acts__row {
