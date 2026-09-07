@@ -6,6 +6,7 @@ type PerformerDetailVideoProps = {
 
 export function PerformerDetailVideo({ performer }: PerformerDetailVideoProps) {
   const url = performer.introVideoUrl
+  if (!url) return null
 
   return (
     <section className="fe-pdv" aria-labelledby="fe-pdv-title">
