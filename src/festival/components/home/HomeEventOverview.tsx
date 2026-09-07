@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react'
-import { PLATFORM_PATH, openPlatform, spaGo } from '../../../app/routes'
 import { PUBLIC_EVENT_META, type PublicEventMeta } from '../../data/public/eventMeta'
 import { isSupabaseConfigured } from '../../../platform/lib/supabase'
 import { getFeaturedEvent } from '../../../platform/lib/api'
-import { useAuth } from '../../../platform/lib/auth'
 import { useLang } from '../../../i18n/LangProvider'
 
+export type HomeHeroStatus = 'live' | 'now' | 'soon'
+
 type HomeEventOverviewProps = {
+  heroPhotoUrl?: string
+  status: HomeHeroStatus
+  primaryLabel: string
+  onPrimary: () => void
   onOpenTimetable: () => void
-  onOpenPerformers?: () => void
 }
 
-export function HomeEventOverview({ onOpenTimetable, onOpenPerformers }: HomeEventOverviewProps) {
-  const { user } = useAuth()
+export function HomeEventOverview({
+  heroPhotoUrl,
+  status,
+  primaryLabel,
+  onPrimary,
+  onOpenTimetable,
+}: HomeEventOverviewProps) {
   const { t, lang } = useLang()
   const [meta, setMeta] = useState<PublicEventMeta>(PUBLIC_EVENT_META)
 
@@ -36,46 +44,43 @@ export function HomeEventOverview({ onOpenTimetable, onOpenPerformers }: HomeEve
       })
       .catch(() => undefined)
   }, [])
+
   const place = meta.placeLabel.trim()
   const hours = meta.hoursLabel.trim()
-  const official = meta.officialUrl.trim()
+  const statusLabel = status === 'live' ? 'LIVE' : status === 'now' ? t('liveNow') : t('heroSoon')
 
   return (
-    <section className="fe-home-overview fe-home-overview--hero" aria-labelledby="fe-home-overview-title">
-      <p className="fe-home-overview__k" lang="en">
-        {t('nextEvent')}
-      </p>
-      <h2 id="fe-home-overview-title" className="fe-home-overview__title">
-        {lang === 'en' ? meta.eventNameEn : meta.eventNameJa}
-      </h2>
-      <p className="fe-home-overview__en" lang="en">
-        {lang === 'en' ? meta.eventNameJa : meta.eventNameEn}
-      </p>
-      <p className="fe-home-overview__presenter">{lang === 'en' ? meta.presenterEn : meta.presenterJa}</p>
-      <p className="fe-home-overview__dates">{meta.dateLabel || t('datesPending')}</p>
-      {place ? <p className="fe-home-overview__place">{place}</p> : null}
-      {hours ? <p className="fe-home-overview__hours">{hours}</p> : null}
-      <p className="fe-home-overview__note">{meta.weatherNote}</p>
-      <div className="fe-home-overview__actions">
-        <button type="button" className="fe-h6-maprow__primary" onClick={() => (user ? spaGo(PLATFORM_PATH) : openPlatform('?auth=1'))}>
-          {t('live')} · {t('tip')}
-        </button>
-        {onOpenPerformers ? (
-          <button type="button" className="fe-h6-maprow__ghost" onClick={onOpenPerformers}>
-            {t('findActs')}
-          </button>
-        ) : null}
-        <button type="button" className="fe-h6-maprow__ghost" onClick={onOpenTimetable}>
-          {t('timetableTitle')}
-        </button>
-      </div>
-      {official ? (
-        <p className="fe-home-overview__official">
-          <a href={official} target="_blank" rel="noopener noreferrer">
-            {t('officialSite')}
-          </a>
+    <section
+      className={`fe-home-hero${heroPhotoUrl ? ' fe-home-hero--photo' : ''}`}
+      aria-labelledby="fe-home-hero-title"
+      style={
+        heroPhotoUrl
+          ? { backgroundImage: `url(${heroPhotoUrl})` }
+          : undefined
+      }
+    >
+      <div className="fe-home-hero__shade" aria-hidden="true" />
+      <div className="fe-home-hero__body">
+        <p className="fe-home-hero__brand">{t('appName')}</p>
+        <p className={`fe-home-hero__status${status === 'live' ? ' fe-home-hero__status--live' : ''}`}>{statusLabel}</p>
+        <h1 id="fe-home-hero-title" className="fe-home-hero__title">
+          {lang === 'en' ? meta.eventNameEn : meta.eventNameJa}
+        </h1>
+        <p className="fe-home-hero__meta">
+          <span>{meta.dateLabel || t('datesPending')}</span>
+          {place ? <span className="fe-home-hero__dot">·</span> : null}
+          {place ? <span>{place}</span> : null}
         </p>
-      ) : null}
+        {hours ? <p className="fe-home-hero__hours">{hours}</p> : null}
+        <div className="fe-home-hero__actions">
+          <button type="button" className="fe-home-hero__cta" onClick={onPrimary}>
+            {primaryLabel}
+          </button>
+          <button type="button" className="fe-home-hero__ghost" onClick={onOpenTimetable}>
+            {t('timetableTitle')}
+          </button>
+        </div>
+      </div>
     </section>
   )
 }

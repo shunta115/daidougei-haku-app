@@ -22,12 +22,6 @@ export function HomeOfficialEntry({
 }: HomeOfficialEntryProps) {
   return (
     <div className="fe-official-entry" aria-label="パフォーマー・運営向け">
-      <button type="button" className="fe-official-entry__perf" onClick={() => openPlatform('?auth=1')}>
-        <span className="fe-official-entry__perf-ja">ライブ配信・投げ銭</span>
-        <span className="fe-official-entry__perf-en" lang="en">
-          LIVE · FOLLOW · TIP
-        </span>
-      </button>
       {showStreamRegisterEntry ? (
         <button type="button" className="fe-official-entry__perf" onClick={onStreamRegister}>
           <span className="fe-official-entry__perf-ja">配信希望パフォーマー登録</span>
