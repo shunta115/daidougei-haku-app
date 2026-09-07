@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import type { Performer } from '../../../types'
 import { readFavorites } from '../../../lib/favoritesStorage'
 import { filterPerformers } from '../../../lib/performerListFilters'
 import { shouldShowAsLiveStream } from '../../../lib/streamPresence'
+import { getLiveCatalogVersion, isLiveCatalogHydrated, subscribeLiveCatalog } from '../../../../catalog/liveCatalog'
 import { useLang } from '../../../../i18n/LangProvider'
 import { PerformerListCard } from './PerformerListCard'
 import { PerformerListSearch } from './PerformerListSearch'
@@ -32,9 +33,23 @@ export function PerformerListScreen({
 }: PerformerListScreenProps) {
   const [query, setQuery] = useState('')
   const [genreId, setGenreId] = useState('all')
+  useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
+  const catalogReady = isLiveCatalogHydrated()
   // eslint-disable-next-line react-hooks/exhaustive-deps -- favTick invalidates localStorage read
   const favIds = useMemo(() => readFavorites(), [favTick])
   const { t } = useLang()
+
+  const genreChips = useMemo(() => {
+    const chips: Array<{ id: string; labelJa: string }> = [{ id: 'all', labelJa: 'すべて' }]
+    const seen = new Set<string>()
+    for (const p of performers) {
+      const g = (p.genre || p.actJa || '').trim()
+      if (!g || seen.has(g)) continue
+      seen.add(g)
+      chips.push({ id: g, labelJa: g })
+    }
+    return chips
+  }, [performers])
 
   const filtered = useMemo(() => {
     const rows = filterPerformers([...performers], query, genreId)
@@ -42,6 +57,8 @@ export function PerformerListScreen({
   }, [performers, query, genreId])
 
   const liveCount = performers.filter(shouldShowAsLiveStream).length
+  const empty = catalogReady && performers.length === 0
+  const loading = !catalogReady && performers.length === 0
 
   return (
     <main className="fe-main fe-main--list fe-plist">
@@ -49,15 +66,17 @@ export function PerformerListScreen({
         <p className="fe-list-hero__eyebrow">{t('eventName')}</p>
         <h1 className="fe-list-hero__title">{t('actsTitle')}</h1>
         <p className="fe-list-hero__sub">
-          {performers.length === 0
-            ? t('comingSoonRoster')
-            : liveCount > 0
-              ? `${t('liveNow')} ${liveCount}`
-              : t('findActs')}
+          {loading
+            ? '読み込み中'
+            : empty
+              ? t('comingSoonRoster')
+              : liveCount > 0
+                ? `${t('liveNow')} ${liveCount}`
+                : t('findActs')}
         </p>
       </header>
 
-      {performers.length === 0 ? (
+      {loading ? null : empty ? (
         <p className="fe-public-prep" role="status">
           {t('comingSoonRoster')}
         </p>
@@ -67,6 +86,7 @@ export function PerformerListScreen({
             query={query}
             genreId={genreId}
             resultCount={filtered.length}
+            genreChips={genreChips}
             onQueryChange={setQuery}
             onGenreChange={setGenreId}
           />

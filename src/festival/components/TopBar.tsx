@@ -23,7 +23,6 @@ export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopB
           <BrandLogo size={28} className="fe-mark__logo" />
         </span>
         <span className="fe-mark__text">
-          <span className="fe-mark__eyebrow">Street Performance Expo</span>
           <span className="fe-mark__title">{t('appName')}</span>
         </span>
       </div>

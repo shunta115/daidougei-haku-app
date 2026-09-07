@@ -158,7 +158,7 @@ export function AdminEventScreen() {
   return (
     <>
       <h1 className="pl-h1">イベント管理</h1>
-      <p className="pl-muted">受賞者たち — 会場・タイムテーブル・出演者はここから登録します。仮データは使いません。</p>
+      <p className="pl-muted">会場・出演者・時間割はここで登録します。決まっていない時間は空のままにしてください。</p>
       {error ? <p className="pl-error">{error}</p> : null}
       {msg ? <p className="pl-muted">{msg}</p> : null}
 
@@ -226,11 +226,12 @@ export function AdminEventScreen() {
               type="button"
               className="pl-btn pl-btn--ghost pl-btn--block"
               style={{ marginTop: 16 }}
-              onClick={() =>
+              onClick={() => {
+                if (!window.confirm('フォロー／推しのユーザーへ出演通知を送ります。実行しますか？')) return
                 void notifyEventAppearances(event.id)
                   .then(() => setMsg('フォロー／推しへ出演通知を送りました'))
                   .catch((e) => setError(e instanceof Error ? e.message : '通知に失敗しました'))
-              }
+              }}
             >
               出演者のフォロワーへ通知する
             </button>
@@ -279,6 +280,9 @@ export function AdminEventScreen() {
 
       {tab === 'slots' ? (
         <>
+          {slots.length === 0 ? (
+            <p className="pl-muted">正式な出演時間が決まるまで空のままです。決まったら下のフォームから追加してください。仮の時間は入れないでください。</p>
+          ) : null}
           {slots.map((s) => {
             const act = approved.find((p) => p.id === s.performer_id)
             const venue = venues.find((v) => v.id === s.venue_id)
@@ -350,6 +354,9 @@ export function AdminEventScreen() {
 
       {tab === 'lineup' ? (
         <>
+          {lineup.length === 0 ? (
+            <p className="pl-muted">このイベントの公式出演者はまだ未登録です。承認済みパフォーマーから追加できます。</p>
+          ) : null}
           {lineup.map((id) => {
             const p = approved.find((x) => x.id === id)
             return (

@@ -31,6 +31,7 @@ export function HomeRecommendedRow({ performers, onOpenDetail }: HomeRecommended
               type="button"
               role="listitem"
               className="fe-home-acts__card"
+              aria-label={p.nameJa || p.name}
               onClick={() => onOpenDetail(p.id)}
             >
               <span

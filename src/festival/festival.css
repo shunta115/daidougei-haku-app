@@ -46,7 +46,7 @@ body {
 
 @media (min-width: 720px) {
   .fe-root--visitor .fe-shell {
-    max-width: min(1080px, calc(100% - 48px));
+    max-width: min(1200px, calc(100% - 48px));
   }
 }
 
@@ -2722,7 +2722,7 @@ body {
 
 @media (min-width: 720px) {
   .fe-root--visitor .fe-vnav__inner {
-    max-width: min(1080px, calc(100% - 48px));
+    max-width: min(1200px, calc(100% - 48px));
   }
 }
 

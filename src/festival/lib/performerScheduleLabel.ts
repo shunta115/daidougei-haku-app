@@ -25,5 +25,5 @@ export function formatPerformerScheduleSummary(performerId: string): string {
     return `最終 ${last.date.slice(5)} ${last.start}–${last.end} · ${last.stageJa}`
   }
 
-  return '出演予定はタイムテーブルで確認'
+  return '出演時間は近日公開'
 }

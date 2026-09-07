@@ -1,9 +1,8 @@
-import { PERFORMER_GENRE_CHIPS } from '../../../lib/performerConstants'
-
 type PerformerListSearchProps = {
   query: string
   genreId: string
   resultCount: number
+  genreChips: readonly { id: string; labelJa: string }[]
   onQueryChange: (q: string) => void
   onGenreChange: (id: string) => void
 }
@@ -12,6 +11,7 @@ export function PerformerListSearch({
   query,
   genreId,
   resultCount,
+  genreChips,
   onQueryChange,
   onGenreChange,
 }: PerformerListSearchProps) {
@@ -30,7 +30,7 @@ export function PerformerListSearch({
       </label>
       <p className="fe-plist-search__count">{resultCount} 名</p>
       <div className="fe-plist-search__genres" role="group" aria-label="ジャンル">
-        {PERFORMER_GENRE_CHIPS.map((c) => (
+        {genreChips.map((c) => (
           <button
             key={c.id}
             type="button"

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Performer, ProgramPulse, VenueArea } from '../../types'
-import { getCatalogSlots, getLiveCatalogVersion, subscribeLiveCatalog } from '../../../catalog/liveCatalog'
+import { getCatalogSlots, getLiveCatalogVersion, isLiveCatalogHydrated, subscribeLiveCatalog } from '../../../catalog/liveCatalog'
 import { HomeEventOverview, type HomeHeroStatus } from './HomeEventOverview'
 import { HomeLiveMega } from './HomeLiveMega'
 import { HomeOfficialEntry } from './HomeOfficialEntry'
@@ -63,6 +63,7 @@ export function HomeScreen({
   const { t } = useLang()
   useTrackView('view_home')
   useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
+  const catalogReady = isLiveCatalogHydrated()
   const hasSchedule = getCatalogSlots().length > 0
   const hasLiveStream = liveStreamers.length > 0
   const hasVenueNow = Boolean(live && livePerformer)
@@ -124,7 +125,7 @@ export function HomeScreen({
 
       <HomeRecommendedRow performers={pickPerformers} onOpenDetail={onOpenDetail} />
 
-      {!pickPerformers.length && !hasLiveStream ? (
+      {catalogReady && !pickPerformers.length && !hasLiveStream ? (
         <p className="fe-home-empty" role="status">
           {t('comingSoonRoster')}
         </p>
