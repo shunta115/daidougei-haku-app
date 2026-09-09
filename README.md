@@ -17,6 +17,7 @@
    - `supabase/migrations/20260903_organizer_and_appearance_notify.sql`
    - `supabase/migrations/20260904_live_event_bind.sql`
    - `supabase/migrations/20260905_ops_foundation.sql`
+   - `supabase/migrations/20260909_safe_runtime_grants.sql`
    - `supabase/migrations/20260909_avatar_storage_hardening.sql`
    - `supabase/migrations/20260909_merch_foundation.sql`
 
