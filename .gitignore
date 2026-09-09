@@ -33,3 +33,5 @@ vite.config.js
 vite.config.d.ts
 package-lock 2.json
 
+# Finder duplicate copies
+* 2.*

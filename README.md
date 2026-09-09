@@ -9,7 +9,18 @@
 1. **Supabase** プロジェクトを作成
 2. SQL Editor で次を実行
    - `supabase/migrations/20260726_platform_beta.sql`
+   - `supabase/migrations/20260728_fix_performer_public_read.sql`
    - `supabase/migrations/20260729_native_livekit.sql`
+   - `supabase/migrations/20260730_live_tip_events.sql`
+   - `supabase/migrations/20260816_secure_tips_and_notifications.sql`
+   - `supabase/migrations/20260902_launch_foundation.sql`
+   - `supabase/migrations/20260903_organizer_and_appearance_notify.sql`
+   - `supabase/migrations/20260904_live_event_bind.sql`
+   - `supabase/migrations/20260905_ops_foundation.sql`
+   - `supabase/migrations/20260909_avatar_storage_hardening.sql`
+   - `supabase/migrations/20260909_merch_foundation.sql`
+
+   `supabase/migrations/20260728_fix_performer_grants_and_approve.sql` は既存performerを強制承認するため、人間レビューなしで本番適用しない。
 3. Authentication → Providers → Email を有効化（βは Confirm email をオフ推奨）
 4. Storage バケット `avatars` は migration で作成済み
 5. 最初の管理者: 通常登録後、SQL で昇格
@@ -22,7 +33,7 @@ where email = 'you@example.com';
 
 6. **LiveKit Cloud**（ネイティブ配信）を作成し、API Key / Secret / WebSocket URL を取得  
 7. **Stripe** Connect を有効化し、Webhook を `https://YOUR_DOMAIN/api/stripe/webhook` に設定  
-   Events: `checkout.session.completed`, `account.updated`
+   Events: `checkout.session.completed`, `checkout.session.expired`, `account.updated`
 
 ## 配信基盤: LiveKit を選定
 
@@ -59,15 +70,17 @@ npm run build
 
 ## βに含まれる機能
 
-- Auth（ファン / パフォーマー / 管理）
+- Auth（ファン / パフォーマー / 主催者 / 管理）
 - プロフィール・画像・ライブ開始終了・現在地共有・履歴
-- 検索・フォロー・投げ銭（Stripe Connect）・通知
-- 管理ダッシュボード（登録・ライブ・投げ銭・手数料・DAU/MAU）・承認・停止・削除
+- 検索・フォロー・コメント・投げ銭（Stripe Connect）・通知
+- イベント情報・出演者・タイムテーブル・会場MAP・人気投票
+- グッズ登録・一覧・詳細・Stripe決済・注文履歴・販売者注文確認
+- 管理ダッシュボード（登録・ライブ・投げ銭・手数料・DAU/MAU）・承認・停止・削除・イベント運営
 - PWA
 
 ## βで作らないもの
 
-世界MAP / ランキング / ファンレベル / イベント / 出演依頼 / 企業案件 / AI / チャット / コメント / グッズ / チケット
+世界MAP / ランキング / ファンレベル / 企業案件 / AI / チケット
 
 ## Vercel
 

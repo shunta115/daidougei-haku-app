@@ -1,6 +1,8 @@
 export type UserRole = 'fan' | 'performer' | 'organizer' | 'admin'
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'deleted'
 export type TipStatus = 'pending' | 'succeeded' | 'failed' | 'refunded'
+export type MerchProductStatus = 'draft' | 'active' | 'sold_out' | 'archived'
+export type MerchOrderStatus = 'pending' | 'succeeded' | 'failed' | 'expired' | 'refunded'
 
 export type Profile = {
   id: string
@@ -123,16 +125,57 @@ export type AdminMetrics = {
   mau_proxy: number
 }
 
+export type MerchProduct = {
+  id: string
+  seller_id: string
+  name: string
+  description: string
+  image_url: string | null
+  price_yen: number
+  stock: number
+  status: MerchProductStatus
+  created_at: string
+  updated_at: string
+}
+
+export type MerchOrder = {
+  id: string
+  buyer_id: string
+  seller_id: string
+  product_id: string
+  buyer_display_name: string
+  buyer_email: string | null
+  checkout_customer_email: string | null
+  checkout_customer_name: string | null
+  checkout_customer_phone: string | null
+  checkout_shipping: unknown | null
+  product_name: string
+  product_image_url: string | null
+  unit_price_yen: number
+  quantity: number
+  amount_yen: number
+  currency: string
+  platform_fee_yen: number
+  status: MerchOrderStatus
+  stripe_session_id: string | null
+  stripe_payment_intent: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type PlatformScreen =
   | 'welcome'
   | 'auth'
   | 'fan-home'
   | 'search'
+  | 'merch-list'
+  | 'merch-detail'
   | 'live-list'
   | 'profile'
   | 'notifications'
   | 'performer-home'
   | 'performer-edit'
+  | 'performer-merch'
   | 'performer-live'
   | 'performer-history'
   | 'live-watch'

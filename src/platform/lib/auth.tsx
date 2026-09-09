@@ -30,7 +30,19 @@ async function loadProfile(userId: string): Promise<{ profile: Profile | null; p
   const sb = requireSupabase()
   const { data: profile } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle()
   let performer: Performer | null = null
-  if (profile?.role === 'performer' || profile?.role === 'admin') {
+  if (profile?.role === 'performer') {
+    const { data } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
+    performer = (data as Performer) ?? null
+    if (!performer) {
+      const stageName = profile.display_name?.trim() || 'Performer'
+      const { data: inserted } = await sb
+        .from('performers')
+        .insert({ id: userId, stage_name: stageName, is_approved: false })
+        .select('*')
+        .maybeSingle()
+      performer = (inserted as Performer) ?? null
+    }
+  } else if (profile?.role === 'admin') {
     const { data } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
     performer = (data as Performer) ?? null
   }

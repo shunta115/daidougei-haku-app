@@ -3,6 +3,7 @@ import { Avatar } from '../components/Avatar'
 import { updatePerformer, uploadAvatar } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { requireSupabase, supabaseAuthHeaders } from '../lib/supabase'
+import { isValidHttpUrl } from '../../festival/lib/productionGuard'
 
 export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
   const { performer, profile, refreshProfile, signOut } = useAuth()
@@ -26,6 +27,10 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
     setError(null)
     setMsg(null)
     try {
+      const trimmedVideoUrl = videoUrl.trim()
+      if (trimmedVideoUrl && !isValidHttpUrl(trimmedVideoUrl)) {
+        throw new Error('紹介動画URLは http または https のURLを入力してください')
+      }
       await updatePerformer(performer.id, {
         stage_name: stageName.trim() || 'Performer',
         bio: bio.trim(),
@@ -35,7 +40,7 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
         support_blurb: blurb.trim(),
         awards: awards.trim(),
         appearances: appearances.trim(),
-        video_url: videoUrl.trim() || null,
+        video_url: trimmedVideoUrl || null,
       })
       await requireSupabase()
         .from('profiles')
@@ -94,7 +99,7 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
         <Avatar url={performer.photo_url} name={performer.stage_name} large />
         <label className="pl-btn pl-btn--ghost" style={{ marginTop: 12, display: 'inline-block' }}>
           Change photo
-          <input type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e.target.files?.[0] ?? null)} />
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => void onPhoto(e.target.files?.[0] ?? null)} />
         </label>
       </div>
 

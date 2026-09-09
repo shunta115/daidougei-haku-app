@@ -481,6 +481,7 @@ export function FestivalApp() {
               onClose={() => setFabOpen(false)}
               onTab={setVisitorTab}
               onLive={() => openPlatform(user ? '?live=1' : '?auth=1&live=1')}
+              onGoods={() => openPlatform('?merch=1')}
               onAccount={() => openPlatform(user ? '' : '?auth=1')}
             />
             {detailPerformer ? (

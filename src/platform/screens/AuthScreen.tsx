@@ -8,11 +8,21 @@ type AuthScreenProps = {
   onDone: () => void
 }
 
+function initialRole(): 'fan' | 'performer' | 'organizer' {
+  try {
+    const role = new URLSearchParams(window.location.search).get('role')
+    if (role === 'performer' || role === 'organizer') return role
+  } catch {
+    /* ignore */
+  }
+  return 'fan'
+}
+
 export function AuthScreen({ onDone }: AuthScreenProps) {
   const { t } = useLang()
   const { signIn, signUp } = useAuth()
   const [mode, setMode] = useState<'in' | 'up'>('up')
-  const [role, setRole] = useState<'fan' | 'performer' | 'organizer'>('fan')
+  const [role, setRole] = useState<'fan' | 'performer' | 'organizer'>(initialRole)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

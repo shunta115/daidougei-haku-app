@@ -5,7 +5,17 @@ import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({ onEdit, onLive, onHistory }: { onEdit: () => void; onLive: () => void; onHistory: () => void }) {
+export function PerformerHomeScreen({
+  onEdit,
+  onLive,
+  onHistory,
+  onMerch,
+}: {
+  onEdit: () => void
+  onLive: () => void
+  onHistory: () => void
+  onMerch: () => void
+}) {
   const { performer, profile, refreshProfile } = useAuth()
   const [recent, setRecent] = useState<LiveSession[]>([])
   const [tips, setTips] = useState<TipRow[]>([])
@@ -78,6 +88,9 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory }: { onEdit: () 
       </button>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onHistory}>
         Live history
+      </button>
+      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onMerch}>
+        グッズ管理
       </button>
       <button
         type="button"

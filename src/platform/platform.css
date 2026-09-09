@@ -300,6 +300,25 @@ a { color: var(--neon); }
   box-shadow: 0 0 28px rgba(43, 255, 221, 0.22);
 }
 
+.pl-merch-thumb {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  object-fit: cover;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+}
+
+.pl-merch-hero {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .pl-badge {
   display: inline-flex;
   align-items: center;

@@ -30,7 +30,7 @@ export function HomeOfficialEntry({
           </span>
         </button>
       ) : (
-        <button type="button" className="fe-official-entry__perf" onClick={() => openPlatform('?auth=1')}>
+        <button type="button" className="fe-official-entry__perf" onClick={() => openPlatform('?auth=1&role=performer')}>
           <span className="fe-official-entry__perf-ja">パフォーマーとして参加</span>
           <span className="fe-official-entry__perf-en" lang="en">
             PERFORMER SIGN-UP

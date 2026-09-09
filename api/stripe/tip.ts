@@ -25,8 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const payerId = user.id
-    if (!performerId || !amountYen || amountYen < 100) {
-      res.status(400).json({ error: 'performerId and amountYen (>=100) required' })
+    if (!performerId || !Number.isInteger(amountYen) || amountYen < 100 || amountYen > 100000) {
+      res.status(400).json({ error: 'performerId and amountYen (100-100000 JPY) required' })
       return
     }
 

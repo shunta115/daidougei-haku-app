@@ -5,10 +5,11 @@ type VisitorQuickSheetProps = {
   onClose: () => void
   onTab: (t: VisitorTab) => void
   onLive: () => void
+  onGoods: () => void
   onAccount: () => void
 }
 
-export function VisitorQuickSheet({ open, onClose, onTab, onLive, onAccount }: VisitorQuickSheetProps) {
+export function VisitorQuickSheet({ open, onClose, onTab, onLive, onGoods, onAccount }: VisitorQuickSheetProps) {
   if (!open) return null
   return (
     <div className="fe-qsheet" role="dialog" aria-modal="true" aria-label="クイックメニュー">
@@ -31,6 +32,9 @@ export function VisitorQuickSheet({ open, onClose, onTab, onLive, onAccount }: V
           </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onLive(); onClose() }}>
             LIVE
+          </button>
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onGoods(); onClose() }}>
+            グッズ
           </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onAccount(); onClose() }}>
             アカウント

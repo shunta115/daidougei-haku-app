@@ -107,10 +107,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
 
   useEffect(() => {
     if (!p?.is_live) return
-    if (!user) {
-      setError(t('signInToWatch'))
-      return
-    }
     let cancelled = false
     ;(async () => {
       try {
@@ -163,7 +159,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, performerId, user, t])
+  }, [p?.is_live, performerId, t])
 
   useEffect(() => {
     if (!p?.is_live || viewers <= 0) return

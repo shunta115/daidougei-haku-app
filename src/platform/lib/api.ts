@@ -5,11 +5,14 @@ import type {
   LiveComment,
   LiveSession,
   LiveTipEvent,
+  MerchOrder,
+  MerchProduct,
   NotificationRow,
   Performer,
   TipRow,
   TipSummary,
 } from './types'
+import { supabaseAuthHeaders } from './supabase'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -456,14 +459,18 @@ export async function approvePerformer(id: string) {
 
 export async function suspendUser(id: string) {
   const sb = requireSupabase()
-  await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)
-  await sb.from('performers').update({ is_live: false, is_approved: false }).eq('id', id)
+  const { error } = await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)
+  if (error) throw error
+  const { error: perr } = await sb.from('performers').update({ is_live: false, is_approved: false }).eq('id', id)
+  if (perr) throw perr
 }
 
 export async function softDeleteUser(id: string) {
   const sb = requireSupabase()
-  await sb.from('profiles').update({ status: 'deleted', display_name: 'Deleted' }).eq('id', id)
-  await sb.from('performers').update({ is_live: false, is_approved: false, stage_name: 'Deleted' }).eq('id', id)
+  const { error } = await sb.from('profiles').update({ status: 'deleted', display_name: 'Deleted' }).eq('id', id)
+  if (error) throw error
+  const { error: perr } = await sb.from('performers').update({ is_live: false, is_approved: false, stage_name: 'Deleted' }).eq('id', id)
+  if (perr) throw perr
 }
 
 export async function listUsers() {
@@ -475,11 +482,33 @@ export async function listUsers() {
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
   const sb = requireSupabase()
-  const ext = file.name.split('.').pop() || 'jpg'
-  const path = `${userId}/${Date.now()}.${ext}`
+  const path = `${userId}/${Date.now()}.${validatedImageExt(file)}`
   const { error } = await sb.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
   if (error) throw error
   const { data } = sb.storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl
+}
+
+function validatedImageExt(file: File): string {
+  const maxBytes = 5 * 1024 * 1024
+  const allowedTypes: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  }
+  const ext = allowedTypes[file.type]
+  if (!ext) throw new Error('JPEG, PNG, WebP, GIF のみアップロードできます')
+  if (file.size > maxBytes) throw new Error('画像は5MB以下にしてください')
+  return ext
+}
+
+export async function uploadMerchImage(sellerId: string, file: File): Promise<string> {
+  const sb = requireSupabase()
+  const path = `${sellerId}/${Date.now()}.${validatedImageExt(file)}`
+  const { error } = await sb.storage.from('merch').upload(path, file, { upsert: true, contentType: file.type })
+  if (error) throw error
+  const { data } = sb.storage.from('merch').getPublicUrl(path)
   return data.publicUrl
 }
 
@@ -750,4 +779,98 @@ export async function listVoteRankingNamed(eventId: string): Promise<Array<{ per
       return performer ? { performer, votes: r.votes } : null
     })
     .filter((x): x is { performer: Performer; votes: number } => Boolean(x))
+}
+
+export async function listActiveMerchProducts(): Promise<MerchProduct[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('merch_products')
+    .select('*')
+    .in('status', ['active', 'sold_out'])
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return (data as MerchProduct[]) ?? []
+}
+
+export async function getMerchProduct(id: string): Promise<MerchProduct | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('merch_products').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return (data as MerchProduct) ?? null
+}
+
+export async function listSellerMerchProducts(sellerId: string): Promise<MerchProduct[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('merch_products')
+    .select('*')
+    .eq('seller_id', sellerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data as MerchProduct[]) ?? []
+}
+
+export async function saveSellerMerchProduct(
+  sellerId: string,
+  input: {
+    id?: string
+    name: string
+    description: string
+    image_url: string | null
+    price_yen: number
+    stock: number
+    status: MerchProduct['status']
+  },
+) {
+  const sb = requireSupabase()
+  const payload = {
+    seller_id: sellerId,
+    name: input.name.trim().slice(0, 120),
+    description: input.description.trim().slice(0, 2000),
+    image_url: input.image_url,
+    price_yen: Math.max(100, Math.min(1000000, Math.floor(input.price_yen) || 100)),
+    stock: Math.max(0, Math.min(9999, Math.floor(input.stock) || 0)),
+    status: input.status,
+  }
+  const query = input.id
+    ? sb.from('merch_products').update(payload).eq('id', input.id).eq('seller_id', sellerId)
+    : sb.from('merch_products').insert(payload)
+  const { error } = await query
+  if (error) throw error
+}
+
+export async function listMyMerchOrders(buyerId: string): Promise<MerchOrder[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('merch_orders')
+    .select('*')
+    .eq('buyer_id', buyerId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return (data as MerchOrder[]) ?? []
+}
+
+export async function listSellerMerchOrders(sellerId: string): Promise<MerchOrder[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('merch_orders')
+    .select('*')
+    .eq('seller_id', sellerId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return (data as MerchOrder[]) ?? []
+}
+
+export async function createMerchCheckout(productId: string, quantity: number): Promise<string> {
+  const res = await fetch('/api/stripe/merch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ productId, quantity }),
+  })
+  const json = (await res.json()) as { url?: string; error?: string }
+  if (!res.ok || !json.url) throw new Error(json.error || 'Checkout failed')
+  return json.url
 }

@@ -7,6 +7,7 @@ import { useLang } from '../../i18n/LangProvider'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
 import { useTrackView } from '../lib/track'
 import type { Performer } from '../lib/types'
+import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 
 type Props = {
   performerId: string
@@ -67,6 +68,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
   if (!p) return <p className="pl-error">{error}</p>
 
   const watchable = Boolean(p.is_live)
+  const videoHref = safeExternalHref(p.video_url ?? undefined)
 
   return (
     <>
@@ -100,9 +102,9 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
             出演歴: {p.appearances}
           </p>
         ) : null}
-        {p.video_url ? (
+        {videoHref ? (
           <p className="pl-muted" style={{ marginTop: 8 }}>
-            <a href={p.video_url} target="_blank" rel="noopener noreferrer">
+            <a href={videoHref} target="_blank" rel="noopener noreferrer">
               紹介動画
             </a>
           </p>

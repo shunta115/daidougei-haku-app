@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type Stripe from 'stripe'
 import { finalizePaidTip } from './_finalizePaidTip.js'
+import { expireMerchOrderReservation, finalizePaidMerchOrder } from './_finalizeMerchOrder.js'
 import { getAdminSupabase, getStripe } from './_shared.js'
 
 export const config = {
@@ -42,7 +43,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.payment_status === 'paid') {
-        await finalizePaidTip(sb, session)
+        if (session.metadata?.kind === 'merch') {
+          await finalizePaidMerchOrder(sb, session)
+        } else {
+          await finalizePaidTip(sb, session)
+        }
+      }
+    }
+
+    if (event.type === 'checkout.session.expired') {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (session.metadata?.kind === 'merch') {
+        await expireMerchOrderReservation(sb, session)
       }
     }
 

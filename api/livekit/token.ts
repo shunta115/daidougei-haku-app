@@ -19,24 +19,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
-    if (!authHeader) {
-      res.status(401).json({ error: 'Authorization required' })
-      return
-    }
-
     const { performerId, asHost } = req.body as { performerId?: string; asHost?: boolean }
     if (!performerId) {
       res.status(400).json({ error: 'performerId required' })
       return
     }
 
+    const host = Boolean(asHost)
+    if (host && !authHeader) {
+      res.status(401).json({ error: 'Authorization required' })
+      return
+    }
+
     const sb = userClient(authHeader)
-    const { data: authData, error: authErr } = await sb.auth.getUser()
-    if (authErr || !authData.user) {
+    const { data: authData } = authHeader
+      ? await sb.auth.getUser()
+      : { data: { user: null } }
+    const user = authData.user
+    if (host && !user) {
       res.status(401).json({ error: 'Invalid session' })
       return
     }
-    const user = authData.user
 
     const { data: performer, error: perr } = await sb.from('performers').select('id, stage_name, is_approved, is_live').eq('id', performerId).maybeSingle()
     if (perr || !performer) {
@@ -44,9 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
-    const host = Boolean(asHost)
     if (host) {
-      if (user.id !== performerId) {
+      if (user?.id !== performerId) {
         res.status(403).json({ error: 'Only the performer can host this room' })
         return
       }
@@ -54,13 +56,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(403).json({ error: 'Performer is not approved yet' })
         return
       }
+    } else if (!performer.is_approved || !performer.is_live) {
+      res.status(403).json({ error: 'This live stream is not currently available' })
+      return
     }
 
-    const { data: profile } = await sb.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
-    const displayName = profile?.display_name || user.email || 'Guest'
+    const { data: profile } = user
+      ? await sb.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+      : { data: null }
+    const guestIdentity = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const identity = user?.id ?? guestIdentity
+    const displayName = profile?.display_name || user?.email || 'Guest'
     const room = roomNameForPerformer(performerId)
     const token = await createLiveKitToken({
-      identity: user.id,
+      identity,
       name: host ? performer.stage_name || displayName : displayName,
       room,
       canPublish: host,
@@ -72,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       url,
       room,
       performerId,
-      identity: user.id,
+      identity,
     })
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'Token failed' })

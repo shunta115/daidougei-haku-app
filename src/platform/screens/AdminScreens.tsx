@@ -139,11 +139,12 @@ export function AdminUsersScreen() {
             <button
               type="button"
               className="pl-btn pl-btn--ghost"
-              onClick={() =>
+              onClick={() => {
+                if (!window.confirm('Suspend this account?')) return
                 void suspendUser(u.id)
                   .then(reload)
                   .catch((e) => setError(e instanceof Error ? e.message : 'Suspend failed'))
-              }
+              }}
             >
               Suspend
             </button>

@@ -23,6 +23,10 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const setSafeAmount = (value: number) => {
+    setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))
+  }
+
   useEffect(() => {
     getPerformer(performerId).then(setP).catch(() => setP(null))
   }, [performerId])
@@ -96,9 +100,10 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
           className="pl-input"
           type="number"
           min={100}
+          max={100000}
           step={100}
           value={amount}
-          onChange={(e) => setAmount(Math.max(100, Number(e.target.value) || 100))}
+          onChange={(e) => setSafeAmount(Number(e.target.value))}
         />
       </label>
 

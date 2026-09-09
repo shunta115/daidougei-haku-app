@@ -253,11 +253,12 @@ export function AdminEventScreen() {
               <button
                 type="button"
                 className="pl-btn pl-btn--ghost"
-                onClick={() =>
+                onClick={() => {
+                  if (!window.confirm(`${v.name_ja} を削除します。実行しますか？`)) return
                   void deleteEventVenue(v.id)
                     .then(reload)
                     .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
-                }
+                }}
               >
                 削除
               </button>
@@ -298,11 +299,12 @@ export function AdminEventScreen() {
                 <button
                   type="button"
                   className="pl-btn pl-btn--ghost"
-                  onClick={() =>
+                  onClick={() => {
+                    if (!window.confirm(`${s.date} ${s.start_time} の出演枠を削除します。実行しますか？`)) return
                     void deleteEventSlot(s.id)
                       .then(reload)
                       .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
-                  }
+                  }}
                 >
                   削除
                 </button>
@@ -368,13 +370,13 @@ export function AdminEventScreen() {
                 <button
                   type="button"
                   className="pl-btn pl-btn--ghost"
-                  onClick={() =>
-                    event
-                      ? void removeEventLineup(event.id, id)
-                          .then(reload)
-                          .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
-                      : undefined
-                  }
+                  onClick={() => {
+                    if (!event) return
+                    if (!window.confirm(`${p?.stage_name ?? id} をラインナップから外します。実行しますか？`)) return
+                    void removeEventLineup(event.id, id)
+                      .then(reload)
+                      .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
+                  }}
                 >
                   外す
                 </button>

@@ -24,6 +24,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
             { key: 'performer-home', label: t('home') },
             { key: 'live-list', label: t('live') },
             { key: 'performer-live', label: t('goLive') },
+            { key: 'performer-merch', label: 'Goods' },
             { key: 'notifications', label: t('notifications') },
           ]
         : role === 'organizer'
@@ -37,6 +38,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
               { key: 'event-home', label: t('eventHome'), href: FESTIVAL_PATH },
               { key: 'fan-home', label: t('home') },
               { key: 'live-list', label: t('live') },
+              { key: 'merch-list', label: 'Goods' },
               { key: 'search', label: t('search') },
               { key: 'notifications', label: t('notifications') },
               { key: 'profile', label: t('profile') },
