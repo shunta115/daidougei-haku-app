@@ -54,6 +54,7 @@ Local audit result: Vercel CLI is not installed and `.vercel` project metadata i
 | `20260909_safe_runtime_grants.sql` | Production required if grants were not already applied | Safe replacement for the useful grant/policy portion of `20260728_fix_performer_grants_and_approve.sql`; does not force-approve performers. |
 | `20260909_avatar_storage_hardening.sql` | Production required after avatars bucket exists | Restricts avatar upload MIME and size. |
 | `20260909_merch_foundation.sql` | Production required for merch | Adds merch products/orders, RLS, settings, storage bucket/policies. |
+| `20260910_product_event_kpis.sql` | Production required for post-UX KPI tracking | Expands the `product_events.name` constraint for home/live/profile/follow/tip/merch/vote funnel events. Does not mutate existing rows. |
 
 Non-migration SQL files:
 
@@ -77,6 +78,7 @@ Non-migration SQL files:
 - Live: `performers.is_live`, `live_sessions`, `live_comments`, `live_tip_events`, realtime publications must exist.
 - Tips: `tips` accepts pending insert from authenticated fan; webhook/confirm updates via service role.
 - Merch: `merch_products` active/sold_out public read; seller can manage own products; `merch_orders` readable by buyer/seller/admin and written by service role.
+- Product events: `product_events.name` must accept both legacy events and the current KPI events (`home_view`, `live_view`, `performer_view`, `follow_click`, `follow_complete`, `tip_cta_click`, `tip_amount_select`, `tip_checkout_start`, `tip_complete`, `merch_view`, `merch_checkout_start`, `merch_purchase`, `vote_complete`).
 
 ## Stripe
 

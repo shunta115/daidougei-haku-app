@@ -61,7 +61,7 @@ export function HomeScreen({
   showStreamRegisterEntry,
 }: HomeScreenProps) {
   const { t } = useLang()
-  useTrackView('view_home')
+  useTrackView('home_view')
   useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
   const catalogReady = isLiveCatalogHydrated()
   const hasSchedule = getCatalogSlots().length > 0

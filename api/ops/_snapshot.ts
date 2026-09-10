@@ -8,6 +8,19 @@ export type OpsMetrics = {
   dau: number
   follows: number
   votes: number
+  home_view: number
+  performer_view: number
+  live_view: number
+  follow_click: number
+  follow_complete: number
+  tip_cta_click: number
+  tip_amount_select: number
+  tip_checkout_start: number
+  tip_complete: number
+  merch_view: number
+  merch_checkout_start: number
+  merch_purchase: number
+  vote_complete: number
   view_home: number
   view_performer: number
   click_tip: number
@@ -25,6 +38,19 @@ export type OpsMetrics = {
 }
 
 const EVENT_NAMES = [
+  'home_view',
+  'live_view',
+  'performer_view',
+  'follow_click',
+  'follow_complete',
+  'tip_cta_click',
+  'tip_amount_select',
+  'tip_checkout_start',
+  'tip_complete',
+  'merch_view',
+  'merch_checkout_start',
+  'merch_purchase',
+  'vote_complete',
   'view_home',
   'view_performer',
   'click_tip',
@@ -83,9 +109,14 @@ export async function buildDayMetrics(sb: SupabaseClient, day: string): Promise<
   ])
 
   const tips = (tipsRes.data ?? []) as Array<{ amount_cents: number }>
-  const viewPerformer = ev.view_performer ?? 0
-  const clickTip = ev.click_tip ?? 0
-  const tipSuccess = ev.tip_success ?? 0
+  const homeView = (ev.home_view ?? 0) + (ev.view_home ?? 0)
+  const viewPerformer = (ev.performer_view ?? 0) + (ev.view_performer ?? 0)
+  const liveView = (ev.live_view ?? 0) + (ev.live_view_start ?? 0)
+  const clickTip = (ev.tip_cta_click ?? 0) + (ev.click_tip ?? 0)
+  const checkoutStart = (ev.tip_checkout_start ?? 0) + (ev.tip_start ?? 0)
+  const tipSuccess = (ev.tip_complete ?? 0) + (ev.tip_success ?? 0)
+  const followComplete = (ev.follow_complete ?? 0) + (ev.follow ?? 0)
+  const voteComplete = (ev.vote_complete ?? 0) + (ev.vote ?? 0)
   const tracked = Object.values(ev).reduce((s, n) => s + n, 0)
 
   return {
@@ -96,16 +127,29 @@ export async function buildDayMetrics(sb: SupabaseClient, day: string): Promise<
     dau: dau.count ?? 0,
     follows: follows.count ?? 0,
     votes: votes.count ?? 0,
-    view_home: ev.view_home ?? 0,
+    home_view: homeView,
+    performer_view: viewPerformer,
+    live_view: liveView,
+    follow_click: ev.follow_click ?? 0,
+    follow_complete: followComplete,
+    tip_cta_click: clickTip,
+    tip_amount_select: ev.tip_amount_select ?? 0,
+    tip_checkout_start: checkoutStart,
+    tip_complete: tipSuccess,
+    merch_view: ev.merch_view ?? 0,
+    merch_checkout_start: ev.merch_checkout_start ?? 0,
+    merch_purchase: ev.merch_purchase ?? 0,
+    vote_complete: voteComplete,
+    view_home: homeView,
     view_performer: viewPerformer,
     click_tip: clickTip,
-    tip_start: ev.tip_start ?? 0,
+    tip_start: checkoutStart,
     tip_success: tipSuccess,
-    live_view_start: ev.live_view_start ?? 0,
+    live_view_start: liveView,
     signup_start: ev.signup_start ?? 0,
     signup_complete: ev.signup_complete ?? 0,
-    follow_events: ev.follow ?? 0,
-    vote_events: ev.vote ?? 0,
+    follow_events: followComplete,
+    vote_events: voteComplete,
     cvr_view_to_click: ratio(clickTip, viewPerformer),
     cvr_click_to_success: ratio(tipSuccess, clickTip),
     cvr_view_to_success: ratio(tipSuccess, viewPerformer),

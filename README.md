@@ -20,6 +20,7 @@
    - `supabase/migrations/20260909_safe_runtime_grants.sql`
    - `supabase/migrations/20260909_avatar_storage_hardening.sql`
    - `supabase/migrations/20260909_merch_foundation.sql`
+   - `supabase/migrations/20260910_product_event_kpis.sql`
 
    `supabase/migrations/20260728_fix_performer_grants_and_approve.sql` は既存performerを強制承認するため、人間レビューなしで本番適用しない。
 3. Authentication → Providers → Email を有効化（βは Confirm email をオフ推奨）

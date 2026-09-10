@@ -35,6 +35,6 @@ export function openLiveWatch(performerId: string): void {
 }
 
 export function openTip(performerId: string): void {
-  trackProductEvent('click_tip', { performerId })
+  trackProductEvent('tip_cta_click', { performerId, props: { surface: 'festival' } })
   spaGo(`${PLATFORM_PATH}?tipTo=${encodeURIComponent(performerId)}`)
 }

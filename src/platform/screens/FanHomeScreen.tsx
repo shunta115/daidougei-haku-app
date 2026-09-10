@@ -31,7 +31,7 @@ function shareApp() {
 
 export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onTip }: FanHomeProps) {
   const { user } = useAuth()
-  useTrackView('view_home')
+  useTrackView('home_view')
   const [mode, setMode] = useState<EventMode>(() => {
     const saved = window.localStorage.getItem('pl-event-mode')
     return saved === 'rain' ? 'rain' : 'normal'
@@ -307,7 +307,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
                         視聴する
                       </button>
                       <button type="button" className="fe-stream-card__support" onClick={() => onTip(p.id)}>
-                        応援する
+                        この人を応援する
                       </button>
                     </div>
                   </div>
@@ -368,7 +368,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
                   今すぐ見る
                 </button>
                 <button type="button" className="fe-btn fe-btn--glass" onClick={() => onTip(liveOshi[0].id)}>
-                  投げ銭する
+                  この人を応援する
                 </button>
               </div>
             </>

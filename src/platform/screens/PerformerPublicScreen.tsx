@@ -1,12 +1,25 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
-import { follow, getPerformer, isFollowing, isOshi, addOshi, removeOshi, unfollow, voteForPerformer, getFeaturedEvent, getMyVote, createReport } from '../lib/api'
+import {
+  addOshi,
+  createReport,
+  follow,
+  getFeaturedEvent,
+  getMyVote,
+  getPerformer,
+  isFollowing,
+  isOshi,
+  listSellerMerchProducts,
+  removeOshi,
+  unfollow,
+  voteForPerformer,
+} from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
-import { useTrackView } from '../lib/track'
-import type { Performer } from '../lib/types'
+import { trackProductEvent, useTrackView } from '../lib/track'
+import type { MerchProduct, Performer } from '../lib/types'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 
 type Props = {
@@ -19,12 +32,13 @@ type Props = {
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive }: Props) {
   const { user } = useAuth()
   const { t } = useLang()
-  useTrackView('view_performer', { performerId })
+  useTrackView('performer_view', { performerId })
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
   const [oshi, setOshi] = useState(false)
   const [voted, setVoted] = useState(false)
   const [eventId, setEventId] = useState<string | null>(null)
+  const [merch, setMerch] = useState<MerchProduct[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -35,6 +49,9 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
     getFeaturedEvent()
       .then((ev) => setEventId(ev?.id ?? null))
       .catch(() => setEventId(null))
+    listSellerMerchProducts(performerId)
+      .then((items) => setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out').slice(0, 3)))
+      .catch(() => setMerch([]))
   }, [performerId])
 
   useEffect(() => {
@@ -53,6 +70,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
   const toggleFollow = async () => {
     if (!user) return
     setBusy(true)
+    trackProductEvent('follow_click', { performerId, props: { surface: 'profile' } })
     try {
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
@@ -125,6 +143,29 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
         </button>
       ) : null}
 
+      {merch.length > 0 ? (
+        <section className="pl-card pl-profile-merch" aria-label="このパフォーマーのグッズ">
+          <div>
+            <p className="pl-profile-merch__eyebrow">GOODS</p>
+            <h2 className="pl-h2" style={{ marginTop: 2 }}>この人をもっと応援する</h2>
+          </div>
+          <div className="pl-profile-merch__grid">
+            {merch.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="pl-profile-merch__item"
+                onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
+              >
+                {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span aria-hidden="true" />}
+                <strong>{item.name}</strong>
+                <small>{item.status === 'sold_out' ? '売り切れ' : '購入できます'}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {user ? (
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" disabled={busy || !user} onClick={() => void toggleFollow()}>
@@ -152,8 +193,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
           >
             {oshi ? t('oshiOn') : t('oshi')}
           </button>
-          <button type="button" className="pl-btn pl-btn--block" onClick={onTip}>
-            {t('tip')}
+          <button type="button" className="pl-btn pl-btn--block pl-btn--tip" onClick={onTip}>
+            ❤️ この人を応援する
           </button>
           {eventId ? (
             <button
@@ -167,7 +208,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
                   .catch((e) => setError(e instanceof Error ? e.message : '投票に失敗しました'))
               }}
             >
-              {voted ? t('voted') : t('vote')}
+              {voted ? t('voted') : `${t('vote')}して応援する`}
             </button>
           ) : null}
           <button

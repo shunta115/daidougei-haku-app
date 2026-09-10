@@ -392,7 +392,7 @@ export async function follow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').insert({ fan_id: fanId, performer_id: performerId })
   if (error && error.code !== '23505') throw error
-  if (!error) trackProductEvent('follow', { performerId })
+  if (!error) trackProductEvent('follow_complete', { performerId })
 }
 
 export async function listFollowedPerformers(fanId: string): Promise<Performer[]> {
@@ -596,7 +596,7 @@ export async function voteForPerformer(eventId: string, performerId: string, fan
   await sb.from('event_votes').delete().eq('event_id', eventId).eq('fan_id', fanId)
   const { error } = await sb.from('event_votes').insert({ event_id: eventId, performer_id: performerId, fan_id: fanId })
   if (error) throw error
-  trackProductEvent('vote', { performerId, eventId })
+  trackProductEvent('vote_complete', { performerId, eventId })
 }
 
 export async function getMyVote(eventId: string, fanId: string): Promise<string | null> {

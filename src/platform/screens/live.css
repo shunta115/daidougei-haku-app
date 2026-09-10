@@ -200,8 +200,12 @@
 
 .pl-live__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr);
   gap: 8px;
+}
+
+.pl-live__support-cta {
+  min-height: 48px;
 }
 
 .pl-live__prefs {

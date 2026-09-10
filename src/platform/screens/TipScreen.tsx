@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
-import { formatYen, TIP_PRESETS_JPY } from '../lib/money'
+import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { getPerformer } from '../lib/api'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
@@ -27,6 +27,11 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
     setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))
   }
 
+  const selectAmount = (value: number, source: string) => {
+    setSafeAmount(value)
+    trackProductEvent('tip_amount_select', { performerId, props: { amount_yen: value, source } })
+  }
+
   useEffect(() => {
     getPerformer(performerId).then(setP).catch(() => setP(null))
   }, [performerId])
@@ -38,7 +43,7 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
     }
     setBusy(true)
     setError(null)
-    trackProductEvent('tip_start', { performerId })
+    trackProductEvent('tip_checkout_start', { performerId, props: { amount_yen: amount } })
     try {
       const res = await fetch('/api/stripe/tip', {
         method: 'POST',
@@ -77,19 +82,21 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
           {t('tipHeading')} {p?.stage_name ?? ''}
         </h1>
       )}
-      <p className="pl-muted">{p?.support_blurb || t('tipSecure')}</p>
+      <p className="pl-muted">{p?.support_blurb || '気持ちが冷める前に、拍手や歓声の代わりに応援を届けられます。決済はStripeで安全に処理されます。'}</p>
 
       <p className="pl-tip__amount">{formatYen(amount)}</p>
-      <div className="pl-chip-row">
+      <div className="pl-tip-presets" aria-label="応援金額">
         {TIP_PRESETS_JPY.map((yen) => (
           <button
             key={yen}
             type="button"
-            className="pl-chip"
+            className="pl-tip-preset"
             data-on={amount === yen}
-            onClick={() => setAmount(yen)}
+            onClick={() => selectAmount(yen, 'preset')}
           >
-            {formatYen(yen)}
+            <span className="pl-tip-preset__label">{TIP_PRESET_LABELS_JA[yen].label}</span>
+            <span className="pl-tip-preset__amount">{formatYen(yen)}</span>
+            {TIP_PRESET_LABELS_JA[yen].note ? <span className="pl-tip-preset__note">{TIP_PRESET_LABELS_JA[yen].note}</span> : null}
           </button>
         ))}
       </div>
@@ -104,11 +111,12 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
           step={100}
           value={amount}
           onChange={(e) => setSafeAmount(Number(e.target.value))}
+          onBlur={() => trackProductEvent('tip_amount_select', { performerId, props: { amount_yen: amount, source: 'custom' } })}
         />
       </label>
 
       <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
-        {busy ? t('processing') : `${t('payNow')} ${formatYen(amount)}`}
+        {busy ? t('processing') : `❤️ 応援を届ける ${formatYen(amount)}`}
       </button>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onBack}>
         {t('cancel')}

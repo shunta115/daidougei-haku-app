@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
-import { useTrackView } from '../lib/track'
+import { trackProductEvent, useTrackView } from '../lib/track'
 import {
   applyNetworkAdaptation,
   attachRemoteTrack,
@@ -49,9 +49,9 @@ function formatDuration(sec: number) {
 export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
-  useTrackView('live_view_start', { performerId }, Boolean(user))
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
+  useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
   const [elapsed, setElapsed] = useState(0)
@@ -207,6 +207,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
       spaGo(`${PLATFORM_PATH}?auth=1`)
       return
     }
+    trackProductEvent('follow_click', { performerId, props: { surface: 'live' } })
     try {
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
@@ -320,13 +321,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
           ))}
         </div>
         <div className="pl-live__actions">
-          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()}>
-            {following ? t('following') : t('follow')}
-          </button>
           <button
             type="button"
-            className="pl-btn pl-btn--tip"
+            className="pl-btn pl-btn--tip pl-live__support-cta"
             onClick={() => {
+              trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live_bottom_bar' } })
               if (!user) {
                 spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
                 return
@@ -334,7 +333,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
               onTip()
             }}
           >
-            {t('tip')}
+            ❤️ 応援する
+          </button>
+          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()}>
+            {following ? t('following') : t('follow')}
           </button>
         </div>
         <div className="pl-live__composer">

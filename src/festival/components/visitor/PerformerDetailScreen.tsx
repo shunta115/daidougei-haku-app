@@ -17,7 +17,7 @@ import { shouldShowAsLiveStream } from '../../lib/streamPresence'
 import { getCatalogFeaturedEvent } from '../../../catalog/liveCatalog'
 import { useAuth } from '../../../platform/lib/auth'
 import { follow, getMyVote, isFollowing, unfollow, voteForPerformer } from '../../../platform/lib/api'
-import { useTrackView } from '../../../platform/lib/track'
+import { trackProductEvent, useTrackView } from '../../../platform/lib/track'
 import { isSupabaseConfigured } from '../../../platform/lib/supabase'
 import { openPlatform } from '../../../app/routes'
 import { useLang } from '../../../i18n/LangProvider'
@@ -51,7 +51,7 @@ export function PerformerDetailScreen({
   onSupportStream,
   onBetaSupport,
 }: PerformerDetailScreenProps) {
-  useTrackView('view_performer', { performerId: p.id })
+  useTrackView('performer_view', { performerId: p.id })
   const schedule = slotsByPerformer(p.id)
   const tips = p.tipLinks ?? []
   const now = getDemoNow()
@@ -71,6 +71,7 @@ export function PerformerDetailScreen({
 
   const photo = resolvePerformerPhotoUrl(p.photoUrl)
   const onTip = () => {
+    trackProductEvent('tip_cta_click', { performerId: p.id, props: { surface: 'festival_profile' } })
     if (onSupportStream) {
       onSupportStream(p.id)
       return
@@ -327,6 +328,7 @@ function FollowTipBar({ performerId, onTip }: { performerId: string; onTip?: () 
             return
           }
           setBusy(true)
+          trackProductEvent('follow_click', { performerId, props: { surface: 'festival_profile' } })
           const run = following ? unfollow(user.id, performerId) : follow(user.id, performerId)
           void run
             .then(() => setFollowing(!following))

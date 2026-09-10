@@ -105,6 +105,7 @@ function PlatformShell() {
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
   const [tipFlash, setTipFlash] = useState<string | null>(null)
+  const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
 
   useEffect(() => {
@@ -120,6 +121,7 @@ function PlatformShell() {
     const liveList = url.searchParams.get('live')
     const merch = url.searchParams.get('merch')
     const merchProduct = url.searchParams.get('merchProduct')
+    const merchProductResultId = url.searchParams.get('productId')
     if (watch) {
       setPerformerId(watch)
       window.sessionStorage.setItem('pl-watch', watch)
@@ -154,23 +156,28 @@ function PlatformShell() {
     }
     if (tip === 'success') {
       setTipFlash('tipSuccess')
-      trackProductEvent('tip_success', { performerId: pid })
+      setTipFollowId(pid)
+      trackProductEvent('tip_complete', { performerId: pid })
       if (sessionId) window.sessionStorage.setItem('pl-tip-confirm', sessionId)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     } else if (tip === 'cancel') {
       setTipFlash('tipCancelled')
+      setTipFollowId(null)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     }
     if (merch === 'success') {
       setTipFlash('merchSuccess')
+      setTipFollowId(null)
+      trackProductEvent('merch_purchase', { performerId: pid, props: { product_id: merchProductResultId } })
       if (sessionId) window.sessionStorage.setItem('pl-merch-confirm', sessionId)
       setScreen('merch-list')
     } else if (merch === 'cancel') {
       setTipFlash('merchCancelled')
+      setTipFollowId(null)
       setScreen('merch-list')
     }
     if (tip || watch || auth || tipTo || stripe || liveList || merch || merchProduct) {
@@ -181,6 +188,7 @@ function PlatformShell() {
       url.searchParams.delete('stripe')
       url.searchParams.delete('live')
       url.searchParams.delete('merch')
+      url.searchParams.delete('productId')
       url.searchParams.delete('role')
       window.history.replaceState({}, '', url.pathname + url.search)
     }
@@ -359,7 +367,7 @@ function PlatformShell() {
             setScreen('live-list')
           }}
           onTip={() => {
-            trackProductEvent('click_tip', { performerId })
+            trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_live' } })
             setTipReturn('live-watch')
             setScreen('tip')
           }}
@@ -383,7 +391,7 @@ function PlatformShell() {
             setScreen('search')
           }}
           onTip={() => {
-            trackProductEvent('click_tip', { performerId })
+            trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_profile' } })
             setTipReturn('profile')
             setScreen('tip')
           }}
@@ -410,6 +418,18 @@ function PlatformShell() {
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
                 {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+                {tipFlash === 'tipSuccess' && tipFollowId ? (
+                  <button
+                    type="button"
+                    className="pl-tip-flash__cta"
+                    onClick={() => {
+                      setPerformerId(tipFollowId)
+                      setScreen('profile')
+                    }}
+                  >
+                    このパフォーマーをフォロー
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {guestBody}
@@ -440,7 +460,7 @@ function PlatformShell() {
           setScreen(homeForRole(role))
         }}
         onTip={() => {
-          trackProductEvent('click_tip', { performerId })
+          trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live' } })
           setTipReturn('live-watch')
           setScreen('tip')
         }}
@@ -467,7 +487,7 @@ function PlatformShell() {
           setScreen(homeForRole(role))
         }}
         onTip={() => {
-          trackProductEvent('click_tip', { performerId })
+          trackProductEvent('tip_cta_click', { performerId, props: { surface: 'profile' } })
           setTipReturn('profile')
           setScreen('tip')
         }}
@@ -486,7 +506,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
-              trackProductEvent('click_tip', { performerId: id })
+              trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home' } })
               setPerformerId(id)
               setTipReturn('fan-home')
               setScreen('tip')
@@ -564,7 +584,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onTip={(id) => {
-              trackProductEvent('click_tip', { performerId: id })
+              trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)
               setTipReturn('fan-home')
               setScreen('tip')
@@ -585,6 +605,18 @@ function PlatformShell() {
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+            {tipFlash === 'tipSuccess' && tipFollowId ? (
+              <button
+                type="button"
+                className="pl-tip-flash__cta"
+                onClick={() => {
+                  setPerformerId(tipFollowId)
+                  setScreen('profile')
+                }}
+              >
+                このパフォーマーをフォロー
+              </button>
+            ) : null}
           </div>
         ) : null}
         {body}

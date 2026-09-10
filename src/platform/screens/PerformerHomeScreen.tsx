@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
-import { listLiveHistory, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
+import { listLiveHistory, listSellerMerchProducts, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
@@ -20,18 +20,21 @@ export function PerformerHomeScreen({
   const [recent, setRecent] = useState<LiveSession[]>([])
   const [tips, setTips] = useState<TipRow[]>([])
   const [summary, setSummary] = useState<TipSummary>({ count: 0, amount_total: 0, fee_total: 0 })
+  const [merchCount, setMerchCount] = useState(0)
 
   useEffect(() => {
     if (!performer) return
     const load = async () => {
-      const [rows, tipRows, tipSum] = await Promise.all([
+      const [rows, tipRows, tipSum, merchRows] = await Promise.all([
         listLiveHistory(performer.id),
         listTipsForPerformer(performer.id),
         tipSummaryForPerformer(performer.id),
+        listSellerMerchProducts(performer.id).catch(() => []),
       ])
       setRecent(rows.slice(0, 3))
       setTips(tipRows.slice(0, 5))
       setSummary(tipSum)
+      setMerchCount(merchRows.filter((item) => item.status === 'active').length)
       await refreshProfile()
     }
     load().catch(() => {
@@ -45,6 +48,7 @@ export function PerformerHomeScreen({
   }, [performer, refreshProfile])
 
   if (!performer || !profile) return <p className="pl-muted">Loading…</p>
+  const profileComplete = Boolean(performer.photo_url && performer.bio.trim() && performer.genre.trim())
 
   return (
     <>
@@ -79,6 +83,25 @@ export function PerformerHomeScreen({
       {!performer.is_approved ? (
         <p className="pl-muted">An admin must approve your profile before fans can find you.</p>
       ) : null}
+
+      <section className="pl-card pl-next-actions" aria-label="次にやること">
+        <p className="pl-next-actions__eyebrow">NEXT ACTION</p>
+        <h2 className="pl-h2" style={{ marginTop: 2 }}>収益化に近づく次の一手</h2>
+        <div className="pl-next-actions__grid">
+          <button type="button" className="pl-next-actions__item" data-done={profileComplete} onClick={onEdit}>
+            <strong>{profileComplete ? 'プロフィールは公開準備OK' : 'プロフィールを完成させる'}</strong>
+            <span>写真・ジャンル・短い紹介で、初見のファンが数秒で理解できます。</span>
+          </button>
+          <button type="button" className="pl-next-actions__item" data-done={performer.is_live} onClick={onLive}>
+            <strong>{performer.is_live ? 'LIVE配信中' : 'LIVEを開始する'}</strong>
+            <span>視聴中の熱量が一番高いタイミングで応援につながります。</span>
+          </button>
+          <button type="button" className="pl-next-actions__item" data-done={merchCount > 0} onClick={onMerch}>
+            <strong>{merchCount > 0 ? `販売中グッズ ${merchCount}件` : 'グッズを追加する'}</strong>
+            <span>投げ銭後も応援したいファンの受け皿になります。</span>
+          </button>
+        </div>
+      </section>
 
       <button type="button" className="pl-btn pl-btn--block pl-btn--live" onClick={onLive}>
         {performer.is_live ? 'Manage LIVE' : 'LIVE開始'}

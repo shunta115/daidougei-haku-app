@@ -2,6 +2,19 @@ import { useEffect } from 'react'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 export type ProductEventName =
+  | 'home_view'
+  | 'live_view'
+  | 'performer_view'
+  | 'follow_click'
+  | 'follow_complete'
+  | 'tip_cta_click'
+  | 'tip_amount_select'
+  | 'tip_checkout_start'
+  | 'tip_complete'
+  | 'merch_view'
+  | 'merch_checkout_start'
+  | 'merch_purchase'
+  | 'vote_complete'
   | 'view_home'
   | 'view_performer'
   | 'click_tip'
@@ -30,11 +43,20 @@ function sessionId(): string {
 
 export function trackProductEvent(
   name: ProductEventName,
-  opts?: { performerId?: string | null; eventId?: string | null; props?: Record<string, unknown> },
+  opts?: { performerId?: string | null; eventId?: string | null; liveId?: string | null; props?: Record<string, unknown> },
 ) {
   if (!isSupabaseConfigured || !supabase) return
   const featuredId = opts?.eventId ?? null
   const path = typeof window !== 'undefined' ? window.location.pathname.slice(0, 200) : null
+  const baseProps = opts?.props && typeof opts.props === 'object' ? opts.props : {}
+  let referrer = 'direct'
+  try {
+    referrer = typeof document !== 'undefined' && document.referrer
+      ? new URL(document.referrer).hostname.slice(0, 120)
+      : 'direct'
+  } catch {
+    referrer = 'direct'
+  }
   const payload = {
     name,
     session_id: sessionId(),
@@ -42,7 +64,15 @@ export function trackProductEvent(
     performer_id: opts?.performerId ?? null,
     event_id: featuredId,
     path,
-    props: opts?.props && typeof opts.props === 'object' ? opts.props : {},
+    props: {
+      ...baseProps,
+      live_id: opts?.liveId ?? (baseProps.live_id as string | null | undefined) ?? null,
+      traffic_source: referrer,
+      device:
+        typeof navigator !== 'undefined' && /iPhone|Android.+Mobile/i.test(navigator.userAgent)
+          ? 'mobile'
+          : 'desktop',
+    },
   }
 
   void (async () => {

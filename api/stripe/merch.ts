@@ -125,8 +125,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           mode: 'payment',
           customer_email: buyerEmail ?? undefined,
           phone_number_collection: { enabled: true },
-          success_url: `${origin}/live?merch=success&session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${origin}/live?merch=cancel`,
+          success_url: `${origin}/live?merch=success&session_id={CHECKOUT_SESSION_ID}&productId=${encodeURIComponent(product.id)}&performerId=${encodeURIComponent(product.seller_id)}`,
+          cancel_url: `${origin}/live?merch=cancel&productId=${encodeURIComponent(product.id)}&performerId=${encodeURIComponent(product.seller_id)}`,
           line_items: [
             {
               quantity: qty,

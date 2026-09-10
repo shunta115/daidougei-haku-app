@@ -13,6 +13,7 @@ import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, MerchProduct } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
+import { trackProductEvent, useTrackView } from '../lib/track'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
@@ -30,6 +31,7 @@ function orderBuyerLabel(order: MerchOrder) {
 
 export function MerchListScreen({ onOpenProduct }: MerchListProps) {
   const { user } = useAuth()
+  useTrackView('merch_view')
   const [products, setProducts] = useState<MerchProduct[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -110,11 +112,15 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
 
   useEffect(() => {
     getMerchProduct(productId)
-      .then(setProduct)
+      .then((item) => {
+        setProduct(item)
+        if (item) trackProductEvent('merch_view', { performerId: item.seller_id, props: { product_id: item.id } })
+      })
       .catch((e) => setError(e instanceof Error ? e.message : '商品を読み込めませんでした'))
   }, [productId])
 
   const buy = async () => {
+    if (!product) return
     if (!user) {
       window.sessionStorage.setItem('pl-merch-product', productId)
       spaGo(`${PLATFORM_PATH}?auth=1`)
@@ -122,6 +128,7 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
     }
     setBusy(true)
     setError(null)
+    trackProductEvent('merch_checkout_start', { performerId: product.seller_id, props: { product_id: productId, quantity } })
     try {
       const url = await createMerchCheckout(productId, quantity)
       window.location.href = url

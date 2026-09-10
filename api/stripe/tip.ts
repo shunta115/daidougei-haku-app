@@ -54,12 +54,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const origin = getAppUrl(req)
     const safeReturn = returnTo === 'live'
+    const performerParam = `performerId=${encodeURIComponent(performerId)}`
     const successUrl = safeReturn
-      ? `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}&return=live&performerId=${encodeURIComponent(performerId)}`
-      : `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}`
+      ? `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}&return=live&${performerParam}`
+      : `${origin}/live?tip=success&session_id={CHECKOUT_SESSION_ID}&${performerParam}`
     const cancelUrl = safeReturn
-      ? `${origin}/live?tip=cancel&return=live&performerId=${encodeURIComponent(performerId)}`
-      : `${origin}/live?tip=cancel`
+      ? `${origin}/live?tip=cancel&return=live&${performerParam}`
+      : `${origin}/live?tip=cancel&${performerParam}`
 
     let feeBps = PLATFORM_FEE_BPS
     try {
