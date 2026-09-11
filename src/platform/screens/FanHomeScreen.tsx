@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
 import { FESTIVAL_PATH, spaGo } from '../../app/routes'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import { getFeaturedEvent, listEventLineup, listFollowedPerformers, listOshiPerformers, searchPerformers, listLivePerformers } from '../lib/api'
@@ -97,6 +97,19 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
 
   const featuredLive = live[0] ?? null
   const nextPick = roster.find((p) => !p.is_live) ?? null
+  const spotlight = featuredLive ?? liveOshi[0] ?? oshi[0] ?? roster[0] ?? null
+  const spotlightSource = featuredLive ? 'LIVE NOW' : liveOshi[0] ? 'OSHI LIVE' : oshi[0] ? 'YOUR OSHI' : 'FEATURED'
+  const discoveryRail = useMemo(() => {
+    const seen = new Set<string>()
+    return [live, oshi, roster]
+      .flat()
+      .filter((p) => {
+        if (seen.has(p.id)) return false
+        seen.add(p.id)
+        return true
+      })
+      .slice(0, 10)
+  }, [live, oshi, roster])
 
   return (
     <main className={`fe-main fe-main--home fe-main--h6 fe-main--stream-home pl-fan-home${rain ? ' fe-main--h6-rain' : ''}`}>
@@ -107,7 +120,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           {live.length > 0 ? <span className="fe-strip__pill">LIVE中</span> : null}
         </div>
         <div className="fe-strip__meta">
-          <span>{eventLabel.date || '開催日は準備中'}</span>
+          <span>{eventLabel.date || '10.10-10.12'}</span>
           {eventLabel.place ? (
             <>
               <span className="fe-strip__sep">·</span>
@@ -128,9 +141,96 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         </button>
       </header>
 
+      {spotlight ? (
+        <section
+          className={`pl-fan-stage${spotlight.is_live ? ' pl-fan-stage--live' : ''}${spotlight.photo_url ? ' pl-fan-stage--photo' : ''}`}
+          style={{ '--pl-fan-stage-photo': spotlight.photo_url ? `url(${spotlight.photo_url})` : 'none' } as CSSProperties}
+          aria-labelledby="pl-fan-stage-title"
+        >
+          <div className="pl-fan-stage__image" aria-hidden="true">
+            {!spotlight.photo_url ? <span>{spotlight.stage_name.slice(0, 2)}</span> : null}
+          </div>
+          <div className="pl-fan-stage__shade" aria-hidden="true" />
+          <div className="pl-fan-stage__content">
+            <p className="pl-fan-stage__brand">大道芸博</p>
+            <p className="pl-fan-stage__signal">
+              <span aria-hidden="true" />
+              {spotlightSource}
+            </p>
+            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">
+              {spotlight.stage_name}
+            </h1>
+            <p className="pl-fan-stage__genre">{spotlight.genre || 'Street Performance'}</p>
+            <p className="pl-fan-stage__copy">
+              {spotlight.is_live
+                ? 'いま起きている演技を、無料で視聴できます。'
+                : '気になった瞬間にフォローして、LIVEや出演を逃さない。'}
+            </p>
+            <div className="pl-fan-stage__actions">
+              <button
+                type="button"
+                className="pl-fan-stage__primary"
+                onClick={() => (spotlight.is_live ? onWatchLive(spotlight.id) : onOpenPerformer(spotlight.id))}
+              >
+                {spotlight.is_live ? 'LIVEを見る' : 'プロフィールを見る'}
+              </button>
+              <button type="button" className="pl-fan-stage__secondary" onClick={() => onOpenPerformer(spotlight.id)}>
+                フォロー
+              </button>
+              <button type="button" className="pl-fan-stage__support" onClick={() => onTip(spotlight.id)}>
+                ❤️ 応援する
+              </button>
+            </div>
+            <p className="pl-fan-stage__meta">
+              {[spotlight.city, spotlight.country].filter(Boolean).join(' · ') || '大道芸博'} · {spotlight.is_live ? '現在LIVE中' : '出演・配信をチェック'}
+            </p>
+          </div>
+        </section>
+      ) : (
+        <section className="pl-fan-stage pl-fan-stage--empty" aria-labelledby="pl-fan-stage-title">
+          <div className="pl-fan-stage__content">
+            <p className="pl-fan-stage__brand">大道芸博</p>
+            <p className="pl-fan-stage__signal">DISCOVERY</p>
+            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">推しを見つける</h1>
+            <p className="pl-fan-stage__copy">LIVE、プロフィール、グッズから、応援したいパフォーマーへすぐ進めます。</p>
+            <button type="button" className="pl-fan-stage__primary" onClick={onOpenSearch}>
+              出演者を見る
+            </button>
+          </div>
+        </section>
+      )}
+
+      {discoveryRail.length > 0 ? (
+        <section className="pl-person-rail" aria-label="発見する">
+          <div className="pl-person-rail__head">
+            <div>
+              <p>DISCOVER</p>
+              <h2>次に好きになる人</h2>
+            </div>
+            <button type="button" onClick={onOpenSearch}>すべて</button>
+          </div>
+          <div className="pl-person-rail__scroll" role="list">
+            {discoveryRail.map((p) => (
+              <article key={p.id} className="pl-person-tile" role="listitem">
+                <button type="button" className="pl-person-tile__photo" onClick={() => onOpenPerformer(p.id)}>
+                  {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span>{p.stage_name.slice(0, 2)}</span>}
+                  {p.is_live ? <em>LIVE</em> : null}
+                </button>
+                <button type="button" className="pl-person-tile__name" onClick={() => onOpenPerformer(p.id)}>{p.stage_name}</button>
+                <small>{p.genre || p.city || 'Performance'}</small>
+                <div className="pl-person-tile__actions">
+                  <button type="button" onClick={() => (p.is_live ? onWatchLive(p.id) : onOpenPerformer(p.id))}>見る</button>
+                  <button type="button" onClick={() => onTip(p.id)}>応援</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <p className="fe-public-prep" role="note">
         <button type="button" className="pl-btn pl-btn--ghost" onClick={() => spaGo(FESTIVAL_PATH)}>
-          開催情報・タイムテーブル・会場マップを見る
+          イベント・タイムテーブル・会場マップ
         </button>
       </p>
 
@@ -163,16 +263,17 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
 
       {error ? <p className="pl-error">{error}</p> : null}
 
+      {(featuredLive || nextPick || todayRail.length > 0) ? (
       <section className="fe-home-venue-block" aria-labelledby="fe-home-venue-title">
         <h2 id="fe-home-venue-title" className="fe-home-venue-block__title">
-          会場の今
+          次に見るパフォーマー
         </h2>
-        <p className="fe-home-venue-block__sub">LIVE · 次に見るべきパフォーマー · 街の空気</p>
+        <p className="fe-home-venue-block__sub">LIVE · 本日の出演 · フォロー候補</p>
 
         <div className={`fe-h6-live${featuredLive ? ' fe-h6-live--on' : ''}`}>
           <div className="fe-h6-live__head">
             <span className="fe-h6-live__tag" lang="en">
-              {featuredLive ? 'LIVE NOW' : 'STANDBY'}
+              {featuredLive ? 'LIVE NOW' : 'NEXT'}
             </span>
             {featuredLive ? <span className="fe-h6-live__pulse" aria-hidden="true" /> : null}
           </div>
@@ -196,14 +297,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
                 </p>
               </div>
             </button>
-          ) : (
-            <div className="fe-h6-live__card fe-h6-live__card--next">
-              <div className="fe-h6-live__info">
-                <p className="fe-h6-live__nextk">いま配信中の枠はありません</p>
-                <p className="fe-h6-live__meta">検索からパフォーマーを見つけてフォローしましょう</p>
-              </div>
-            </div>
-          )}
+          ) : null}
           {nextPick ? (
             <button type="button" className="fe-h6-live__card fe-h6-live__card--next" onClick={() => onOpenPerformer(nextPick.id)}>
               <div className="fe-h6-live__info">
@@ -252,7 +346,9 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           </div>
         </section>
       </section>
+      ) : null}
 
+      {live.length > 0 ? (
       <section className="fe-stream-hero" aria-labelledby="fe-stream-hero-title">
         <div className="fe-stream-hero__glow" aria-hidden="true" />
         <header className="fe-stream-hero__head">
@@ -270,12 +366,6 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           <p className="fe-stream-hero__sub">承認されたパフォーマーだけが配信できます。視聴は無料 · 応援はWEBで完結。</p>
         </header>
 
-        {live.length === 0 ? (
-          <div className="fe-stream-hero__empty">
-            <p className="fe-stream-hero__empty-t">現在ライブ配信中のパフォーマーはいません</p>
-            <p className="fe-stream-hero__empty-h">フォローしておくと、次の配信を逃しません</p>
-          </div>
-        ) : (
           <ul className="fe-stream-hero__list">
             {live.map((p) => (
               <li key={p.id}>
@@ -315,8 +405,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
               </li>
             ))}
           </ul>
-        )}
       </section>
+      ) : null}
 
       <div className="fe-h6-maprow">
         <button type="button" className="fe-h6-maprow__primary" onClick={onOpenSearch}>
@@ -327,7 +417,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         </button>
       </div>
       <p className="fe-home-loc-note" role="note">
-        世界マップは準備中です。位置共有ONのライブは下に表示されます。
+        位置共有ONのライブはここに表示されます。会場MAPから次に見る人を探せます。
       </p>
 
       <section className="pl-map-panel" aria-label="位置共有中のライブ">

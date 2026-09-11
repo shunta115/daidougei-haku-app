@@ -63,27 +63,31 @@ export function MerchListScreen({ onOpenProduct }: MerchListProps) {
 
   return (
     <>
-      <h1 className="pl-h1">グッズ</h1>
-      <p className="pl-muted">出演者の公式グッズを購入できます。決済はStripeで安全に処理されます。</p>
+      <section className="pl-merch-market-hero" aria-labelledby="pl-merch-market-title">
+        <p>MERCH</p>
+        <h1 id="pl-merch-market-title">応援を、持ち帰る</h1>
+        <span>気に入ったパフォーマーのグッズ購入も、次の演技を支える応援になります。</span>
+      </section>
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-muted">Loading…</p> : null}
-      {!loading && products.length === 0 ? <div className="pl-empty">販売中のグッズはまだありません。</div> : null}
-      {products.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          className="pl-card pl-row"
-          style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
-          onClick={() => onOpenProduct(p.id)}
-        >
-          {p.image_url ? <img className="pl-merch-thumb" src={p.image_url} alt="" loading="lazy" /> : <div className="pl-merch-thumb" aria-hidden="true" />}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700 }}>{p.name}</div>
-            <div className="pl-muted">{formatYen(p.price_yen)}</div>
-            <div className="pl-muted">{p.stock > 0 ? `在庫 ${p.stock}` : '売り切れ'}</div>
-          </div>
-        </button>
-      ))}
+      {!loading && products.length === 0 ? <div className="pl-empty">グッズ公開後、ここから購入できます。</div> : null}
+      <div className="pl-merch-grid" role="list">
+        {products.map((p) => (
+          <article key={p.id} className="pl-merch-card" role="listitem">
+            <button type="button" className="pl-merch-card__photo" onClick={() => onOpenProduct(p.id)}>
+              {p.image_url ? <img src={p.image_url} alt="" loading="lazy" /> : <span aria-hidden="true" />}
+              <em>{p.stock > 0 ? `残り ${p.stock}` : 'SOLD OUT'}</em>
+            </button>
+            <div className="pl-merch-card__body">
+              <button type="button" className="pl-merch-card__name" onClick={() => onOpenProduct(p.id)}>{p.name}</button>
+              <p>{formatYen(p.price_yen)}</p>
+              <button type="button" className="pl-merch-card__cta" onClick={() => onOpenProduct(p.id)}>
+                詳細を見る
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
 
       {user ? (
         <>
@@ -148,12 +152,14 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
         Back
       </button>
-      <div className="pl-card" style={{ marginTop: 12 }}>
-        {product.image_url ? <img className="pl-merch-hero" src={product.image_url} alt="" /> : null}
-        <h1 className="pl-h1" style={{ marginTop: 12 }}>{product.name}</h1>
+      <div className="pl-merch-detail">
+        {product.image_url ? <img className="pl-merch-detail__image" src={product.image_url} alt="" /> : <div className="pl-merch-detail__image" aria-hidden="true" />}
+        <div className="pl-merch-detail__body">
+        <p className="pl-merch-detail__k">OFFICIAL GOODS</p>
+        <h1 className="pl-h1">{product.name}</h1>
         <p className="pl-tip__amount">{formatYen(product.price_yen)}</p>
-        <p className="pl-muted">{product.description || '商品説明は準備中です。'}</p>
-        <p className="pl-muted">{product.stock > 0 ? `在庫 ${product.stock}` : '売り切れ'}</p>
+        <p className="pl-muted">{product.description || 'この商品を購入して、パフォーマーの活動を応援できます。'}</p>
+        <p className="pl-merch-detail__stock">{product.stock > 0 ? `在庫 ${product.stock}` : '売り切れ'}</p>
         <label>
           <span className="pl-label">数量</span>
           <input
@@ -167,8 +173,9 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
           />
         </label>
         <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available} onClick={() => void buy()}>
-          {busy ? 'Processing…' : user ? '購入する' : 'ログインして購入'}
+          {busy ? 'Processing…' : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
         </button>
+        </div>
       </div>
       {error ? <p className="pl-error">{error}</p> : null}
     </>

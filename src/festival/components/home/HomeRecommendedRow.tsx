@@ -7,9 +7,11 @@ import { useLang } from '../../../i18n/LangProvider'
 type HomeRecommendedRowProps = {
   performers: readonly Performer[]
   onOpenDetail: (id: string) => void
+  onSupport?: (id: string) => void
+  onWatch?: (id: string) => void
 }
 
-export function HomeRecommendedRow({ performers, onOpenDetail }: HomeRecommendedRowProps) {
+export function HomeRecommendedRow({ performers, onOpenDetail, onSupport, onWatch }: HomeRecommendedRowProps) {
   const { t } = useLang()
   if (!performers.length) return null
 
@@ -26,17 +28,17 @@ export function HomeRecommendedRow({ performers, onOpenDetail }: HomeRecommended
           const photo = resolvePerformerPhotoUrl(p.photoUrl)
           const live = shouldShowAsLiveStream(p)
           return (
-            <button
+            <article
               key={p.id}
-              type="button"
               role="listitem"
               className="fe-home-acts__card"
-              aria-label={p.nameJa || p.name}
-              onClick={() => onOpenDetail(p.id)}
             >
-              <span
+              <button
+                type="button"
                 className={`fe-home-acts__photo${photo ? ' fe-home-acts__photo--img' : ''}`}
                 style={photo ? { backgroundImage: `url(${photo})` } : { background: p.gradient }}
+                aria-label={`${p.nameJa || p.name}の詳細を見る`}
+                onClick={() => onOpenDetail(p.id)}
               >
                 {!photo ? initials(p.nameJa || p.name) : null}
                 {live ? (
@@ -44,11 +46,26 @@ export function HomeRecommendedRow({ performers, onOpenDetail }: HomeRecommended
                     LIVE
                   </span>
                 ) : null}
-              </span>
-              <span className="fe-home-acts__name">{p.nameJa || p.name}</span>
+              </button>
+              <button type="button" className="fe-home-acts__name" onClick={() => onOpenDetail(p.id)}>
+                {p.nameJa || p.name}
+              </button>
               <span className="fe-home-acts__genre">{p.genre ?? p.actJa}</span>
               <span className="fe-home-acts__when">{formatPerformerScheduleSummary(p.id)}</span>
-            </button>
+              <div className="fe-home-acts__actions">
+                <button type="button" onClick={() => (live && onWatch ? onWatch(p.id) : onOpenDetail(p.id))}>
+                  見る
+                </button>
+                <button type="button" onClick={() => onOpenDetail(p.id)}>
+                  フォロー
+                </button>
+                {onSupport ? (
+                  <button type="button" onClick={() => onSupport(p.id)}>
+                    応援
+                  </button>
+                ) : null}
+              </div>
+            </article>
           )
         })}
       </div>

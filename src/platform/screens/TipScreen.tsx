@@ -69,21 +69,24 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
         {t('back')}
       </button>
-      {p?.photo_url ? (
-        <div
-          className="pl-tip-hero"
-          style={{ backgroundImage: `url(${p.photo_url})` }}
-        >
-          <div className="pl-tip-hero__shade" />
-          <p className="pl-tip-hero__name">{p.stage_name}</p>
+      <section
+        className={`pl-tip-hero${p?.photo_url ? ' pl-tip-hero--photo' : ''}`}
+        style={p?.photo_url ? { backgroundImage: `url(${p.photo_url})` } : undefined}
+        aria-labelledby="pl-tip-title"
+      >
+        <div className="pl-tip-hero__shade" />
+        <div className="pl-tip-hero__body">
+          <p className="pl-tip-hero__k">SUPPORT</p>
+          <h1 id="pl-tip-title" className="pl-tip-hero__name">
+            {p?.stage_name ? `${p.stage_name}へ応援を届ける` : t('tipHeading')}
+          </h1>
+          <p className="pl-tip-hero__copy">
+            {p?.support_blurb || '気持ちが動いた瞬間に、拍手の続きとして応援できます。決済はStripeで安全に処理されます。'}
+          </p>
         </div>
-      ) : (
-        <h1 className="pl-h1">
-          {t('tipHeading')} {p?.stage_name ?? ''}
-        </h1>
-      )}
-      <p className="pl-muted">{p?.support_blurb || '気持ちが冷める前に、拍手や歓声の代わりに応援を届けられます。決済はStripeで安全に処理されます。'}</p>
+      </section>
 
+      <section className="pl-tip-decision" aria-label="応援金額の選択">
       <p className="pl-tip__amount">{formatYen(amount)}</p>
       <div className="pl-tip-presets" aria-label="応援金額">
         {TIP_PRESETS_JPY.map((yen) => (
@@ -118,6 +121,7 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
       <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
         {busy ? t('processing') : `❤️ 応援を届ける ${formatYen(amount)}`}
       </button>
+      </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onBack}>
         {t('cancel')}
       </button>

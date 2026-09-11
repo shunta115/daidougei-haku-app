@@ -307,12 +307,14 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
       </div>
 
       <div className="pl-live__panel pl-live__panel--live" data-dim={isOverlayChrome && !chromeVisible}>
-        {mode === 'desktop' || mode.startsWith('tablet') ? (
+        <div className="pl-live__creator-mini">
+          {p?.photo_url ? <img src={p.photo_url} alt="" /> : <span aria-hidden="true">{p?.stage_name?.slice(0, 2) || 'DH'}</span>}
           <div>
-            <strong>{p?.stage_name}</strong>
-            <div className="pl-muted">{p?.live_title || p?.genre || ''}</div>
+            <strong>{p?.stage_name || 'LIVE'}</strong>
+            <small>{p?.live_title || p?.genre || 'いま起きているパフォーマンス'}</small>
           </div>
-        ) : null}
+          {p?.is_live ? <em>LIVE</em> : null}
+        </div>
         <div className="pl-live__comments">
           {comments.map((c) => (
             <div key={c.id} className="pl-live__comment">

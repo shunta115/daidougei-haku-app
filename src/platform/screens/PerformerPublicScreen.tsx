@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
 import {
@@ -68,7 +68,10 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
   }, [user, eventId, performerId])
 
   const toggleFollow = async () => {
-    if (!user) return
+    if (!user) {
+      spaGo(`${PLATFORM_PATH}?auth=1`)
+      return
+    }
     setBusy(true)
     trackProductEvent('follow_click', { performerId, props: { surface: 'profile' } })
     try {
@@ -90,58 +93,63 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
 
   return (
     <>
-      <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
+      <button type="button" className="pl-btn pl-btn--ghost pl-profile-back" onClick={onBack}>
         {t('back')}
       </button>
-      <div className="pl-card" style={{ marginTop: 12, textAlign: 'center' }}>
-        <Avatar url={p.photo_url} name={p.stage_name} large />
-        {p.is_live ? (
-          <p style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-            <LiveBadge />
+      <section
+        className={`pl-profile-stage${p.photo_url ? ' pl-profile-stage--photo' : ''}${p.is_live ? ' pl-profile-stage--live' : ''}`}
+        style={{ '--pl-profile-photo': p.photo_url ? `url(${p.photo_url})` : 'none' } as CSSProperties}
+        aria-labelledby="pl-profile-title"
+      >
+        <div className="pl-profile-stage__media" aria-hidden="true">
+          {!p.photo_url ? <Avatar url={p.photo_url} name={p.stage_name} large /> : null}
+        </div>
+        <div className="pl-profile-stage__shade" aria-hidden="true" />
+        <div className="pl-profile-stage__body">
+          {p.is_live ? <LiveBadge /> : <span className="pl-profile-stage__badge">PERFORMER</span>}
+          <h1 id="pl-profile-title" className="pl-profile-stage__name">{p.stage_name}</h1>
+          <p className="pl-profile-stage__genre">
+            {p.genre || 'Performance'}
+            {p.city ? ` · ${p.city}` : ''}
+            {p.country ? ` · ${p.country}` : ''}
           </p>
-        ) : null}
-        <h1 className="pl-h1" style={{ marginTop: 12 }}>
-          {p.stage_name}
-        </h1>
-        <p className="pl-muted">
-          {p.genre}
-          {p.city ? ` · ${p.city}` : ''}
-          {p.country ? ` · ${p.country}` : ''}
-        </p>
-        {p.is_live && p.live_title ? <p className="pl-muted">{p.live_title}</p> : null}
-        <p style={{ marginTop: 12, lineHeight: 1.5 }}>{p.bio || t('profileReady')}</p>
-        {p.awards ? (
-          <p className="pl-muted" style={{ marginTop: 8 }}>
-            受賞歴: {p.awards}
-          </p>
-        ) : null}
-        {p.appearances ? (
-          <p className="pl-muted" style={{ marginTop: 8 }}>
-            出演歴: {p.appearances}
-          </p>
-        ) : null}
+          {p.is_live && p.live_title ? <p className="pl-profile-stage__live-title">{p.live_title}</p> : null}
+          <div className="pl-profile-stage__actions">
+            {watchable ? (
+              <button type="button" className="pl-profile-stage__primary" onClick={onWatchLive}>
+                LIVEを見る
+              </button>
+            ) : (
+              <button type="button" className="pl-profile-stage__primary" onClick={() => void toggleFollow()}>
+                {following ? 'フォロー中' : 'フォローする'}
+              </button>
+            )}
+            <button type="button" className="pl-profile-stage__secondary" disabled={busy} onClick={() => void toggleFollow()}>
+              {following ? t('following') : t('follow')}
+            </button>
+            <button type="button" className="pl-profile-stage__support" onClick={onTip}>
+              ❤️ この人を応援する
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="pl-card pl-profile-story" aria-label="プロフィール">
+        <p>{p.bio || t('profileReady')}</p>
+        {p.awards ? <p className="pl-muted">受賞歴: {p.awards}</p> : null}
+        {p.appearances ? <p className="pl-muted">出演歴: {p.appearances}</p> : null}
         {videoHref ? (
-          <p className="pl-muted" style={{ marginTop: 8 }}>
+          <p className="pl-muted">
             <a href={videoHref} target="_blank" rel="noopener noreferrer">
               紹介動画
             </a>
           </p>
         ) : null}
         {Array.isArray(p.sns_json) && p.sns_json.length > 0 ? (
-          <p className="pl-muted" style={{ marginTop: 8 }}>
-            {p.sns_json.map((s) => s.label).join(' / ')}
-          </p>
+          <p className="pl-muted">{p.sns_json.map((s) => s.label).join(' / ')}</p>
         ) : null}
-        {p.share_location && p.lat != null && p.lng != null ? (
-          <p className="pl-muted">Approx. location shared while live.</p>
-        ) : null}
-      </div>
-
-      {watchable ? (
-        <button type="button" className="pl-btn pl-btn--block pl-btn--live" onClick={onWatchLive}>
-          {t('watchInApp')}
-        </button>
-      ) : null}
+        {p.share_location && p.lat != null && p.lng != null ? <p className="pl-muted">Approx. location shared while live.</p> : null}
+      </section>
 
       {merch.length > 0 ? (
         <section className="pl-card pl-profile-merch" aria-label="このパフォーマーのグッズ">
@@ -167,10 +175,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
       ) : null}
 
       {user ? (
-        <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" disabled={busy || !user} onClick={() => void toggleFollow()}>
-            {following ? t('following') : t('follow')}
-          </button>
+        <div className="pl-profile-next-actions">
           <button
             type="button"
             className="pl-btn pl-btn--block pl-btn--ghost"
@@ -192,9 +197,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
             }}
           >
             {oshi ? t('oshiOn') : t('oshi')}
-          </button>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--tip" onClick={onTip}>
-            ❤️ この人を応援する
           </button>
           {eventId ? (
             <button
