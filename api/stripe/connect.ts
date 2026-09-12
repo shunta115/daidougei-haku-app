@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
+import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountChargeReady, requireAuthUser } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -32,7 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let accountId = performer.stripe_account_id as string | null
     if (!accountId) {
       const account = await stripe.accounts.create({
-        type: 'express',
+        controller: {
+          fees: { payer: 'account' },
+          losses: { payments: 'stripe' },
+          requirement_collection: 'stripe',
+          stripe_dashboard: { type: 'full' },
+        },
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -41,6 +46,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       accountId = account.id
       await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
+    } else {
+      const account = await stripe.accounts.retrieve(accountId)
+      await sb
+        .from('performers')
+        .update({ stripe_onboarding_complete: isConnectedAccountChargeReady(account) })
+        .eq('id', performerId)
     }
 
     const origin = getAppUrl(req)

@@ -87,11 +87,20 @@ export type TipRow = {
   fan_id: string | null
   performer_id: string
   amount_cents: number
+  gross_amount_yen?: number | null
   currency: string
   platform_fee_cents: number
+  platform_fee_yen?: number | null
   status: TipStatus
   stripe_session_id: string | null
   stripe_payment_intent: string | null
+  stripe_payment_intent_id?: string | null
+  stripe_charge_id?: string | null
+  connected_account_id?: string | null
+  stripe_checkout_mode?: string | null
+  stripe_application_fee_id?: string | null
+  refunded_amount_yen?: number | null
+  dispute_status?: string | null
   created_at: string
   updated_at: string
 }
@@ -154,11 +163,20 @@ export type MerchOrder = {
   unit_price_yen: number
   quantity: number
   amount_yen: number
+  gross_amount_yen?: number | null
   currency: string
   platform_fee_yen: number
   status: MerchOrderStatus
   stripe_session_id: string | null
   stripe_payment_intent: string | null
+  stripe_payment_intent_id?: string | null
+  stripe_charge_id?: string | null
+  connected_account_id?: string | null
+  stripe_checkout_mode?: string | null
+  stripe_application_fee_id?: string | null
+  refunded_amount_yen?: number | null
+  dispute_status?: string | null
+  seller_responsibility?: string | null
   created_at: string
   updated_at: string
 }

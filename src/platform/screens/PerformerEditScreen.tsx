@@ -5,6 +5,18 @@ import { useAuth } from '../lib/auth'
 import { requireSupabase, supabaseAuthHeaders } from '../lib/supabase'
 import { isValidHttpUrl } from '../../festival/lib/productionGuard'
 
+const SNS_FIELDS = [
+  { key: 'Instagram', label: 'Instagram' },
+  { key: 'X', label: 'X' },
+  { key: 'TikTok', label: 'TikTok' },
+  { key: 'YouTube', label: 'YouTube' },
+  { key: 'Web', label: 'Webサイト' },
+] as const
+
+function initialSnsValue(items: { label: string; url: string }[] | undefined, label: string) {
+  return items?.find((item) => item.label === label)?.url ?? ''
+}
+
 export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
   const { performer, profile, refreshProfile, signOut } = useAuth()
   const [stageName, setStageName] = useState(performer?.stage_name ?? '')
@@ -16,6 +28,9 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
   const [awards, setAwards] = useState(performer?.awards ?? '')
   const [appearances, setAppearances] = useState(performer?.appearances ?? '')
   const [videoUrl, setVideoUrl] = useState(performer?.video_url ?? '')
+  const [sns, setSns] = useState<Record<string, string>>(() =>
+    Object.fromEntries(SNS_FIELDS.map((field) => [field.key, initialSnsValue(performer?.sns_json, field.key)])),
+  )
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -31,6 +46,14 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
       if (trimmedVideoUrl && !isValidHttpUrl(trimmedVideoUrl)) {
         throw new Error('紹介動画URLは http または https のURLを入力してください')
       }
+      const sns_json = SNS_FIELDS.map((field) => ({
+        label: field.key,
+        url: (sns[field.key] ?? '').trim(),
+      })).filter((item) => item.url.length > 0)
+      const invalidSns = sns_json.find((item) => !isValidHttpUrl(item.url))
+      if (invalidSns) {
+        throw new Error(`${invalidSns.label} URLは http または https のURLを入力してください`)
+      }
       await updatePerformer(performer.id, {
         stage_name: stageName.trim() || 'Performer',
         bio: bio.trim(),
@@ -41,6 +64,7 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
         awards: awards.trim(),
         appearances: appearances.trim(),
         video_url: trimmedVideoUrl || null,
+        sns_json,
       })
       await requireSupabase()
         .from('profiles')
@@ -145,6 +169,17 @@ export function PerformerEditScreen({ onBack }: { onBack: () => void }) {
         <span className="pl-label">紹介動画 URL</span>
         <input className="pl-input" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://" />
       </label>
+      {SNS_FIELDS.map((field) => (
+        <label key={field.key}>
+          <span className="pl-label">{field.label}</span>
+          <input
+            className="pl-input"
+            value={sns[field.key] ?? ''}
+            onChange={(e) => setSns((current) => ({ ...current, [field.key]: e.target.value }))}
+            placeholder="https://"
+          />
+        </label>
+      ))}
 
       <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void save()}>
         Save

@@ -1,15 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { calcPlatformFee, getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
+import {
+  PLATFORM_FEE_BPS,
+  calcPlatformFee,
+  getAdminSupabase,
+  getAppUrl,
+  getBpsSetting,
+  getStripe,
+  requireAuthUser,
+  requireConnectedAccountChargeReady,
+} from './_shared.js'
 
-async function merchFeeBps(sb: ReturnType<typeof getAdminSupabase>) {
-  try {
-    const { data } = await sb.from('platform_settings').select('value').eq('key', 'merch_fee_bps').maybeSingle()
-    const n = Number(data?.value)
-    if (Number.isFinite(n) && n >= 0 && n <= 5000) return Math.floor(n)
-  } catch {
-    /* keep default */
-  }
-  return 1000
+function missingColumn(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
+  return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -71,18 +74,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const stripe = getStripe()
+    const account = await requireConnectedAccountChargeReady(stripe, seller.stripe_account_id)
+    if (!account) {
+      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', seller.id)
+      res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
+      return
+    }
     if (!seller.stripe_onboarding_complete) {
-      const acct = await stripe.accounts.retrieve(seller.stripe_account_id)
-      const active = Boolean(acct.charges_enabled && acct.details_submitted)
-      if (!active) {
-        res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
-        return
-      }
       await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', seller.id)
     }
 
     const amount = product.price_yen * qty
-    const fee = calcPlatformFee(amount, await merchFeeBps(sb))
+    const feeBps = await getBpsSetting(sb, 'merch_fee_bps', PLATFORM_FEE_BPS)
+    const fee = calcPlatformFee(amount, feeBps)
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')
       .insert({
@@ -104,6 +108,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single()
     if (orderErr || !order) throw orderErr || new Error('Order insert failed')
 
+    const connectedAccountId = seller.stripe_account_id as string
+    const orderMetaPatch = {
+      gross_amount_yen: amount,
+      connected_account_id: connectedAccountId,
+      stripe_checkout_mode: 'direct',
+      seller_responsibility: 'seller',
+    }
+    const { error: orderMetaErr } = await sb.from('merch_orders').update(orderMetaPatch).eq('id', order.id)
+    if (orderMetaErr && !missingColumn(orderMetaErr)) throw orderMetaErr
+
     const remaining = product.stock - qty
     const { data: reserved, error: reserveErr } = await sb
       .from('merch_products')
@@ -119,6 +133,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+      const paymentIntentMetadata = {
+        kind: 'merch',
+        order_id: order.id,
+        product_id: product.id,
+        seller_id: product.seller_id,
+        buyer_id: user.id,
+        connected_account_id: connectedAccountId,
+        charge_type: 'direct',
+        platform_fee_bps: String(feeBps),
+        platform_fee_yen: String(fee),
+        seller_responsibility: 'seller',
+      }
       const origin = getAppUrl(req)
       const session = await stripe.checkout.sessions.create(
         {
@@ -145,28 +171,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
           ],
           payment_intent_data: {
-            application_fee_amount: fee,
-            transfer_data: {
-              destination: seller.stripe_account_id,
-            },
-            metadata: {
-              kind: 'merch',
-              order_id: order.id,
-              product_id: product.id,
-              seller_id: product.seller_id,
-              buyer_id: user.id,
-            },
+            ...(fee > 0 ? { application_fee_amount: fee } : {}),
+            metadata: paymentIntentMetadata,
           },
           metadata: {
-            kind: 'merch',
-            order_id: order.id,
-            product_id: product.id,
-            seller_id: product.seller_id,
-            buyer_id: user.id,
+            ...paymentIntentMetadata,
           },
           expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         },
-        { idempotencyKey: `merch-checkout-${order.id}` },
+        { idempotencyKey: `merch-checkout-${order.id}`, stripeAccount: connectedAccountId },
       )
 
       if (!session.url) throw new Error('Checkout URL missing')

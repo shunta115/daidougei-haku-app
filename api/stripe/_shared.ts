@@ -3,6 +3,8 @@ import { createClient, type User } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 export const PLATFORM_FEE_BPS = 1000
+export const MIN_TIP_AMOUNT_YEN = 100
+export const MAX_PLATFORM_FEE_BPS = 5000
 
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
@@ -43,7 +45,59 @@ export function getAppUrl(req: VercelRequest) {
 }
 
 export function calcPlatformFee(amountYen: number, feeBps = PLATFORM_FEE_BPS) {
-  return Math.floor((amountYen * feeBps) / 10000)
+  if (!Number.isInteger(amountYen) || amountYen <= 0) return 0
+  const safeBps = Number.isInteger(feeBps) && feeBps >= 0 && feeBps <= MAX_PLATFORM_FEE_BPS ? feeBps : PLATFORM_FEE_BPS
+  return Math.floor((amountYen * safeBps) / 10000)
+}
+
+export async function getBpsSetting(
+  sb: ReturnType<typeof getAdminSupabase>,
+  key: string,
+  fallback = PLATFORM_FEE_BPS,
+) {
+  try {
+    const { data } = await sb.from('platform_settings').select('value').eq('key', key).maybeSingle()
+    const n = Number(data?.value)
+    if (Number.isFinite(n) && n >= 0 && n <= MAX_PLATFORM_FEE_BPS) return Math.floor(n)
+  } catch {
+    /* table may not exist in older environments */
+  }
+  return fallback
+}
+
+export async function getIntSetting(
+  sb: ReturnType<typeof getAdminSupabase>,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  try {
+    const { data } = await sb.from('platform_settings').select('value').eq('key', key).maybeSingle()
+    const n = Number(data?.value)
+    if (Number.isFinite(n) && Number.isInteger(n) && n >= min && n <= max) return n
+  } catch {
+    /* table may not exist in older environments */
+  }
+  return fallback
+}
+
+export function isConnectedAccountChargeReady(account: Stripe.Account) {
+  return Boolean(
+    account.charges_enabled &&
+      account.payouts_enabled &&
+      account.details_submitted &&
+      !account.requirements?.disabled_reason,
+  )
+}
+
+export async function requireConnectedAccountChargeReady(
+  stripe: Stripe,
+  accountId: string | null | undefined,
+) {
+  if (!accountId) return null
+  const account = await stripe.accounts.retrieve(accountId)
+  return isConnectedAccountChargeReady(account) ? account : null
 }
 
 function userClient(authHeader: string) {

@@ -1,5 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { PLATFORM_FEE_BPS, getAdminSupabase, getAppUrl, getStripe, requireAuthUser } from './_shared.js'
+import {
+  MIN_TIP_AMOUNT_YEN,
+  PLATFORM_FEE_BPS,
+  calcPlatformFee,
+  getAdminSupabase,
+  getAppUrl,
+  getBpsSetting,
+  getIntSetting,
+  getStripe,
+  requireAuthUser,
+  requireConnectedAccountChargeReady,
+} from './_shared.js'
+
+function missingColumn(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
+  return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -25,12 +41,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const payerId = user.id
-    if (!performerId || !Number.isInteger(amountYen) || amountYen < 100 || amountYen > 100000) {
-      res.status(400).json({ error: 'performerId and amountYen (100-100000 JPY) required' })
+    const sb = getAdminSupabase()
+    const minTipAmount = await getIntSetting(sb, 'tip_min_amount_yen', MIN_TIP_AMOUNT_YEN, 100, 100000)
+    if (!performerId || !Number.isInteger(amountYen) || amountYen < minTipAmount || amountYen > 100000) {
+      res.status(400).json({ error: `performerId and amountYen (${minTipAmount}-100000 JPY) required` })
       return
     }
 
-    const sb = getAdminSupabase()
     const { data: performer, error } = await sb.from('performers').select('*').eq('id', performerId).single()
     if (error || !performer) {
       res.status(404).json({ error: 'Performer not found' })
@@ -42,13 +59,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const stripe = getStripe()
+    const account = await requireConnectedAccountChargeReady(stripe, performer.stripe_account_id)
+    if (!account) {
+      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', performerId)
+      res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
+      return
+    }
     if (!performer.stripe_onboarding_complete) {
-      const acct = await stripe.accounts.retrieve(performer.stripe_account_id)
-      const active = Boolean(acct.charges_enabled && acct.details_submitted)
-      if (!active) {
-        res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
-        return
-      }
       await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', performerId)
     }
 
@@ -62,15 +79,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${origin}/live?tip=cancel&return=live&${performerParam}`
       : `${origin}/live?tip=cancel&${performerParam}`
 
-    let feeBps = PLATFORM_FEE_BPS
-    try {
-      const { data: feeRow } = await sb.from('platform_settings').select('value').eq('key', 'tip_fee_bps').maybeSingle()
-      const n = Number(feeRow?.value)
-      if (Number.isFinite(n) && n >= 0 && n <= 5000) feeBps = Math.floor(n)
-    } catch {
-      /* keep default until migration is applied */
-    }
-    const fee = Math.floor((amountYen * feeBps) / 10000)
+    const feeBps = await getBpsSetting(sb, 'tip_fee_bps', PLATFORM_FEE_BPS)
+    const fee = calcPlatformFee(amountYen, feeBps)
     const { data: tip, error: tipErr } = await sb
       .from('tips')
       .insert({
@@ -85,43 +95,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single()
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
 
+    const connectedAccountId = performer.stripe_account_id as string
+    const tipMetaPatch = {
+      gross_amount_yen: amountYen,
+      platform_fee_yen: fee,
+      connected_account_id: connectedAccountId,
+      stripe_checkout_mode: 'direct',
+    }
+    const { error: tipMetaErr } = await sb.from('tips').update(tipMetaPatch).eq('id', tip.id)
+    if (tipMetaErr && !missingColumn(tipMetaErr)) throw tipMetaErr
+
+    const paymentIntentMetadata = {
+      kind: 'tip',
+      tip_id: tip.id,
+      performer_id: performerId,
+      fan_id: payerId,
+      anonymous: anonymous ? '1' : '0',
+      connected_account_id: connectedAccountId,
+      charge_type: 'direct',
+      platform_fee_bps: String(feeBps),
+      platform_fee_yen: String(fee),
+    }
+
     const session = await stripe.checkout.sessions.create(
       {
         mode: 'payment',
         success_url: successUrl,
         cancel_url: cancelUrl,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'jpy',
-            unit_amount: amountYen,
-            product_data: {
-              name: `Tip for ${performer.stage_name}`,
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: 'jpy',
+              unit_amount: amountYen,
+              product_data: {
+                name: `Tip for ${performer.stage_name}`,
+              },
             },
           },
-        },
-      ],
-      payment_intent_data: {
-        application_fee_amount: fee,
-        transfer_data: {
-          destination: performer.stripe_account_id,
+        ],
+        payment_intent_data: {
+          ...(fee > 0 ? { application_fee_amount: fee } : {}),
+          metadata: paymentIntentMetadata,
         },
         metadata: {
-          tip_id: tip.id,
-          performer_id: performerId,
-          fan_id: payerId,
-          anonymous: anonymous ? '1' : '0',
+          ...paymentIntentMetadata,
         },
       },
-      metadata: {
-        tip_id: tip.id,
-        performer_id: performerId,
-        fan_id: payerId,
-        anonymous: anonymous ? '1' : '0',
-      },
-      },
-      { idempotencyKey: `tip-checkout-${tip.id}` },
+      { idempotencyKey: `tip-checkout-${tip.id}`, stripeAccount: connectedAccountId },
     )
 
     await sb.from('tips').update({ stripe_session_id: session.id }).eq('id', tip.id)

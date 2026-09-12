@@ -24,7 +24,8 @@ This document intentionally contains no secret values.
 | `SUPABASE_SERVICE_ROLE_KEY` | Required for API | Required for API | Server-only Supabase service role | Name only | Stripe Checkout creation, webhook finalization, merch orders |
 | `SUPABASE_ANON_KEY` | Optional if `VITE_SUPABASE_ANON_KEY` is present | Optional if `VITE_SUPABASE_ANON_KEY` is present | Server user-session validation fallback | Name only | API auth if `VITE_SUPABASE_ANON_KEY` unavailable server-side |
 | `STRIPE_SECRET_KEY` | Required for payment testing | Required for live payments | Server-only Stripe API key | Name only | Tips, merch checkout, Connect onboarding |
-| `STRIPE_WEBHOOK_SECRET` | Required | Required | Verifies Stripe webhook signatures | Name only | Payment success/failure finalization, idempotency |
+| `STRIPE_WEBHOOK_SECRET` | Required | Required | Verifies platform Stripe webhook signatures | Name only | Legacy/platform webhook finalization |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Required for Connect test | Required for Connect live | Verifies Connect webhook signatures for connected-account Direct Charges | Name only | Direct Charge finalization, refund/dispute tracking, onboarding status sync |
 | `STRIPE_ALLOW_LIVE` | Usually unset | Required only with `sk_live_` | Explicit guard for live Stripe charges | Name only | Live Stripe key use is blocked unless set to `true` |
 | `APP_URL` | Recommended | Required | Checkout/Connect return origin | Name only | Incorrect return URLs if Vercel fallback is wrong |
 | `LIVEKIT_URL` | Required | Required | Server LiveKit URL | Name only | Live token issuance |
@@ -55,6 +56,7 @@ Local audit result: Vercel CLI is not installed and `.vercel` project metadata i
 | `20260909_avatar_storage_hardening.sql` | Production required after avatars bucket exists | Restricts avatar upload MIME and size. |
 | `20260909_merch_foundation.sql` | Production required for merch | Adds merch products/orders, RLS, settings, storage bucket/policies. |
 | `20260910_product_event_kpis.sql` | Production required for post-UX KPI tracking | Expands the `product_events.name` constraint for home/live/profile/follow/tip/merch/vote funnel events. Does not mutate existing rows. |
+| `20260912_stripe_connect_direct_charges.sql` | Production required for final payments | Adds Direct Charge tracking columns, Stripe webhook idempotency table, minimum tip setting, refund/dispute fields, and payment summary view. Additive only. |
 
 Non-migration SQL files:
 
@@ -88,9 +90,10 @@ Required webhook endpoint:
 
 Required events:
 
-- `checkout.session.completed`: finalizes tips and merch orders.
-- `checkout.session.expired`: releases reserved merch stock for abandoned Checkout sessions.
-- `account.updated`: marks performer Stripe Connect onboarding complete when enabled/submitted.
+- Platform webhook: keep `checkout.session.completed` and `checkout.session.expired` for legacy/platform-scoped sessions during rollout.
+- Connect webhook: enable events on connected accounts for `checkout.session.completed`, `checkout.session.expired`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, and `account.updated`.
+- `payment_intent.succeeded` is the durable paid signal for Direct Charges; `checkout.session.completed` remains a fast-path signal and is idempotent.
+- `charge.refunded` and dispute events update refund/dispute tracking fields without creating duplicate revenue.
 
 Live charges are deliberately blocked when `STRIPE_SECRET_KEY` starts with `sk_live_` unless `STRIPE_ALLOW_LIVE=true`.
 

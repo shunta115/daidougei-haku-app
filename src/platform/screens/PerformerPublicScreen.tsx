@@ -90,6 +90,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
 
   const watchable = Boolean(p.is_live)
   const videoHref = safeExternalHref(p.video_url ?? undefined)
+  const snsLinks = Array.isArray(p.sns_json)
+    ? p.sns_json
+        .map((s) => ({ label: s.label, href: safeExternalHref(s.url) }))
+        .filter((s): s is { label: string; href: string } => Boolean(s.href))
+    : []
 
   return (
     <>
@@ -147,8 +152,19 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
             </a>
           </p>
         ) : null}
-        {Array.isArray(p.sns_json) && p.sns_json.length > 0 ? (
-          <p className="pl-muted">{p.sns_json.map((s) => s.label).join(' / ')}</p>
+        {snsLinks.length > 0 ? (
+          <p className="pl-muted">
+            {snsLinks.map((s, index) => {
+              return (
+                <span key={s.href}>
+                  {index > 0 ? ' / ' : null}
+                  <a href={s.href} target="_blank" rel="noopener noreferrer">
+                    {s.label}
+                  </a>
+                </span>
+              )
+            })}
+          </p>
         ) : null}
         {p.share_location && p.lat != null && p.lng != null ? <p className="pl-muted">Approx. location shared while live.</p> : null}
       </section>
