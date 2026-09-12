@@ -46,27 +46,33 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
         <div className="pl-empty">{q.trim() || genre || region || liveOnly ? '条件に合うパフォーマーが見つかりません' : 'パフォーマー登録を準備中です'}</div>
       ) : null}
       {rows.map((p) => (
-        <button
+        <article
           key={p.id}
-          type="button"
-          className="pl-card pl-row"
-          style={{ width: '100%', textAlign: 'left', cursor: 'pointer' }}
-          onClick={() => {
-            if (p.is_live && onWatchLive) onWatchLive(p.id)
-            else onOpenPerformer(p.id)
-          }}
+          className="pl-card pl-row pl-search-card"
         >
-          <Avatar url={p.photo_url} name={p.stage_name} />
-          <div>
-            {p.is_live ? <LiveBadge /> : null}
-            <div style={{ fontWeight: 700 }}>{p.stage_name}</div>
-            <div className="pl-muted">
-              {p.genre}
-              {p.city ? ` · ${p.city}` : ''}
-              {p.country ? ` · ${p.country}` : ''}
+          <button type="button" className="pl-search-card__main" onClick={() => onOpenPerformer(p.id)}>
+            <Avatar url={p.photo_url} name={p.stage_name} />
+            <div>
+              {p.is_live ? <LiveBadge /> : null}
+              <div style={{ fontWeight: 700 }}>{p.stage_name}</div>
+              <div className="pl-muted">
+                {p.genre}
+                {p.city ? ` · ${p.city}` : ''}
+                {p.country ? ` · ${p.country}` : ''}
+              </div>
             </div>
+          </button>
+          <div className="pl-search-card__actions">
+            {p.is_live && onWatchLive ? (
+              <button type="button" className="pl-btn pl-btn--live" onClick={() => onWatchLive(p.id)}>
+                LIVEを見る
+              </button>
+            ) : null}
+            <button type="button" className="pl-btn pl-btn--ghost" onClick={() => onOpenPerformer(p.id)}>
+              詳細
+            </button>
           </div>
-        </button>
+        </article>
       ))}
     </>
   )

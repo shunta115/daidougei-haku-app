@@ -13,9 +13,10 @@ type TipProps = {
   onBack: () => void
   onDone: () => void
   returnToLive?: boolean
+  onRequireAuth?: () => void
 }
 
-export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
+export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: TipProps) {
   const { user } = useAuth()
   const { lang, t } = useLang()
   const [p, setP] = useState<Performer | null>(null)
@@ -38,7 +39,9 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
 
   const pay = async () => {
     if (!user) {
-      spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
+      window.sessionStorage.setItem('pl-tip-to', performerId)
+      if (onRequireAuth) onRequireAuth()
+      else spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
       return
     }
     setBusy(true)
@@ -129,7 +132,11 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
         <button
           type="button"
           className="pl-btn pl-btn--block"
-          onClick={() => spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)}
+          onClick={() => {
+            window.sessionStorage.setItem('pl-tip-to', performerId)
+            if (onRequireAuth) onRequireAuth()
+            else spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
+          }}
         >
           {t('loginToContinue')}
         </button>

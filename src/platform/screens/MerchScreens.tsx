@@ -123,7 +123,15 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
   )
 }
 
-export function MerchDetailScreen({ productId, onBack }: { productId: string; onBack: () => void }) {
+export function MerchDetailScreen({
+  productId,
+  onBack,
+  onRequireAuth,
+}: {
+  productId: string
+  onBack: () => void
+  onRequireAuth?: () => void
+}) {
   const { user } = useAuth()
   const [product, setProduct] = useState<MerchProduct | null>(null)
   const [quantity, setQuantity] = useState(1)
@@ -143,7 +151,8 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
     if (!product) return
     if (!user) {
       window.sessionStorage.setItem('pl-merch-product', productId)
-      spaGo(`${PLATFORM_PATH}?auth=1`)
+      if (onRequireAuth) onRequireAuth()
+      else spaGo(`${PLATFORM_PATH}?auth=1`)
       return
     }
     setBusy(true)

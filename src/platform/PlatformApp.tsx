@@ -427,6 +427,7 @@ function PlatformShell() {
           returnToLive={tipReturn === 'live-watch'}
           onBack={() => setScreen(tipReturn)}
           onDone={() => setScreen('welcome')}
+          onRequireAuth={() => setScreen('auth')}
         />
       )
     } else if (performerId && screen === 'profile') {
@@ -443,6 +444,7 @@ function PlatformShell() {
             setScreen('tip')
           }}
           onWatchLive={() => setScreen('live-watch')}
+          onRequireAuth={() => setScreen('auth')}
         />
       )
     } else if (screen === 'live-list') {
@@ -452,7 +454,7 @@ function PlatformShell() {
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
-      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} />
+      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
     }
 
     if (guestBody) {
@@ -537,6 +539,7 @@ function PlatformShell() {
           setPerformerId(null)
           setScreen(homeForRole(role))
         }}
+        onRequireAuth={() => setScreen('auth')}
       />
     )
   } else if (performerId && screen === 'profile') {
@@ -553,10 +556,11 @@ function PlatformShell() {
           setScreen('tip')
         }}
         onWatchLive={() => setScreen('live-watch')}
+        onRequireAuth={() => setScreen('auth')}
       />
     )
   } else if (merchProductId && screen === 'merch-detail') {
-    body = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} />
+    body = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
   } else {
     switch (screen) {
       case 'fan-home':
@@ -598,7 +602,7 @@ function PlatformShell() {
         )
         break
       case 'profile':
-        body = <FanProfileScreen />
+        body = <FanProfileScreen onOpenPerformer={openPerformer} onOpenProduct={openMerchProduct} />
         break
       case 'performer-home':
         body = (

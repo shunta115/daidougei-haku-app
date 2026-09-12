@@ -53,10 +53,11 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       const [liveRows, allRows, ev] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
       if (ev) {
         setEventLabel({ date: ev.date_label, place: ev.place_label })
-        const lineup = await listEventLineup(ev.id)
-        setRoster(lineup.length > 0 ? allRows.filter((p) => lineup.includes(p.id)) : [])
+        const lineup = await listEventLineup(ev.id).catch((): string[] => [])
+        const lineupRows = lineup.length > 0 ? allRows.filter((p) => lineup.includes(p.id)) : []
+        setRoster(lineupRows.length > 0 ? lineupRows : allRows)
       } else {
-        setRoster([])
+        setRoster(allRows)
       }
       setLive(liveRows)
       if (user) {
@@ -427,10 +428,10 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       ) : null}
 
       <div className="fe-h6-maprow">
-        <button type="button" className="fe-h6-maprow__primary" onClick={onOpenSearch}>
+        <button type="button" className="fe-h6-maprow__primary" onClick={() => spaGo(FESTIVAL_PATH)}>
           会場マップ
         </button>
-        <button type="button" className="fe-h6-maprow__ghost" onClick={onOpenSearch}>
+        <button type="button" className="fe-h6-maprow__ghost" onClick={() => spaGo(FESTIVAL_PATH)}>
           公演エリアを見る
         </button>
       </div>

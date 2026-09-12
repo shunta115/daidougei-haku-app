@@ -46,7 +46,7 @@ import {
   canWatchLiveStream,
   sanitizePersonaForProduction,
 } from './lib/productionGuard'
-import { enableDemoSeedData } from './config/runtimeConfig'
+import { enableDemoSeedData, isDemoMode } from './config/runtimeConfig'
 import { useLang } from '../i18n/LangProvider'
 import { warnPublicDataIssuesInDev } from './data/public'
 import { readAppPersona, writeAppPersona } from './session/appPersona'
@@ -193,7 +193,7 @@ export function FestivalApp() {
       const m = hash.match(/^#artist-(.+)$/)
       const id = m?.[1]
       if (id) {
-        if (!getPerformerById(id) && !performerById(id)) {
+        if (!getPerformerById(id) && !(isDemoMode && performerById(id))) {
           clearBadHash()
           setDetailId(null)
           setVisitorTab('home')
@@ -250,8 +250,9 @@ export function FestivalApp() {
     setPerformerFlow('registerComplete')
   }, [])
 
-  const spotlight = SPOTLIGHT_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
-  const todaysPicks = TODAYS_PICK_IDS.map((id) => getPerformerById(id) ?? performerById(id)).filter(Boolean) as Performer[]
+  const resolveHomePerformer = (id: string) => getPerformerById(id) ?? (isDemoMode ? performerById(id) : undefined)
+  const spotlight = SPOTLIGHT_IDS.map(resolveHomePerformer).filter(Boolean) as Performer[]
+  const todaysPicks = TODAYS_PICK_IDS.map(resolveHomePerformer).filter(Boolean) as Performer[]
   const fromCatalog = performers.filter((p) => p.approvalStatus === 'approved').slice(0, 6)
   const primePicksForHome = (
     [...spotlight, ...todaysPicks].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i).slice(0, 4)

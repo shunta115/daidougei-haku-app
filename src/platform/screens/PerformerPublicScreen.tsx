@@ -27,9 +27,10 @@ type Props = {
   onTip: () => void
   onBack: () => void
   onWatchLive: () => void
+  onRequireAuth?: () => void
 }
 
-export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive }: Props) {
+export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive, onRequireAuth }: Props) {
   const { user } = useAuth()
   const { lang, t } = useLang()
   useTrackView('performer_view', { performerId })
@@ -69,7 +70,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
 
   const toggleFollow = async () => {
     if (!user) {
-      spaGo(`${PLATFORM_PATH}?auth=1`)
+      if (onRequireAuth) onRequireAuth()
+      else spaGo(`${PLATFORM_PATH}?auth=1`)
       return
     }
     setBusy(true)

@@ -38,6 +38,7 @@ function sanitizePerformer(p: Performer): Performer {
 }
 
 function isPublicPerformerVisible(p: Performer): boolean {
+  if (!isDemoMode) return p.approvalStatus === 'approved'
   const hay = [p.id, p.name, p.nameJa].join(' ').toLowerCase()
   return !/\b(test|dummy|demo|sample)\b/.test(hay) && !hay.includes('test performer')
 }

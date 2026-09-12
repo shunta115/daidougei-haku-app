@@ -135,15 +135,12 @@ export async function refreshLiveCatalog(): Promise<void> {
     const ev = await getFeaturedEvent()
     featuredEvent = ev
     const eventId = ev?.id
-    const [venueRes, slotRes, lineupRes, performerRes] = await Promise.all([
+    const [venueRes, slotRes, performerRes] = await Promise.all([
       eventId
         ? supabase.from('event_venues').select('*').eq('event_id', eventId).order('sort_order')
         : Promise.resolve({ data: [], error: null }),
       eventId
         ? supabase.from('event_slots').select('*').eq('event_id', eventId).order('date').order('start_time')
-        : Promise.resolve({ data: [], error: null }),
-      eventId
-        ? supabase.from('event_lineup').select('performer_id').eq('event_id', eventId)
         : Promise.resolve({ data: [], error: null }),
       supabase.from('performers').select('*').eq('is_approved', true).order('is_live', { ascending: false }).limit(200),
     ])
@@ -202,10 +199,7 @@ export async function refreshLiveCatalog(): Promise<void> {
       }))
 
     const allPlatform = (performerRes.data ?? []) as PlatformPerformer[]
-    const lineupIds = new Set(((lineupRes.data ?? []) as Array<{ performer_id: string }>).map((r) => r.performer_id))
-    const mapped = allPlatform.map(platformToFestival)
-    // Lineup is the announced roster. If admin has not filled it yet, still show real approved performers.
-    performers = lineupIds.size > 0 ? mapped.filter((p) => lineupIds.has(p.id)) : mapped
+    performers = allPlatform.map(platformToFestival)
 
     const fromSlots = Array.from(new Set(slots.map((s) => s.date))).sort()
     if (fromSlots.length > 0) {
