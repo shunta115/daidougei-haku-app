@@ -5932,13 +5932,9 @@ body {
   color: rgba(255, 255, 255, 0.82);
 }
 
-/* --- bottom nav 6 --- */
-.fe-vnav__inner--six {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.fe-vnav__inner--six .fe-vnav__label {
-  font-size: 10px;
+/* --- bottom nav primary IA --- */
+.fe-vnav__inner--main {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 /* --- timetable toolbar --- */
@@ -10328,7 +10324,7 @@ body {
 }
 
 .fe-creator-hero--empty {
-  min-height: min(560px, calc(100dvh - 170px));
+  min-height: min(360px, calc(100dvh - 270px));
   background:
     linear-gradient(180deg, rgba(20, 18, 16, 0.18), rgba(8, 8, 9, 0.94)),
     linear-gradient(135deg, rgba(166, 48, 48, 0.18), rgba(205, 166, 84, 0.12)),
@@ -10336,7 +10332,7 @@ body {
 }
 
 .fe-creator-hero--empty .fe-creator-hero__content {
-  top: 88px;
+  top: 58px;
   bottom: auto;
 }
 

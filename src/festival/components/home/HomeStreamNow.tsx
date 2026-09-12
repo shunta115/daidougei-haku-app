@@ -66,7 +66,7 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport, hideWhenEmpt
                     {p.streamTitle ? <p className="fe-stream-card__title">{p.streamTitle}</p> : null}
                     <p className="fe-stream-card__status" lang="en">
                       <span className="fe-stream-card__status-dot" aria-hidden="true" />
-                      配信ステータス · LIVE
+                      LIVE中
                     </p>
                     <div className="fe-stream-card__actions">
                       <button
@@ -75,7 +75,7 @@ export function HomeStreamNow({ livePerformers, onWatch, onSupport, hideWhenEmpt
                         disabled={!watchable}
                         onClick={() => watchable && onWatch(p.id)}
                       >
-                        {watchable ? '視聴する' : '配信準備中'}
+                        {watchable ? 'LIVEを見る' : 'LIVE準備中'}
                       </button>
                       <button type="button" className="fe-stream-card__support" onClick={() => onSupport(p.id)}>
                         応援する

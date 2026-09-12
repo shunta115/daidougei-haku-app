@@ -99,7 +99,7 @@ export function TipsScreen({
                     disabled={!watchable}
                     onClick={() => watchable && onWatchStream(p.id)}
                   >
-                    {watchable ? '視聴する' : '配信準備中'}
+                    {watchable ? 'LIVEを見る' : 'LIVE準備中'}
                   </button>
                 ) : null}
                 {live && onSupportStream ? (

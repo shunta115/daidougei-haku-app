@@ -20,7 +20,7 @@ export function HomeUpcomingStreams({ performers, onOpen, onOpenDetail }: HomeUp
         <h2 id="fe-stream-soon-title" className="fe-stream-soon__title">
           近日配信
         </h2>
-        <p className="fe-stream-soon__sub">承認済みパフォーマーの次の配信をお楽しみに。</p>
+        <p className="fe-stream-soon__sub">承認済みパフォーマーの次のLIVEをお楽しみに。</p>
       </header>
       <ul className="fe-stream-soon__list">
         {performers.map((p) => {
@@ -41,7 +41,7 @@ export function HomeUpcomingStreams({ performers, onOpen, onOpenDetail }: HomeUp
                 disabled={!watchable}
                 onClick={() => watchable && onOpen(p.id)}
               >
-                {watchable ? '配信ページ' : '配信準備中'}
+                {watchable ? 'LIVEページ' : 'LIVE準備中'}
               </button>
             </article>
           </li>

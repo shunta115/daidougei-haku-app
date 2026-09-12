@@ -80,7 +80,7 @@ export function HomeScreen({
     : ''
   const labels = {
     featured: lang === 'ja' ? '注目パフォーマー' : 'Featured performer',
-    discovery: lang === 'ja' ? '発見' : 'Discovery',
+    discovery: lang === 'ja' ? '探す' : 'Discovery',
     event: lang === 'ja' ? 'イベント' : 'Event',
   }
   const discoveryRows = useMemo(() => {
@@ -165,11 +165,11 @@ export function HomeScreen({
             <p className="fe-creator-hero__brand">大道芸博</p>
             <p className="fe-creator-hero__signal">{labels.discovery}</p>
             <h1 id="fe-creator-hero-title" className="fe-creator-hero__name">
-              パフォーマーを見つける
+              パフォーマー準備中
             </h1>
-            <p className="fe-creator-hero__why">大道芸博は、気になる才能を見つけてLIVE・フォロー・応援へ進む場所です。</p>
+            <p className="fe-creator-hero__why">公開済みの出演者が入り次第、ここに表示されます。</p>
             <button type="button" className="fe-creator-hero__cta" onClick={onOpenPerformers}>
-              出演者を見る
+              探す
             </button>
           </div>
         </section>

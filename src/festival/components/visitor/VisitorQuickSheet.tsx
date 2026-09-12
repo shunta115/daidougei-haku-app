@@ -4,12 +4,10 @@ type VisitorQuickSheetProps = {
   open: boolean
   onClose: () => void
   onTab: (t: VisitorTab) => void
-  onLive: () => void
-  onGoods: () => void
   onAccount: () => void
 }
 
-export function VisitorQuickSheet({ open, onClose, onTab, onLive, onGoods, onAccount }: VisitorQuickSheetProps) {
+export function VisitorQuickSheet({ open, onClose, onTab, onAccount }: VisitorQuickSheetProps) {
   if (!open) return null
   return (
     <div className="fe-qsheet" role="dialog" aria-modal="true" aria-label="クイックメニュー">
@@ -18,32 +16,20 @@ export function VisitorQuickSheet({ open, onClose, onTab, onLive, onGoods, onAcc
         <div className="fe-qsheet__grab" aria-hidden="true" />
         <p className="fe-qsheet__title">クイック移動</p>
         <div className="fe-qsheet__grid">
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('timetable'); onClose() }}>
-            タイムテーブル
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('home'); onClose() }}>
+            ホーム
           </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('map'); onClose() }}>
-            会場マップ
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('performers'); onClose() }}>
+            探す
+          </button>
+          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('timetable'); onClose() }}>
+            イベント
           </button>
           <button type="button" className="fe-qsheet__btn fe-qsheet__btn--support" onClick={() => { onTab('tips'); onClose() }}>
             応援
           </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('oshi'); onClose() }}>
-            推しリスト
-          </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onLive(); onClose() }}>
-            LIVE
-          </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onGoods(); onClose() }}>
-            グッズ
-          </button>
           <button type="button" className="fe-qsheet__btn" onClick={() => { onAccount(); onClose() }}>
-            アカウント
-          </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('performers'); onClose() }}>
-            アーティスト
-          </button>
-          <button type="button" className="fe-qsheet__btn" onClick={() => { onTab('home'); onClose() }}>
-            ホーム
+            マイ
           </button>
         </div>
       </div>

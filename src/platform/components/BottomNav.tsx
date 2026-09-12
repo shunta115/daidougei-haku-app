@@ -16,9 +16,9 @@ type NavItem = {
 export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
   const { lang, t } = useLang()
   const labels = {
-    discover: lang === 'ja' ? '発見' : 'Discover',
+    discover: lang === 'ja' ? '探す' : 'Discover',
     goods: lang === 'ja' ? 'グッズ' : 'Goods',
-    you: lang === 'ja' ? 'マイ' : 'You',
+    you: lang === 'ja' ? 'マイ' : 'Me',
     event: t('eventHome'),
   }
 
@@ -34,11 +34,9 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
       : role === 'performer'
         ? [
             { key: 'performer-home', label: t('home') },
-            { key: 'search', label: labels.discover },
             { key: 'event-home', label: labels.event, href: FESTIVAL_PATH },
             { key: 'performer-live', label: t('live') },
             { key: 'performer-merch', label: labels.goods },
-            { key: 'notifications', label: t('notifications') },
           ]
         : role === 'organizer'
           ? [
@@ -50,9 +48,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
           : [
               { key: 'fan-home', label: t('home') },
               { key: 'search', label: labels.discover },
-              { key: 'live-list', label: t('live') },
               { key: 'event-home', label: labels.event, href: FESTIVAL_PATH },
-              { key: 'merch-list', label: labels.goods },
               { key: 'profile', label: labels.you },
             ]
 

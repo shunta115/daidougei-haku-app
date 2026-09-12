@@ -57,7 +57,7 @@ export function PerformerListCard({
             {p.name}
           </p>
           <p className="fe-plist-card__tagline">{isLive && p.streamTitle ? p.streamTitle : p.tagline}</p>
-          <p className="fe-plist-card__schedule">{isLive ? '配信ステータス · LIVE' : schedule}</p>
+          <p className="fe-plist-card__schedule">{isLive ? 'LIVE中' : schedule}</p>
         </button>
 
         {isLive && onWatchStream && onSupportStream ? (
@@ -68,7 +68,7 @@ export function PerformerListCard({
               disabled={!watchable}
               onClick={() => watchable && onWatchStream(p.id)}
             >
-              {watchable ? '視聴する' : '配信準備中'}
+              {watchable ? 'LIVEを見る' : 'LIVE準備中'}
             </button>
             <button type="button" className="fe-plist-card__support" onClick={() => onSupportStream(p.id)}>
               応援する

@@ -18,7 +18,7 @@ export function PerformerDetailProfile({ performer: p }: PerformerDetailProfileP
         {p.country ? <p className="fe-detail-muted">活動地域 · {p.country}</p> : null}
         {p.streamTitle ? (
           <p className="fe-detail-stream-title">
-            {live ? 'LIVE · ' : '配信 · '}
+            {live ? 'LIVE · ' : 'LIVE予定 · '}
             {p.streamTitle}
           </p>
         ) : null}
@@ -33,7 +33,7 @@ export function PerformerDetailProfile({ performer: p }: PerformerDetailProfileP
           <span className="fe-chip fe-chip--ghost">{p.actJa}</span>
           <span className="fe-chip fe-chip--ghost">{p.locale}</span>
           {p.approvalStatus === 'approved' && p.canStream ? (
-            <span className="fe-chip fe-chip--ghost">{live ? '配信可能 · LIVE' : '配信可能'}</span>
+            <span className="fe-chip fe-chip--ghost">{live ? 'LIVE中' : 'LIVE予定'}</span>
           ) : null}
         </p>
       </section>

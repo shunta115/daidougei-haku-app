@@ -33,8 +33,8 @@ function isLiveNow(p: Performer) {
 }
 
 function nextLineForPerformer(p: Performer): string {
-  if (isLiveNow(p)) return p.streamTitle ? `LIVE · ${p.streamTitle}` : 'ライブ配信中'
-  if (isStreamReady(p)) return p.streamTitle ? `近日配信 · ${p.streamTitle}` : '配信可能 · 次のLIVEをお待ちください'
+  if (isLiveNow(p)) return p.streamTitle ? `LIVE · ${p.streamTitle}` : 'LIVE中'
+  if (isStreamReady(p)) return p.streamTitle ? `LIVE予定 · ${p.streamTitle}` : '次のLIVEをお待ちください'
   const now = getDemoNow()
   const next = nextSlotForPerformerFromNow(p.id, now)
   if (next) return `NEXT · ${next.start}–${next.end} · ${next.stageJa}`
@@ -99,12 +99,12 @@ export function OshiListScreen({
       </header>
 
       {liveOshi.length > 0 ? (
-        <section className="fe-oshi-live-banner" aria-label="推しが配信中">
+        <section className="fe-oshi-live-banner" aria-label="推しがLIVE中">
           <p className="fe-oshi-live-banner__k">
             {lang === 'ja' ? '推しがLIVE中' : 'Your oshi is live'}
           </p>
           <p className="fe-oshi-live-banner__t">
-            推しがいま配信中 · {liveOshi.map((p) => p.nameJa).join(' / ')}
+            推しがいまLIVE中 · {liveOshi.map((p) => p.nameJa).join(' / ')}
           </p>
           {onWatchStream ? (
             <div className="fe-oshi-live-banner__actions">
@@ -118,7 +118,7 @@ export function OshiListScreen({
                   disabled={!watchable}
                   onClick={() => watchable && onWatchStream(p.id)}
                 >
-                  {watchable ? `${p.nameJa} を見る` : `${p.nameJa} · 配信準備中`}
+                  {watchable ? `${p.nameJa} を見る` : `${p.nameJa} · LIVE準備中`}
                 </button>
                 )
               })}
@@ -200,7 +200,7 @@ export function OshiListScreen({
                         disabled={!watchable}
                         onClick={() => watchable && onWatchStream(p.id)}
                       >
-                        {watchable ? '配信ページ' : '配信準備中'}
+                        {watchable ? 'LIVEページ' : 'LIVE準備中'}
                       </button>
                     ) : null}
                     <button

@@ -27,7 +27,7 @@ export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: H
               {lang === 'ja' ? '推しLIVE' : 'Oshi live'}
             </p>
             <h2 id="fe-home-tips-h" className="fe-home-tips__title">
-              推しがいま配信中
+              推しがいまLIVE中
             </h2>
             <p className="fe-home-tips__text">
               {liveOshi.map((p) => p.nameJa).join(' / ')} — 視聴は無料 · 応援はWEBで完結。
@@ -40,7 +40,7 @@ export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: H
                   disabled={!watchable}
                   onClick={() => watchable && onWatchOshiLive(watchTarget.id)}
                 >
-                  {watchable ? '今すぐ見る' : '配信準備中'}
+                  {watchable ? '今すぐ見る' : 'LIVE準備中'}
                 </button>
               ) : null}
               <button type="button" className="fe-btn fe-btn--glass" onClick={onOpenOshi}>

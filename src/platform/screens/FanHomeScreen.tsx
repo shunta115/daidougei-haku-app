@@ -114,7 +114,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           ? '注目パフォーマー'
           : 'Featured'
   const labels = {
-    discovery: lang === 'ja' ? '発見' : 'Discovery',
+    discovery: lang === 'ja' ? '探す' : 'Discovery',
     discoverNext: lang === 'ja' ? '次に好きになる人' : 'Discover your next favorite',
   }
   const discoveryRail = useMemo(() => {
@@ -200,7 +200,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
               </button>
             </div>
             <p className="pl-fan-stage__meta">
-              {[spotlight.city, spotlight.country].filter(Boolean).join(' · ') || '大道芸博'} · {spotlight.is_live ? '現在LIVE中' : '出演・配信をチェック'}
+              {[spotlight.city, spotlight.country].filter(Boolean).join(' · ') || '大道芸博'} · {spotlight.is_live ? '現在LIVE中' : '出演とLIVEをチェック'}
             </p>
           </div>
         </section>
@@ -209,17 +209,17 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           <div className="pl-fan-stage__content">
             <p className="pl-fan-stage__brand">大道芸博</p>
             <p className="pl-fan-stage__signal">{labels.discovery}</p>
-            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">推しを見つける</h1>
-            <p className="pl-fan-stage__copy">LIVE、プロフィール、グッズから、応援したいパフォーマーへすぐ進めます。</p>
+            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">パフォーマー準備中</h1>
+            <p className="pl-fan-stage__copy">公開済みの出演者が入り次第、ここに表示されます。</p>
             <button type="button" className="pl-fan-stage__primary" onClick={onOpenSearch}>
-              出演者を見る
+              探す
             </button>
           </div>
         </section>
       )}
 
       {discoveryRail.length > 0 ? (
-        <section className="pl-person-rail" aria-label="発見する">
+        <section className="pl-person-rail" aria-label="探す">
           <div className="pl-person-rail__head">
             <div>
               <p>{labels.discovery}</p>
@@ -408,11 +408,11 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
                     {p.live_title ? <p className="fe-stream-card__title">{p.live_title}</p> : null}
                     <p className="fe-stream-card__status" lang="en">
                       <span className="fe-stream-card__status-dot" aria-hidden="true" />
-                      配信ステータス · LIVE
+                      LIVE中
                     </p>
                     <div className="fe-stream-card__actions">
                       <button type="button" className="fe-stream-card__watch" onClick={() => onWatchLive(p.id)}>
-                        視聴する
+                        LIVEを見る
                       </button>
                       <button type="button" className="fe-stream-card__support" onClick={() => onTip(p.id)}>
                         この人を応援する
@@ -464,7 +464,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
                 {lang === 'ja' ? '推しLIVE' : 'Oshi live'}
               </p>
               <h2 id="fe-home-tips-h" className="fe-home-tips__title">
-                推しがいま配信中
+                推しがいまLIVE中
               </h2>
               <p className="fe-home-tips__text">
                 {liveOshi.map((p) => p.stage_name).join(' / ')} — 視聴は無料 · 応援はWEBで完結。

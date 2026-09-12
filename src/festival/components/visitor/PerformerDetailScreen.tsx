@@ -144,9 +144,9 @@ export function PerformerDetailScreen({
       <FollowTipBar performerId={p.id} onTip={onSupportStream || onOpenTips ? onTip : undefined} />
 
       {streamReady && onWatchStream && onSupportStream ? (
-        <div className="fe-detail-stream-cta" aria-label="ライブ配信">
+        <div className="fe-detail-stream-cta" aria-label="LIVE">
           <p className="fe-detail-stream-cta__status">
-            {isLive ? 'いまライブ配信中' : '配信可能なパフォーマーです'}
+            {isLive ? 'いまLIVE中' : 'LIVE予定のあるパフォーマーです'}
           </p>
           <div className="fe-detail-stream-cta__row">
             <button
@@ -155,7 +155,7 @@ export function PerformerDetailScreen({
               disabled={!watchable}
               onClick={() => watchable && onWatchStream(p.id)}
             >
-              {watchable ? (isLive ? '視聴する' : '配信ページを開く') : '配信準備中'}
+              {watchable ? (isLive ? 'LIVEを見る' : 'LIVEページを開く') : 'LIVE準備中'}
             </button>
           </div>
         </div>

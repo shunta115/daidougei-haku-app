@@ -29,11 +29,11 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
 
   return (
     <>
-      <h1 className="pl-h1">検索</h1>
+      <h1 className="pl-h1">探す</h1>
       <input className="pl-input" placeholder="名前・ジャンル・地域" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="pl-chip-row" style={{ marginTop: 10 }}>
         <button type="button" className="pl-chip" data-on={liveOnly} onClick={() => setLiveOnly((v) => !v)}>
-          配信中
+          LIVE中
         </button>
         <button type="button" className="pl-chip" data-on={overseasOnly} onClick={() => setOverseasOnly((v) => !v)}>
           海外
@@ -43,7 +43,7 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
       <input className="pl-input" style={{ marginTop: 8 }} placeholder="国・都市" value={region} onChange={(e) => setRegion(e.target.value)} />
       {error ? <p className="pl-error">{error}</p> : null}
       {!error && rows.length === 0 ? (
-        <div className="pl-empty">{q.trim() || genre || region || liveOnly ? '該当なし' : '承認済みパフォーマーはまだいません。'}</div>
+        <div className="pl-empty">{q.trim() || genre || region || liveOnly ? '条件に合うパフォーマーが見つかりません' : 'パフォーマー登録を準備中です'}</div>
       ) : null}
       {rows.map((p) => (
         <button
