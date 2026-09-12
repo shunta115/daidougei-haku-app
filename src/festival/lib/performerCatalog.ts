@@ -37,10 +37,15 @@ function sanitizePerformer(p: Performer): Performer {
   return { ...p, photoUrl, isLive }
 }
 
+function isPublicPerformerVisible(p: Performer): boolean {
+  const hay = [p.id, p.name, p.nameJa].join(' ').toLowerCase()
+  return !/\b(test|dummy|demo|sample)\b/.test(hay) && !hay.includes('test performer')
+}
+
 export function getPerformers(): Performer[] {
   const overrides = readOverrides()
   const base = isDemoMode ? PERFORMERS : getCatalogPerformers()
-  return base.map((p) => sanitizePerformer({ ...p, ...overrides[p.id] }))
+  return base.map((p) => sanitizePerformer({ ...p, ...overrides[p.id] })).filter(isPublicPerformerVisible)
 }
 
 export function getPerformerById(id: string): Performer | undefined {

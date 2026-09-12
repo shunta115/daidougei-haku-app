@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { FESTIVAL_PATH, PLATFORM_PATH, spaGo } from '../app/routes'
+import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
@@ -76,6 +77,24 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
   )
 }
 
+function PlatformTopBar({ accountLabel, onAccount }: { accountLabel: string; onAccount: () => void }) {
+  const { t } = useLang()
+  return (
+    <header className="pl-unified-topbar">
+      <button type="button" className="pl-unified-topbar__brand" onClick={() => spaGo(FESTIVAL_PATH)} aria-label={t('appName')}>
+        <BrandLogo size={28} className="pl-unified-topbar__logo" />
+        <span>{t('appName')}</span>
+      </button>
+      <div className="pl-unified-topbar__actions">
+        <LanguageToggle />
+        <button type="button" className="pl-unified-topbar__account" onClick={onAccount}>
+          {accountLabel}
+        </button>
+      </div>
+    </header>
+  )
+}
+
 function homeForRole(role: string | undefined): PlatformScreen {
   if (role === 'admin') return 'admin'
   if (role === 'performer') return 'performer-home'
@@ -91,11 +110,12 @@ function initialGuestScreen(): PlatformScreen {
     if (q.get('merchProduct')) return 'merch-detail'
     if (q.get('live') === '1') return 'live-list'
     if (q.get('merch') === '1') return 'merch-list'
+    if (q.get('account') === '1') return 'auth'
     if (q.get('auth') === '1' || q.get('stripe')) return 'auth'
   } catch {
     /* ignore */
   }
-  return 'welcome'
+  return 'fan-home'
 }
 
 function PlatformShell() {
@@ -120,6 +140,7 @@ function PlatformShell() {
     const stripe = url.searchParams.get('stripe')
     const liveList = url.searchParams.get('live')
     const merch = url.searchParams.get('merch')
+    const account = url.searchParams.get('account')
     const merchProduct = url.searchParams.get('merchProduct')
     const merchProductResultId = url.searchParams.get('productId')
     if (watch) {
@@ -140,10 +161,13 @@ function PlatformShell() {
       window.sessionStorage.setItem('pl-merch-product', merchProduct)
       url.searchParams.delete('merchProduct')
     }
+    if (account === '1') {
+      window.sessionStorage.setItem('pl-open-account', '1')
+    }
     if (stripe === 'return' || stripe === 'refresh') {
       window.sessionStorage.setItem('pl-stripe-connect', stripe)
     }
-    if (auth === '1' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct) {
+    if (auth === '1' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct || account === '1') {
       if (watch) setScreen('live-watch')
       else if (tipTo) {
         setTipReturn('welcome')
@@ -151,6 +175,7 @@ function PlatformShell() {
       } else if (liveList === '1') setScreen('live-list')
       else if (merchProduct) setScreen('merch-detail')
       else if (merch === '1') setScreen('merch-list')
+      else if (account === '1') setScreen('auth')
       else setScreen('auth')
       url.searchParams.delete('auth')
     }
@@ -180,7 +205,7 @@ function PlatformShell() {
       setTipFollowId(null)
       setScreen('merch-list')
     }
-    if (tip || watch || auth || tipTo || stripe || liveList || merch || merchProduct) {
+    if (tip || watch || auth || tipTo || stripe || liveList || merch || merchProduct || account) {
       url.searchParams.delete('tip')
       url.searchParams.delete('session_id')
       url.searchParams.delete('performerId')
@@ -188,6 +213,7 @@ function PlatformShell() {
       url.searchParams.delete('stripe')
       url.searchParams.delete('live')
       url.searchParams.delete('merch')
+      url.searchParams.delete('account')
       url.searchParams.delete('productId')
       url.searchParams.delete('role')
       window.history.replaceState({}, '', url.pathname + url.search)
@@ -233,7 +259,7 @@ function PlatformShell() {
     if (!user) {
       setScreen((s) =>
         s === 'auth' ||
-        s === 'welcome' ||
+        s === 'fan-home' ||
         s === 'live-list' ||
         s === 'live-watch' ||
         s === 'profile' ||
@@ -242,7 +268,7 @@ function PlatformShell() {
         s === 'merch-list' ||
         s === 'merch-detail'
           ? s
-          : 'welcome',
+          : 'fan-home',
       )
       return
     }
@@ -284,6 +310,12 @@ function PlatformShell() {
         setScreen('performer-edit')
         return
       }
+    }
+    const openAccount = window.sessionStorage.getItem('pl-open-account')
+    if (openAccount) {
+      window.sessionStorage.removeItem('pl-open-account')
+      setScreen('profile')
+      return
     }
     const raw = window.sessionStorage.getItem('pl-tip-return')
     if (raw) {
@@ -358,7 +390,22 @@ function PlatformShell() {
   if (!user) {
     let guestBody: ReactNode = null
 
-    if (screen === 'live-watch' && performerId) {
+    if (screen === 'fan-home') {
+      guestBody = (
+        <FanHomeScreen
+          onOpenPerformer={openPerformer}
+          onWatchLive={openWatch}
+          onOpenSearch={() => setScreen('search')}
+          onOpenLiveList={() => setScreen('live-list')}
+          onTip={(id) => {
+            trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
+            setPerformerId(id)
+            setTipReturn('fan-home')
+            setScreen('tip')
+          }}
+        />
+      )
+    } else if (screen === 'live-watch' && performerId) {
       guestBody = (
         <LiveWatchScreen
           performerId={performerId}
@@ -403,18 +450,17 @@ function PlatformShell() {
     } else if (screen === 'search') {
       guestBody = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
     } else if (screen === 'merch-list') {
-      guestBody = <MerchListScreen onOpenProduct={openMerchProduct} />
+      guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
       guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} />
     }
 
     if (guestBody) {
+      const guestShowNav = !['tip', 'live-watch'].includes(screen) && !(performerId && screen === 'profile')
       return (
         <div className="pl-app">
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-              <LanguageToggle />
-            </div>
+            {guestShowNav ? <PlatformTopBar accountLabel={t('signIn')} onAccount={() => setScreen('auth')} /> : null}
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
                 {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
@@ -427,13 +473,28 @@ function PlatformShell() {
                       setScreen('profile')
                     }}
                   >
-                    このパフォーマーをフォロー
+                    プロフィールでフォロー
                   </button>
                 ) : null}
               </div>
             ) : null}
             {guestBody}
           </div>
+          {guestShowNav ? (
+            <BottomNav
+              role="fan"
+              active={screen}
+              onNavigate={(key) => {
+                setPerformerId(null)
+                setMerchProductId(null)
+                if (key === 'profile') {
+                  setScreen('auth')
+                  return
+                }
+                setScreen(key as PlatformScreen)
+              }}
+            />
+          ) : null}
         </div>
       )
     }
@@ -441,7 +502,7 @@ function PlatformShell() {
     return (
       <div className="pl-app">
         {screen === 'auth' ? (
-          <AuthScreen onDone={() => setScreen(homeForRole(undefined))} />
+          <AuthScreen onDone={() => setScreen('fan-home')} />
         ) : (
           <WelcomeScreen onAuth={() => setScreen('auth')} />
         )}
@@ -523,7 +584,7 @@ function PlatformShell() {
         )
         break
       case 'merch-list':
-        body = <MerchListScreen onOpenProduct={openMerchProduct} />
+        body = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
         break
       case 'search':
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
@@ -597,11 +658,7 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-        {showNav ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <LanguageToggle />
-          </div>
-        ) : null}
+        {showNav ? <PlatformTopBar accountLabel={t('account')} onAccount={() => setScreen('profile')} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
@@ -614,7 +671,7 @@ function PlatformShell() {
                   setScreen('profile')
                 }}
               >
-                このパフォーマーをフォロー
+                プロフィールでフォロー
               </button>
             ) : null}
           </div>

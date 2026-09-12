@@ -31,7 +31,7 @@ type Props = {
 
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive }: Props) {
   const { user } = useAuth()
-  const { t } = useLang()
+  const { lang, t } = useLang()
   useTrackView('performer_view', { performerId })
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
@@ -120,16 +120,18 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
                 LIVEを見る
               </button>
             ) : (
-              <button type="button" className="pl-profile-stage__primary" onClick={() => void toggleFollow()}>
-                {following ? 'フォロー中' : 'フォローする'}
+              <button type="button" className="pl-profile-stage__primary pl-profile-stage__primary--support" onClick={onTip}>
+                ❤️ この人を応援する
               </button>
             )}
             <button type="button" className="pl-profile-stage__secondary" disabled={busy} onClick={() => void toggleFollow()}>
               {following ? t('following') : t('follow')}
             </button>
-            <button type="button" className="pl-profile-stage__support" onClick={onTip}>
-              ❤️ この人を応援する
-            </button>
+            {watchable ? (
+              <button type="button" className="pl-profile-stage__support" onClick={onTip}>
+                ❤️ この人を応援する
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -154,7 +156,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive 
       {merch.length > 0 ? (
         <section className="pl-card pl-profile-merch" aria-label="このパフォーマーのグッズ">
           <div>
-            <p className="pl-profile-merch__eyebrow">GOODS</p>
+            <p className="pl-profile-merch__eyebrow">{lang === 'ja' ? 'グッズ' : 'Goods'}</p>
             <h2 className="pl-h2" style={{ marginTop: 2 }}>この人をもっと応援する</h2>
           </div>
           <div className="pl-profile-merch__grid">

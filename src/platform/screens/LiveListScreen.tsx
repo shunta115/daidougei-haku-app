@@ -36,6 +36,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
   const [acts, setActs] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const suggestions = acts.slice(0, 4)
 
   useEffect(() => {
     let cancelled = false
@@ -107,7 +108,18 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
       {!loading && tab === 'list' ? (
         <>
         {live.length === 0 ? (
-          <div className="pl-empty">{t('noLiveNow')}</div>
+          <section className="pl-live-empty-next" aria-label="次に見るパフォーマー">
+            <p className="pl-live-empty-next__k">次に見る</p>
+            <h2>いまは注目パフォーマーから探せます</h2>
+            <p>LIVEが始まっていない時間も、プロフィール・出演予定・応援から好きな人を見つけられます。</p>
+            {suggestions[0] ? (
+              <div className="pl-live-empty-next__actions">
+                <button type="button" className="pl-btn pl-btn--block" onClick={() => onOpenPerformer(suggestions[0].id)}>
+                  注目パフォーマーを見る
+                </button>
+              </div>
+            ) : null}
+          </section>
         ) : (
           live.map((p) => (
             <button
@@ -164,8 +176,18 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
               )
             })}
           </>
+        ) : live.length === 0 && suggestions.length > 0 ? (
+          <div className="pl-live-suggest-grid" role="list">
+            {suggestions.map((p) => (
+              <button key={p.id} type="button" className="pl-live-suggest-card" role="listitem" onClick={() => onOpenPerformer(p.id)}>
+                {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span aria-hidden="true">{p.stage_name.slice(0, 2)}</span>}
+                <strong>{p.stage_name}</strong>
+                <small>{p.genre || p.city || 'Performance'}</small>
+              </button>
+            ))}
+          </div>
         ) : live.length === 0 ? (
-          <p className="pl-muted">{t('comingSoonSchedule')}</p>
+          <p className="pl-muted">出演者一覧から次に応援したい人を探せます。</p>
         ) : null}
         {ended.length > 0 ? (
           <>
@@ -189,7 +211,11 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
 
       {!loading && tab === 'rank' ? (
         rank.length === 0 ? (
-          <div className="pl-empty">{t('noLiveNow')}</div>
+          <section className="pl-live-empty-next" aria-label="LIVEランキング準備中">
+            <p className="pl-live-empty-next__k">応援はこれから</p>
+            <h2>最初のLIVE後にランキングが育ちます</h2>
+            <p>いまは注目パフォーマーを見て、気になる人をフォローできます。</p>
+          </section>
         ) : (
           rank.map((row, i) => (
             <button
@@ -224,7 +250,11 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
 
       {!loading && tab === 'votes' ? (
         votes.length === 0 ? (
-          <div className="pl-empty">{t('noVotesYet')}</div>
+          <section className="pl-live-empty-next" aria-label="投票導線">
+            <p className="pl-live-empty-next__k">人気投票</p>
+            <h2>投票はプロフィールからできます</h2>
+            <p>気になるパフォーマーを見つけたら、プロフィールで投票・フォロー・応援へ進めます。</p>
+          </section>
         ) : (
           votes.map((row, i) => (
             <button

@@ -13,7 +13,7 @@ type TopBarProps = {
 
 export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopBarProps) {
   const isVisitor = persona === 'visitor'
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const { t } = useLang()
 
   return (
@@ -39,16 +39,16 @@ export function TopBar({ persona, visitorContext, onExitPerformerOrAdmin }: TopB
             来場者モードへ
           </button>
         ) : (
-          <button type="button" className="fe-staff-btn" onClick={() => openPlatform(user ? '' : '?auth=1')}>
-            {user ? profile?.display_name || t('account') : t('signIn')}
+          <button type="button" className="fe-staff-btn" onClick={() => openPlatform(user ? '?account=1' : '?auth=1')}>
+            {user ? t('account') : t('signIn')}
           </button>
         )}
-        <div className="fe-live-pill" title={visitorContext ?? 'Guest mode'}>
-          <span className="fe-live-pill__dot" aria-hidden="true" />
-          <span className="fe-live-pill__label">
-            {persona === 'visitor' ? (user ? 'IN' : 'GUEST') : persona === 'performer' ? 'ENTRY' : 'ADMIN'}
-          </span>
-        </div>
+        {!isVisitor ? (
+          <div className="fe-live-pill" title={visitorContext ?? 'Staff mode'}>
+            <span className="fe-live-pill__dot" aria-hidden="true" />
+            <span className="fe-live-pill__label">{persona === 'performer' ? 'ENTRY' : 'ADMIN'}</span>
+          </div>
+        ) : null}
       </div>
     </header>
   )

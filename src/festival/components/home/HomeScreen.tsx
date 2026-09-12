@@ -6,6 +6,7 @@ import { HomeOfficialEntry } from './HomeOfficialEntry'
 import { HomeRecommendedRow } from './HomeRecommendedRow'
 import { HomeStreamNow } from './HomeStreamNow'
 import { HomeVenuePanel } from './HomeVenuePanel'
+import { useLang } from '../../../i18n/LangProvider'
 import { useTrackView } from '../../../platform/lib/track'
 import { initials } from '../../lib/initials'
 import { formatPerformerScheduleSummary } from '../../lib/performerScheduleLabel'
@@ -61,6 +62,7 @@ export function HomeScreen({
   showStaffEntry,
   showStreamRegisterEntry,
 }: HomeScreenProps) {
+  const { lang } = useLang()
   useTrackView('home_view')
   useSyncExternalStore(subscribeLiveCatalog, getLiveCatalogVersion, () => 0)
   const hasSchedule = getCatalogSlots().length > 0
@@ -71,6 +73,16 @@ export function HomeScreen({
   const heroLive = Boolean(heroPerformer && (liveStreamers.some((p) => p.id === heroPerformer.id) || shouldShowAsLiveStream(heroPerformer)))
   const heroSchedule = heroPerformer ? formatPerformerScheduleSummary(heroPerformer.id) : null
   const heroWatchable = heroPerformer ? canWatchLiveStream(heroPerformer) : false
+  const heroGenre = heroPerformer
+    ? lang === 'ja'
+      ? heroPerformer.actJa || heroPerformer.genre
+      : heroPerformer.genre || heroPerformer.actJa
+    : ''
+  const labels = {
+    featured: lang === 'ja' ? '注目パフォーマー' : 'Featured performer',
+    discovery: lang === 'ja' ? '発見' : 'Discovery',
+    event: lang === 'ja' ? 'イベント' : 'Event',
+  }
   const discoveryRows = useMemo(() => {
     const seen = new Set<string>()
     return [liveStreamers, livePerformer ? [livePerformer] : [], pickPerformers, nextPerformer ? [nextPerformer] : []]
@@ -120,12 +132,12 @@ export function HomeScreen({
             <p className="fe-creator-hero__brand">大道芸博</p>
             <p className="fe-creator-hero__signal">
               <span className="fe-creator-hero__live-dot" aria-hidden="true" />
-              {heroLive ? 'LIVE NOW' : 'FEATURED PERFORMER'}
+              {heroLive ? 'LIVE NOW' : labels.featured}
             </p>
             <h1 id="fe-creator-hero-title" className="fe-creator-hero__name">
               {heroPerformer.nameJa || heroPerformer.name}
             </h1>
-            <p className="fe-creator-hero__genre">{heroPerformer.genre ?? heroPerformer.actJa}</p>
+            <p className="fe-creator-hero__genre">{heroGenre}</p>
             <p className="fe-creator-hero__why">
               {heroLive
                 ? 'いま、この瞬間のパフォーマンスを無料で視聴できます。'
@@ -151,7 +163,7 @@ export function HomeScreen({
         <section className="fe-creator-hero fe-creator-hero--empty" aria-labelledby="fe-creator-hero-title">
           <div className="fe-creator-hero__content">
             <p className="fe-creator-hero__brand">大道芸博</p>
-            <p className="fe-creator-hero__signal">DISCOVERY</p>
+            <p className="fe-creator-hero__signal">{labels.discovery}</p>
             <h1 id="fe-creator-hero-title" className="fe-creator-hero__name">
               パフォーマーを見つける
             </h1>
@@ -185,7 +197,7 @@ export function HomeScreen({
                     <button type="button" className="fe-person-card__name" onClick={() => onOpenDetail(p.id)}>
                       {p.nameJa || p.name}
                     </button>
-                    <p>{p.genre ?? p.actJa}</p>
+                    <p>{lang === 'ja' ? p.actJa || p.genre : p.genre || p.actJa}</p>
                     <small>{formatPerformerScheduleSummary(p.id)}</small>
                     <div className="fe-person-card__actions">
                       <button type="button" onClick={() => (canWatchLiveStream(p) ? onWatchStream(p.id) : onOpenDetail(p.id))}>
@@ -230,7 +242,7 @@ export function HomeScreen({
 
       <section className="fe-event-brief" aria-label="イベント情報">
         <div>
-          <p className="fe-event-brief__k">EVENT</p>
+          <p className="fe-event-brief__k">{labels.event}</p>
           <h2>受賞者たち · 10.10–10.12</h2>
           <p>タイムテーブルと会場MAPは、見たいパフォーマーが決まった後にすぐ確認できます。</p>
         </div>

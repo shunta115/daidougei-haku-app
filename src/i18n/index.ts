@@ -33,7 +33,7 @@ const dict = {
     ranking: 'ランキング',
     votes: '人気投票',
     overseas: '海外',
-    eventHome: '開催',
+    eventHome: 'イベント',
     continue: '続ける',
     processing: '処理中…',
     displayName: '表示名',

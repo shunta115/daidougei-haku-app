@@ -1,5 +1,6 @@
 import { readFavorites } from '../../lib/favoritesStorage'
 import { canWatchLiveStream } from '../../lib/productionGuard'
+import { useLang } from '../../../i18n/LangProvider'
 import type { Performer } from '../../types'
 
 type HomeTipsTeaserProps = {
@@ -10,6 +11,7 @@ type HomeTipsTeaserProps = {
 
 /** ホーム上の推し・応援導線。推しがLIVEなら最優先で案内。 */
 export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: HomeTipsTeaserProps) {
+  const { lang } = useLang()
   const favIds = readFavorites()
   const liveOshi = liveStreamers.filter((p) => favIds.includes(p.id))
   const watchTarget = liveOshi.find((p) => canWatchLiveStream(p)) ?? liveOshi[0]
@@ -21,8 +23,8 @@ export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: H
       <div className="fe-home-tips__inner">
         {liveOshi.length > 0 ? (
           <>
-            <p className="fe-home-tips__eyebrow fe-home-tips__eyebrow--live" lang="en">
-              OSHI LIVE
+            <p className="fe-home-tips__eyebrow fe-home-tips__eyebrow--live">
+              {lang === 'ja' ? '推しLIVE' : 'Oshi live'}
             </p>
             <h2 id="fe-home-tips-h" className="fe-home-tips__title">
               推しがいま配信中
@@ -48,8 +50,8 @@ export function HomeTipsTeaser({ liveStreamers, onOpenOshi, onWatchOshiLive }: H
           </>
         ) : (
           <>
-            <p className="fe-home-tips__eyebrow" lang="en">
-              SUPPORT
+            <p className="fe-home-tips__eyebrow">
+              {lang === 'ja' ? '応援' : 'Support'}
             </p>
             <h2 id="fe-home-tips-h" className="fe-home-tips__title">
               推しを、すぐ応援できる場所へ

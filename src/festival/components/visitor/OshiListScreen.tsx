@@ -12,6 +12,7 @@ import { listOshiPerformers } from '../../../platform/lib/api'
 import { platformToFestival } from '../../../catalog/liveCatalog'
 import { toggleOshiOrLogin } from '../../lib/oshiActions'
 import { openPlatform } from '../../../app/routes'
+import { useLang } from '../../../i18n/LangProvider'
 
 type OshiListScreenProps = {
   performers: Performer[]
@@ -60,6 +61,7 @@ export function OshiListScreen({
   onBetaSupport,
 }: OshiListScreenProps) {
   const { user } = useAuth()
+  const { lang } = useLang()
   const [remote, setRemote] = useState<Performer[]>([])
 
   useEffect(() => {
@@ -98,8 +100,8 @@ export function OshiListScreen({
 
       {liveOshi.length > 0 ? (
         <section className="fe-oshi-live-banner" aria-label="推しが配信中">
-          <p className="fe-oshi-live-banner__k" lang="en">
-            YOUR OSHI IS LIVE
+          <p className="fe-oshi-live-banner__k">
+            {lang === 'ja' ? '推しがLIVE中' : 'Your oshi is live'}
           </p>
           <p className="fe-oshi-live-banner__t">
             推しがいま配信中 · {liveOshi.map((p) => p.nameJa).join(' / ')}

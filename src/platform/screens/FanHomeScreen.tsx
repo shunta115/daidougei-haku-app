@@ -4,6 +4,7 @@ import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import { getFeaturedEvent, listEventLineup, listFollowedPerformers, listOshiPerformers, searchPerformers, listLivePerformers } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
+import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import '../../festival/festival.css'
 import './fanHome.css'
@@ -31,6 +32,7 @@ function shareApp() {
 
 export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onTip }: FanHomeProps) {
   const { user } = useAuth()
+  const { lang } = useLang()
   useTrackView('home_view')
   const [mode, setMode] = useState<EventMode>(() => {
     const saved = window.localStorage.getItem('pl-event-mode')
@@ -98,7 +100,23 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const featuredLive = live[0] ?? null
   const nextPick = roster.find((p) => !p.is_live) ?? null
   const spotlight = featuredLive ?? liveOshi[0] ?? oshi[0] ?? roster[0] ?? null
-  const spotlightSource = featuredLive ? 'LIVE NOW' : liveOshi[0] ? 'OSHI LIVE' : oshi[0] ? 'YOUR OSHI' : 'FEATURED'
+  const spotlightSource = featuredLive
+    ? 'LIVE NOW'
+    : liveOshi[0]
+      ? lang === 'ja'
+        ? '推しがLIVE中'
+        : 'Oshi live'
+      : oshi[0]
+        ? lang === 'ja'
+          ? 'フォロー中'
+          : 'Your oshi'
+        : lang === 'ja'
+          ? '注目パフォーマー'
+          : 'Featured'
+  const labels = {
+    discovery: lang === 'ja' ? '発見' : 'Discovery',
+    discoverNext: lang === 'ja' ? '次に好きになる人' : 'Discover your next favorite',
+  }
   const discoveryRail = useMemo(() => {
     const seen = new Set<string>()
     return [live, oshi, roster]
@@ -190,7 +208,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         <section className="pl-fan-stage pl-fan-stage--empty" aria-labelledby="pl-fan-stage-title">
           <div className="pl-fan-stage__content">
             <p className="pl-fan-stage__brand">大道芸博</p>
-            <p className="pl-fan-stage__signal">DISCOVERY</p>
+            <p className="pl-fan-stage__signal">{labels.discovery}</p>
             <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">推しを見つける</h1>
             <p className="pl-fan-stage__copy">LIVE、プロフィール、グッズから、応援したいパフォーマーへすぐ進めます。</p>
             <button type="button" className="pl-fan-stage__primary" onClick={onOpenSearch}>
@@ -204,8 +222,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         <section className="pl-person-rail" aria-label="発見する">
           <div className="pl-person-rail__head">
             <div>
-              <p>DISCOVER</p>
-              <h2>次に好きになる人</h2>
+              <p>{labels.discovery}</p>
+              <h2>{labels.discoverNext}</h2>
             </div>
             <button type="button" onClick={onOpenSearch}>すべて</button>
           </div>
@@ -444,8 +462,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         <div className="fe-home-tips__inner">
           {liveOshi.length > 0 ? (
             <>
-              <p className="fe-home-tips__eyebrow fe-home-tips__eyebrow--live" lang="en">
-                OSHI LIVE
+              <p className="fe-home-tips__eyebrow fe-home-tips__eyebrow--live">
+                {lang === 'ja' ? '推しLIVE' : 'Oshi live'}
               </p>
               <h2 id="fe-home-tips-h" className="fe-home-tips__title">
                 推しがいま配信中

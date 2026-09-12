@@ -504,7 +504,7 @@ body {
   font: inherit;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0;
   text-transform: uppercase;
   padding: 9px 12px;
   border-radius: 12px;
@@ -2715,7 +2715,7 @@ body {
   padding: 8px 4px 6px;
   border-radius: 18px;
   border: none;
-  background: rgba(12, 13, 16, 0.94);
+  background: rgba(8, 8, 8, 0.94);
   backdrop-filter: blur(20px);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
 }
@@ -2748,20 +2748,21 @@ body {
 }
 
 .fe-vnav__btn[data-active='true'] {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: #111;
+  background: #f7f2e8;
   box-shadow: none;
 }
 
 .fe-vnav__btn[data-active='true'] .fe-vnav__icon {
-  color: #fff;
+  color: #111;
 }
 
 .fe-vnav__label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   text-transform: none;
+  white-space: nowrap;
 }
 
 .fe-vnav__icon {

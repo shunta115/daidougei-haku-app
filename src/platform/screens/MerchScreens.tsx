@@ -10,6 +10,7 @@ import {
   uploadMerchImage,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLang } from '../../i18n/LangProvider'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, MerchProduct } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
@@ -17,6 +18,7 @@ import { trackProductEvent, useTrackView } from '../lib/track'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
+  onOpenSearch?: () => void
 }
 
 function productAvailable(p: MerchProduct) {
@@ -29,8 +31,9 @@ function orderBuyerLabel(order: MerchOrder) {
   return email ? `${name} · ${email}` : name
 }
 
-export function MerchListScreen({ onOpenProduct }: MerchListProps) {
+export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps) {
   const { user } = useAuth()
+  const { lang } = useLang()
   useTrackView('merch_view')
   const [products, setProducts] = useState<MerchProduct[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
@@ -64,13 +67,26 @@ export function MerchListScreen({ onOpenProduct }: MerchListProps) {
   return (
     <>
       <section className="pl-merch-market-hero" aria-labelledby="pl-merch-market-title">
-        <p>MERCH</p>
-        <h1 id="pl-merch-market-title">応援を、持ち帰る</h1>
-        <span>気に入ったパフォーマーのグッズ購入も、次の演技を支える応援になります。</span>
+        <p>{lang === 'ja' ? 'グッズ' : 'Merch'}</p>
+        <h1 id="pl-merch-market-title">{lang === 'ja' ? '応援を、持ち帰る' : 'Take your support home'}</h1>
+        <span>
+          {lang === 'ja'
+            ? '気に入ったパフォーマーのグッズ購入も、次の演技を支える応援になります。'
+            : 'Buying from a performer is another way to support the next show.'}
+        </span>
       </section>
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-muted">Loading…</p> : null}
-      {!loading && products.length === 0 ? <div className="pl-empty">グッズ公開後、ここから購入できます。</div> : null}
+      {!loading && products.length === 0 ? (
+        <section className="pl-merch-empty-next" aria-label="グッズ準備中">
+          <p>グッズは公開準備中です。</p>
+          <h2>まず応援したいパフォーマーを見つける</h2>
+          <span>プロフィールをフォローしておくと、商品公開やLIVEに戻りやすくなります。</span>
+          <button type="button" className="pl-btn pl-btn--block" onClick={onOpenSearch ?? (() => spaGo(PLATFORM_PATH))}>
+            パフォーマーを探す
+          </button>
+        </section>
+      ) : null}
       <div className="pl-merch-grid" role="list">
         {products.map((p) => (
           <article key={p.id} className="pl-merch-card" role="listitem">
@@ -155,7 +171,7 @@ export function MerchDetailScreen({ productId, onBack }: { productId: string; on
       <div className="pl-merch-detail">
         {product.image_url ? <img className="pl-merch-detail__image" src={product.image_url} alt="" /> : <div className="pl-merch-detail__image" aria-hidden="true" />}
         <div className="pl-merch-detail__body">
-        <p className="pl-merch-detail__k">OFFICIAL GOODS</p>
+        <p className="pl-merch-detail__k">GOODS</p>
         <h1 className="pl-h1">{product.name}</h1>
         <p className="pl-tip__amount">{formatYen(product.price_yen)}</p>
         <p className="pl-muted">{product.description || 'この商品を購入して、パフォーマーの活動を応援できます。'}</p>
