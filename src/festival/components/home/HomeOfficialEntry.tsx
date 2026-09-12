@@ -25,16 +25,12 @@ export function HomeOfficialEntry({
       {showStreamRegisterEntry ? (
         <button type="button" className="fe-official-entry__perf" onClick={onStreamRegister}>
           <span className="fe-official-entry__perf-ja">配信希望パフォーマー登録</span>
-          <span className="fe-official-entry__perf-en" lang="en">
-            STREAM PERFORMER SIGN-UP
-          </span>
+          <span className="fe-official-entry__perf-en">審査後にLIVE配信できます</span>
         </button>
       ) : (
         <button type="button" className="fe-official-entry__perf" onClick={() => openPlatform('?auth=1&role=performer')}>
           <span className="fe-official-entry__perf-ja">パフォーマーとして参加</span>
-          <span className="fe-official-entry__perf-en" lang="en">
-            PERFORMER SIGN-UP
-          </span>
+          <span className="fe-official-entry__perf-en">登録してプロフィールを作成</span>
         </button>
       )}
       {showStaffEntry ? (

@@ -438,11 +438,9 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         位置共有ONのライブはここに表示されます。会場MAPから次に見る人を探せます。
       </p>
 
-      <section className="pl-map-panel" aria-label="位置共有中のライブ">
-        <h2 className="fe-h6-rail__title">いま街にいる</h2>
-        {mapRows.length === 0 ? (
-          <p className="fe-h6-rail__empty">位置を共有中のライブはありません</p>
-        ) : (
+      {mapRows.length > 0 ? (
+        <section className="pl-map-panel" aria-label="位置共有中のライブ">
+          <h2 className="fe-h6-rail__title">いま街にいる</h2>
           <div className="pl-map-panel__list">
             {mapRows.map((p) => (
               <button key={p.id} type="button" className="pl-map-panel__card" onClick={() => onOpenPerformer(p.id)}>
@@ -454,8 +452,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
               </button>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="fe-home-tips" id="fe-home-tips" aria-labelledby="fe-home-tips-h">
         <div className="fe-home-tips__glow" aria-hidden="true" />
@@ -482,8 +480,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
             </>
           ) : (
             <>
-              <p className="fe-home-tips__eyebrow" lang="en">
-                SUPPORT
+              <p className="fe-home-tips__eyebrow">
+                {lang === 'ja' ? '応援' : 'Support'}
               </p>
               <h2 id="fe-home-tips-h" className="fe-home-tips__title">
                 推しを、すぐ応援できる場所へ

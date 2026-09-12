@@ -17,7 +17,7 @@ type TipProps = {
 
 export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
   const { user } = useAuth()
-  const { t } = useLang()
+  const { lang, t } = useLang()
   const [p, setP] = useState<Performer | null>(null)
   const [amount, setAmount] = useState<number>(TIP_PRESETS_JPY[1])
   const [busy, setBusy] = useState(false)
@@ -76,7 +76,7 @@ export function TipScreen({ performerId, onBack, returnToLive }: TipProps) {
       >
         <div className="pl-tip-hero__shade" />
         <div className="pl-tip-hero__body">
-          <p className="pl-tip-hero__k">SUPPORT</p>
+          <p className="pl-tip-hero__k">{lang === 'ja' ? '応援' : 'Support'}</p>
           <h1 id="pl-tip-title" className="pl-tip-hero__name">
             {p?.stage_name ? `${p.stage_name}へ応援を届ける` : t('tipHeading')}
           </h1>
