@@ -163,14 +163,22 @@ export function HomeScreen({
         <section className="fe-creator-hero fe-creator-hero--empty" aria-labelledby="fe-creator-hero-title">
           <div className="fe-creator-hero__content">
             <p className="fe-creator-hero__brand">大道芸博</p>
-            <p className="fe-creator-hero__signal">{labels.discovery}</p>
+            <p className="fe-creator-hero__signal">{labels.event}</p>
             <h1 id="fe-creator-hero-title" className="fe-creator-hero__name">
-              パフォーマー準備中
+              受賞者たち · 10.10–10.12
             </h1>
-            <p className="fe-creator-hero__why">公開済みの出演者が入り次第、ここに表示されます。</p>
-            <button type="button" className="fe-creator-hero__cta" onClick={onOpenPerformers}>
-              探す
-            </button>
+            <p className="fe-creator-hero__why">出演者・LIVE・投票は公開済みの情報から順次つながります。</p>
+            <div className="fe-creator-hero__actions" aria-label="イベントアクション">
+              <button type="button" className="fe-creator-hero__cta" onClick={onOpenPerformers}>
+                探す
+              </button>
+              <button type="button" className="fe-creator-hero__follow" onClick={onOpenTimetable}>
+                時間を見る
+              </button>
+              <button type="button" className="fe-creator-hero__support" onClick={onOpenMap}>
+                MAP
+              </button>
+            </div>
           </div>
         </section>
       )}

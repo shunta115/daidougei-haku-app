@@ -38,6 +38,7 @@ type Props = {
   performerId: string
   onBack: () => void
   onTip: () => void
+  onRequireAuth?: () => void
 }
 
 function formatDuration(sec: number) {
@@ -46,7 +47,7 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
+export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
@@ -204,6 +205,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
 
   const toggleFollow = async () => {
     if (!user) {
+      if (onRequireAuth) {
+        onRequireAuth()
+        return
+      }
       spaGo(`${PLATFORM_PATH}?auth=1`)
       return
     }
@@ -329,6 +334,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip }: Props) {
             onClick={() => {
               trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live_bottom_bar' } })
               if (!user) {
+                window.sessionStorage.setItem('pl-tip-to', performerId)
+                if (onRequireAuth) {
+                  onRequireAuth()
+                  return
+                }
                 spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
                 return
               }

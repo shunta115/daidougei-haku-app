@@ -418,6 +418,7 @@ function PlatformShell() {
             setTipReturn('live-watch')
             setScreen('tip')
           }}
+          onRequireAuth={() => setScreen('auth')}
         />
       )
     } else if (performerId && screen === 'tip') {
@@ -527,6 +528,7 @@ function PlatformShell() {
           setTipReturn('live-watch')
           setScreen('tip')
         }}
+        onRequireAuth={() => setScreen('auth')}
       />
     )
   } else if (performerId && screen === 'tip') {
