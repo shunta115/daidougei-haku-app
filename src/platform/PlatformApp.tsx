@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { FESTIVAL_PATH, PLATFORM_PATH, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
@@ -26,7 +26,9 @@ import { MerchDetailScreen, MerchListScreen, PerformerMerchScreen } from './scre
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
+import { PERFORMER_REGISTER_PATH } from './lib/onboarding'
 import './platform.css'
+import './screens/registration.css'
 
 function SetupScreen() {
   const { t } = useLang()
@@ -104,8 +106,10 @@ function homeForRole(role: string | undefined): PlatformScreen {
 
 function initialGuestScreen(): PlatformScreen {
   try {
+    if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
+    if (q.get('profile')) return 'profile'
     if (q.get('tipTo')) return 'tip'
     if (q.get('merchProduct')) return 'merch-detail'
     if (q.get('live') === '1') return 'live-list'
@@ -119,14 +123,25 @@ function initialGuestScreen(): PlatformScreen {
 }
 
 function PlatformShell() {
-  const { ready, configured, user, profile } = useAuth()
+  const { ready, configured, user, profile, profileError, refreshProfile, signOut } = useAuth()
   const { t } = useLang()
   const [screen, setScreen] = useState<PlatformScreen>(initialGuestScreen)
+  const [registrationEntry] = useState(() => window.location.pathname === PERFORMER_REGISTER_PATH)
+  const [authRole] = useState<'fan' | 'performer' | 'organizer'>(() => {
+    if (registrationEntry) return 'performer'
+    const role = new URLSearchParams(window.location.search).get('role')
+    return role === 'performer' || role === 'organizer' ? role : 'fan'
+  })
+  const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
   const [tipFlash, setTipFlash] = useState<string | null>(null)
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
+
+  useEffect(() => {
+    if (screen === 'performer-home' || screen === 'performer-edit' || screen === 'admin') window.scrollTo(0, 0)
+  }, [screen])
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -135,6 +150,7 @@ function PlatformShell() {
     const ret = url.searchParams.get('return')
     const pid = url.searchParams.get('performerId')
     const watch = url.searchParams.get('watch')
+    const publicProfile = url.searchParams.get('profile')
     const auth = url.searchParams.get('auth')
     const tipTo = url.searchParams.get('tipTo')
     const stripe = url.searchParams.get('stripe')
@@ -147,6 +163,10 @@ function PlatformShell() {
       setPerformerId(watch)
       window.sessionStorage.setItem('pl-watch', watch)
       url.searchParams.delete('watch')
+    }
+    if (publicProfile && !watch && !tipTo) {
+      setPerformerId(publicProfile)
+      setScreen('profile')
     }
     if (tipTo) {
       setPerformerId(tipTo)
@@ -257,6 +277,8 @@ function PlatformShell() {
       return
     }
     if (!user) {
+      routedUser.current = null
+      if (registrationEntry) { setPerformerId(null); setScreen('auth'); return }
       setScreen((s) =>
         s === 'auth' ||
         s === 'fan-home' ||
@@ -272,7 +294,22 @@ function PlatformShell() {
       )
       return
     }
+    if (!profile) return
+    const firstVisit = routedUser.current !== user.id
+    routedUser.current = user.id
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
+      return
+    }
+    if (firstVisit && registrationEntry) {
+      for (const key of ['pl-watch', 'pl-open-live-list', 'pl-merch-product', 'pl-tip-to', 'pl-open-account', 'pl-tip-return']) window.sessionStorage.removeItem(key)
+      setPerformerId(null)
+      setScreen(homeForRole(profile.role))
+      return
+    }
+    const stripeConnect = window.sessionStorage.getItem('pl-stripe-connect')
+    if (stripeConnect && profile.role === 'performer') {
+      window.sessionStorage.removeItem('pl-stripe-connect')
+      setScreen('performer-home')
       return
     }
     const watchId = window.sessionStorage.getItem('pl-watch')
@@ -303,18 +340,10 @@ function PlatformShell() {
       setScreen('tip')
       return
     }
-    const stripeConnect = window.sessionStorage.getItem('pl-stripe-connect')
-    if (stripeConnect) {
-      window.sessionStorage.removeItem('pl-stripe-connect')
-      if (profile?.role === 'performer') {
-        setScreen('performer-edit')
-        return
-      }
-    }
     const openAccount = window.sessionStorage.getItem('pl-open-account')
     if (openAccount) {
       window.sessionStorage.removeItem('pl-open-account')
-      setScreen('profile')
+      setScreen(profile.role === 'fan' ? 'profile' : homeForRole(profile.role))
       return
     }
     const raw = window.sessionStorage.getItem('pl-tip-return')
@@ -333,16 +362,16 @@ function PlatformShell() {
       }
     }
     setScreen((s) => {
-      if (s === 'welcome' || s === 'auth' || s === 'setup') return homeForRole(profile?.role)
+      if (s === 'welcome' || s === 'auth' || s === 'setup' || (firstVisit && s === 'fan-home')) return homeForRole(profile?.role)
       return s
     })
-  }, [ready, configured, user, profile])
+  }, [ready, configured, user, profile, registrationEntry])
 
   if (!ready) {
     return (
       <div className="pl-app">
         <div className="pl-shell">
-          <p className="pl-muted">Loading…</p>
+          <p className="pl-muted" role="status">登録情報を確認しています…</p>
         </div>
       </div>
     )
@@ -354,6 +383,23 @@ function PlatformShell() {
         <SetupScreen />
       </div>
     )
+  }
+
+  if (user && profileError) {
+    return <div className="pl-app"><div className="pl-shell pl-registration">
+      <h1 className="pl-h1">登録情報の確認</h1><p className="pl-error" role="alert">{profileError}</p>
+      <button className="pl-btn pl-btn--block" onClick={() => void refreshProfile().catch(() => undefined)}>再読み込み</button>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>ログアウトしてやり直す</button>
+    </div></div>
+  }
+
+  if (registrationEntry && profile && profile.role !== 'performer' && profile.role !== 'admin') {
+    return <div className="pl-app"><div className="pl-shell pl-registration">
+      <h1 className="pl-h1">パフォーマー登録</h1>
+      <p className="pl-muted">現在は{profile.role === 'fan' ? 'ファン' : '主催者'}のアカウントでログインしています。パフォーマー用のアカウントでログインするか、別のメールアドレスで登録してください。</p>
+      <button className="pl-btn pl-btn--block" onClick={() => void signOut()}>ログアウトして登録へ</button>
+      <a className="pl-registration__link" href={PLATFORM_PATH}>今のアカウントで戻る</a>
+    </div></div>
   }
 
   if (profile?.status === 'suspended' || profile?.status === 'deleted') {
@@ -505,7 +551,7 @@ function PlatformShell() {
     return (
       <div className="pl-app">
         {screen === 'auth' ? (
-          <AuthScreen onDone={() => setScreen('fan-home')} />
+          <AuthScreen initialRole={authRole} performerEntry={registrationEntry} onDone={() => undefined} />
         ) : (
           <WelcomeScreen onAuth={() => setScreen('auth')} />
         )}
@@ -613,6 +659,7 @@ function PlatformShell() {
             onLive={() => setScreen('performer-live')}
             onHistory={() => setScreen('performer-history')}
             onMerch={() => setScreen('performer-merch')}
+            onPreview={() => { if (user) openPerformer(user.id) }}
           />
         )
         break
@@ -664,7 +711,7 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-        {showNav ? <PlatformTopBar accountLabel={t('account')} onAccount={() => setScreen('profile')} /> : null}
+        {showNav ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}

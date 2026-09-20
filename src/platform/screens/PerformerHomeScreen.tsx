@@ -1,161 +1,132 @@
 import { useEffect, useState } from 'react'
+import { CheckCircle2, Circle, Camera, Pencil, ShoppingBag, CalendarDays, Share2 } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
-import { listLiveHistory, listSellerMerchProducts, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
+import { PayoutSetup, type ConnectStatus } from '../components/PayoutSetup'
+import { listLiveHistory, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
+import { performerRegistrationStatus, registrationError } from '../lib/onboarding'
+import { FESTIVAL_PATH, PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({
-  onEdit,
-  onLive,
-  onHistory,
-  onMerch,
-}: {
+export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview }: {
   onEdit: () => void
   onLive: () => void
   onHistory: () => void
   onMerch: () => void
+  onPreview: () => void
 }) {
-  const { performer, profile, refreshProfile } = useAuth()
+  const { performer, profile, refreshProfile, signOut } = useAuth()
   const [recent, setRecent] = useState<LiveSession[]>([])
   const [tips, setTips] = useState<TipRow[]>([])
   const [summary, setSummary] = useState<TipSummary>({ count: 0, amount_total: 0, fee_total: 0 })
-  const [merchCount, setMerchCount] = useState(0)
+  const [connect, setConnect] = useState<ConnectStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const performerId = performer?.id
 
   useEffect(() => {
-    if (!performer) return
+    if (!performerId) return
+    let active = true
+    let loading = false
     const load = async () => {
-      const [rows, tipRows, tipSum, merchRows] = await Promise.all([
-        listLiveHistory(performer.id),
-        listTipsForPerformer(performer.id),
-        tipSummaryForPerformer(performer.id),
-        listSellerMerchProducts(performer.id).catch(() => []),
-      ])
-      setRecent(rows.slice(0, 3))
-      setTips(tipRows.slice(0, 5))
-      setSummary(tipSum)
-      setMerchCount(merchRows.filter((item) => item.status === 'active').length)
-      await refreshProfile()
+      if (loading) return
+      loading = true
+      try {
+        const [rows, tipRows, tipSum] = await Promise.all([
+          listLiveHistory(performerId), listTipsForPerformer(performerId), tipSummaryForPerformer(performerId),
+        ])
+        if (!active) return
+        setRecent(rows.slice(0, 3)); setTips(tipRows.slice(0, 5)); setSummary(tipSum)
+      } catch { if (active) setError('売上情報を読み込めませんでした。時間をおいてページを開き直してください。') }
+      finally { loading = false }
     }
-    load().catch(() => {
-      setRecent([])
-      setTips([])
-    })
-    const timer = window.setInterval(() => {
-      load().catch(() => undefined)
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [performer, refreshProfile])
+    void load()
+    const timer = window.setInterval(() => { if (!document.hidden) void load() }, 30_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [performerId])
 
-  if (!performer || !profile) return <p className="pl-muted">Loading…</p>
-  const profileComplete = Boolean(performer.photo_url && performer.bio.trim() && performer.genre.trim())
+  useEffect(() => {
+    const refresh = () => { void refreshProfile().catch(() => undefined) }
+    const timer = window.setInterval(() => { if (!document.hidden) refresh() }, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [refreshProfile])
 
-  return (
-    <>
-      <div className="pl-card pl-row">
-        <Avatar url={performer.photo_url ?? profile.avatar_url} name={performer.stage_name} large />
-        <div style={{ flex: 1 }}>
-          <h1 className="pl-h1" style={{ margin: 0, fontSize: '1.4rem' }}>
-            {performer.stage_name}
-          </h1>
-          <p className="pl-muted" style={{ margin: '4px 0 0' }}>
-            {performer.is_approved ? 'Public' : 'Pending approval'}
-            {performer.is_live ? ' · LIVE' : ''}
-          </p>
-        </div>
+  if (!performer || !profile) return <p className="pl-muted">登録情報を確認しています…</p>
+  const status = performerRegistrationStatus({ ...performer, ...(connect ? { stripe_onboarding_complete: connect.complete, stripe_account_id: connect.connected ? 'connected' : null } : {}) })
+  const steps = [
+    { label: 'プロフィール', done: status.profileComplete, detail: status.profileComplete ? '登録済み' : status.missing.join('・') },
+    { label: '売上の受取設定', done: status.payoutsComplete, detail: status.payoutsComplete ? '完了' : connect?.underReview ? 'Stripeで確認中' : '本人確認・振込口座' },
+    { label: '運営確認・公開', done: status.approved, detail: status.approved ? '公開中' : status.profileComplete && status.payoutsComplete ? '運営の確認待ち' : '登録完了後に運営が確認' },
+  ]
+  const share = async () => {
+    const url = `${window.location.origin}${PLATFORM_PATH}?profile=${encodeURIComponent(performer.id)}`
+    try {
+      if (navigator.share) await navigator.share({ title: performer.stage_name, url })
+      else { await navigator.clipboard.writeText(url); setMessage('プロフィールのリンクをコピーしました。') }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setError('共有できませんでした。公開プロフィールを開いて、ブラウザから共有してください。')
+    }
+  }
+
+  return <div className="pl-registration">
+    <div className="pl-registration__identity">
+      <Avatar url={performer.photo_url ?? profile.avatar_url} name={performer.stage_name} large />
+      <div><h1 className="pl-h1">{performer.stage_name}</h1><p className="pl-muted">{status.approved ? '公開中' : '登録を進めましょう'}{performer.is_live ? '・LIVE中' : ''}</p></div>
+    </div>
+
+    <section className="pl-registration__section" aria-labelledby="registration-heading">
+      <h2 id="registration-heading" className="pl-h2">{status.next === 'complete' ? '登録が完了しました' : '登録状況'}</h2>
+      <ol className="pl-registration__steps">
+        {steps.map((step) => <li key={step.label} data-done={step.done}>
+          {step.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+          <div><strong>{step.label}</strong><span>{step.detail}</span></div>
+        </li>)}
+      </ol>
+      {status.next === 'profile' ? <button className="pl-btn pl-btn--block" onClick={onEdit}><Pencil size={18} />プロフィールを完成させる</button> : null}
+      {status.next === 'payouts' ? <a className="pl-btn pl-btn--block" href="#payout-heading">受取設定へ進む</a> : null}
+      {status.next === 'approval' ? <p className="pl-registration__notice">必要な登録が完了しました。追加の申請操作は不要です。運営の承認後に公開され、通知でもお知らせします。</p> : null}
+      {status.approved ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onPreview}>公開プロフィールを見る</button> : null}
+    </section>
+
+    <PayoutSetup performerId={performer.id} onStatus={setConnect} />
+
+    <section className="pl-registration__section" aria-label="活動メニュー">
+      <h2 className="pl-h2">活動メニュー</h2>
+      <div className="pl-registration__actions">
+        <button className="pl-btn pl-btn--ghost" onClick={onEdit}><Pencil size={18} />プロフィール・SNS</button>
+        <button className="pl-btn pl-btn--ghost" disabled={!status.approved} onClick={onLive}><Camera size={18} />{performer.is_live ? 'LIVEを管理' : 'LIVE開始'}</button>
+        <button className="pl-btn pl-btn--ghost" onClick={onMerch}><ShoppingBag size={18} />グッズ・注文管理</button>
+        <a className="pl-btn pl-btn--ghost" href={FESTIVAL_PATH}><CalendarDays size={18} />イベント・出演情報</a>
+        {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />プロフィールを共有</button> : null}
       </div>
+      {!status.approved ? <p className="pl-muted">公開・LIVE・販売開始は運営承認後に利用できます。グッズは先に下書きを作れます。</p> : null}
+    </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <div className="pl-card" style={{ margin: 0 }}>
-          <div className="pl-muted" style={{ fontSize: 12 }}>
-            Tips received
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{summary.count}</div>
-        </div>
-        <div className="pl-card" style={{ margin: 0 }}>
-          <div className="pl-muted" style={{ fontSize: 12 }}>
-            Tip total
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{formatYen(summary.amount_total)}</div>
-        </div>
-      </div>
+    {error ? <p className="pl-error" role="alert">{error}</p> : null}
+    {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
+    <section className="pl-registration__section" aria-label="投げ銭の売上">
+      <h2 className="pl-h2">投げ銭の売上</h2>
+      <dl className="pl-registration__totals">
+        <div><dt>応援件数</dt><dd>{summary.count}件</dd></div>
+        <div><dt>売上合計</dt><dd>{formatYen(summary.amount_total)}</dd></div>
+        <div><dt>運営手数料</dt><dd>{formatYen(summary.fee_total)}</dd></div>
+      </dl>
+      <p className="pl-muted">振込額・振込予定はStripeで確認できます。グッズの売上は「グッズ・注文管理」へ。</p>
+      {tips.map((tip) => <div key={tip.id} className="pl-registration__sale"><strong>{formatYen(tip.amount_cents)}</strong><span>{new Date(tip.created_at).toLocaleDateString('ja-JP')}</span></div>)}
+    </section>
 
-      {!performer.is_approved ? (
-        <p className="pl-muted">An admin must approve your profile before fans can find you.</p>
-      ) : null}
-
-      <section className="pl-card pl-next-actions" aria-label="次にやること">
-        <p className="pl-next-actions__eyebrow">NEXT ACTION</p>
-        <h2 className="pl-h2" style={{ marginTop: 2 }}>収益化に近づく次の一手</h2>
-        <div className="pl-next-actions__grid">
-          <button type="button" className="pl-next-actions__item" data-done={profileComplete} onClick={onEdit}>
-            <strong>{profileComplete ? 'プロフィールは公開準備OK' : 'プロフィールを完成させる'}</strong>
-            <span>写真・ジャンル・短い紹介で、初見のファンが数秒で理解できます。</span>
-          </button>
-          <button type="button" className="pl-next-actions__item" data-done={performer.is_live} onClick={onLive}>
-            <strong>{performer.is_live ? 'LIVE配信中' : 'LIVEを開始する'}</strong>
-            <span>視聴中の熱量が一番高いタイミングで応援につながります。</span>
-          </button>
-          <button type="button" className="pl-next-actions__item" data-done={merchCount > 0} onClick={onMerch}>
-            <strong>{merchCount > 0 ? `販売中グッズ ${merchCount}件` : 'グッズを追加する'}</strong>
-            <span>投げ銭後も応援したいファンの受け皿になります。</span>
-          </button>
-        </div>
-      </section>
-
-      <button type="button" className="pl-btn pl-btn--block pl-btn--live" onClick={onLive}>
-        {performer.is_live ? 'Manage LIVE' : 'LIVE開始'}
-      </button>
-      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onEdit}>
-        Edit profile
-      </button>
-      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onHistory}>
-        Live history
-      </button>
-      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onMerch}>
-        グッズ管理
-      </button>
-      <button
-        type="button"
-        className="pl-btn pl-btn--block pl-btn--ghost"
-        onClick={() => {
-          void (async () => {
-            await updatePerformer(performer.id, { share_location: !performer.share_location })
-            await refreshProfile()
-          })()
-        }}
-      >
-        Location share: {performer.share_location ? 'ON' : 'OFF'}
-      </button>
-
-      <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 24 }}>
-        Recent tips
-      </h2>
-      {tips.length === 0 ? <div className="pl-empty">No tips yet.</div> : null}
-      {tips.map((t) => (
-        <div key={t.id} className="pl-card">
-          <div style={{ fontWeight: 700 }}>{formatYen(t.amount_cents)}</div>
-          <div className="pl-muted">
-            {new Date(t.created_at).toLocaleString()} · fee {formatYen(t.platform_fee_cents)}
-          </div>
-        </div>
-      ))}
-
-      {recent.length > 0 ? (
-        <>
-          <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 24 }}>
-            Recent lives
-          </h2>
-          {recent.map((s) => (
-            <div key={s.id} className="pl-card">
-              <div style={{ fontWeight: 600 }}>{new Date(s.started_at).toLocaleString()}</div>
-              <div className="pl-muted">
-                {s.ended_at ? 'Ended' : 'Open'} · tips {s.tip_count} · {formatYen(s.tip_amount_total)}
-              </div>
-            </div>
-          ))}
-        </>
-      ) : null}
-    </>
-  )
+    <details className="pl-registration__details"><summary>LIVE履歴・位置情報・アカウント</summary>
+      {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString('ja-JP')}・{session.ended_at ? '終了' : 'LIVE中'}・{formatYen(session.tip_amount_total)}</p>)}
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onHistory}>LIVE履歴</button>
+      <label className="pl-registration__toggle"><input type="checkbox" checked={performer.share_location} disabled={busy} onChange={(e) => {
+        const checked = e.target.checked
+        setBusy(true)
+        void updatePerformer(performer.id, { share_location: checked }).then(refreshProfile).catch((e) => setError(registrationError(e))).finally(() => setBusy(false))
+      }} />LIVE中の位置情報を公開</label>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>ログアウト</button>
+    </details>
+  </div>
 }

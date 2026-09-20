@@ -1,4 +1,4 @@
-import { openPlatform } from '../../../app/routes'
+import { PERFORMER_REGISTER_PATH } from '../../../platform/lib/onboarding'
 import {
   canAccessPerformerAreas,
   canAccessStaffAreas,
@@ -28,7 +28,7 @@ export function HomeOfficialEntry({
           <span className="fe-official-entry__perf-en">審査後にLIVE配信できます</span>
         </button>
       ) : (
-        <button type="button" className="fe-official-entry__perf" onClick={() => openPlatform('?auth=1&role=performer')}>
+        <button type="button" className="fe-official-entry__perf" onClick={() => { window.location.href = PERFORMER_REGISTER_PATH }}>
           <span className="fe-official-entry__perf-ja">パフォーマーとして参加</span>
           <span className="fe-official-entry__perf-en">登録してプロフィールを作成</span>
         </button>

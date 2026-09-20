@@ -11,7 +11,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireAuthUser(req, res)
     if (!user) return
 
-    const { performerId } = req.body as { performerId?: string }
+    const { performerId, action } = (req.body ?? {}) as { performerId?: string; action?: string }
+    if (action && action !== 'status') {
+      res.status(400).json({ error: 'Unknown action' })
+      return
+    }
     if (!performerId) {
       res.status(400).json({ error: 'performerId required' })
       return
@@ -22,14 +26,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sb = getAdminSupabase()
+    const { data: profile, error: profileError } = await sb.from('profiles').select('role,status').eq('id', user.id).single()
+    if (profileError) throw profileError
+    if (!profile || !['performer', 'admin'].includes(profile.role) || !['pending', 'active'].includes(profile.status)) {
+      res.status(403).json({ error: '受取設定を利用できません。アカウントの登録状況を確認してください。' })
+      return
+    }
     const { data: performer, error } = await sb.from('performers').select('*').eq('id', performerId).single()
     if (error || !performer) {
       res.status(404).json({ error: 'Performer not found' })
       return
     }
 
-    const stripe = getStripe()
     let accountId = performer.stripe_account_id as string | null
+    res.setHeader('Cache-Control', 'no-store')
+    if (action === 'status' && !accountId) {
+      res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false })
+      return
+    }
+    const stripe = getStripe()
     if (!accountId) {
       const account = await stripe.accounts.create({
         controller: {
@@ -43,15 +58,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           transfers: { requested: true },
         },
         metadata: { performer_id: performerId },
-      })
+      }, { idempotencyKey: `performer-connect:${performerId}` })
       accountId = account.id
-      await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
+      const { error: saveError } = await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
+      if (saveError) throw saveError
     } else {
       const account = await stripe.accounts.retrieve(accountId)
-      await sb
+      const complete = isConnectedAccountChargeReady(account)
+      const { error: saveError } = await sb
         .from('performers')
-        .update({ stripe_onboarding_complete: isConnectedAccountChargeReady(account) })
+        .update({ stripe_onboarding_complete: complete })
         .eq('id', performerId)
+      if (saveError) throw saveError
+      if (action === 'status') {
+        res.status(200).json({
+          connected: true, complete,
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          needsInformation: Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length),
+          underReview: Boolean(account.requirements?.pending_verification?.length),
+        })
+        return
+      }
     }
 
     const origin = getAppUrl(req)
@@ -63,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     res.status(200).json({ url: link.url })
-  } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Connect failed' })
+  } catch {
+    res.status(500).json({ error: '受取設定を確認できませんでした。時間をおいて再度お試しください。' })
   }
 }

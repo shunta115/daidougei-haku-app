@@ -133,8 +133,9 @@ export async function updateLiveViewerPeak(performerId: string, viewers: number)
 
 export async function updatePerformer(id: string, patch: Partial<Performer>) {
   const sb = requireSupabase()
-  const { error } = await sb.from('performers').update(patch).eq('id', id)
+  const { data, error } = await sb.from('performers').update(patch).eq('id', id).select('id')
   if (error) throw error
+  if (!data?.length) throw new Error('Performer update unavailable')
 }
 
 export async function startLive(performerId: string, title?: string) {
@@ -443,6 +444,20 @@ export async function listPendingPerformers(): Promise<Performer[]> {
   const { data, error } = await sb.from('performers').select('*').eq('is_approved', false).order('created_at')
   if (error) throw error
   return (data as Performer[]) ?? []
+}
+
+export type PerformerRegistration = Performer & { account_status: string }
+
+export async function listPerformerRegistrations(): Promise<PerformerRegistration[]> {
+  const sb = requireSupabase()
+  const [{ data: performers, error }, { data: profiles, error: profileError }] = await Promise.all([
+    sb.from('performers').select('*').order('created_at', { ascending: false }),
+    sb.from('profiles').select('id,status').in('role', ['performer', 'admin']),
+  ])
+  if (error) throw error
+  if (profileError) throw profileError
+  const statuses = new Map((profiles ?? []).map((p) => [p.id, p.status]))
+  return (performers ?? []).map((p) => ({ ...p, account_status: statuses.get(p.id) ?? 'unknown' })) as PerformerRegistration[]
 }
 
 export async function approvePerformer(id: string) {

@@ -26,10 +26,10 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
     role === 'admin'
       ? [
           { key: 'event-home', label: labels.event, href: FESTIVAL_PATH },
-          { key: 'admin', label: 'Today' },
-          { key: 'admin-event', label: 'Event' },
-          { key: 'admin-users', label: 'Users' },
-          { key: 'admin-ops', label: 'AI' },
+          { key: 'admin', label: '登録確認' },
+          { key: 'admin-event', label: '運営' },
+          { key: 'admin-users', label: '利用者' },
+          { key: 'admin-ops', label: '分析' },
         ]
       : role === 'performer'
         ? [

@@ -4,12 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, requireSupabase, supabase } from './supabase'
-import type { Performer, Profile, UserRole } from './types'
+import type { Performer, Profile } from './types'
+import { registrationError } from './onboarding'
 
 type AuthState = {
   ready: boolean
@@ -18,6 +20,7 @@ type AuthState = {
   profile: Profile | null
   performer: Performer | null
   configured: boolean
+  profileError: string | null
   refreshProfile: () => Promise<void>
   signUp: (email: string, password: string, role: 'fan' | 'performer' | 'organizer', displayName: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
@@ -28,18 +31,22 @@ const AuthContext = createContext<AuthState | null>(null)
 
 async function loadProfile(userId: string): Promise<{ profile: Profile | null; performer: Performer | null }> {
   const sb = requireSupabase()
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle()
+  const { data: profile, error: profileError } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle()
+  if (profileError) throw profileError
+  if (!profile) throw new Error('Profile unavailable')
   let performer: Performer | null = null
   if (profile?.role === 'performer') {
-    const { data } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
+    const { data, error } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
+    if (error) throw error
     performer = (data as Performer) ?? null
     if (!performer) {
       const stageName = profile.display_name?.trim() || 'Performer'
-      const { data: inserted } = await sb
+      const { error: insertError } = await sb
         .from('performers')
         .insert({ id: userId, stage_name: stageName, is_approved: false })
-        .select('*')
-        .maybeSingle()
+      if (insertError && insertError.code !== '23505') throw insertError
+      const { data: inserted, error: reloadError } = await sb.from('performers').select('*').eq('id', userId).single()
+      if (reloadError) throw reloadError
       performer = (inserted as Performer) ?? null
     }
   } else if (profile?.role === 'admin') {
@@ -54,49 +61,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [performer, setPerformer] = useState<Performer | null>(null)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [authRevision, setAuthRevision] = useState(0)
+  const currentUserId = useRef<string | null>(null)
 
   const refreshProfile = useCallback(async () => {
     if (!supabase) return
-    const uid = (await supabase.auth.getUser()).data.user?.id
+    const uid = currentUserId.current
     if (!uid) {
       setProfile(null)
       setPerformer(null)
       return
     }
     const loaded = await loadProfile(uid)
+    if (currentUserId.current !== uid) return
     setProfile(loaded.profile)
     setPerformer(loaded.performer)
+    setProfileError(null)
   }, [])
 
   useEffect(() => {
     if (!supabase) return
     let mounted = true
-    supabase.auth.getSession().then(async ({ data }) => {
+    // Supabase auth callbacks hold an auth lock. Load DB rows outside the callback.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       if (!mounted) return
-      setSession(data.session)
-      if (data.session?.user) {
-        const loaded = await loadProfile(data.session.user.id)
-        if (!mounted) return
-        setProfile(loaded.profile)
-        setPerformer(loaded.performer)
-      }
-      setReady(true)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
+      const changed = currentUserId.current !== (next?.user.id ?? null)
+      currentUserId.current = next?.user.id ?? null
       setSession(next)
-      if (next?.user) {
-        const loaded = await loadProfile(next.user.id)
-        setProfile(loaded.profile)
-        setPerformer(loaded.performer)
-        // Touch updated_at for DAU/MAU proxies
-        void requireSupabase()
-          .from('profiles')
-          .update({ updated_at: new Date().toISOString() })
-          .eq('id', next.user.id)
-      } else {
+      setAuthRevision((revision) => revision + 1)
+      if (changed || !next) {
         setProfile(null)
         setPerformer(null)
+        setProfileError(null)
       }
+      if (changed || !next) setReady(!next)
     })
     return () => {
       mounted = false
@@ -104,7 +103,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signUp = useCallback(async (email: string, password: string, role: UserRole, displayName: string) => {
+  const userId = session?.user.id
+  useEffect(() => {
+    if (!userId) return
+    let active = true
+    void loadProfile(userId).then((loaded) => {
+      if (!active || currentUserId.current !== userId) return
+      setProfile(loaded.profile)
+      setPerformer(loaded.performer)
+      setProfileError(null)
+      // Preserve the existing activity timestamp without holding the auth lock.
+      void (async () => {
+        try { await requireSupabase().from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', userId) }
+        catch { /* Activity metrics must not prevent registration. */ }
+      })()
+    }).catch(() => {
+      if (active) setProfileError('登録情報を読み込めませんでした。通信を確認し、再読み込みしてください。')
+    }).finally(() => { if (active) setReady(true) })
+    return () => { active = false }
+  }, [userId, authRevision])
+
+  const signUp = useCallback(async (email: string, password: string, role: 'fan' | 'performer' | 'organizer', displayName: string) => {
     try {
       const sb = requireSupabase()
       const { data, error } = await sb.auth.signUp({
@@ -115,11 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailRedirectTo: `${window.location.origin}/live`,
         },
       })
-      if (error) return error.message
+      if (error) return registrationError(error)
       if (!data.session) return 'check-email'
       return null
     } catch (e) {
-      return e instanceof Error ? e.message : 'Sign up failed'
+      return registrationError(e)
     }
   }, [])
 
@@ -127,9 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.signInWithPassword({ email, password })
-      return error?.message ?? null
+      return error ? registrationError(error) : null
     } catch (e) {
-      return e instanceof Error ? e.message : 'Sign in failed'
+      return registrationError(e)
     }
   }, [])
 
@@ -146,12 +165,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       performer,
       configured: isSupabaseConfigured,
+      profileError,
       refreshProfile,
       signUp,
       signIn,
       signOut,
     }),
-    [ready, session, profile, performer, refreshProfile, signUp, signIn, signOut],
+    [ready, session, profile, performer, profileError, refreshProfile, signUp, signIn, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
