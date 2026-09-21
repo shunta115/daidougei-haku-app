@@ -86,9 +86,8 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
   }, [])
 
   return (
-    <>
-      <h1 className="pl-h1">LIVE</h1>
-      <p className="pl-muted">{t('liveListLead')}</p>
+    <main className="pl-experience pl-live-hub">
+      <header className="pl-page-intro"><p>LIVE STAGE</p><h1>いま起きている熱狂へ。</h1><span>視聴は無料。気になるパフォーマーを、その瞬間から好きになれる。</span></header>
 
       <div className="pl-live-tabs">
         <button type="button" className="pl-live-tabs__btn" data-active={tab === 'list'} onClick={() => setTab('list')}>
@@ -276,6 +275,6 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
           ))
         )
       ) : null}
-    </>
+    </main>
   )
 }

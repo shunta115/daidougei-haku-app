@@ -1,6 +1,6 @@
 /* Platform β offline shell */
-const CACHE = 'daidougei-platform-v5-live-responsive'
-const SHELL = ['/', '/index.html', '/live', '/manifest.webmanifest', '/offline.html']
+const CACHE = 'daidougei-platform-v6-performer-first'
+const SHELL = ['/', '/index.html', '/live', '/event', '/manifest.webmanifest', '/offline.html']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))

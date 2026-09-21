@@ -55,6 +55,7 @@ export type LiveSession = {
   viewer_peak: number
   event_id?: string | null
   venue_id?: string | null
+  event_slot_id?: string | null
 }
 
 export type LiveTipEvent = {
@@ -189,6 +190,7 @@ export type PlatformScreen =
   | 'merch-list'
   | 'merch-detail'
   | 'live-list'
+  | 'map-schedule'
   | 'profile'
   | 'notifications'
   | 'performer-home'

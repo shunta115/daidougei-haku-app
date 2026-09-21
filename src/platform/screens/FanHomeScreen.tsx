@@ -1,12 +1,18 @@
-import { type CSSProperties, useEffect, useMemo, useState } from 'react'
-import { FESTIVAL_PATH, spaGo } from '../../app/routes'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { ArrowRight, Eye, MapPin, Play, Radio, Search, Share2, Sparkles, UserRound } from 'lucide-react'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
-import { getFeaturedEvent, listEventLineup, listFollowedPerformers, listOshiPerformers, searchPerformers, listLivePerformers } from '../lib/api'
+import {
+  getFeaturedEvent,
+  listEventLineup,
+  listFollowedPerformers,
+  listLivePerformers,
+  listOshiPerformers,
+  searchPerformers,
+} from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
-import '../../festival/festival.css'
 import './fanHome.css'
 
 type FanHomeProps = {
@@ -14,15 +20,14 @@ type FanHomeProps = {
   onWatchLive: (id: string) => void
   onOpenSearch: () => void
   onOpenLiveList: () => void
+  onOpenMap: () => void
   onTip: (id: string) => void
 }
-
-type EventMode = 'normal' | 'rain'
 
 function shareApp() {
   const url = window.location.origin
   const title = '大道芸博'
-  const text = 'ストリートパフォーマーのライブと投げ銭 — 大道芸博'
+  const text = '街は、ステージになる。大道芸博のLIVEを無料で楽しもう。'
   if (navigator.share) {
     void navigator.share({ title, text, url }).catch(() => undefined)
     return
@@ -30,497 +35,139 @@ function shareApp() {
   void navigator.clipboard?.writeText(url)
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onTip }: FanHomeProps) {
+function PerformerRail({ title, eyebrow, performers, onOpen, onWatch }: {
+  title: string
+  eyebrow: string
+  performers: Performer[]
+  onOpen: (id: string) => void
+  onWatch: (id: string) => void
+}) {
+  if (performers.length === 0) return null
+  return (
+    <section className="pl-cinema-section" aria-label={title}>
+      <header className="pl-cinema-section__head"><div><p>{eyebrow}</p><h2>{title}</h2></div></header>
+      <div className="pl-cinema-rail" role="list">
+        {performers.map((performer) => (
+          <article key={performer.id} className="pl-cinema-card" role="listitem">
+            <button type="button" className="pl-cinema-card__media" onClick={() => (performer.is_live ? onWatch(performer.id) : onOpen(performer.id))} aria-label={`${performer.stage_name}を見る`}>
+              {performer.photo_url ? <img src={performer.photo_url} alt="" loading="lazy" /> : <span>{performer.stage_name.slice(0, 2)}</span>}
+              <span className="pl-cinema-card__shade" aria-hidden="true" />
+              {performer.is_live ? <em><Radio size={12} /> LIVE</em> : null}
+              <span className="pl-cinema-card__play"><Play size={18} fill="currentColor" /></span>
+            </button>
+            <button type="button" className="pl-cinema-card__body" onClick={() => onOpen(performer.id)}>
+              <strong>{performer.stage_name}</strong>
+              <small>{[performer.genre, performer.city].filter(Boolean).join(' · ') || 'Performance'}</small>
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onTip }: FanHomeProps) {
   const { user } = useAuth()
   const { lang } = useLang()
   useTrackView('home_view')
-  const [mode, setMode] = useState<EventMode>(() => {
-    const saved = window.localStorage.getItem('pl-event-mode')
-    return saved === 'rain' ? 'rain' : 'normal'
-  })
   const [live, setLive] = useState<Performer[]>([])
   const [roster, setRoster] = useState<Performer[]>([])
-  const [oshi, setOshi] = useState<Performer[]>([])
+  const [followed, setFollowed] = useState<Performer[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel })
 
   useEffect(() => {
-    window.localStorage.setItem('pl-event-mode', mode)
-  }, [mode])
-
-  useEffect(() => {
+    let cancelled = false
     const load = async () => {
-      const [liveRows, allRows, ev] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
-      if (ev) {
-        setEventLabel({ date: ev.date_label, place: ev.place_label })
-        const lineup = await listEventLineup(ev.id).catch((): string[] => [])
-        const lineupRows = lineup.length > 0 ? allRows.filter((p) => lineup.includes(p.id)) : []
-        setRoster(lineupRows.length > 0 ? lineupRows : allRows)
-      } else {
-        setRoster(allRows)
-      }
+      const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
+      if (cancelled) return
+      if (event) {
+        setEventLabel({ date: event.date_label, place: event.place_label })
+        const lineup = await listEventLineup(event.id).catch((): string[] => [])
+        if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
+      } else setRoster(allRows)
       setLive(liveRows)
       if (user) {
-        try {
-          const favs = await listOshiPerformers(user.id)
-          setOshi(favs.length > 0 ? favs : await listFollowedPerformers(user.id))
-        } catch {
-          setOshi(await listFollowedPerformers(user.id))
-        }
-      } else {
-        setOshi([])
-      }
+        const favorites = await listOshiPerformers(user.id).catch(() => [])
+        const follows = favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])
+        if (!cancelled) setFollowed(follows)
+      } else setFollowed([])
       setError(null)
     }
-    load().catch((e) => setError(e instanceof Error ? e.message : '読み込みに失敗しました'))
-    const timer = window.setInterval(() => {
-      load().catch(() => undefined)
-    }, 12000)
-    return () => window.clearInterval(timer)
+    void load()
+      .catch(() => setError('パフォーマー情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    const timer = window.setInterval(() => void load().catch(() => undefined), 12000)
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [user])
 
-  const rain = mode === 'rain'
-  const todayRail = useMemo(() => {
-    let rows = [...roster]
-    if (rain) {
-      rows = rows.filter((p) => p.share_location || p.city || p.is_live)
-    }
-    return rows.slice(0, 12)
-  }, [roster, rain])
-
-  const mapRows = useMemo(
-    () => roster.filter((p) => p.is_live && p.share_location && p.lat != null && p.lng != null),
-    [roster],
-  )
-
-  const liveOshi = useMemo(() => {
-    const ids = new Set(oshi.map((p) => p.id))
-    return live.filter((p) => ids.has(p.id))
-  }, [oshi, live])
-
-  const featuredLive = live[0] ?? null
-  const nextPick = roster.find((p) => !p.is_live) ?? null
-  const spotlight = featuredLive ?? liveOshi[0] ?? oshi[0] ?? roster[0] ?? null
-  const spotlightSource = featuredLive
-    ? 'LIVE NOW'
-    : liveOshi[0]
-      ? lang === 'ja'
-        ? '推しがLIVE中'
-        : 'Oshi live'
-      : oshi[0]
-        ? lang === 'ja'
-          ? 'フォロー中'
-          : 'Your oshi'
-        : lang === 'ja'
-          ? '注目パフォーマー'
-          : 'Featured'
-  const labels = {
-    discovery: lang === 'ja' ? '探す' : 'Discovery',
-    discoverNext: lang === 'ja' ? '次に好きになる人' : 'Discover your next favorite',
-  }
-  const discoveryRail = useMemo(() => {
+  const hero = live[0] ?? followed[0] ?? roster[0] ?? null
+  const recommendations = useMemo(() => {
     const seen = new Set<string>()
-    return [live, oshi, roster]
-      .flat()
-      .filter((p) => {
-        if (seen.has(p.id)) return false
-        seen.add(p.id)
-        return true
-      })
-      .slice(0, 10)
-  }, [live, oshi, roster])
+    return [...live, ...roster].filter((performer) => {
+      if (seen.has(performer.id)) return false
+      seen.add(performer.id)
+      return true
+    }).slice(0, 10)
+  }, [live, roster])
+  const upcoming = useMemo(() => roster.filter((performer) => !performer.is_live).slice(0, 8), [roster])
 
   return (
-    <main className={`fe-main fe-main--home fe-main--h6 fe-main--stream-home pl-fan-home${rain ? ' fe-main--h6-rain' : ''}`}>
-      <header className="fe-strip">
-        <div className="fe-strip__brand">
-          <span className="fe-strip__dot" aria-hidden="true" />
-          <span className="fe-strip__name">大道芸博</span>
-          {live.length > 0 ? <span className="fe-strip__pill">LIVE中</span> : null}
-        </div>
-        <div className="fe-strip__meta">
-          <span>{eventLabel.date || '10.10-10.12'}</span>
-          {eventLabel.place ? (
-            <>
-              <span className="fe-strip__sep">·</span>
-              <span>{eventLabel.place}</span>
-            </>
-          ) : null}
-        </div>
-        <button type="button" className="fe-strip__share" onClick={() => shareApp()} aria-label="シェア">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v14"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+    <main className="pl-experience pl-home-v7">
+      <header className="pl-home-v7__masthead">
+        <div><p className="pl-home-v7__brand">大道芸博</p><p className="pl-home-v7__tagline">街は、ステージになる。</p></div>
+        <button type="button" className="pl-icon-button" onClick={() => shareApp()} aria-label="シェア"><Share2 size={19} /></button>
       </header>
 
-      {spotlight ? (
-        <section
-          className={`pl-fan-stage${spotlight.is_live ? ' pl-fan-stage--live' : ''}${spotlight.photo_url ? ' pl-fan-stage--photo' : ''}`}
-          style={{ '--pl-fan-stage-photo': spotlight.photo_url ? `url(${spotlight.photo_url})` : 'none' } as CSSProperties}
-          aria-labelledby="pl-fan-stage-title"
-        >
-          <div className="pl-fan-stage__image" aria-hidden="true">
-            {!spotlight.photo_url ? <span>{spotlight.stage_name.slice(0, 2)}</span> : null}
-          </div>
-          <div className="pl-fan-stage__shade" aria-hidden="true" />
-          <div className="pl-fan-stage__content">
-            <p className="pl-fan-stage__brand">大道芸博</p>
-            <p className="pl-fan-stage__signal">
-              <span aria-hidden="true" />
-              {spotlightSource}
-            </p>
-            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">
-              {spotlight.stage_name}
-            </h1>
-            <p className="pl-fan-stage__genre">{spotlight.genre || 'Street Performance'}</p>
-            <p className="pl-fan-stage__copy">
-              {spotlight.is_live
-                ? 'いま起きている演技を、無料で視聴できます。'
-                : '気になった瞬間にフォローして、LIVEや出演を逃さない。'}
-            </p>
-            <div className="pl-fan-stage__actions">
-              <button
-                type="button"
-                className="pl-fan-stage__primary"
-                onClick={() => (spotlight.is_live ? onWatchLive(spotlight.id) : onOpenPerformer(spotlight.id))}
-              >
-                {spotlight.is_live ? 'LIVEを見る' : 'プロフィールを見る'}
+      {loading ? (
+        <section className="pl-cinema-hero pl-cinema-hero--loading" aria-label="パフォーマーを読み込み中" aria-busy="true">
+          <div className="pl-cinema-hero__skeleton" aria-hidden="true"><span /><span /><span /></div>
+        </section>
+      ) : hero ? (
+        <section className={`pl-cinema-hero${hero.is_live ? ' pl-cinema-hero--live' : ''}`} style={{ '--hero-image': hero.photo_url ? `url(${hero.photo_url})` : 'none' } as CSSProperties} aria-labelledby="pl-home-hero-title">
+          <div className="pl-cinema-hero__ambient" aria-hidden="true" />
+          <div className="pl-cinema-hero__media" aria-hidden="true">{!hero.photo_url ? <span>{hero.stage_name.slice(0, 2)}</span> : null}</div>
+          <div className="pl-cinema-hero__scrim" aria-hidden="true" />
+          <div className="pl-cinema-hero__content">
+            <div className="pl-cinema-hero__status">{hero.is_live ? <><span /> LIVE NOW · {live.length}組が配信中</> : <><Sparkles size={14} /> FEATURED</>}</div>
+            <h1 id="pl-home-hero-title">{hero.stage_name}</h1>
+            <p className="pl-cinema-hero__meta">{[hero.genre, hero.city, hero.country].filter(Boolean).join(' · ') || 'Street Performance'}</p>
+            <p className="pl-cinema-hero__lead">{hero.is_live ? (hero.live_title || 'いま、この瞬間のパフォーマンスを無料で。') : '次の好きなパフォーマーを見つけよう。'}</p>
+            <div className="pl-cinema-hero__actions">
+              <button type="button" className="pl-action pl-action--primary" onClick={() => (hero.is_live ? onWatchLive(hero.id) : onOpenPerformer(hero.id))}>
+                {hero.is_live ? <><Play size={18} fill="currentColor" /> 無料でLIVEを見る</> : <><Eye size={18} /> プロフィールを見る</>}
               </button>
-              <button type="button" className="pl-fan-stage__secondary" onClick={() => onOpenPerformer(spotlight.id)}>
-                フォロー
-              </button>
-              <button type="button" className="pl-fan-stage__support" onClick={() => onTip(spotlight.id)}>
-                ❤️ 応援する
-              </button>
+              <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(hero.id)}><UserRound size={18} /> プロフィール</button>
             </div>
-            <p className="pl-fan-stage__meta">
-              {[spotlight.city, spotlight.country].filter(Boolean).join(' · ') || '大道芸博'} · {spotlight.is_live ? '現在LIVE中' : '出演とLIVEをチェック'}
-            </p>
+            <button type="button" className="pl-cinema-hero__support" onClick={() => onTip(hero.id)}>この人を応援する</button>
           </div>
         </section>
       ) : (
-        <section className="pl-fan-stage pl-fan-stage--empty" aria-labelledby="pl-fan-stage-title">
-          <div className="pl-fan-stage__content">
-            <p className="pl-fan-stage__brand">大道芸博</p>
-            <p className="pl-fan-stage__signal">{labels.discovery}</p>
-            <h1 id="pl-fan-stage-title" className="pl-fan-stage__name">パフォーマー準備中</h1>
-            <p className="pl-fan-stage__copy">公開済みの出演者が入り次第、ここに表示されます。</p>
-            <button type="button" className="pl-fan-stage__primary" onClick={onOpenSearch}>
-              探す
-            </button>
-          </div>
+        <section className="pl-home-v7__empty">
+          <div><p>DISCOVER</p><h1>まだ知らない才能に会いにいこう。</h1><span>公開されたパフォーマーや開催情報から、次に見る人を探せます。</span></div>
+          <button type="button" className="pl-action pl-action--primary" onClick={onOpenSearch}><Search size={18} /> 探す</button>
         </section>
       )}
 
-      {discoveryRail.length > 0 ? (
-        <section className="pl-person-rail" aria-label="探す">
-          <div className="pl-person-rail__head">
-            <div>
-              <p>{labels.discovery}</p>
-              <h2>{labels.discoverNext}</h2>
-            </div>
-            <button type="button" onClick={onOpenSearch}>すべて</button>
-          </div>
-          <div className="pl-person-rail__scroll" role="list">
-            {discoveryRail.map((p) => (
-              <article key={p.id} className="pl-person-tile" role="listitem">
-                <button type="button" className="pl-person-tile__photo" onClick={() => onOpenPerformer(p.id)}>
-                  {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span>{p.stage_name.slice(0, 2)}</span>}
-                  {p.is_live ? <em>LIVE</em> : null}
-                </button>
-                <button type="button" className="pl-person-tile__name" onClick={() => onOpenPerformer(p.id)}>{p.stage_name}</button>
-                <small>{p.genre || p.city || 'Performance'}</small>
-                <div className="pl-person-tile__actions">
-                  <button type="button" onClick={() => (p.is_live ? onWatchLive(p.id) : onOpenPerformer(p.id))}>見る</button>
-                  <button type="button" onClick={() => onTip(p.id)}>応援</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <p className="fe-public-prep" role="note">
-        <button type="button" className="pl-btn pl-btn--ghost" onClick={() => spaGo(FESTIVAL_PATH)}>
-          イベント・タイムテーブル・会場マップ
+      <section className="pl-now-strip" aria-label="LIVE案内">
+        <button type="button" onClick={onOpenLiveList}>
+          <span className="pl-now-strip__icon"><Radio size={19} /></span>
+          <span><small>LIVE NOW</small><strong>{live.length > 0 ? `${live.length}組が配信中` : '次のLIVEをチェック'}</strong></span>
+          <ArrowRight size={19} />
         </button>
-      </p>
-
-      <section className="fe-h6-weather" aria-label="開催モード">
-        <p className="fe-h6-weather__k">開催モード</p>
-        <div className={`fe-h6-weather__track${rain ? ' fe-h6-weather__track--rain' : ''}`}>
-          <button
-            type="button"
-            className={`fe-h6-weather__btn${!rain ? ' fe-h6-weather__btn--on' : ''}`}
-            aria-pressed={!rain}
-            onClick={() => setMode('normal')}
-          >
-            ☀ 通常開催
-          </button>
-          <button
-            type="button"
-            className={`fe-h6-weather__btn${rain ? ' fe-h6-weather__btn--on' : ''}`}
-            aria-pressed={rain}
-            onClick={() => setMode('rain')}
-          >
-            ☂ 雨天対応
-          </button>
-        </div>
-        <p className="fe-h6-weather__note">
-          {rain
-            ? '位置共有中・屋内寄りのパフォーマーを優先表示します'
-            : '世界中のストリートパフォーマーのライブと投げ銭'}
-        </p>
       </section>
 
-      {error ? <p className="pl-error">{error}</p> : null}
+      <PerformerRail title={lang === 'ja' ? 'いま配信中' : 'Live now'} eyebrow="FREE LIVE" performers={live.slice(1)} onOpen={onOpenPerformer} onWatch={onWatchLive} />
+      <PerformerRail title={lang === 'ja' ? 'フォロー中' : 'Following'} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} />
+      <PerformerRail title={lang === 'ja' ? 'あなたへのおすすめ' : 'For you'} eyebrow="DISCOVER" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} />
+      <PerformerRail title={lang === 'ja' ? 'まもなく出演' : 'Coming up'} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} />
 
-      {(featuredLive || nextPick || todayRail.length > 0) ? (
-      <section className="fe-home-venue-block" aria-labelledby="fe-home-venue-title">
-        <h2 id="fe-home-venue-title" className="fe-home-venue-block__title">
-          次に見るパフォーマー
-        </h2>
-        <p className="fe-home-venue-block__sub">LIVE · 本日の出演 · フォロー候補</p>
-
-        <div className={`fe-h6-live${featuredLive ? ' fe-h6-live--on' : ''}`}>
-          <div className="fe-h6-live__head">
-            <span className="fe-h6-live__tag" lang="en">
-              {featuredLive ? 'LIVE NOW' : 'NEXT'}
-            </span>
-            {featuredLive ? <span className="fe-h6-live__pulse" aria-hidden="true" /> : null}
-          </div>
-          {featuredLive ? (
-            <button type="button" className="fe-h6-live__card" onClick={() => onOpenPerformer(featuredLive.id)}>
-              <div
-                className="fe-h6-live__photo"
-                style={
-                  featuredLive.photo_url
-                    ? { backgroundImage: `url(${featuredLive.photo_url})` }
-                    : undefined
-                }
-              >
-                <span className="fe-h6-live__livepill">LIVE中</span>
-              </div>
-              <div className="fe-h6-live__info">
-                <p className="fe-h6-live__genre">{featuredLive.genre || 'Street'}</p>
-                <p className="fe-h6-live__name">{featuredLive.stage_name}</p>
-                <p className="fe-h6-live__meta">
-                  {[featuredLive.city, featuredLive.country].filter(Boolean).join(' · ') || 'On the street'}
-                </p>
-              </div>
-            </button>
-          ) : null}
-          {nextPick ? (
-            <button type="button" className="fe-h6-live__card fe-h6-live__card--next" onClick={() => onOpenPerformer(nextPick.id)}>
-              <div className="fe-h6-live__info">
-                <p className="fe-h6-live__nextk">NEXT</p>
-                <p className="fe-h6-live__name">{nextPick.stage_name}</p>
-                <p className="fe-h6-live__meta">{nextPick.genre || 'Performer'}</p>
-              </div>
-            </button>
-          ) : null}
-          <button type="button" className="fe-h6-live__map" onClick={onOpenSearch}>
-            出演者を探す
-          </button>
-        </div>
-
-        <section className={`fe-h6-rail${rain ? ' fe-h6-rail--rain' : ''}`} aria-label="今日のタイムテーブル">
-          <div className="fe-h6-rail__head">
-            <h2 className="fe-h6-rail__title">今日の公演</h2>
-            <button type="button" className="fe-h6-rail__all" onClick={onOpenSearch}>
-              すべて
-            </button>
-          </div>
-          <div className="fe-h6-rail__scroll" role="list">
-            {todayRail.length === 0 ? (
-              <p className="fe-h6-rail__empty">公開中のパフォーマーはまだいません</p>
-            ) : null}
-            {todayRail.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                role="listitem"
-                className={[
-                  'fe-h6-rail__card',
-                  p.is_live ? 'fe-h6-rail__card--live' : '',
-                  rain ? 'fe-h6-rail__card--rainctx' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => onOpenPerformer(p.id)}
-              >
-                <span className="fe-h6-rail__time">{p.is_live ? 'NOW' : 'TODAY'}</span>
-                <span className="fe-h6-rail__name">{p.stage_name}</span>
-                <span className="fe-h6-rail__stage">{p.genre || p.city || 'Street'}</span>
-                {p.is_live ? <span className="fe-h6-rail__badge fe-h6-rail__badge--live">LIVE中</span> : null}
-              </button>
-            ))}
-          </div>
-        </section>
+      <section className="pl-event-glass" aria-label="イベント">
+        <div><p>DAIDOUGEI HAKU 2026</p><h2>{eventLabel.date || '10.10-10.12'}</h2><span><MapPin size={14} /> {eventLabel.place || '会場情報'}</span></div>
+        <button type="button" className="pl-action pl-action--glass" onClick={onOpenMap}>MAP・予定を見る <ArrowRight size={17} /></button>
       </section>
-      ) : null}
-
-      {live.length > 0 ? (
-      <section className="fe-stream-hero" aria-labelledby="fe-stream-hero-title">
-        <div className="fe-stream-hero__glow" aria-hidden="true" />
-        <header className="fe-stream-hero__head">
-          <div className="pl-live-row__top" style={{ marginBottom: 8 }}>
-            <p className="fe-stream-hero__eyebrow" lang="en" style={{ margin: 0 }}>
-              LIVE NOW
-            </p>
-            <button type="button" className="pl-btn pl-btn--ghost" style={{ minHeight: 32, padding: '0 10px' }} onClick={onOpenLiveList}>
-              すべて見る
-            </button>
-          </div>
-          <h2 id="fe-stream-hero-title" className="fe-stream-hero__title">
-            今、世界のどこかで大道芸が始まっている
-          </h2>
-          <p className="fe-stream-hero__sub">承認されたパフォーマーだけが配信できます。視聴は無料 · 応援はWEBで完結。</p>
-        </header>
-
-          <ul className="fe-stream-hero__list">
-            {live.map((p) => (
-              <li key={p.id}>
-                <article className="fe-stream-card fe-stream-card--live">
-                  <div className="fe-stream-card__visual" aria-hidden="true">
-                    {p.photo_url ? (
-                      <img className="fe-stream-card__photo" src={p.photo_url} alt="" loading="lazy" />
-                    ) : null}
-                    <span className="fe-stream-card__live-badge" lang="ja">
-                      LIVE中
-                    </span>
-                  </div>
-                  <div className="fe-stream-card__body">
-                    <p className="fe-stream-card__name">{p.stage_name}</p>
-                    <p className="fe-stream-card__meta">
-                      <span>{p.country || 'World'}</span>
-                      <span className="fe-stream-card__dot" aria-hidden="true">
-                        ·
-                      </span>
-                      <span>{p.genre || 'Street'}</span>
-                    </p>
-                    {p.live_title ? <p className="fe-stream-card__title">{p.live_title}</p> : null}
-                    <p className="fe-stream-card__status" lang="en">
-                      <span className="fe-stream-card__status-dot" aria-hidden="true" />
-                      LIVE中
-                    </p>
-                    <div className="fe-stream-card__actions">
-                      <button type="button" className="fe-stream-card__watch" onClick={() => onWatchLive(p.id)}>
-                        LIVEを見る
-                      </button>
-                      <button type="button" className="fe-stream-card__support" onClick={() => onTip(p.id)}>
-                        この人を応援する
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              </li>
-            ))}
-          </ul>
-      </section>
-      ) : null}
-
-      <div className="fe-h6-maprow">
-        <button type="button" className="fe-h6-maprow__primary" onClick={() => spaGo(FESTIVAL_PATH)}>
-          会場マップ
-        </button>
-        <button type="button" className="fe-h6-maprow__ghost" onClick={() => spaGo(FESTIVAL_PATH)}>
-          公演エリアを見る
-        </button>
-      </div>
-      <p className="fe-home-loc-note" role="note">
-        位置共有ONのライブはここに表示されます。会場MAPから次に見る人を探せます。
-      </p>
-
-      {mapRows.length > 0 ? (
-        <section className="pl-map-panel" aria-label="位置共有中のライブ">
-          <h2 className="fe-h6-rail__title">いま街にいる</h2>
-          <div className="pl-map-panel__list">
-            {mapRows.map((p) => (
-              <button key={p.id} type="button" className="pl-map-panel__card" onClick={() => onOpenPerformer(p.id)}>
-                <span className="pl-map-panel__live">LIVE中</span>
-                <span className="pl-map-panel__name">{p.stage_name}</span>
-                <span className="pl-map-panel__meta">
-                  {p.city || 'Street'} · {p.lat?.toFixed(2)}, {p.lng?.toFixed(2)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="fe-home-tips" id="fe-home-tips" aria-labelledby="fe-home-tips-h">
-        <div className="fe-home-tips__glow" aria-hidden="true" />
-        <div className="fe-home-tips__inner">
-          {liveOshi.length > 0 ? (
-            <>
-              <p className="fe-home-tips__eyebrow fe-home-tips__eyebrow--live">
-                {lang === 'ja' ? '推しLIVE' : 'Oshi live'}
-              </p>
-              <h2 id="fe-home-tips-h" className="fe-home-tips__title">
-                推しがいまLIVE中
-              </h2>
-              <p className="fe-home-tips__text">
-                {liveOshi.map((p) => p.stage_name).join(' / ')} — 視聴は無料 · 応援はWEBで完結。
-              </p>
-              <div className="fe-home-tips__actions">
-                <button type="button" className="fe-btn fe-btn--primary" onClick={() => onOpenPerformer(liveOshi[0].id)}>
-                  今すぐ見る
-                </button>
-                <button type="button" className="fe-btn fe-btn--glass" onClick={() => onTip(liveOshi[0].id)}>
-                  この人を応援する
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="fe-home-tips__eyebrow">
-                {lang === 'ja' ? '応援' : 'Support'}
-              </p>
-              <h2 id="fe-home-tips-h" className="fe-home-tips__title">
-                推しを、すぐ応援できる場所へ
-              </h2>
-              <p className="fe-home-tips__text">
-                フォローすると、LIVE時にここに案内が出ます。投げ銭はStripeで完結します。
-              </p>
-              <div className="fe-home-tips__actions">
-                <button type="button" className="fe-btn fe-btn--primary" onClick={onOpenSearch}>
-                  推しを探す
-                </button>
-                {oshi[0] ? (
-                  <button type="button" className="fe-btn fe-btn--glass" onClick={() => onTip(oshi[0].id)}>
-                    応援する
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-
-      {oshi.length > 0 ? (
-        <section className="pl-oshi-rail" aria-label="推しリスト">
-          <div className="fe-h6-rail__head">
-            <h2 className="fe-h6-rail__title">推しリスト</h2>
-          </div>
-          <div className="pl-oshi-rail__row">
-            {oshi.map((p) => (
-              <button key={p.id} type="button" className="pl-oshi-rail__card" onClick={() => onOpenPerformer(p.id)}>
-                {p.photo_url ? <img src={p.photo_url} alt="" className="pl-oshi-rail__av" /> : <span className="pl-oshi-rail__av pl-oshi-rail__av--ph" />}
-                <span className="pl-oshi-rail__name">{p.stage_name}</span>
-                {p.is_live ? <span className="pl-oshi-rail__live">LIVE中</span> : null}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {error ? <p className="pl-error" role="status">{error}</p> : null}
     </main>
   )
 }

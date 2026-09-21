@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
+import { ArrowLeft, Gift, Heart, Maximize2, Minimize2, Send, SlidersHorizontal, Users } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   follow,
@@ -52,6 +53,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
+  const [reaction, setReaction] = useState(false)
   useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
@@ -79,7 +81,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   useEffect(() => {
     getPerformer(performerId)
       .then(setP)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Load failed'))
+      .catch(() => setError('LIVE情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
   }, [performerId])
 
   useEffect(() => {
@@ -217,8 +219,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
       setFollowing(!following)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Follow failed')
+    } catch {
+      setError('フォローを更新できませんでした。通信を確認して、もう一度お試しください。')
     }
   }
 
@@ -269,16 +271,14 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
         <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} />
 
         <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
-          <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
-            {t('back')}
+          <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
+            <ArrowLeft size={19} />
           </button>
           <div className="pl-live__hud-actions">
             <div className="pl-live__stats">
               {p?.is_live ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}
               <span>{formatDuration(elapsed)}</span>
-              <span>👁 {viewers}</span>
-              <span>{quality}</span>
-              <span>{videoOrient === 'landscape' ? '横映像' : videoOrient === 'portrait' ? '縦映像' : '映像'}</span>
+              <span><Users size={13} /> {viewers}</span>
             </div>
             <button
               type="button"
@@ -288,7 +288,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
                 setObjectFit((f) => (f === 'contain' ? 'cover' : 'contain'))
               }}
             >
-              {objectFit === 'contain' ? 'Fit' : 'Fill'}
+              <SlidersHorizontal size={18} />
             </button>
             <button
               type="button"
@@ -298,7 +298,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
                 void fs.toggle()
               }}
             >
-              {fs.active ? '全画面解除' : '全画面'}
+              {fs.active ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
           </div>
         </div>
@@ -328,6 +328,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
           ))}
         </div>
         <div className="pl-live__actions">
+          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="拍手を送る">
+            <span aria-hidden="true">👏</span> リアクション
+          </button>
           <button
             type="button"
             className="pl-btn pl-btn--tip pl-live__support-cta"
@@ -345,10 +348,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
               onTip()
             }}
           >
-            ❤️ 応援する
+            <Gift size={18} /> 応援
           </button>
           <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()}>
-            {following ? t('following') : t('follow')}
+            <Heart size={17} fill={following ? 'currentColor' : 'none'} /> {following ? t('following') : t('follow')}
           </button>
         </div>
         <div className="pl-live__composer">
@@ -365,10 +368,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
             }}
           />
           <button type="button" className="pl-btn" disabled={!user} onClick={() => void sendComment()}>
-            {t('send')}
+            <Send size={18} /><span className="pl-live__send-label">{t('send')}</span>
           </button>
         </div>
         <div className="pl-live__prefs">
+          <span>{quality} · {videoOrient === 'landscape' ? '横映像' : videoOrient === 'portrait' ? '縦映像' : '映像'}</span>
           <label>
             <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
             ギフト音

@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useState } from 'react'
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, Heart, MapPin, Play, Radio } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
 import {
@@ -10,10 +11,15 @@ import {
   getPerformer,
   isFollowing,
   isOshi,
+  listEventSlots,
+  listEventVenues,
   listSellerMerchProducts,
   removeOshi,
   unfollow,
   voteForPerformer,
+  tipSummaryForPerformer,
+  type EventSlotRow,
+  type EventVenueRow,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
@@ -40,19 +46,29 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [voted, setVoted] = useState(false)
   const [eventId, setEventId] = useState<string | null>(null)
   const [merch, setMerch] = useState<MerchProduct[]>([])
+  const [supportCount, setSupportCount] = useState(0)
+  const [nextAppearance, setNextAppearance] = useState<{ slot: EventSlotRow; venue: EventVenueRow | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     getPerformer(performerId)
       .then(setP)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Load failed'))
+      .catch(() => setError('パフォーマー情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
     getFeaturedEvent()
-      .then((ev) => setEventId(ev?.id ?? null))
-      .catch(() => setEventId(null))
+      .then(async (ev) => {
+        setEventId(ev?.id ?? null)
+        if (!ev) return
+        const [slots, venues] = await Promise.all([listEventSlots(ev.id), listEventVenues(ev.id)])
+        const now = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
+        const slot = slots.find((row) => row.performer_id === performerId && String(row.date).slice(0, 10) >= now && row.status !== 'cancelled')
+        setNextAppearance(slot ? { slot, venue: venues.find((venue) => venue.id === slot.venue_id) ?? null } : null)
+      })
+      .catch(() => { setEventId(null); setNextAppearance(null) })
     listSellerMerchProducts(performerId)
       .then((items) => setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out').slice(0, 3)))
       .catch(() => setMerch([]))
+    tipSummaryForPerformer(performerId).then((summary) => setSupportCount(summary.count)).catch(() => setSupportCount(0))
   }, [performerId])
 
   useEffect(() => {
@@ -80,8 +96,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
       setFollowing(!following)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Follow failed')
+    } catch {
+      setError('フォローを更新できませんでした。通信を確認して、もう一度お試しください。')
     } finally {
       setBusy(false)
     }
@@ -100,8 +116,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
 
   return (
     <>
-      <button type="button" className="pl-btn pl-btn--ghost pl-profile-back" onClick={onBack}>
-        {t('back')}
+      <button type="button" className="pl-btn pl-btn--ghost pl-profile-back" onClick={onBack} aria-label={t('back')}>
+        <ArrowLeft size={18} />
       </button>
       <section
         className={`pl-profile-stage${p.photo_url ? ' pl-profile-stage--photo' : ''}${p.is_live ? ' pl-profile-stage--live' : ''}`}
@@ -113,7 +129,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         </div>
         <div className="pl-profile-stage__shade" aria-hidden="true" />
         <div className="pl-profile-stage__body">
-          {p.is_live ? <LiveBadge /> : <span className="pl-profile-stage__badge">PERFORMER</span>}
+          {p.is_live ? <LiveBadge /> : <span className="pl-profile-stage__badge"><CheckCircle2 size={13} /> VERIFIED PERFORMER</span>}
           <h1 id="pl-profile-title" className="pl-profile-stage__name">{p.stage_name}</h1>
           <p className="pl-profile-stage__genre">
             {p.genre || 'Performance'}
@@ -124,24 +140,38 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           <div className="pl-profile-stage__actions">
             {watchable ? (
               <button type="button" className="pl-profile-stage__primary" onClick={onWatchLive}>
-                LIVEを見る
+                <Play size={18} fill="currentColor" /> 無料でLIVEを見る
               </button>
             ) : (
               <button type="button" className="pl-profile-stage__primary pl-profile-stage__primary--support" onClick={onTip}>
-                ❤️ この人を応援する
+                <Heart size={18} /> この人を応援する
               </button>
             )}
             <button type="button" className="pl-profile-stage__secondary" disabled={busy} onClick={() => void toggleFollow()}>
-              {following ? t('following') : t('follow')}
+              <Heart size={17} fill={following ? 'currentColor' : 'none'} /> {following ? t('following') : t('follow')}
             </button>
             {watchable ? (
               <button type="button" className="pl-profile-stage__support" onClick={onTip}>
-                ❤️ この人を応援する
+                <Heart size={17} /> この人を応援する
               </button>
             ) : null}
           </div>
         </div>
       </section>
+
+      <section className="pl-profile-proof" aria-label="パフォーマー情報">
+        <div><strong>{p.is_live ? 'LIVE中' : '公開中'}</strong><span>{p.is_live ? <Radio size={13} /> : <CheckCircle2 size={13} />} ステータス</span></div>
+        <div><strong>{supportCount}</strong><span><Heart size={13} /> 応援</span></div>
+        <div><strong>{merch.length}</strong><span>グッズ</span></div>
+      </section>
+
+      {nextAppearance ? (
+        <section className="pl-next-appearance" aria-label="次回の出演">
+          <header><span><CalendarDays size={16} /> NEXT APPEARANCE</span><h2>次回の出演</h2></header>
+          <div><strong>{String(nextAppearance.slot.date).slice(5).replace('-', '/')}</strong><span><Clock3 size={15} /> {String(nextAppearance.slot.start_time).slice(0, 5)}</span></div>
+          <p><MapPin size={16} /> {nextAppearance.venue?.name_ja || nextAppearance.slot.stage_ja}</p>
+        </section>
+      ) : null}
 
       <section className="pl-card pl-profile-story" aria-label="プロフィール">
         <p>{p.bio || t('profileReady')}</p>

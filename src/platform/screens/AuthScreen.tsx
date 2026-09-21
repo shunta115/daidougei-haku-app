@@ -8,7 +8,7 @@ import { requireSupabase } from '../lib/supabase'
 
 type Props = {
   onDone: () => void
-  initialRole?: 'fan' | 'performer' | 'organizer'
+  initialRole?: 'fan' | 'performer'
   performerEntry?: boolean
 }
 
@@ -79,7 +79,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       {mode === 'up' && !performerEntry ? (
         <fieldset className="pl-registration__roles">
           <legend>登録するアカウント</legend>
-          {(['fan', 'performer', 'organizer'] as const).map((item) => (
+          {(['fan', 'performer'] as const).map((item) => (
             <label key={item}><input type="radio" name="role" checked={role === item} onChange={() => setRole(item)} />{t(item)}</label>
           ))}
         </fieldset>
@@ -108,7 +108,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       {role === 'performer' ? <p className="pl-muted">プロフィール・受取設定の完了後、運営が確認して公開します。本名・本人確認・振込口座はStripeの画面で登録します。</p> : null}
       {!performerEntry && role !== 'performer' ? <a className="pl-registration__link" href={PERFORMER_REGISTER_PATH}>パフォーマーとして登録する</a> : null}
       <a className="pl-registration__link" href={FESTIVAL_PATH}>イベントを見る</a>
-      {performerEntry ? <a className="pl-registration__link" href={`${PLATFORM_PATH}?auth=1`}>ファン・主催者として登録</a> : null}
+      {performerEntry ? <a className="pl-registration__link" href={`${PLATFORM_PATH}?auth=1`}>ファンとして登録</a> : null}
     </div>
   )
 }

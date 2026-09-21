@@ -13,6 +13,7 @@ vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: () => <
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
+import { FESTIVAL_PATH, isPlatformPath } from '../src/app/routes'
 
 beforeEach(() => {
   const storage = new JSDOM('', { url: 'http://localhost' }).window
@@ -23,6 +24,14 @@ beforeEach(() => {
   fake.auth = { ready: true, configured: true, user: null, profile: null, profileError: null, refreshProfile: vi.fn(), signOut: vi.fn() }
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+it('uses the public root for the performer-first experience and keeps event detail separate', () => {
+  expect(isPlatformPath('/')).toBe(true)
+  expect(isPlatformPath('/live')).toBe(true)
+  expect(isPlatformPath('/live/register')).toBe(true)
+  expect(FESTIVAL_PATH).toBe('/event')
+  expect(isPlatformPath(FESTIVAL_PATH)).toBe(false)
+})
 
 it('keeps the performer role on a cold load while the original query is cleaned', async () => {
   window.history.replaceState({}, '', '/live?auth=1&role=performer')

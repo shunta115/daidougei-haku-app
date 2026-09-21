@@ -75,6 +75,18 @@ export type LiveRankRow = {
   viewer_peak: number
 }
 
+type LiveSlotCandidate = { id: string; venue_id: string; date: string; start_time: string; end_time: string }
+
+export function selectLiveEventSlot(rows: LiveSlotCandidate[], today: string, currentTime: string): LiveSlotCandidate | null {
+  const sorted = [...rows].sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
+  const todayRows = sorted.filter((slot) => String(slot.date).slice(0, 10) === today)
+  return todayRows.find((slot) => String(slot.start_time).slice(0, 5) <= currentTime && currentTime < String(slot.end_time).slice(0, 5))
+    ?? todayRows.find((slot) => String(slot.start_time).slice(0, 5) > currentTime)
+    ?? todayRows[0]
+    ?? sorted[0]
+    ?? null
+}
+
 /** Currently-live ranking by tips, then viewer peak, then start time. */
 export async function listLiveRanking(): Promise<LiveRankRow[]> {
   const live = await listLivePerformers()
@@ -185,15 +197,20 @@ export async function startLive(performerId: string, title?: string) {
 
   const featured = await getFeaturedEvent().catch(() => null)
   let venueId: string | null = null
+  let eventSlotId: string | null = null
   if (featured) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
+    const currentTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date())
     const { data: slotRows } = await sb
       .from('event_slots')
-      .select('venue_id, date, start_time, end_time')
+      .select('id, venue_id, date, start_time, end_time')
       .eq('event_id', featured.id)
       .eq('performer_id', performerId)
-    const match = (slotRows ?? []).find((s) => String(s.date).slice(0, 10) === today)
+    const match = selectLiveEventSlot((slotRows ?? []) as LiveSlotCandidate[], today, currentTime)
     venueId = (match?.venue_id as string | undefined) ?? ((slotRows ?? [])[0]?.venue_id as string | undefined) ?? null
+    eventSlotId = (match?.id as string | undefined) ?? null
   }
 
   const baseInsert = {
@@ -203,8 +220,12 @@ export async function startLive(performerId: string, title?: string) {
     started_at: now,
   }
   const boundInsert = { ...baseInsert, event_id: featured?.id ?? null, venue_id: venueId }
+  const slotBoundInsert = { ...boundInsert, event_slot_id: eventSlotId }
 
-  let inserted = await sb.from('live_sessions').insert(boundInsert).select('id').single()
+  let inserted = await sb.from('live_sessions').insert(slotBoundInsert).select('id').single()
+  if (inserted.error) {
+    inserted = await sb.from('live_sessions').insert(boundInsert).select('id').single()
+  }
   if (inserted.error) {
     inserted = await sb.from('live_sessions').insert(baseInsert).select('id').single()
   }
@@ -690,6 +711,9 @@ export type EventSlotRow = {
   note_ja: string
   note_en: string
   is_stream?: boolean
+  performance_type?: 'regular' | 'special_final'
+  round_no?: number | null
+  ranking_position?: number | null
 }
 
 export async function listApprovedPerformers(): Promise<Performer[]> {

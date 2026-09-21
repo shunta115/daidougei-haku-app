@@ -9,6 +9,7 @@ import { PlatformBackground } from './components/PlatformBackground'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
 import { SearchScreen } from './screens/SearchScreen'
+import { MapScheduleScreen } from './screens/MapScheduleScreen'
 import { PerformerPublicScreen } from './screens/PerformerPublicScreen'
 import { PerformerHomeScreen } from './screens/PerformerHomeScreen'
 import { PerformerEditScreen } from './screens/PerformerEditScreen'
@@ -29,6 +30,7 @@ import { trackProductEvent } from './lib/track'
 import { PERFORMER_REGISTER_PATH } from './lib/onboarding'
 import './platform.css'
 import './screens/registration.css'
+import './experience.css'
 
 function SetupScreen() {
   const { t } = useLang()
@@ -127,10 +129,10 @@ function PlatformShell() {
   const { t } = useLang()
   const [screen, setScreen] = useState<PlatformScreen>(initialGuestScreen)
   const [registrationEntry] = useState(() => window.location.pathname === PERFORMER_REGISTER_PATH)
-  const [authRole] = useState<'fan' | 'performer' | 'organizer'>(() => {
+  const [authRole] = useState<'fan' | 'performer'>(() => {
     if (registrationEntry) return 'performer'
     const role = new URLSearchParams(window.location.search).get('role')
-    return role === 'performer' || role === 'organizer' ? role : 'fan'
+    return role === 'performer' ? role : 'fan'
   })
   const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(null)
@@ -287,6 +289,7 @@ function PlatformShell() {
         s === 'profile' ||
         s === 'tip' ||
         s === 'search' ||
+        s === 'map-schedule' ||
         s === 'merch-list' ||
         s === 'merch-detail'
           ? s
@@ -443,6 +446,7 @@ function PlatformShell() {
           onWatchLive={openWatch}
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
+          onOpenMap={() => setScreen('map-schedule')}
           onTip={(id) => {
             trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
             setPerformerId(id)
@@ -498,6 +502,8 @@ function PlatformShell() {
       guestBody = <LiveListScreen onWatchLive={openWatch} onOpenPerformer={openPerformer} />
     } else if (screen === 'search') {
       guestBody = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
+    } else if (screen === 'map-schedule') {
+      guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
@@ -509,7 +515,7 @@ function PlatformShell() {
       return (
         <div className="pl-app">
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-            {guestShowNav ? <PlatformTopBar accountLabel={t('signIn')} onAccount={() => setScreen('auth')} /> : null}
+            {guestShowNav && screen !== 'fan-home' ? <PlatformTopBar accountLabel={t('signIn')} onAccount={() => setScreen('auth')} /> : null}
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
                 {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
@@ -618,6 +624,7 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
+            onOpenMap={() => setScreen('map-schedule')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home' } })
               setPerformerId(id)
@@ -640,6 +647,9 @@ function PlatformShell() {
         break
       case 'search':
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
+        break
+      case 'map-schedule':
+        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'notifications':
         body = (
@@ -697,6 +707,7 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
+            onOpenMap={() => setScreen('map-schedule')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)
@@ -711,7 +722,7 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-        {showNav ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
+        {showNav && screen !== 'fan-home' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}

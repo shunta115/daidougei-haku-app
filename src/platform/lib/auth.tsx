@@ -22,7 +22,7 @@ type AuthState = {
   configured: boolean
   profileError: string | null
   refreshProfile: () => Promise<void>
-  signUp: (email: string, password: string, role: 'fan' | 'performer' | 'organizer', displayName: string) => Promise<string | null>
+  signUp: (email: string, password: string, role: 'fan' | 'performer', displayName: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
   signOut: () => Promise<void>
 }
@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [userId, authRevision])
 
-  const signUp = useCallback(async (email: string, password: string, role: 'fan' | 'performer' | 'organizer', displayName: string) => {
+  const signUp = useCallback(async (email: string, password: string, role: 'fan' | 'performer', displayName: string) => {
     try {
       const sb = requireSupabase()
       const { data, error } = await sb.auth.signUp({

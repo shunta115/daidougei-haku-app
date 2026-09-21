@@ -9,7 +9,7 @@ import { profileMissingFields, registrationError } from '../lib/onboarding'
 import { prepareProfilePhoto } from '../lib/profilePhoto'
 import type { Performer } from '../lib/types'
 
-const SNS_FIELDS = ['Instagram', 'X', 'TikTok', 'YouTube', 'Web'] as const
+const SNS_FIELDS = ['Instagram', 'X', 'TikTok', 'YouTube', 'Web', 'チケット'] as const
 
 function initialFields(performer: Performer) {
   return {
@@ -142,7 +142,7 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
         {field('country', '国・地域')}
         <details className="pl-registration__details">
           <summary>SNS・Webサイト（任意）</summary>
-          {SNS_FIELDS.map((key) => field(key, key === 'Web' ? 'Webサイト' : key, { url: true }))}
+          {SNS_FIELDS.map((key) => field(key, key === 'Web' ? 'Webサイト' : key === 'チケット' ? 'チケット販売ページ' : key, { url: true }))}
         </details>
         <details className="pl-registration__details">
           <summary>動画・受賞歴・出演歴（任意）</summary>

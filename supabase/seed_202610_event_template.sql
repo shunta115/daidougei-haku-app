@@ -36,11 +36,19 @@ create temp table seed_slots (
   stage_en text not null default '',
   note_ja text not null default '',
   note_en text not null default '',
-  is_stream boolean not null default false
+  is_stream boolean not null default false,
+  performance_type text not null default 'regular',
+  round_no smallint,
+  ranking_position smallint
 ) on commit drop;
 
 insert into seed_slots values
-  ('performer@example.com', 'nerima-joshi-park-main', '2026-10-10', '11:00', '11:30', 'TODO_STAGE_NAME', 'TODO_STAGE_NAME_EN', '', '', false);
+  ('performer@example.com', 'nerima-joshi-park-main', '2026-10-10', '11:00', '11:30', 'TODO_STAGE_NAME', 'TODO_STAGE_NAME_EN', '', '', true, 'regular', 1, null),
+  ('performer@example.com', 'nerima-joshi-park-main', '2026-10-10', '13:00', '13:30', 'TODO_STAGE_NAME', 'TODO_STAGE_NAME_EN', '', '', true, 'regular', 2, null),
+  ('performer@example.com', 'nerima-joshi-park-main', '2026-10-10', '15:00', '15:30', 'TODO_STAGE_NAME', 'TODO_STAGE_NAME_EN', '', '', true, 'regular', 3, null),
+  (null, 'nerima-joshi-park-main', '2026-10-12', '16:00', '16:20', 'TODO_FINAL_STAGE', 'TODO_FINAL_STAGE_EN', '人気投票1位', 'Audience vote #1', true, 'special_final', null, 1),
+  (null, 'nerima-joshi-park-main', '2026-10-12', '16:20', '16:40', 'TODO_FINAL_STAGE', 'TODO_FINAL_STAGE_EN', '人気投票2位', 'Audience vote #2', true, 'special_final', null, 2),
+  (null, 'nerima-joshi-park-main', '2026-10-12', '16:40', '17:00', 'TODO_FINAL_STAGE', 'TODO_FINAL_STAGE_EN', '人気投票3位', 'Audience vote #3', true, 'special_final', null, 3);
 
 create temp table seed_merch_products (
   seller_email text not null,
@@ -73,6 +81,38 @@ begin
        or value in ('performer@example.com', 'goods@example.com')
   ) then
     raise exception 'seed template still contains placeholder values';
+  end if;
+end $$;
+
+do $$
+declare
+  invalid_regular text[];
+  invalid_special integer;
+begin
+  select array_agg(l.performer_email)
+  into invalid_regular
+  from seed_lineup l
+  left join seed_slots s
+    on s.performer_email = l.performer_email
+   and s.performance_type = 'regular'
+  group by l.performer_email
+  having count(s.*) <> 3
+     or count(distinct s.round_no) <> 3
+     or count(distinct s.slot_date) <> 1;
+
+  if coalesce(array_length(invalid_regular, 1), 0) > 0 then
+    raise exception 'each performer needs exactly three numbered regular slots on one date: %', array_to_string(invalid_regular, ', ');
+  end if;
+
+  select count(*) into invalid_special
+  from seed_slots
+  where performance_type = 'special_final';
+
+  if invalid_special <> 3
+     or (select count(distinct ranking_position) from seed_slots where performance_type = 'special_final') <> 3
+     or (select min(start_time) from seed_slots where performance_type = 'special_final') <> '16:00'
+     or (select max(end_time) from seed_slots where performance_type = 'special_final') <> '17:00' then
+    raise exception 'special final must contain ranking positions 1-3 between 16:00 and 17:00';
   end if;
 end $$;
 
@@ -155,7 +195,8 @@ on conflict (event_id, performer_id) do update set
 
 insert into public.event_slots (
   event_id, venue_id, performer_id, date, start_time, end_time,
-  stage_ja, stage_en, note_ja, note_en, is_stream
+  stage_ja, stage_en, note_ja, note_en, is_stream,
+  performance_type, round_no, ranking_position
 )
 select
   e.id,
@@ -168,7 +209,10 @@ select
   s.stage_en,
   s.note_ja,
   s.note_en,
-  s.is_stream
+  s.is_stream,
+  s.performance_type,
+  s.round_no,
+  s.ranking_position
 from seed_slots s
 cross join public.events e
 left join public.profiles pr on pr.email = s.performer_email

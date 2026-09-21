@@ -1,6 +1,9 @@
 -- Expand product_events KPI names for behavior-science UX tracking.
 -- Additive for analytics semantics. Does not touch user, payment, or performer data.
 
+begin;
+set local lock_timeout = '5s';
+
 alter table public.product_events
   drop constraint if exists product_events_name_check;
 
@@ -30,4 +33,9 @@ alter table public.product_events
     'follow',
     'vote',
     'live_view_start'
-  ));
+  )) not valid;
+
+alter table public.product_events
+  validate constraint product_events_name_check;
+
+commit;

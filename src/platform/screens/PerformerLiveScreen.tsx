@@ -115,7 +115,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }
 
   const connectHostRoom = async () => {
-    if (!performer) throw new Error('No performer')
+    if (!performer) throw new Error('パフォーマー情報を確認できませんでした。登録状況に戻って再読み込みしてください。')
     const status = await fetchLiveKitStatus()
     if (!status.configured) {
       throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
@@ -165,7 +165,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
   const goLive = async () => {
     if (!performer.is_approved) {
-      setError('管理者の承認後にLIVEできます')
+      setError('運営の承認後にLIVEを開始できます。登録状況をご確認ください。')
       return
     }
     setBusy(true)
@@ -210,7 +210,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       roomRef.current = null
       if (room) void room.disconnect()
       if (e instanceof LiveKitClientError) setError(e.message)
-      else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : 'LIVE開始に失敗しました'))
+      else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : 'LIVEを開始できませんでした。通信を確認してもう一度お試しください。'))
     } finally {
       setBusy(false)
     }
@@ -233,7 +233,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       reconnectAttempted.current = false
     } catch (e) {
       endingRef.current = false
-      setError(e instanceof Error ? e.message : 'LIVE終了に失敗しました')
+      setError('LIVEを終了できませんでした。通信を確認して、もう一度「LIVE終了」を押してください。')
     } finally {
       setBusy(false)
     }
@@ -250,7 +250,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       })
       setDraft('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'コメント送信に失敗')
+      setError('コメントを送信できませんでした。通信を確認して、もう一度お試しください。')
     }
   }
 
@@ -268,7 +268,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
         {phase === 'ready' ? <div className="pl-live__placeholder">カメラ準備</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
-            Back
+            戻る
           </button>
           {phase === 'live' ? (
             <div className="pl-live__stats">
@@ -295,9 +295,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
               onChange={(e) => setTitle(e.target.value)}
             />
           </label>
-          <p className="pl-muted">現在地共有: {performer.share_location ? 'ON' : 'OFF'}（Homeで切替）</p>
+          <p className="pl-muted">現在地共有: {performer.share_location ? 'ON' : 'OFF'}（登録状況画面で変更できます）</p>
           <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy} onClick={() => void goLive()}>
-            {busy ? 'Starting…' : 'LIVE START'}
+            {busy ? 'カメラを準備中…' : 'LIVEを開始'}
           </button>
         </div>
       ) : (
@@ -322,7 +322,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
               }}
             />
             <button type="button" className="pl-btn" onClick={() => void sendComment()}>
-              Send
+              送信
             </button>
           </div>
           <div className="pl-live__prefs">

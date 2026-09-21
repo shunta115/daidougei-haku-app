@@ -35,6 +35,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('smartphone performer registration', () => {
+  it('does not offer office privileges during public signup', () => {
+    render(<AuthScreen onDone={vi.fn()} />)
+    expect(screen.getByRole('radio', { name: 'ファン' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'パフォーマー' })).toBeTruthy()
+    expect(screen.queryByRole('radio', { name: '主催者' })).toBeNull()
+  })
+
   it('submits a performer account from the dedicated entry, never fan', async () => {
     render(<AuthScreen performerEntry initialRole="performer" onDone={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('芸名（公開されます）'), { target: { value: 'テスト芸名' } })
@@ -70,6 +77,13 @@ describe('smartphone performer registration', () => {
     expect(patch).not.toHaveProperty('stripe_account_id')
     expect(patch).not.toHaveProperty('real_name')
     expect(localStorage.getItem('pl-profile-draft:performer-fixture')).toBeNull()
+  })
+  it('stores a ticket sales link with the existing public link data', async () => {
+    render(<PerformerEditScreen onBack={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('チケット販売ページ'), { target: { value: 'https://tickets.example.test/show' } })
+    fireEvent.click(screen.getByRole('button', { name: 'プロフィールを保存' }))
+    await screen.findByText('プロフィールを保存しました。登録状況に戻って次へ進めます。')
+    expect(fake.update.mock.calls[0][1].sns_json).toContainEqual({ label: 'チケット', url: 'https://tickets.example.test/show' })
   })
   it('does not report success when profile persistence fails', async () => {
     fake.update.mockRejectedValue({ message: 'private database message' })
