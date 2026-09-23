@@ -200,6 +200,8 @@ a { color: var(--neon); }
 
 .pl-unified-topbar__logo {
   flex: 0 0 auto;
+  width: 102px;
+  height: auto;
 }
 
 .pl-unified-topbar__brand span {

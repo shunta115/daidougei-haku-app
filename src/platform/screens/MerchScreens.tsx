@@ -15,7 +15,7 @@ import { formatYen } from '../lib/money'
 import type { MerchOrder, MerchProduct } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
-import { ShoppingBag, Ticket, UsersRound } from 'lucide-react'
+import { ShoppingBag, ShoppingCart, Ticket, UsersRound } from 'lucide-react'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
@@ -31,6 +31,13 @@ function orderBuyerLabel(order: MerchOrder) {
   const email = order.checkout_customer_email || order.buyer_email
   return email ? `${name} · ${email}` : name
 }
+
+const MERCH_PREVIEW = [
+  { name: 'オフィシャルTシャツ', type: 'WEAR' },
+  { name: 'フェイスタオル', type: 'TOWEL' },
+  { name: 'ステッカーセット', type: 'STICKER' },
+  { name: 'イベントパス', type: 'PASS' },
+]
 
 export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps) {
   const { user } = useAuth()
@@ -69,6 +76,7 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
   return (
     <>
       <section className="pl-merch-market-hero" aria-labelledby="pl-merch-market-title">
+        <span className="pl-merch-market-hero__cart" aria-label="カートは商品公開後に利用できます"><ShoppingCart size={20} /></span>
         <p>{lang === 'ja' ? 'グッズ' : 'Merch'}</p>
         <h1 id="pl-merch-market-title">{lang === 'ja' ? '応援を、持ち帰る' : 'Take your support home'}</h1>
         <span>
@@ -85,13 +93,17 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-muted">Loading…</p> : null}
       {market === 'goods' && !loading && products.length === 0 ? (
-        <section className="pl-merch-empty-next" aria-label="グッズ準備中">
-          <p>グッズは公開準備中です。</p>
-          <h2>まず応援したいパフォーマーを見つける</h2>
-          <span>プロフィールをフォローしておくと、商品公開やLIVEに戻りやすくなります。</span>
-          <button type="button" className="pl-btn pl-btn--block" onClick={onOpenSearch ?? (() => spaGo(PLATFORM_PATH))}>
-            パフォーマーを探す
-          </button>
+        <section className="pl-merch-preview" aria-label="公開予定のグッズ表示例">
+          <header><div><p>COMING SOON</p><h2>公開予定のグッズ</h2></div><span>商品公開後に購入できます</span></header>
+          <div className="pl-merch-grid" role="list">
+            {MERCH_PREVIEW.map((item, index) => (
+              <article key={item.name} className="pl-merch-card pl-merch-card--preview" role="listitem" aria-disabled="true">
+                <div className={`pl-merch-card__photo pl-merch-card__photo--preview pl-merch-card__photo--${index + 1}`}><span>{item.type}</span><em>COMING SOON</em></div>
+                <div className="pl-merch-card__body"><strong className="pl-merch-card__name">{item.name}</strong><p>価格公開予定</p><button type="button" className="pl-merch-card__cta" disabled>近日公開</button></div>
+              </article>
+            ))}
+          </div>
+          <button type="button" className="pl-action pl-action--glass" onClick={onOpenSearch ?? (() => spaGo(PLATFORM_PATH))}>応援したい人を見つける</button>
         </section>
       ) : null}
       {market === 'goods' ? <div className="pl-merch-grid" role="list">

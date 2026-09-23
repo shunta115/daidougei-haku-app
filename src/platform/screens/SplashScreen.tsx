@@ -49,8 +49,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       ) : null}
       <div className="pl-splash__shade" aria-hidden="true" />
       <section className="pl-splash__content">
-        <BrandLogo size={58} className="pl-splash__logo" />
-        <p>DAIDOUGEI HAKU</p>
+        <BrandLogo size={44} variant="lockup" className="pl-splash__logo" />
         <h1>街は、<br />ステージになる。</h1>
         <button type="button" onClick={onStart}>はじめる <ArrowRight size={19} /></button>
       </section>

@@ -4,7 +4,7 @@ import { getFeaturedEvent, listVoteRankingNamed, searchPerformers } from '../lib
 import type { Performer } from '../lib/types'
 
 type SearchProps = { onOpenPerformer: (id: string) => void; onWatchLive?: (id: string) => void }
-type DiscoverMode = 'all' | 'live' | 'popular' | 'new' | 'ranking'
+type DiscoverMode = 'all' | 'popular' | 'new' | 'genre' | 'ranking'
 type RankingPeriod = 'today' | 'week' | 'month'
 
 export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
@@ -12,6 +12,7 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
   const [genre, setGenre] = useState('')
   const [mode, setMode] = useState<DiscoverMode>('all')
   const [rankingPeriod, setRankingPeriod] = useState<RankingPeriod>('today')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [region, setRegion] = useState('')
   const [rows, setRows] = useState<Performer[]>([])
@@ -25,7 +26,7 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
     setLoading(true)
     setError(null)
     const timer = window.setTimeout(() => {
-      searchPerformers(q, { liveOnly: mode === 'live', genre, country: region })
+      searchPerformers(q, { genre, country: region })
         .then((result) => { if (active) setRows(result) })
         .catch(() => { if (active) setError('検索できませんでした。通信を確認して、もう一度お試しください。') })
         .finally(() => { if (active) setLoading(false) })
@@ -52,23 +53,25 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
 
   return (
     <main className="pl-experience pl-discover-v7">
-      <header className="pl-page-intro"><p>DISCOVER</p><h1>見つける</h1><span>次の好きな人と、偶然出会う。</span></header>
-      <div className="pl-search-v7">
+      <header className="pl-page-intro pl-page-intro--actions">
+        <div><p>{mode === 'ranking' ? 'CHEER RANKING' : 'DISCOVER'}</p><h1>{mode === 'ranking' ? 'ランキング' : '見つける'}</h1><span>{mode === 'ranking' ? 'みんなの応援が、次のステージをつくる。' : '次の好きな人と、偶然出会う。'}</span></div>
+        <div className="pl-page-intro__actions"><button type="button" onClick={() => { setMode('all'); setSearchOpen((open) => !open) }} aria-label="検索"><Search size={20} /></button><button type="button" data-active={mode === 'ranking'} onClick={() => setMode('ranking')} aria-label="ランキング"><Crown size={20} /></button></div>
+      </header>
+      {mode !== 'ranking' && searchOpen ? <div className="pl-search-v7">
         <Search size={20} />
         <input aria-label="パフォーマーを検索" placeholder="名前・ジャンル・地域" value={q} onChange={(event) => setQ(event.target.value)} />
         <button type="button" onClick={() => setFiltersOpen((open) => !open)} aria-label="絞り込み"><SlidersHorizontal size={19} /></button>
-      </div>
-      {filtersOpen ? <div className="pl-filter-glass"><input placeholder="ジャンル" value={genre} onChange={(event) => setGenre(event.target.value)} /><input placeholder="国・都市" value={region} onChange={(event) => setRegion(event.target.value)} /></div> : null}
+      </div> : null}
+      {mode !== 'ranking' && searchOpen && filtersOpen ? <div className="pl-filter-glass"><input placeholder="ジャンル" value={genre} onChange={(event) => setGenre(event.target.value)} /><input placeholder="国・都市" value={region} onChange={(event) => setRegion(event.target.value)} /></div> : null}
 
-      <div className="pl-discover-tabs" role="tablist">
+      {mode !== 'ranking' ? <div className="pl-discover-tabs" role="tablist">
         <button type="button" data-active={mode === 'all'} onClick={() => setMode('all')}><Sparkles size={15} />おすすめ</button>
-        <button type="button" data-active={mode === 'live'} onClick={() => setMode('live')}><Radio size={15} />LIVE</button>
-        <button type="button" data-active={mode === 'popular'} onClick={() => setMode('popular')}><TrendingUp size={15} />人気</button>
-        <button type="button" data-active={mode === 'new'} onClick={() => setMode('new')}>新着</button>
-        <button type="button" data-active={mode === 'ranking'} onClick={() => setMode('ranking')}><Crown size={15} />ランキング</button>
-      </div>
+        <button type="button" data-active={mode === 'popular'} onClick={() => setMode('popular')}><TrendingUp size={15} />急上昇</button>
+        <button type="button" data-active={mode === 'new'} onClick={() => setMode('new')}>新人</button>
+        <button type="button" data-active={mode === 'genre'} onClick={() => setMode('genre')}><Radio size={15} />ジャンル</button>
+      </div> : null}
 
-      {genres.length > 0 && mode === 'all' ? <div className="pl-genre-row">{genres.map((item) => <button type="button" key={item} data-active={genre === item} onClick={() => setGenre((current) => current === item ? '' : item)}>{item}</button>)}</div> : null}
+      {genres.length > 0 && mode === 'genre' ? <div className="pl-genre-row">{genres.map((item) => <button type="button" key={item} data-active={genre === item} onClick={() => setGenre((current) => current === item ? '' : item)}>{item}</button>)}</div> : null}
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-inline-loading" role="status">パフォーマーを読み込み中…</p> : null}
       {!loading && !error && visibleRows.length === 0 ? <p className="pl-inline-empty">条件を少し変えると、別のパフォーマーに出会えます。</p> : null}

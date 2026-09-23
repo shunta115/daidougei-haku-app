@@ -87,8 +87,7 @@ function PlatformTopBar({ accountLabel, onAccount }: { accountLabel: string; onA
   return (
     <header className="pl-unified-topbar">
       <button type="button" className="pl-unified-topbar__brand" onClick={() => spaGo(FESTIVAL_PATH)} aria-label={t('appName')}>
-        <BrandLogo size={28} className="pl-unified-topbar__logo" />
-        <span>{t('appName')}</span>
+        <BrandLogo size={24} variant="lockup" className="pl-unified-topbar__logo" />
       </button>
       <div className="pl-unified-topbar__actions">
         <LanguageToggle />
@@ -379,7 +378,7 @@ function PlatformShell() {
     return (
       <div className="pl-app">
         <div className="pl-shell">
-          <BrandLogo size={42} className="pl-boot-logo" />
+          <BrandLogo size={36} variant="lockup" className="pl-boot-logo" />
           <p className="pl-muted" role="status">登録情報を確認しています…</p>
         </div>
       </div>
@@ -529,7 +528,6 @@ function PlatformShell() {
       return (
         <div className="pl-app">
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-            {guestShowNav && screen !== 'fan-home' ? <PlatformTopBar accountLabel={t('signIn')} onAccount={() => setScreen('auth')} /> : null}
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
                 {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
@@ -744,7 +742,7 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-        {showNav && screen !== 'fan-home' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
+        {showNav && screen !== 'fan-home' && navRole !== 'fan' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}

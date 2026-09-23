@@ -46,6 +46,7 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
   }, [user])
 
   if (!profile) return <p className="pl-muted">Loading…</p>
+  const username = (profile.email?.split('@')[0] || profile.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '')
 
   return (
     <>
@@ -58,9 +59,9 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         <div>
           <p>MY STREET</p>
           <h1>{profile.display_name}</h1>
-          <span>{profile.email ?? user?.email}</span>
+          <span>@{username || profile.id.slice(0, 8)}</span>
         </div>
-        <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>フォロー</span><span><strong>{orders.length}</strong>購入</span><span><strong>0</strong>応援</span></div>
+        <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>フォロー</span><span><strong>0</strong>フォロワー</span><span><strong>0</strong>応援した数</span></div>
       </section>
       {error ? <p className="pl-error">{error}</p> : null}
 
@@ -89,7 +90,7 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         <div><span><Ticket size={19} />チケット</span><small>準備中</small></div>
         <button type="button" onClick={() => scrollTo('pl-my-orders')}><span><ShoppingBag size={19} />グッズ購入履歴</span><ChevronRight size={18} /></button>
         <button type="button" onClick={onOpenNotifications}><span><Bell size={19} />通知</span><ChevronRight size={18} /></button>
-        <div><span><Settings size={19} />設定</span><small>準備中</small></div>
+        <div><span><Settings size={19} />設定・ヘルプ</span><small>準備中</small></div>
       </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>{t('signOut')}</button>
 
