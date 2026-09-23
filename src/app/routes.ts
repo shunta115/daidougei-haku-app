@@ -7,9 +7,9 @@ export const FESTIVAL_PATH = '/event'
 export const PLATFORM_PATH = '/live'
 
 export function isPlatformPath(pathname: string): boolean {
-  // The public root is the performer-first fan experience. Keep /live as a
+  // All public routes render inside the MASTER experience. /live remains a
   // stable alias because registration and shared LIVE links already use it.
-  return pathname === '/' || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
+  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
 }
 
 /** フルリロードせず Festival / Platform を切り替える */

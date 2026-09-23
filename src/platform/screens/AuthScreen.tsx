@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { FESTIVAL_PATH, PLATFORM_PATH } from '../../app/routes'
+import { BrandLogo } from '../../brand/BrandLogo'
 import { useAuth } from '../lib/auth'
 import { LanguageToggle, useLang } from '../../i18n/LangProvider'
 import { trackProductEvent } from '../lib/track'
@@ -70,10 +71,10 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
   return (
     <div className="pl-shell pl-shell--flush pl-registration">
       <div className="pl-registration__heading">
-        <p className="pl-brand">{t('appName')}</p><LanguageToggle />
+        <a href="/" aria-label={t('appName')}><BrandLogo size={28} variant="lockup" className="pl-registration__logo" /></a><LanguageToggle />
       </div>
-      <h1 className="pl-h1">{mode === 'in' ? 'ログイン' : role === 'performer' ? 'パフォーマー登録' : t('signUp')}</h1>
-      <p className="pl-muted">{role === 'performer' ? '芸名で登録して、あなたの活動を届けましょう。' : '登録済みの方はログインして続けられます。'}</p>
+      <div className="pl-registration__intro"><p>{role === 'performer' ? 'PERFORMER ENTRY' : 'YOUR ACCOUNT'}</p><h1 className="pl-h1">{mode === 'in' ? 'ログイン' : role === 'performer' ? 'パフォーマー登録' : t('signUp')}</h1>
+      <span>{role === 'performer' ? '芸名で登録して、あなたの活動を届けましょう。' : '登録済みの方はログインして続けられます。'}</span></div>
       {role === 'performer' && mode === 'up' ? <p className="pl-registration__progress">アカウント作成 → プロフィール → 受取設定</p> : null}
 
       {mode === 'up' && !performerEntry ? (

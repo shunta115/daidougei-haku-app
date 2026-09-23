@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { isPlatformPath, spaGo, FESTIVAL_PATH, PLATFORM_PATH } from './app/routes'
 import { AppErrorBoundary } from './festival/components/shared/AppErrorBoundary'
-import { FestivalApp } from './festival/FestivalApp'
 import { LangProvider } from './i18n/LangProvider'
 import { PlatformApp } from './platform/PlatformApp'
 import './platform/platform.css'
@@ -42,7 +41,7 @@ export default function App() {
     <AppErrorBoundary>
       <LangProvider>
         <AuthProvider>
-          {!isKnownPath(path) ? <NotFoundScreen /> : isPlatformPath(path) ? <PlatformApp /> : <FestivalApp />}
+          {!isKnownPath(path) ? <NotFoundScreen /> : <PlatformApp />}
         </AuthProvider>
       </LangProvider>
     </AppErrorBoundary>

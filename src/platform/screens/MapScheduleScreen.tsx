@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { CalendarDays, ChevronRight, Clock3, LocateFixed, Map as MapIcon, Navigation, Radio } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, UserRound } from 'lucide-react'
+import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import {
   getFeaturedEvent,
   listApprovedPerformers,
@@ -14,6 +15,7 @@ import type { Performer } from '../lib/types'
 type Props = {
   onOpenPerformer: (id: string) => void
   onWatchLive: (id: string) => void
+  initialView?: View
 }
 
 type View = 'map' | 'schedule'
@@ -29,14 +31,23 @@ function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
 
-export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
-  const [view, setView] = useState<View>('map')
+function distanceKm(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
+  const rad = (value: number) => value * Math.PI / 180
+  const dLat = rad(to.lat - from.lat)
+  const dLng = rad(to.lng - from.lng)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(from.lat)) * Math.cos(rad(to.lat)) * Math.sin(dLng / 2) ** 2
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map' }: Props) {
+  const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -88,49 +99,42 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
 
       {view === 'map' ? (
         <>
-          <section className="pl-spatial-map" aria-label="会場マップ">
-            <div className="pl-spatial-map__glow" aria-hidden="true" />
-            <div className="pl-spatial-map__roads" aria-hidden="true" />
-            {venues.map((venue, index) => {
-              const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
-              const act = venueSlots.map((slot) => slot.performer_id ? performerById.get(slot.performer_id) : null).find(Boolean)
-              const live = Boolean(act?.is_live)
-              return (
-                <button
-                  key={venue.id}
-                  type="button"
-                  className={`pl-spatial-pin${selectedVenue === venue.id ? ' pl-spatial-pin--active' : ''}${live ? ' pl-spatial-pin--live' : ''}`}
-                  style={{ '--pin-x': `${18 + ((index * 31) % 68)}%`, '--pin-y': `${18 + ((index * 27) % 62)}%` } as CSSProperties}
-                  onClick={() => setSelectedVenue(venue.id)}
-                >
-                  <span>{act?.photo_url ? <img src={act.photo_url} alt="" /> : <MapIcon size={18} />}</span>
-                  <strong>{venue.name_ja}</strong>
-                  {live ? <em>LIVE</em> : null}
-                </button>
-              )
-            })}
-            {venues.length === 0 ? <div className="pl-spatial-map__empty"><LocateFixed size={24} /><span>会場情報はイベント詳細と連動して表示されます。</span></div> : null}
-          </section>
+          <GoogleVenueMap
+            venues={venues}
+            slots={slots}
+            performers={performers}
+            selectedDate={selectedDate}
+            selectedVenueId={selectedVenue}
+            onSelectVenue={setSelectedVenue}
+            onLocationChange={setUserLocation}
+          />
 
           {selectedVenue ? (() => {
             const venue = venueById.get(selectedVenue)
             if (!venue) return null
             const first = selectedSlots[0]
             const act = first?.performer_id ? performerById.get(first.performer_id) : null
-            const directions = venue.lat != null && venue.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${venue.lat},${venue.lng}` : null
+            const venuePosition = venue.lat != null && venue.lng != null ? { lat: venue.lat, lng: venue.lng } : null
+            const km = userLocation && venuePosition ? distanceKm(userLocation, venuePosition) : null
+            const walkMinutes = km == null ? null : Math.max(1, Math.round(km * 1000 / 80))
+            const directions = venuePosition ? `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${venuePosition.lat},${venuePosition.lng}&travelmode=walking` : null
             return (
               <section className="pl-venue-sheet">
                 <div className="pl-venue-sheet__top">
-                  <div><p>STAGE · 徒歩約5分</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || '次の出演をチェック'}</span></div>
+                  <div><p>STAGE{walkMinutes ? ` · 徒歩約${walkMinutes}分` : ''}</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || '次の出演をチェック'}</span></div>
                   {act?.photo_url ? <img src={act.photo_url} alt="" /> : null}
                 </div>
                 {first && act ? (
-                  <button type="button" className="pl-venue-sheet__act" onClick={() => (act.is_live ? onWatchLive(act.id) : onOpenPerformer(act.id))}>
-                    <span><small>{act.is_live ? 'LIVE NOW' : `${timeLabel(first.start_time)} START`}</small><strong>{act.stage_name}</strong><em>{act.genre || first.stage_ja}</em></span>
+                  <button type="button" className="pl-venue-sheet__act" onClick={() => onOpenPerformer(act.id)}>
+                    <span><small>{act.is_live ? 'LIVE NOW' : `${timeLabel(first.start_time)}–${timeLabel(first.end_time)}`}</small><strong>{act.stage_name}</strong><em>{act.genre || first.stage_ja} · {venue.name_ja}</em></span>
                     <ChevronRight size={20} />
                   </button>
                 ) : null}
-                {directions ? <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> ここへ行く</a> : null}
+                <div className="pl-venue-sheet__actions">
+                  {directions ? <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> ここへ行く</a> : null}
+                  {act ? <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(act.id)}><UserRound size={17} /> プロフィール</button> : null}
+                  {act?.is_live ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(act.id)}><Radio size={17} /> LIVEを見る</button> : null}
+                </div>
               </section>
             )
           })() : null}
@@ -167,6 +171,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
           })}
         </section>
       )}
+
+      {performers.length > 0 ? (
+        <section className="pl-event-lineup" aria-label="出演パフォーマー">
+          <header><div><p>PERFORMERS</p><h2>出演パフォーマー</h2></div><span>{performers.length}組</span></header>
+          <div className="pl-event-lineup__rail">
+            {performers.slice(0, 12).map((performer) => (
+              <button type="button" key={performer.id} onClick={() => performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id)}>
+                <span>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}</span>
+                <strong>{performer.stage_name}</strong>
+                <small>{performer.is_live ? 'LIVE中' : performer.genre || 'Performance'}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }

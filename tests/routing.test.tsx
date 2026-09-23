@@ -10,6 +10,7 @@ vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn(), useTra
 vi.mock('../src/platform/screens/AuthScreen', () => ({ AuthScreen: ({ initialRole }: { initialRole: string }) => <p>register:{initialRole}</p> }))
 vi.mock('../src/platform/screens/PerformerHomeScreen', () => ({ PerformerHomeScreen: () => <p>performer-dashboard</p> }))
 vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: () => <p>fan-home</p> }))
+vi.mock('../src/platform/screens/MapScheduleScreen', () => ({ MapScheduleScreen: () => <p>master-event</p> }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
@@ -25,12 +26,20 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-it('uses the public root for the performer-first experience and keeps event detail separate', () => {
+it('keeps the public root, event and live routes inside the MASTER experience', () => {
   expect(isPlatformPath('/')).toBe(true)
   expect(isPlatformPath('/live')).toBe(true)
   expect(isPlatformPath('/live/register')).toBe(true)
   expect(FESTIVAL_PATH).toBe('/event')
-  expect(isPlatformPath(FESTIVAL_PATH)).toBe(false)
+  expect(isPlatformPath(FESTIVAL_PATH)).toBe(true)
+})
+
+it('opens the event in MASTER UI and can return through the shared bottom navigation', async () => {
+  window.history.replaceState({}, '', FESTIVAL_PATH)
+  render(<PlatformApp />)
+  await screen.findByText('master-event')
+  screen.getByRole('button', { name: 'ホーム' }).click()
+  await screen.findByText('fan-home')
 })
 
 it('keeps the performer role on a cold load while the original query is cleaned', async () => {

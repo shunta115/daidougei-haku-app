@@ -109,6 +109,7 @@ function homeForRole(role: string | undefined): PlatformScreen {
 function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
+    if (window.location.pathname === FESTIVAL_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
     if (q.get('profile')) return 'profile'
@@ -430,7 +431,7 @@ function PlatformShell() {
 
   const role = profile?.role ?? 'fan'
   const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
-  const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen) && !(performerId && screen === 'profile')
+  const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
   const openPerformer = (id: string) => {
@@ -516,7 +517,7 @@ function PlatformShell() {
     } else if (screen === 'search') {
       guestBody = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
     } else if (screen === 'map-schedule') {
-      guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
+      guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
@@ -524,7 +525,7 @@ function PlatformShell() {
     }
 
     if (guestBody) {
-      const guestShowNav = !['tip', 'live-watch'].includes(screen) && !(performerId && screen === 'profile')
+      const guestShowNav = !['tip', 'live-watch'].includes(screen)
       return (
         <div className="pl-app">
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
@@ -662,7 +663,7 @@ function PlatformShell() {
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'map-schedule':
-        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
+        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
         break
       case 'notifications':
         body = (

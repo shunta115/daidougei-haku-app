@@ -1,17 +1,21 @@
 .pl-registration {
-  --neon: #f1f3f4;
-  --radius: 8px;
+  --neon: #59adff;
+  --radius: 16px;
+  width: min(100%, 560px);
+  min-height: 100dvh;
+  padding-top: max(18px, env(safe-area-inset-top));
+  background: radial-gradient(90% 45% at 100% 0%, rgba(57,140,255,.17), transparent 68%);
   overflow-wrap: anywhere;
   letter-spacing: 0;
 }
 
 .pl-registration .pl-h1 { font-size: 26px; line-height: 1.35; letter-spacing: 0; }
 .pl-registration .pl-h2 { font-size: 18px; line-height: 1.4; letter-spacing: 0; margin: 0 0 12px; }
-.pl-registration .pl-muted { font-size: 14px; line-height: 1.65; color: #b7bcc2; }
+.pl-registration .pl-muted { font-size: 14px; line-height: 1.65; color: rgba(224,237,248,.68); }
 .pl-registration .pl-error { font-size: 14px; line-height: 1.6; }
 .pl-registration .pl-btn {
   min-height: 48px;
-  border-radius: 8px;
+  border-radius: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -22,34 +26,41 @@
   letter-spacing: 0;
   text-decoration: none;
   white-space: normal;
-  background: #f1f3f4;
-  color: #151719;
+  background: #398cff;
+  color: #fff;
   border: 1px solid transparent;
-  box-shadow: none;
+  box-shadow: 0 12px 30px rgba(57,140,255,.22);
   transform: none;
 }
-.pl-registration .pl-btn--ghost { color: #f1f3f4; background: transparent; border-color: #555b63; }
+.pl-registration .pl-btn--ghost { color: #f1f7ff; background: rgba(255,255,255,.06); border-color: rgba(151,199,240,.22); box-shadow: none; }
 .pl-registration .pl-btn:hover { box-shadow: none; transform: none; }
 .pl-registration .pl-btn:disabled { opacity: 0.5; }
 .pl-registration .pl-btn svg { flex-shrink: 0; }
 .pl-registration .pl-input,
 .pl-registration .pl-textarea,
-.pl-registration .pl-select { font-size: 16px; min-height: 48px; border-radius: 8px; width: 100%; min-width: 0; }
+.pl-registration .pl-select { font-size: 16px; min-height: 50px; border: 1px solid rgba(151,199,240,.22); border-radius: 14px; width: 100%; min-width: 0; background: rgba(7,24,41,.74); color: #fff; }
 .pl-registration .pl-textarea { min-height: 132px; }
 .pl-registration .pl-label { font-size: 14px; margin-top: 16px; }
 .pl-registration button:focus-visible,
 .pl-registration a:focus-visible,
 .pl-registration summary:focus-visible { outline: 2px solid #84cce4; outline-offset: 3px; }
 .pl-registration__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pl-registration__heading > a { min-height: 44px; display: inline-flex; align-items: center; }
+.pl-registration__logo { display: block; width: 116px; height: auto; }
 .pl-registration__heading .fe-lang__btn { min-width: 44px; min-height: 44px; }
+.pl-registration__intro { margin: 34px 0 22px; }
+.pl-registration__intro p, .pl-registration__intro h1, .pl-registration__intro span { margin: 0; }
+.pl-registration__intro p { color: #8bc3ff; font-size: 10px; font-weight: 900; }
+.pl-registration__intro h1 { margin-top: 5px; font-size: 34px; }
+.pl-registration__intro span { display: block; margin-top: 8px; color: rgba(224,237,248,.68); font-size: 13px; line-height: 1.55; }
 .pl-registration__progress { color: #b7bcc2; font-size: 13px; line-height: 1.6; padding: 12px 0; border-bottom: 1px solid #34383e; }
-.pl-registration__roles { border: 0; padding: 0; margin: 20px 0; display: flex; gap: 6px 14px; flex-wrap: wrap; }
+.pl-registration__roles { border: 1px solid rgba(151,199,240,.18); padding: 10px 12px; margin: 20px 0; display: flex; gap: 6px 14px; flex-wrap: wrap; border-radius: 16px; background: rgba(12,29,48,.58); }
 .pl-registration__roles legend { font-size: 14px; margin-bottom: 4px; }
 .pl-registration__roles label,
 .pl-registration__toggle { display: flex; align-items: center; gap: 8px; min-height: 48px; font-size: 14px; }
-.pl-registration input[type='radio'], .pl-registration input[type='checkbox'] { width: 20px; height: 20px; flex-shrink: 0; accent-color: #96d9bd; }
+.pl-registration input[type='radio'], .pl-registration input[type='checkbox'] { width: 20px; height: 20px; flex-shrink: 0; accent-color: #398cff; }
 .pl-registration__fields { border: 0; padding: 0; margin: 0; min-width: 0; }
-.pl-registration__link { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #c3e5f3; margin: 8px 0; }
+.pl-registration__link { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #9bcaff; margin: 8px 0; }
 .pl-registration__notice { padding: 14px 0; color: #c3e5f3; font-size: 14px; line-height: 1.7; border-block: 1px solid #34383e; }
 .pl-registration__identity { display: flex; align-items: center; gap: 16px; margin: 20px 0; }
 .pl-registration__identity > div { min-width: 0; }

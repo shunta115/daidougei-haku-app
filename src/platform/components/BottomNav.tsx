@@ -16,7 +16,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
   const labels = {
     discover: lang === 'ja' ? '探す' : 'Discover',
     goods: lang === 'ja' ? 'グッズ' : 'Goods',
-    account: lang === 'ja' ? 'マイ' : 'Me',
+    account: lang === 'ja' ? 'マイページ' : 'Me',
     map: 'MAP',
     event: t('eventHome'),
   }
