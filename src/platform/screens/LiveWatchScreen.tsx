@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
-import { ArrowLeft, Gift, Heart, Maximize2, Minimize2, Send, SlidersHorizontal, Users } from 'lucide-react'
+import { ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Users } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   follow,
@@ -63,7 +63,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('contain')
+  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('cover')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
     () =>
@@ -73,6 +73,12 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+
+  const shareLive = () => {
+    const url = `${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`
+    if (navigator.share) void navigator.share({ title: p?.stage_name || '大道芸博 LIVE', text: 'このLIVEを一緒に見よう。', url }).catch(() => undefined)
+    else void navigator.clipboard?.writeText(url)
+  }
   const roomRef = useRef<Room | null>(null)
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
@@ -266,7 +272,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
           if (isOverlayChrome) bumpChrome()
         }}
       >
-        <video ref={videoRef} className="pl-live__video" playsInline autoPlay />
+        <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay />
         <audio ref={audioRef} autoPlay />
         <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} />
 
@@ -309,6 +315,13 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
             <span>{p?.live_title || p?.genre || ''}</span>
           </div>
         ) : null}
+
+        <aside className="pl-live__side-actions" aria-label="LIVEアクション">
+          <button type="button" onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="いいね"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
+          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
+          <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
+          <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
+        </aside>
       </div>
 
       <div className="pl-live__panel pl-live__panel--live" data-dim={isOverlayChrome && !chromeVisible}>

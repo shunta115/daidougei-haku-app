@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, Eye, MapPin, Play, Radio, Search, Share2, Sparkles, UserRound } from 'lucide-react'
+import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
+import { BrandLogo } from '../../brand/BrandLogo'
+import { InstallPrompt } from '../components/InstallPrompt'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
   getFeaturedEvent,
@@ -21,31 +23,25 @@ type FanHomeProps = {
   onOpenSearch: () => void
   onOpenLiveList: () => void
   onOpenMap: () => void
+  onOpenNotifications: () => void
   onTip: (id: string) => void
 }
 
-function shareApp() {
-  const url = window.location.origin
-  const title = '大道芸博'
-  const text = '街は、ステージになる。大道芸博のLIVEを無料で楽しもう。'
-  if (navigator.share) {
-    void navigator.share({ title, text, url }).catch(() => undefined)
-    return
-  }
-  void navigator.clipboard?.writeText(url)
-}
-
-function PerformerRail({ title, eyebrow, performers, onOpen, onWatch }: {
+function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }: {
   title: string
   eyebrow: string
   performers: Performer[]
   onOpen: (id: string) => void
   onWatch: (id: string) => void
+  onSeeAll: () => void
 }) {
   if (performers.length === 0) return null
   return (
     <section className="pl-cinema-section" aria-label={title}>
-      <header className="pl-cinema-section__head"><div><p>{eyebrow}</p><h2>{title}</h2></div></header>
+      <header className="pl-cinema-section__head">
+        <div><p>{eyebrow}</p><h2>{title}</h2></div>
+        <button type="button" onClick={onSeeAll}>すべて見る <ChevronRight size={15} /></button>
+      </header>
       <div className="pl-cinema-rail" role="list">
         {performers.map((performer) => (
           <article key={performer.id} className="pl-cinema-card" role="listitem">
@@ -53,11 +49,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch }: {
               {performer.photo_url ? <img src={performer.photo_url} alt="" loading="lazy" /> : <span>{performer.stage_name.slice(0, 2)}</span>}
               <span className="pl-cinema-card__shade" aria-hidden="true" />
               {performer.is_live ? <em><Radio size={12} /> LIVE</em> : null}
-              <span className="pl-cinema-card__play"><Play size={18} fill="currentColor" /></span>
-            </button>
-            <button type="button" className="pl-cinema-card__body" onClick={() => onOpen(performer.id)}>
-              <strong>{performer.stage_name}</strong>
-              <small>{[performer.genre, performer.city].filter(Boolean).join(' · ') || 'Performance'}</small>
+              <span className="pl-cinema-card__copy"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><small>{performer.is_live ? '無料で視聴' : performer.city || 'プロフィールを見る'}</small></span>
             </button>
           </article>
         ))}
@@ -66,7 +58,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch }: {
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onTip }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenNotifications }: FanHomeProps) {
   const { user } = useAuth()
   const { lang } = useLang()
   useTrackView('home_view')
@@ -116,9 +108,19 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   return (
     <main className="pl-experience pl-home-v7">
       <header className="pl-home-v7__masthead">
-        <div><p className="pl-home-v7__brand">大道芸博</p><p className="pl-home-v7__tagline">街は、ステージになる。</p></div>
-        <button type="button" className="pl-icon-button" onClick={() => shareApp()} aria-label="シェア"><Share2 size={19} /></button>
+        <div className="pl-home-v7__identity"><span><BrandLogo size={20} /></span><p className="pl-home-v7__brand">大道芸博</p></div>
+        <div className="pl-home-v7__tools">
+          <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label="パフォーマーを検索"><Search size={19} /></button>
+          <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label="通知"><Bell size={19} /></button>
+        </div>
       </header>
+
+      <nav className="pl-home-v7__channels" aria-label="ホームの表示カテゴリ">
+        <button type="button" data-active="true" onClick={onOpenLiveList}>LIVE</button>
+        <button type="button" onClick={onOpenSearch}>おすすめ</button>
+        <button type="button" onClick={onOpenMap}>近く</button>
+        <button type="button" onClick={onOpenSearch}>新着</button>
+      </nav>
 
       {loading ? (
         <section className="pl-cinema-hero pl-cinema-hero--loading" aria-label="パフォーマーを読み込み中" aria-busy="true">
@@ -130,17 +132,15 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           <div className="pl-cinema-hero__media" aria-hidden="true">{!hero.photo_url ? <span>{hero.stage_name.slice(0, 2)}</span> : null}</div>
           <div className="pl-cinema-hero__scrim" aria-hidden="true" />
           <div className="pl-cinema-hero__content">
-            <div className="pl-cinema-hero__status">{hero.is_live ? <><span /> LIVE NOW · {live.length}組が配信中</> : <><Sparkles size={14} /> FEATURED</>}</div>
-            <h1 id="pl-home-hero-title">{hero.stage_name}</h1>
-            <p className="pl-cinema-hero__meta">{[hero.genre, hero.city, hero.country].filter(Boolean).join(' · ') || 'Street Performance'}</p>
-            <p className="pl-cinema-hero__lead">{hero.is_live ? (hero.live_title || 'いま、この瞬間のパフォーマンスを無料で。') : '次の好きなパフォーマーを見つけよう。'}</p>
-            <div className="pl-cinema-hero__actions">
-              <button type="button" className="pl-action pl-action--primary" onClick={() => (hero.is_live ? onWatchLive(hero.id) : onOpenPerformer(hero.id))}>
-                {hero.is_live ? <><Play size={18} fill="currentColor" /> 無料でLIVEを見る</> : <><Eye size={18} /> プロフィールを見る</>}
-              </button>
-              <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(hero.id)}><UserRound size={18} /> プロフィール</button>
+            <h1 className="pl-sr-only">{hero.stage_name}</h1>
+            <div className="pl-cinema-hero__status"><span /> {hero.is_live ? 'LIVE' : 'FEATURED'}</div>
+            <h2 id="pl-home-hero-title">今、ここで生まれる<br />特別な時間。</h2>
+            <button type="button" className="pl-cinema-hero__play" onClick={() => (hero.is_live ? onWatchLive(hero.id) : onOpenLiveList())} aria-label={hero.is_live ? `${hero.stage_name}のLIVEを見る` : 'LIVEを探す'}><Play size={24} fill="currentColor" /></button>
+            <div className="pl-cinema-hero__live-meta">
+              <div className="pl-cinema-hero__avatars" aria-hidden="true">{(live.length ? live : recommendations).slice(0, 3).map((performer) => <span key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 1)}</span>)}</div>
+              <p><strong>{live.length > 0 ? `${live.length}組がLIVE配信中` : '次のLIVEをチェック'}</strong><small>{hero.stage_name} · {hero.genre || 'Performance'}</small></p>
+              <ChevronRight size={18} />
             </div>
-            <button type="button" className="pl-cinema-hero__support" onClick={() => onTip(hero.id)}>この人を応援する</button>
           </div>
         </section>
       ) : (
@@ -150,18 +150,11 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         </section>
       )}
 
-      <section className="pl-now-strip" aria-label="LIVE案内">
-        <button type="button" onClick={onOpenLiveList}>
-          <span className="pl-now-strip__icon"><Radio size={19} /></span>
-          <span><small>LIVE NOW</small><strong>{live.length > 0 ? `${live.length}組が配信中` : '次のLIVEをチェック'}</strong></span>
-          <ArrowRight size={19} />
-        </button>
-      </section>
+      <PerformerRail title={lang === 'ja' ? '注目のパフォーマー' : 'Featured performers'} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
+      <PerformerRail title={lang === 'ja' ? 'フォロー中' : 'Following'} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
+      <PerformerRail title={lang === 'ja' ? 'まもなく出演' : 'Coming up'} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
 
-      <PerformerRail title={lang === 'ja' ? 'いま配信中' : 'Live now'} eyebrow="FREE LIVE" performers={live.slice(1)} onOpen={onOpenPerformer} onWatch={onWatchLive} />
-      <PerformerRail title={lang === 'ja' ? 'フォロー中' : 'Following'} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} />
-      <PerformerRail title={lang === 'ja' ? 'あなたへのおすすめ' : 'For you'} eyebrow="DISCOVER" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} />
-      <PerformerRail title={lang === 'ja' ? 'まもなく出演' : 'Coming up'} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} />
+      <InstallPrompt />
 
       <section className="pl-event-glass" aria-label="イベント">
         <div><p>DAIDOUGEI HAKU 2026</p><h2>{eventLabel.date || '10.10-10.12'}</h2><span><MapPin size={14} /> {eventLabel.place || '会場情報'}</span></div>

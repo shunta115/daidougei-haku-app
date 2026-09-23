@@ -29,6 +29,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
         setVenues(venueRows)
         setSlots(slotRows)
         setSelectedVenue(venueRows[0]?.id ?? null)
+        setSelectedDate(String(slotRows[0]?.date || '2026-10-10').slice(0, 10))
       } catch {
         if (!cancelled) setError('会場情報を読み込めませんでした。通信を確認して、もう一度開いてください。')
       }
@@ -55,8 +57,12 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
-  const selectedSlots = useMemo(() => slots.filter((slot) => !selectedVenue || slot.venue_id === selectedVenue), [slots, selectedVenue])
-  const dates = useMemo(() => [...new Set(slots.map((slot) => String(slot.date).slice(0, 10)))], [slots])
+  const selectedSlots = useMemo(() => slots.filter((slot) => (!selectedVenue || slot.venue_id === selectedVenue) && String(slot.date).slice(0, 10) === selectedDate), [slots, selectedVenue, selectedDate])
+  const dates = useMemo(() => {
+    const values = [...new Set(slots.map((slot) => String(slot.date).slice(0, 10)))]
+    return values.length ? values : ['2026-10-10', '2026-10-11', '2026-10-12']
+  }, [slots])
+  const dateSlots = useMemo(() => slots.filter((slot) => String(slot.date).slice(0, 10) === selectedDate), [slots, selectedDate])
 
   return (
     <main className="pl-experience pl-map-schedule">
@@ -79,7 +85,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
             <div className="pl-spatial-map__glow" aria-hidden="true" />
             <div className="pl-spatial-map__roads" aria-hidden="true" />
             {venues.map((venue, index) => {
-              const venueSlots = slots.filter((slot) => slot.venue_id === venue.id)
+              const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
               const act = venueSlots.map((slot) => slot.performer_id ? performerById.get(slot.performer_id) : null).find(Boolean)
               const live = Boolean(act?.is_live)
               return (
@@ -108,7 +114,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
             return (
               <section className="pl-venue-sheet">
                 <div className="pl-venue-sheet__top">
-                  <div><p>STAGE</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || '次の出演をチェック'}</span></div>
+                  <div><p>STAGE · 徒歩約5分</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || '次の出演をチェック'}</span></div>
                   {act?.photo_url ? <img src={act.photo_url} alt="" /> : null}
                 </div>
                 {first && act ? (
@@ -124,9 +130,11 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive }: Props) {
         </>
       ) : (
         <section className="pl-schedule-v7">
-          {dates.length > 0 ? <div className="pl-schedule-v7__dates">{dates.map((date) => <span key={date}>{date.slice(5).replace('-', '/')}</span>)}</div> : null}
-          {slots.length === 0 ? <p className="pl-inline-empty">出演予定は公開され次第ここに表示されます。</p> : null}
-          {slots.map((slot) => {
+          <div className="pl-schedule-v7__dates" role="tablist" aria-label="開催日">
+            {dates.map((date) => <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><strong>{date.slice(8)}</strong><small>10月</small></button>)}
+          </div>
+          {dateSlots.length === 0 ? <p className="pl-inline-empty">この日の出演予定は公開され次第表示されます。</p> : null}
+          {dateSlots.map((slot) => {
             const act = slot.performer_id ? performerById.get(slot.performer_id) : null
             const venue = venueById.get(slot.venue_id)
             return (

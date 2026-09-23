@@ -15,6 +15,7 @@ import { formatYen } from '../lib/money'
 import type { MerchOrder, MerchProduct } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
+import { ShoppingBag, Ticket, UsersRound } from 'lucide-react'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
@@ -39,6 +40,7 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [market, setMarket] = useState<'goods' | 'tickets' | 'club'>('goods')
 
   useEffect(() => {
     let cancelled = false
@@ -75,9 +77,14 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
             : 'Buying from a performer is another way to support the next show.'}
         </span>
       </section>
+      <div className="pl-market-tabs" role="tablist" aria-label="応援メニュー">
+        <button type="button" role="tab" aria-selected={market === 'goods'} data-active={market === 'goods'} onClick={() => setMarket('goods')}><ShoppingBag size={16} />グッズ</button>
+        <button type="button" role="tab" aria-selected={market === 'tickets'} data-active={market === 'tickets'} onClick={() => setMarket('tickets')}><Ticket size={16} />チケット</button>
+        <button type="button" role="tab" aria-selected={market === 'club'} data-active={market === 'club'} onClick={() => setMarket('club')}><UsersRound size={16} />ファンクラブ</button>
+      </div>
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-muted">Loading…</p> : null}
-      {!loading && products.length === 0 ? (
+      {market === 'goods' && !loading && products.length === 0 ? (
         <section className="pl-merch-empty-next" aria-label="グッズ準備中">
           <p>グッズは公開準備中です。</p>
           <h2>まず応援したいパフォーマーを見つける</h2>
@@ -87,7 +94,7 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
           </button>
         </section>
       ) : null}
-      <div className="pl-merch-grid" role="list">
+      {market === 'goods' ? <div className="pl-merch-grid" role="list">
         {products.map((p) => (
           <article key={p.id} className="pl-merch-card" role="listitem">
             <button type="button" className="pl-merch-card__photo" onClick={() => onOpenProduct(p.id)}>
@@ -103,9 +110,17 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
             </div>
           </article>
         ))}
-      </div>
+      </div> : (
+        <section className="pl-market-coming" aria-label={market === 'tickets' ? 'チケット' : 'ファンクラブ'}>
+          {market === 'tickets' ? <Ticket size={30} /> : <UsersRound size={30} />}
+          <p>{market === 'tickets' ? 'TICKETS' : 'FAN CLUB'}</p>
+          <h2>{market === 'tickets' ? '次に会える場所へ。' : '好きな人を、長く応援する。'}</h2>
+          <span>公開中の案内は各パフォーマーのプロフィールから確認できます。</span>
+          <button type="button" className="pl-action pl-action--primary" onClick={onOpenSearch ?? (() => spaGo(PLATFORM_PATH))}>パフォーマーを探す</button>
+        </section>
+      )}
 
-      {user ? (
+      {user && market === 'goods' ? (
         <>
           <h2 className="pl-h2" style={{ marginTop: 24 }}>購入履歴</h2>
           {orders.length === 0 ? <div className="pl-empty">購入履歴はまだありません。</div> : null}

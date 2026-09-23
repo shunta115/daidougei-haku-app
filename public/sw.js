@@ -1,6 +1,6 @@
-/* Platform β offline shell */
-const CACHE = 'daidougei-platform-v6-performer-first'
-const SHELL = ['/', '/index.html', '/live', '/event', '/manifest.webmanifest', '/offline.html']
+/* Production PWA shell. Authenticated API responses are deliberately never cached. */
+const CACHE = 'daidougei-platform-v7-master-ui'
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
@@ -15,15 +15,19 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
-  event.respondWith(
-    fetch(request)
-      .then((res) => {
-        const copy = res.clone()
-        if (res.ok && new URL(request.url).origin === self.location.origin) {
-          caches.open(CACHE).then((c) => c.put(request, copy))
-        }
-        return res
-      })
-      .catch(() => caches.match(request).then((hit) => hit || caches.match('/offline.html'))),
-  )
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return
+
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).catch(() => caches.match('/index.html').then((hit) => hit || caches.match('/offline.html'))))
+    return
+  }
+
+  event.respondWith(caches.match(request).then((cached) => {
+    const network = fetch(request).then((response) => {
+      if (response.ok) void caches.open(CACHE).then((cache) => cache.put(request, response.clone()))
+      return response
+    })
+    return cached || network
+  }))
 })

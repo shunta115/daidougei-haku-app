@@ -1,5 +1,5 @@
 import { type CSSProperties, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, Heart, MapPin, Play, Radio } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, ExternalLink, Film, Heart, MapPin, Play, Radio, ShoppingBag, UserRound } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
 import {
@@ -50,6 +50,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [nextAppearance, setNextAppearance] = useState<{ slot: EventSlotRow; venue: EventVenueRow | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [section, setSection] = useState<'about' | 'schedule' | 'media' | 'goods'>('about')
 
   useEffect(() => {
     getPerformer(performerId)
@@ -165,15 +166,25 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         <div><strong>{merch.length}</strong><span>グッズ</span></div>
       </section>
 
+      <nav className="pl-profile-tabs" aria-label="プロフィールの内容">
+        <button type="button" data-active={section === 'about'} onClick={() => setSection('about')}><UserRound size={15} />概要</button>
+        <button type="button" data-active={section === 'schedule'} onClick={() => setSection('schedule')}><CalendarDays size={15} />予定</button>
+        <button type="button" data-active={section === 'media'} onClick={() => setSection('media')}><Film size={15} />メディア</button>
+        <button type="button" data-active={section === 'goods'} onClick={() => setSection('goods')}><ShoppingBag size={15} />グッズ</button>
+      </nav>
+
       {nextAppearance ? (
         <section className="pl-next-appearance" aria-label="次回の出演">
           <header><span><CalendarDays size={16} /> NEXT APPEARANCE</span><h2>次回の出演</h2></header>
           <div><strong>{String(nextAppearance.slot.date).slice(5).replace('-', '/')}</strong><span><Clock3 size={15} /> {String(nextAppearance.slot.start_time).slice(0, 5)}</span></div>
           <p><MapPin size={16} /> {nextAppearance.venue?.name_ja || nextAppearance.slot.stage_ja}</p>
+          {nextAppearance.venue?.lat != null && nextAppearance.venue?.lng != null ? (
+            <a className="pl-action pl-action--map" href={`https://www.google.com/maps/dir/?api=1&destination=${nextAppearance.venue.lat},${nextAppearance.venue.lng}`} target="_blank" rel="noopener noreferrer"><MapPin size={16} /> MAPで見る</a>
+          ) : null}
         </section>
       ) : null}
 
-      <section className="pl-card pl-profile-story" aria-label="プロフィール">
+      {section === 'about' ? <section className="pl-card pl-profile-story" aria-label="プロフィール">
         <p>{p.bio || t('profileReady')}</p>
         {p.awards ? <p className="pl-muted">受賞歴: {p.awards}</p> : null}
         {p.appearances ? <p className="pl-muted">出演歴: {p.appearances}</p> : null}
@@ -199,9 +210,24 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           </p>
         ) : null}
         {p.share_location && p.lat != null && p.lng != null ? <p className="pl-muted">Approx. location shared while live.</p> : null}
-      </section>
+      </section> : null}
 
-      {merch.length > 0 ? (
+      {section === 'schedule' ? (
+        <section className="pl-profile-panel" aria-label="出演スケジュール">
+          <CalendarDays size={24} />
+          <div><h2>出演スケジュール</h2><p>{nextAppearance ? '次回出演は上のカードから会場まで確認できます。' : '出演予定は公開され次第表示されます。'}</p></div>
+        </section>
+      ) : null}
+
+      {section === 'media' ? (
+        <section className="pl-profile-panel pl-profile-media" aria-label="メディア">
+          <Film size={24} />
+          <div><h2>パフォーマンスを見る</h2><p>{videoHref ? '紹介動画から、この人の世界をもっと知る。' : '動画は公開され次第表示されます。'}</p></div>
+          {videoHref ? <a className="pl-action pl-action--primary" href={videoHref} target="_blank" rel="noopener noreferrer">紹介動画を開く <ExternalLink size={16} /></a> : null}
+        </section>
+      ) : null}
+
+      {section === 'goods' && merch.length > 0 ? (
         <section className="pl-card pl-profile-merch" aria-label="このパフォーマーのグッズ">
           <div>
             <p className="pl-profile-merch__eyebrow">{lang === 'ja' ? 'グッズ' : 'Goods'}</p>
@@ -223,6 +249,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           </div>
         </section>
       ) : null}
+      {section === 'goods' && merch.length === 0 ? <p className="pl-inline-empty">グッズは公開され次第、ここから購入できます。</p> : null}
 
       {user ? (
         <div className="pl-profile-next-actions">
@@ -278,11 +305,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       ) : (
         <button
           type="button"
-          className="pl-btn pl-btn--block"
+          className="pl-btn pl-btn--block pl-profile-auth-cta"
           style={{ marginTop: 12 }}
           onClick={() => spaGo(`${PLATFORM_PATH}?auth=1`)}
         >
-          {t('needAuthActions')}
+          {lang === 'ja' ? 'ログインしてフォロー・応援する' : 'Sign in to follow and support'}
         </button>
       )}
       {error ? <p className="pl-error">{error}</p> : null}

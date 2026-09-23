@@ -24,6 +24,7 @@ import { AdminDashboardScreen, AdminEventScreen, AdminUsersScreen } from './scre
 import { AdminOpsScreen } from './screens/AdminOpsScreen'
 import { OrganizerHomeScreen } from './screens/OrganizerHomeScreen'
 import { MerchDetailScreen, MerchListScreen, PerformerMerchScreen } from './screens/MerchScreens'
+import { SplashScreen } from './screens/SplashScreen'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
@@ -140,6 +141,10 @@ function PlatformShell() {
   const [tipFlash, setTipFlash] = useState<string | null>(null)
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
+  const [showSplash, setShowSplash] = useState(() => {
+    if (!import.meta.env.PROD || window.location.pathname !== '/' || window.location.search) return false
+    try { return window.localStorage.getItem('pl-master-splash-seen') !== '1' } catch { return false }
+  })
 
   useEffect(() => {
     if (screen === 'performer-home' || screen === 'performer-edit' || screen === 'admin') window.scrollTo(0, 0)
@@ -374,6 +379,7 @@ function PlatformShell() {
     return (
       <div className="pl-app">
         <div className="pl-shell">
+          <BrandLogo size={42} className="pl-boot-logo" />
           <p className="pl-muted" role="status">登録情報を確認しています…</p>
         </div>
       </div>
@@ -386,6 +392,13 @@ function PlatformShell() {
         <SetupScreen />
       </div>
     )
+  }
+
+  if (showSplash && screen === 'fan-home') {
+    return <div className="pl-app"><SplashScreen onStart={() => {
+      try { window.localStorage.setItem('pl-master-splash-seen', '1') } catch { /* continue without persistence */ }
+      setShowSplash(false)
+    }} /></div>
   }
 
   if (user && profileError) {
@@ -447,6 +460,7 @@ function PlatformShell() {
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
           onOpenMap={() => setScreen('map-schedule')}
+          onOpenNotifications={() => setScreen('auth')}
           onTip={(id) => {
             trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
             setPerformerId(id)
@@ -625,6 +639,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
+            onOpenNotifications={() => setScreen('notifications')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home' } })
               setPerformerId(id)
@@ -660,7 +675,13 @@ function PlatformShell() {
         )
         break
       case 'profile':
-        body = <FanProfileScreen onOpenPerformer={openPerformer} onOpenProduct={openMerchProduct} />
+        body = (
+          <FanProfileScreen
+            onOpenPerformer={openPerformer}
+            onOpenProduct={openMerchProduct}
+            onOpenNotifications={() => setScreen('notifications')}
+          />
+        )
         break
       case 'performer-home':
         body = (
@@ -708,6 +729,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
+            onOpenNotifications={() => setScreen('notifications')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)

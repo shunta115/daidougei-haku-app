@@ -5,18 +5,24 @@ import { LanguageToggle, useLang } from '../../i18n/LangProvider'
 import { listFollowedPerformers, listMyMerchOrders } from '../lib/api'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
+import { Bell, ChevronRight, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
 
 type Props = {
   onOpenPerformer?: (id: string) => void
   onOpenProduct?: (id: string) => void
+  onOpenNotifications?: () => void
 }
 
-export function FanProfileScreen({ onOpenPerformer, onOpenProduct }: Props) {
+export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotifications }: Props) {
   const { t } = useLang()
   const { profile, user, signOut } = useAuth()
   const [follows, setFollows] = useState<Performer[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   useEffect(() => {
     if (!user) return
@@ -46,20 +52,16 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct }: Props) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
         <LanguageToggle />
       </div>
-      <div className="pl-card pl-row">
+      <section className="pl-my-hero">
+        <div className="pl-my-hero__glow" aria-hidden="true" />
         <Avatar url={profile.avatar_url} name={profile.display_name} large />
         <div>
-          <h1 className="pl-h1" style={{ margin: 0, fontSize: '1.4rem' }}>
-            {profile.display_name}
-          </h1>
-          <p className="pl-muted" style={{ margin: '4px 0 0' }}>
-            {profile.email ?? user?.email}
-          </p>
+          <p>MY STREET</p>
+          <h1>{profile.display_name}</h1>
+          <span>{profile.email ?? user?.email}</span>
         </div>
-      </div>
-      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>
-        {t('signOut')}
-      </button>
+        <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>フォロー</span><span><strong>{orders.length}</strong>購入</span><span><strong>0</strong>応援</span></div>
+      </section>
       {error ? <p className="pl-error">{error}</p> : null}
 
       <section className="pl-card" aria-labelledby="pl-my-follows">
@@ -80,6 +82,16 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct }: Props) {
           </button>
         ))}
       </section>
+
+      <section className="pl-my-menu" aria-label="マイメニュー">
+        <button type="button" onClick={() => scrollTo('pl-my-follows')}><span><Heart size={19} />お気に入り</span><ChevronRight size={18} /></button>
+        <div><span><History size={19} />応援履歴</span><small>準備中</small></div>
+        <div><span><Ticket size={19} />チケット</span><small>準備中</small></div>
+        <button type="button" onClick={() => scrollTo('pl-my-orders')}><span><ShoppingBag size={19} />グッズ購入履歴</span><ChevronRight size={18} /></button>
+        <button type="button" onClick={onOpenNotifications}><span><Bell size={19} />通知</span><ChevronRight size={18} /></button>
+        <div><span><Settings size={19} />設定</span><small>準備中</small></div>
+      </section>
+      <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>{t('signOut')}</button>
 
       <section className="pl-card" aria-labelledby="pl-my-orders">
         <h2 id="pl-my-orders" className="pl-h2" style={{ marginTop: 0 }}>購入履歴</h2>
