@@ -249,7 +249,14 @@ export async function endLive(performerId: string) {
   const now = new Date().toISOString()
   const { error: uerr } = await sb
     .from('performers')
-    .update({ is_live: false, live_started_at: null, live_title: null })
+    .update({
+      is_live: false,
+      live_started_at: null,
+      live_title: null,
+      lat: null,
+      lng: null,
+      location_updated_at: null,
+    })
     .eq('id', performerId)
   if (uerr) throw uerr
   // Close every open session (guards against duplicates from older builds).
@@ -340,6 +347,23 @@ export function subscribePerformerLive(performerId: string, onChange: (row: Part
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'performers', filter: `id=eq.${performerId}` },
+      (payload) => {
+        onChange(payload.new as Performer)
+      },
+    )
+    .subscribe()
+  return () => {
+    void sb.removeChannel(channel)
+  }
+}
+
+export function subscribePerformerMapUpdates(onChange: (row: Performer) => void) {
+  const sb = requireSupabase()
+  const channel = sb
+    .channel('performer-map-updates')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'performers' },
       (payload) => {
         onChange(payload.new as Performer)
       },

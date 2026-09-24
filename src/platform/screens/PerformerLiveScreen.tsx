@@ -41,6 +41,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [title, setTitle] = useState(performer?.live_title ?? '')
+  const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -63,6 +64,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const endingRef = useRef(false)
   const peakRef = useRef(0)
   const reconnectAttempted = useRef(false)
+  const locationWriteAtRef = useRef(0)
 
   useEffect(() => {
     if (performer?.is_live) {
@@ -73,6 +75,41 @@ export function PerformerLiveScreen({ onBack }: Props) {
       if (performer.live_title) setTitle(performer.live_title)
     }
   }, [performer?.is_live, performer?.live_started_at, performer?.live_title])
+
+  useEffect(() => {
+    if (!performer || phase !== 'live' || !shareLocation || !navigator.geolocation?.watchPosition) return
+    let active = true
+    const writePosition = (position: GeolocationPosition) => {
+      const now = Date.now()
+      if (!active || now - locationWriteAtRef.current < 15_000) return
+      locationWriteAtRef.current = now
+      void updatePerformer(performer.id, {
+        share_location: true,
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        location_updated_at: new Date(now).toISOString(),
+      }).catch(() => undefined)
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      writePosition,
+      () => undefined,
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 10_000 },
+    )
+    return () => {
+      active = false
+      navigator.geolocation.clearWatch(watchId)
+    }
+  }, [performer, phase, shareLocation])
+
+  useEffect(() => {
+    if (!performer || phase !== 'live' || shareLocation) return
+    void updatePerformer(performer.id, {
+      share_location: false,
+      lat: null,
+      lng: null,
+      location_updated_at: null,
+    }).catch(() => undefined)
+  }, [performer, phase, shareLocation])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -174,7 +211,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
     try {
       let lat: number | null = null
       let lng: number | null = null
-      if (performer.share_location && 'geolocation' in navigator) {
+      if (shareLocation && 'geolocation' in navigator) {
         try {
           const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000 })
@@ -186,7 +223,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
         }
       }
       await updatePerformer(performer.id, {
-        share_location: performer.share_location,
+        share_location: shareLocation,
         lat,
         lng,
         location_updated_at: lat != null ? new Date().toISOString() : null,
@@ -295,7 +332,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
               onChange={(e) => setTitle(e.target.value)}
             />
           </label>
-          <p className="pl-muted">現在地共有: {performer.share_location ? 'ON' : 'OFF'}（登録状況画面で変更できます）</p>
+          <label className="pl-live__location-consent">
+            <input
+              type="checkbox"
+              checked={shareLocation}
+              onChange={(event) => setShareLocation(event.target.checked)}
+            />
+            <span><strong>現在地を共有してMAPに表示</strong><small>LIVE中だけ現在地を更新します。いつでもOFFにできます。</small></span>
+          </label>
           <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy} onClick={() => void goLive()}>
             {busy ? 'カメラを準備中…' : 'LIVEを開始'}
           </button>
@@ -326,6 +370,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
             </button>
           </div>
           <div className="pl-live__prefs">
+            <label>
+              <input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />
+              MAP位置共有
+            </label>
             <label>
               <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
               ギフト音

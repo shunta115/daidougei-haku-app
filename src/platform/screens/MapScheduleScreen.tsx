@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import {
@@ -6,10 +6,13 @@ import {
   listApprovedPerformers,
   listEventSlots,
   listEventVenues,
+  listLiveRanking,
+  subscribePerformerMapUpdates,
   type EventSlotRow,
   type EventVenueRow,
   type FeaturedEvent,
 } from '../lib/api'
+import { distanceKm, formatMapDistance, isFreshLiveLocation, walkingMinutes } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
 
 type Props = {
@@ -31,14 +34,6 @@ function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
 
-function distanceKm(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
-  const rad = (value: number) => value * Math.PI / 180
-  const dLat = rad(to.lat - from.lat)
-  const dLng = rad(to.lng - from.lng)
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(from.lat)) * Math.cos(rad(to.lat)) * Math.sin(dLng / 2) ** 2
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
 export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map' }: Props) {
   const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
@@ -46,25 +41,41 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null)
+  const [selectedPerformer, setSelectedPerformer] = useState<string | null>(null)
+  const [viewerPeaks, setViewerPeaks] = useState<Record<string, number>>({})
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [locationClock, setLocationClock] = useState(Date.now())
+
+  const refreshLiveMap = useCallback(async () => {
+    const [acts, ranks] = await Promise.all([
+      listApprovedPerformers(),
+      listLiveRanking().catch(() => []),
+    ])
+    setPerformers(acts)
+    setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
+    setLocationClock(Date.now())
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
         const featured = await getFeaturedEvent()
-        const acts = await listApprovedPerformers()
+        const [acts, ranks] = await Promise.all([
+          listApprovedPerformers(),
+          listLiveRanking().catch(() => []),
+        ])
         const [venueRows, slotRows] = featured
           ? await Promise.all([listEventVenues(featured.id), listEventSlots(featured.id)])
           : [[], []]
         if (cancelled) return
         setEvent(featured)
         setPerformers(acts)
+        setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
         setVenues(venueRows)
         setSlots(slotRows)
-        setSelectedVenue(venueRows[0]?.id ?? null)
         setSelectedDate(String(slotRows[0]?.date || '2026-10-10').slice(0, 10))
       } catch {
         if (!cancelled) setError('会場情報を読み込めませんでした。通信を確認して、もう一度開いてください。')
@@ -72,6 +83,33 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     })()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (view !== 'map') return
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void refreshLiveMap().catch(() => undefined)
+    }
+    const timer = window.setInterval(refresh, 20_000)
+    const clock = window.setInterval(() => setLocationClock(Date.now()), 15_000)
+    let unsubscribe: () => void = () => {}
+    try {
+      unsubscribe = subscribePerformerMapUpdates((row) => {
+        if (!row.is_approved) return
+        setPerformers((current) => {
+          const exists = current.some((item) => item.id === row.id)
+          return exists ? current.map((item) => item.id === row.id ? row : item) : [...current, row]
+        })
+        setLocationClock(Date.now())
+      })
+    } catch {
+      // Polling remains active when Realtime is unavailable.
+    }
+    return () => {
+      window.clearInterval(timer)
+      window.clearInterval(clock)
+      unsubscribe()
+    }
+  }, [refreshLiveMap, view])
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
@@ -81,6 +119,23 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     return values.length ? values : ['2026-10-10', '2026-10-11', '2026-10-12']
   }, [slots])
   const dateSlots = useMemo(() => slots.filter((slot) => String(slot.date).slice(0, 10) === selectedDate), [slots, selectedDate])
+  const liveMapPerformers = useMemo(
+    () => performers.filter((performer) => isFreshLiveLocation(performer, locationClock)),
+    [locationClock, performers],
+  )
+  const selectedLivePerformer = useMemo(
+    () => liveMapPerformers.find((performer) => performer.id === selectedPerformer) ?? null,
+    [liveMapPerformers, selectedPerformer],
+  )
+  const nearbyLive = useMemo(() => liveMapPerformers
+    .map((performer) => ({
+      performer,
+      distance: userLocation && performer.lat != null && performer.lng != null
+        ? distanceKm(userLocation, { lat: performer.lat, lng: performer.lng })
+        : null,
+    }))
+    .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY)),
+  [liveMapPerformers, userLocation])
 
   return (
     <main className="pl-experience pl-map-schedule">
@@ -101,22 +156,47 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         <>
           <GoogleVenueMap
             venues={venues}
-            slots={slots}
-            performers={performers}
-            selectedDate={selectedDate}
+            livePerformers={liveMapPerformers}
+            selectedPerformerId={selectedPerformer}
             selectedVenueId={selectedVenue}
-            onSelectVenue={setSelectedVenue}
+            onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
+            onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
             onLocationChange={setUserLocation}
           />
 
-          {selectedVenue ? (() => {
+          {selectedLivePerformer ? (() => {
+            const performer = selectedLivePerformer
+            const point = { lat: performer.lat!, lng: performer.lng! }
+            const km = userLocation ? distanceKm(userLocation, point) : null
+            const matchingSlot = dateSlots.find((slot) => slot.performer_id === performer.id)
+            const venue = matchingSlot ? venueById.get(matchingSlot.venue_id) : null
+            const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${point.lat},${point.lng}&travelmode=walking`
+            return (
+              <section className="pl-venue-sheet pl-live-map-sheet" aria-label={`${performer.stage_name}のLIVE情報`}>
+                <div className="pl-venue-sheet__top">
+                  <div><p>LIVE NOW{km != null ? ` · 徒歩約${walkingMinutes(km)}分` : ''}</p><h2>{performer.stage_name}</h2><span>{performer.genre || 'Performance'} · {venue?.name_ja || performer.city || '現在地を共有中'}</span></div>
+                  {performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-live-map-sheet__avatar">{performer.stage_name.slice(0, 2)}</span>}
+                </div>
+                <div className="pl-live-map-sheet__facts">
+                  <span><Radio size={14} /> LIVE中</span>
+                  {km != null ? <span><Navigation size={14} /> 現在地から {formatMapDistance(km)}</span> : null}
+                  <span><UserRound size={14} /> 視聴 {viewerPeaks[performer.id] ?? 0}</span>
+                </div>
+                <div className="pl-venue-sheet__actions">
+                  <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> LIVEを見る</button>
+                  <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> プロフィール</button>
+                  <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> ここへ行く</a>
+                </div>
+              </section>
+            )
+          })() : selectedVenue ? (() => {
             const venue = venueById.get(selectedVenue)
             if (!venue) return null
             const first = selectedSlots[0]
             const act = first?.performer_id ? performerById.get(first.performer_id) : null
             const venuePosition = venue.lat != null && venue.lng != null ? { lat: venue.lat, lng: venue.lng } : null
             const km = userLocation && venuePosition ? distanceKm(userLocation, venuePosition) : null
-            const walkMinutes = km == null ? null : Math.max(1, Math.round(km * 1000 / 80))
+            const walkMinutes = km == null ? null : walkingMinutes(km)
             const directions = venuePosition ? `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${venuePosition.lat},${venuePosition.lng}&travelmode=walking` : null
             return (
               <section className="pl-venue-sheet">
@@ -138,6 +218,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               </section>
             )
           })() : null}
+
+          <section className="pl-near-live" aria-label="近くでLIVE中">
+            <header><div><p>NEAR YOU</p><h2>近くでLIVE中</h2></div><span>{nearbyLive.length}組</span></header>
+            {nearbyLive.length > 0 ? (
+              <div className="pl-near-live__rail">
+                {nearbyLive.map(({ performer, distance }) => (
+                  <button type="button" key={performer.id} onClick={() => { setSelectedPerformer(performer.id); setSelectedVenue(null) }}>
+                    <span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>LIVE</i></span>
+                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><em>{distance != null ? `現在地から ${formatMapDistance(distance)}` : '位置共有中'} · 視聴 {viewerPeaks[performer.id] ?? 0}</em></span>
+                    <ChevronRight size={18} />
+                  </button>
+                ))}
+              </div>
+            ) : <p className="pl-near-live__empty">現在地を共有しているLIVEはまだありません。</p>}
+          </section>
         </>
       ) : (
         <section className="pl-schedule-v7">

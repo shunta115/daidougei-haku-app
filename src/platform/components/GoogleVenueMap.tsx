@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Crosshair, LocateFixed, MapPin } from 'lucide-react'
-import type { EventSlotRow, EventVenueRow } from '../lib/api'
+import type { EventVenueRow } from '../lib/api'
+import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
-
-type Coordinates = { lat: number; lng: number; accuracy?: number }
 
 type Props = {
   venues: EventVenueRow[]
-  slots: EventSlotRow[]
-  performers: Performer[]
-  selectedDate: string
+  livePerformers: Performer[]
+  selectedPerformerId: string | null
   selectedVenueId: string | null
+  onSelectPerformer: (id: string) => void
   onSelectVenue: (id: string) => void
-  onLocationChange: (location: Coordinates | null) => void
+  onLocationChange: (location: MapCoordinates | null) => void
 }
 
-type LocationState = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable'
+type LocationState = 'requesting' | 'granted' | 'denied' | 'unavailable'
+type MapState = 'loading' | 'ready' | 'missing-key' | 'error'
 
 declare global {
   interface Window {
@@ -56,50 +56,86 @@ function loadGoogleMaps(apiKey: string) {
   return window.__daidougeiGoogleMaps
 }
 
-export function GoogleVenueMap({ venues, slots, performers, selectedDate, selectedVenueId, onSelectVenue, onLocationChange }: Props) {
+export function GoogleVenueMap({
+  venues,
+  livePerformers,
+  selectedPerformerId,
+  selectedVenueId,
+  onSelectPerformer,
+  onSelectVenue,
+  onLocationChange,
+}: Props) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ?? ''
   const containerRef = useRef<HTMLDivElement>(null)
+  const watchIdRef = useRef<number | null>(null)
+  const autoCenteredRef = useRef(false)
+  const userMovedMapRef = useRef(false)
   const [googleApi, setGoogleApi] = useState<any>(null)
   const [map, setMap] = useState<any>(null)
-  const [mapError, setMapError] = useState(false)
-  const [locationState, setLocationState] = useState<LocationState>('idle')
-  const [location, setLocation] = useState<Coordinates | null>(null)
-  const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
-  const center = location ?? venues.find((venue) => venue.lat != null && venue.lng != null) ?? EVENT_CENTER
+  const [mapState, setMapState] = useState<MapState>(apiKey ? 'loading' : 'missing-key')
+  const [locationState, setLocationState] = useState<LocationState>('requesting')
+  const [location, setLocation] = useState<MapCoordinates | null>(null)
+  const centerSeed = useMemo(
+    () => venues.find((venue) => venue.lat != null && venue.lng != null) ?? EVENT_CENTER,
+    [venues],
+  )
+
+  const acceptPosition = useCallback((position: GeolocationPosition) => {
+    const next = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+    }
+    setLocation(next)
+    setLocationState('granted')
+    onLocationChange(next)
+  }, [onLocationChange])
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationState('unavailable')
       return
     }
+    if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current)
     setLocationState('requesting')
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const next = { lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy }
-        setLocation(next)
-        setLocationState('granted')
-        onLocationChange(next)
-      },
-      (error) => {
-        setLocationState(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable')
-        setLocation(null)
-        onLocationChange(null)
-      },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-    )
-  }, [onLocationChange])
+    const denied = (error: GeolocationPositionError) => {
+      setLocationState(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable')
+      setLocation(null)
+      onLocationChange(null)
+    }
+    if (typeof navigator.geolocation.watchPosition === 'function') {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        acceptPosition,
+        denied,
+        { enableHighAccuracy: true, timeout: 12_000, maximumAge: 10_000 },
+      )
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        acceptPosition,
+        denied,
+        { enableHighAccuracy: true, timeout: 12_000, maximumAge: 10_000 },
+      )
+    }
+  }, [acceptPosition, onLocationChange])
 
-  useEffect(() => { requestLocation() }, [requestLocation])
+  useEffect(() => {
+    requestLocation()
+    return () => {
+      if (watchIdRef.current != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+      }
+    }
+  }, [requestLocation])
 
   useEffect(() => {
     if (!apiKey || !containerRef.current) return
     let active = true
+    setMapState('loading')
     void loadGoogleMaps(apiKey)
       .then((api) => {
         if (!active || !containerRef.current) return
-        setGoogleApi(api)
-        setMap(new api.maps.Map(containerRef.current, {
-          center: EVENT_CENTER,
+        const nextMap = new api.maps.Map(containerRef.current, {
+          center: centerSeed,
           zoom: 15,
           clickableIcons: false,
           fullscreenControl: false,
@@ -107,16 +143,23 @@ export function GoogleVenueMap({ venues, slots, performers, selectedDate, select
           streetViewControl: false,
           cameraControl: false,
           styles: MAP_STYLE,
-        }))
+        })
+        nextMap.addListener('dragstart', () => { userMovedMapRef.current = true })
+        setGoogleApi(api)
+        setMap(nextMap)
+        setMapState('ready')
       })
-      .catch(() => { if (active) setMapError(true) })
+      .catch(() => { if (active) setMapState('error') })
     return () => { active = false }
-  }, [apiKey])
+  }, [apiKey, centerSeed])
 
   useEffect(() => {
     if (!map || !googleApi || !location) return
-    map.panTo(location)
-    map.setZoom(16)
+    if (!autoCenteredRef.current && !userMovedMapRef.current) {
+      map.panTo(location)
+      map.setZoom(16)
+      autoCenteredRef.current = true
+    }
     const dot = new googleApi.maps.Marker({
       map,
       position: location,
@@ -147,37 +190,45 @@ export function GoogleVenueMap({ venues, slots, performers, selectedDate, select
   useEffect(() => {
     if (!map || !googleApi) return
     const overlays: any[] = []
-    const datedSlots = slots.filter((slot) => String(slot.date).slice(0, 10) === selectedDate)
-    venues.forEach((venue) => {
-      if (venue.lat == null || venue.lng == null) return
-      const slot = datedSlots.find((item) => item.venue_id === venue.id)
-      const performer = slot?.performer_id ? performerById.get(slot.performer_id) : null
+    const addOverlay = (input: {
+      position: { lat: number; lng: number }
+      label: string
+      image?: string | null
+      live?: boolean
+      active?: boolean
+      onClick: () => void
+    }) => {
       const overlay = new googleApi.maps.OverlayView()
       let element: HTMLButtonElement | null = null
       overlay.onAdd = () => {
         element = document.createElement('button')
         element.type = 'button'
-        element.className = `pl-google-marker${performer?.is_live ? ' pl-google-marker--live' : ''}${selectedVenueId === venue.id ? ' pl-google-marker--active' : ''}`
-        element.setAttribute('aria-label', `${venue.name_ja}を表示`)
-        if (performer?.photo_url) {
-          const image = document.createElement('img')
-          image.src = performer.photo_url
-          image.alt = ''
-          element.appendChild(image)
+        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : ''}${input.active ? ' pl-google-marker--active' : ''}`
+        element.setAttribute('aria-label', `${input.label}${input.live ? 'のLIVEを表示' : 'を表示'}`)
+        const portrait = input.image ? document.createElement('img') : document.createElement('b')
+        if (portrait instanceof HTMLImageElement) {
+          portrait.src = input.image ?? ''
+          portrait.alt = ''
         } else {
-          const badge = document.createElement('b')
-          badge.textContent = 'STAGE'
+          portrait.textContent = input.label.slice(0, 2)
+        }
+        element.appendChild(portrait)
+        if (input.live) {
+          const badge = document.createElement('i')
+          badge.textContent = 'LIVE'
           element.appendChild(badge)
         }
         const label = document.createElement('span')
-        label.textContent = venue.name_ja
+        label.textContent = input.label
         element.appendChild(label)
-        element.addEventListener('click', () => onSelectVenue(venue.id))
+        element.addEventListener('click', input.onClick)
         overlay.getPanes()?.overlayMouseTarget.appendChild(element)
       }
       overlay.draw = () => {
         if (!element) return
-        const point = overlay.getProjection()?.fromLatLngToDivPixel(new googleApi.maps.LatLng(venue.lat, venue.lng))
+        const point = overlay.getProjection()?.fromLatLngToDivPixel(
+          new googleApi.maps.LatLng(input.position.lat, input.position.lng),
+        )
         if (!point) return
         element.style.left = `${point.x}px`
         element.style.top = `${point.y}px`
@@ -185,24 +236,61 @@ export function GoogleVenueMap({ venues, slots, performers, selectedDate, select
       overlay.onRemove = () => { element?.remove(); element = null }
       overlay.setMap(map)
       overlays.push(overlay)
+    }
+
+    venues.forEach((venue) => {
+      if (venue.lat == null || venue.lng == null) return
+      addOverlay({
+        position: { lat: venue.lat, lng: venue.lng },
+        label: venue.name_ja,
+        active: selectedVenueId === venue.id,
+        onClick: () => onSelectVenue(venue.id),
+      })
+    })
+    livePerformers.forEach((performer) => {
+      if (performer.lat == null || performer.lng == null) return
+      addOverlay({
+        position: { lat: performer.lat, lng: performer.lng },
+        label: performer.stage_name,
+        image: performer.photo_url,
+        live: true,
+        active: selectedPerformerId === performer.id,
+        onClick: () => onSelectPerformer(performer.id),
+      })
     })
     return () => overlays.forEach((overlay) => overlay.setMap(null))
-  }, [googleApi, map, onSelectVenue, performerById, selectedDate, selectedVenueId, slots, venues])
+  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, venues])
 
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${center.lat},${center.lng}`)}`
-  const showFallback = !apiKey || mapError
+  const recenter = () => {
+    if (!map || !location) return
+    userMovedMapRef.current = false
+    map.panTo(location)
+    map.setZoom(16)
+  }
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${EVENT_CENTER.lat},${EVENT_CENTER.lng}`
 
   return (
     <section className="pl-google-map" aria-label="Google Maps会場マップ">
-      {showFallback ? <div className="pl-google-map__setup"><MapPin size={28} /><strong>Google Maps</strong><span>地図をアプリ内に表示するには、Google Maps APIの設定が必要です。</span><a href={mapsHref} target="_blank" rel="noopener noreferrer">Google Mapsで会場を見る</a></div> : <div ref={containerRef} className="pl-google-map__canvas" />}
+      <div ref={containerRef} className="pl-google-map__canvas" />
+      {mapState === 'loading' ? <div className="pl-google-map__loading" aria-label="地図を読み込み中"><span /><span /><span /></div> : null}
+      {mapState === 'missing-key' || mapState === 'error' ? (
+        <div className="pl-google-map__error" role="status">
+          <MapPin size={20} />
+          <span>{mapState === 'missing-key' ? '地図の公開設定が未完了です。' : '地図を読み込めませんでした。'}</span>
+          <a href={mapsHref} target="_blank" rel="noopener noreferrer">Google Mapsを開く</a>
+        </div>
+      ) : null}
       {locationState !== 'granted' ? (
         <div className="pl-google-map__permission">
           <LocateFixed size={20} />
-          <span>{locationState === 'requesting' ? '現在地を確認しています…' : '現在地を許可すると、近くの大道芸を見つけられます。'}</span>
-          {locationState !== 'requesting' ? <button type="button" onClick={requestLocation}><Crosshair size={16} /> 現在地を許可</button> : null}
+          <span>{locationState === 'requesting' ? '現在地を確認しています…' : locationState === 'denied' ? '位置情報がOFFです。許可すると近くのLIVEが分かります。' : '現在地を取得できませんでした。'}</span>
+          {locationState !== 'requesting' ? <button type="button" onClick={requestLocation}><Crosshair size={16} /> 再取得</button> : null}
         </div>
-      ) : map ? <button type="button" className="pl-google-map__recenter" onClick={() => map.panTo(location)} aria-label="現在地を中央に戻す"><LocateFixed size={19} /></button> : null}
-      {showFallback ? <div className="pl-google-map__fallback"><MapPin size={14} /> Google Maps</div> : null}
+      ) : map ? (
+        <button type="button" className="pl-google-map__recenter" onClick={recenter} aria-label="現在地へ戻る">
+          <LocateFixed size={19} />
+        </button>
+      ) : null}
     </section>
   )
 }
