@@ -96,3 +96,17 @@
   .pl-registration .pl-h1 { font-size: 23px; }
   .pl-registration__actions { grid-template-columns: minmax(0, 1fr); }
 }
+.pl-registration__text-button {
+  min-height: 44px;
+  margin: 4px auto 0;
+  border: 0;
+  background: transparent;
+  color: #b9d7ea;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.pl-registration__text-button:disabled {
+  opacity: .55;
+}

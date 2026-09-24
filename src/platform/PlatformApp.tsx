@@ -126,7 +126,7 @@ function initialGuestScreen(): PlatformScreen {
 }
 
 function PlatformShell() {
-  const { ready, configured, user, profile, profileError, refreshProfile, signOut } = useAuth()
+  const { ready, configured, user, profile, profileError, passwordRecovery, refreshProfile, signOut } = useAuth()
   const { t } = useLang()
   const [screen, setScreen] = useState<PlatformScreen>(initialGuestScreen)
   const [registrationEntry] = useState(() => window.location.pathname === PERFORMER_REGISTER_PATH)
@@ -303,6 +303,10 @@ function PlatformShell() {
       return
     }
     if (!profile) return
+    if (passwordRecovery) {
+      setScreen('auth')
+      return
+    }
     const firstVisit = routedUser.current !== user.id
     routedUser.current = user.id
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
@@ -373,7 +377,7 @@ function PlatformShell() {
       if (s === 'welcome' || s === 'auth' || s === 'setup' || (firstVisit && s === 'fan-home')) return homeForRole(profile?.role)
       return s
     })
-  }, [ready, configured, user, profile, registrationEntry])
+  }, [ready, configured, user, profile, passwordRecovery, registrationEntry])
 
   if (!ready) {
     return (

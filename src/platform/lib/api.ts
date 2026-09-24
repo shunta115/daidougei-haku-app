@@ -251,6 +251,7 @@ export async function endLive(performerId: string) {
     .from('performers')
     .update({
       is_live: false,
+      share_location: false,
       live_started_at: null,
       live_title: null,
       lat: null,

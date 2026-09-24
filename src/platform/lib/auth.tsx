@@ -21,9 +21,12 @@ type AuthState = {
   performer: Performer | null
   configured: boolean
   profileError: string | null
+  passwordRecovery: boolean
   refreshProfile: () => Promise<void>
   signUp: (email: string, password: string, role: 'fan' | 'performer', displayName: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
+  sendPasswordReset: (email: string) => Promise<string | null>
+  updatePassword: (password: string) => Promise<string | null>
   signOut: () => Promise<void>
 }
 
@@ -62,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [performer, setPerformer] = useState<Performer | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [authRevision, setAuthRevision] = useState(0)
   const currentUserId = useRef<string | null>(null)
 
@@ -84,11 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return
     let mounted = true
     // Supabase auth callbacks hold an auth lock. Load DB rows outside the callback.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (!mounted) return
       const changed = currentUserId.current !== (next?.user.id ?? null)
       currentUserId.current = next?.user.id ?? null
       setSession(next)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      if (event === 'SIGNED_OUT') setPasswordRecovery(false)
       setAuthRevision((revision) => revision + 1)
       if (changed || !next) {
         setProfile(null)
@@ -152,6 +158,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const sendPasswordReset = useCallback(async (email: string) => {
+    try {
+      const sb = requireSupabase()
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/live?auth=1`,
+      })
+      return error ? registrationError(error) : null
+    } catch (e) {
+      return registrationError(e)
+    }
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    try {
+      const sb = requireSupabase()
+      const { error } = await sb.auth.updateUser({ password })
+      if (error) return registrationError(error)
+      setPasswordRecovery(false)
+      return null
+    } catch (e) {
+      return registrationError(e)
+    }
+  }, [])
+
   const signOut = useCallback(async () => {
     if (!supabase) return
     await supabase.auth.signOut()
@@ -166,12 +196,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       performer,
       configured: isSupabaseConfigured,
       profileError,
+      passwordRecovery,
       refreshProfile,
       signUp,
       signIn,
+      sendPasswordReset,
+      updatePassword,
       signOut,
     }),
-    [ready, session, profile, performer, profileError, refreshProfile, signUp, signIn, signOut],
+    [ready, session, profile, performer, profileError, passwordRecovery, refreshProfile, signUp, signIn, sendPasswordReset, updatePassword, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

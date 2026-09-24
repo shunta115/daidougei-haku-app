@@ -23,13 +23,6 @@ type Props = {
 
 type View = 'map' | 'schedule'
 
-const PREVIEW_TIMES = [
-  { time: '10:00', label: 'モーニングステージ' },
-  { time: '11:30', label: 'ストリートステージ' },
-  { time: '14:30', label: 'アフタヌーンステージ' },
-  { time: '16:00', label: 'スペシャルステージ' },
-]
-
 function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
@@ -240,16 +233,8 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             {dates.map((date) => <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><strong>{date.slice(8)}</strong><small>10月</small></button>)}
           </div>
           {dateSlots.length === 0 ? (
-            <div className="pl-schedule-preview" aria-label="出演時間枠プレビュー">
-              <p className="pl-schedule-preview__note">出演者公開前 · 時間枠プレビュー</p>
-              {PREVIEW_TIMES.map((item) => (
-                <div key={item.time} className="pl-schedule-row pl-schedule-row--preview" aria-disabled="true">
-                  <span className="pl-schedule-row__time"><Clock3 size={15} />{item.time}</span>
-                  <span className="pl-schedule-row__media"><span>HAKU</span></span>
-                  <span className="pl-schedule-row__body"><strong>出演者は後日発表</strong><small>{item.label} · 会場調整中</small></span>
-                  <ChevronRight size={18} />
-                </div>
-              ))}
+            <div className="pl-schedule-preview" role="status">
+              <p className="pl-schedule-preview__note">この日の出演スケジュールは近日公開します。</p>
             </div>
           ) : null}
           {dateSlots.map((slot) => {
