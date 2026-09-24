@@ -520,6 +520,33 @@ export async function approvePerformer(id: string) {
   if (perr) throw perr
 }
 
+export async function unpublishPerformer(id: string) {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('performers')
+    .update({
+      is_approved: false,
+      is_live: false,
+      share_location: false,
+      live_started_at: null,
+      live_title: null,
+      lat: null,
+      lng: null,
+      location_updated_at: null,
+    })
+    .eq('id', id)
+    .select('id')
+  if (error) throw error
+  if (!data?.length) throw new Error('Unpublish failed: performer row not updated (check RLS/grants)')
+
+  const { error: sessionError } = await sb
+    .from('live_sessions')
+    .update({ ended_at: new Date().toISOString() })
+    .eq('performer_id', id)
+    .is('ended_at', null)
+  if (sessionError) throw sessionError
+}
+
 export async function suspendUser(id: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)

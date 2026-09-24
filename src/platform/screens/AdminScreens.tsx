@@ -7,6 +7,7 @@ import {
   listUsers,
   softDeleteUser,
   suspendUser,
+  unpublishPerformer,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
@@ -32,7 +33,7 @@ export function AdminDashboardScreen() {
   const [filter, setFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [approving, setApproving] = useState<string | null>(null)
+  const [changingApproval, setChangingApproval] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const reload = async () => {
@@ -94,10 +95,14 @@ export function AdminDashboardScreen() {
             {!['active', 'pending'].includes(p.account_status) ? <li>アカウント：利用停止中または確認が必要</li> : null}
           </ul>
           <details className="pl-registration__details"><summary>プロフィールを確認</summary><p>{p.bio || '自己紹介は未入力です。'}</p><p className="pl-muted">登録日：{new Date(p.created_at).toLocaleDateString('ja-JP')}</p></details>
-          {!p.is_approved ? <button className="pl-btn pl-btn--block" disabled={!eligible || approving !== null} onClick={() => {
-            setApproving(p.id)
-            void approvePerformer(p.id).then(reload).catch((e) => setError(registrationError(e, '承認できませんでした。登録状況を更新して再確認してください。'))).finally(() => setApproving(null))
-          }}>{approving === p.id ? '承認中…' : eligible ? '承認して公開' : 'プロフィール・受取設定の完了待ち'}</button> : null}
+          {!p.is_approved ? <button className="pl-btn pl-btn--block" disabled={!eligible || changingApproval !== null} onClick={() => {
+            setChangingApproval(p.id)
+            void approvePerformer(p.id).then(reload).catch((e) => setError(registrationError(e, '承認できませんでした。登録状況を更新して再確認してください。'))).finally(() => setChangingApproval(null))
+          }}>{changingApproval === p.id ? '承認中…' : eligible ? '承認して公開' : 'プロフィール・受取設定の完了待ち'}</button> : <button className="pl-btn pl-btn--block pl-btn--ghost" disabled={changingApproval !== null} onClick={() => {
+            if (!window.confirm(`${p.stage_name}の公開を停止しますか？\nプロフィールは削除されず、本人は引き続き編集できます。LIVE中の場合は終了します。`)) return
+            setChangingApproval(p.id)
+            void unpublishPerformer(p.id).then(reload).catch((e) => setError(registrationError(e, '公開を停止できませんでした。登録状況を更新して再確認してください。'))).finally(() => setChangingApproval(null))
+          }}>{changingApproval === p.id ? '更新中…' : '公開を停止'}</button>}
         </article>
       })}
 
