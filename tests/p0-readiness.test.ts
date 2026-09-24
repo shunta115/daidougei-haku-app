@@ -38,4 +38,14 @@ describe('P0 migration safety', () => {
     expect(seed).toContain("'16:00'")
     expect(seed).toContain("'17:00'")
   })
+
+  it('prevents public clients from self-assigning office, approval, or payout state', () => {
+    const sql = read('supabase/migrations/20260924_protect_privileged_profile_fields.sql')
+    expect(sql).toMatch(/new\.role is distinct from old\.role/i)
+    expect(sql).toMatch(/new\.status is distinct from old\.status/i)
+    expect(sql).toMatch(/new\.is_approved is distinct from old\.is_approved/i)
+    expect(sql).toMatch(/new\.stripe_account_id is distinct from old\.stripe_account_id/i)
+    expect(sql).toMatch(/stripe_onboarding_complete = false/i)
+    expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
+  })
 })
