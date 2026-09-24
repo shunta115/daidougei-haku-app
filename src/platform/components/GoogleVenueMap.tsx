@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Crosshair, LocateFixed, MapPin } from 'lucide-react'
+import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucide-react'
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
@@ -16,6 +16,7 @@ type Props = {
 
 type LocationState = 'requesting' | 'granted' | 'denied' | 'unavailable'
 type MapState = 'loading' | 'ready' | 'missing-key' | 'error'
+type MapDisplayMode = 'roadmap' | 'hybrid'
 
 declare global {
   interface Window {
@@ -73,6 +74,7 @@ export function GoogleVenueMap({
   const [googleApi, setGoogleApi] = useState<any>(null)
   const [map, setMap] = useState<any>(null)
   const [mapState, setMapState] = useState<MapState>(apiKey ? 'loading' : 'missing-key')
+  const [displayMode, setDisplayMode] = useState<MapDisplayMode>('roadmap')
   const [locationState, setLocationState] = useState<LocationState>('requesting')
   const [location, setLocation] = useState<MapCoordinates | null>(null)
   const centerSeed = useMemo(
@@ -137,6 +139,7 @@ export function GoogleVenueMap({
         const nextMap = new api.maps.Map(containerRef.current, {
           center: centerSeed,
           zoom: 15,
+          mapTypeId: 'roadmap',
           clickableIcons: false,
           fullscreenControl: false,
           mapTypeControl: false,
@@ -152,6 +155,11 @@ export function GoogleVenueMap({
       .catch(() => { if (active) setMapState('error') })
     return () => { active = false }
   }, [apiKey, centerSeed])
+
+  useEffect(() => {
+    if (!map) return
+    map.setMapTypeId(displayMode)
+  }, [displayMode, map])
 
   useEffect(() => {
     if (!map || !googleApi || !location) return
@@ -272,6 +280,26 @@ export function GoogleVenueMap({
   return (
     <section className="pl-google-map" aria-label="Google Maps会場マップ">
       <div ref={containerRef} className="pl-google-map__canvas" />
+      {mapState === 'ready' ? (
+        <div className="pl-google-map__type" role="group" aria-label="地図表示">
+          <button
+            type="button"
+            aria-pressed={displayMode === 'roadmap'}
+            data-active={displayMode === 'roadmap'}
+            onClick={() => setDisplayMode('roadmap')}
+          >
+            <MapIcon size={14} /> 地図
+          </button>
+          <button
+            type="button"
+            aria-pressed={displayMode === 'hybrid'}
+            data-active={displayMode === 'hybrid'}
+            onClick={() => setDisplayMode('hybrid')}
+          >
+            <Satellite size={14} /> 航空写真
+          </button>
+        </div>
+      ) : null}
       {mapState === 'loading' ? <div className="pl-google-map__loading" aria-label="地図を読み込み中"><span /><span /><span /></div> : null}
       {mapState === 'missing-key' || mapState === 'error' ? (
         <div className="pl-google-map__error" role="status">
