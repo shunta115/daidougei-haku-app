@@ -15,6 +15,7 @@ import { PerformerHomeScreen } from './screens/PerformerHomeScreen'
 import { PerformerEditScreen } from './screens/PerformerEditScreen'
 import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
+import { PerformerEarningsScreen, PerformerScheduleScreen } from './screens/PerformerBusinessScreens'
 import { NotificationsScreen } from './screens/NotificationsScreen'
 import { LiveWatchScreen } from './screens/LiveWatchScreen'
 import { LiveListScreen } from './screens/LiveListScreen'
@@ -694,8 +695,16 @@ function PlatformShell() {
             onHistory={() => setScreen('performer-history')}
             onMerch={() => setScreen('performer-merch')}
             onPreview={() => { if (user) openPerformer(user.id) }}
+            onSchedule={() => setScreen('performer-schedule')}
+            onEarnings={() => setScreen('performer-earnings')}
           />
         )
+        break
+      case 'performer-schedule':
+        body = <PerformerScheduleScreen onBack={() => setScreen('performer-home')} onLive={() => setScreen('performer-live')} />
+        break
+      case 'performer-earnings':
+        body = <PerformerEarningsScreen onBack={() => setScreen('performer-home')} />
         break
       case 'performer-edit':
         body = <PerformerEditScreen onBack={() => setScreen('performer-home')} />

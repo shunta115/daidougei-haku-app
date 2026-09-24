@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Circle, Camera, Pencil, ShoppingBag, CalendarDays, Share2 } from 'lucide-react'
+import { CheckCircle2, Circle, Camera, Pencil, ShoppingBag, CalendarDays, Share2, WalletCards } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
 import { PayoutSetup, type ConnectStatus } from '../components/PayoutSetup'
 import { listLiveHistory, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
 import { performerRegistrationStatus, registrationError } from '../lib/onboarding'
-import { FESTIVAL_PATH, PLATFORM_PATH } from '../../app/routes'
+import { PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview }: {
+export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings }: {
   onEdit: () => void
   onLive: () => void
   onHistory: () => void
   onMerch: () => void
   onPreview: () => void
+  onSchedule: () => void
+  onEarnings: () => void
 }) {
   const { performer, profile, refreshProfile, signOut } = useAuth()
   const [recent, setRecent] = useState<LiveSession[]>([])
@@ -94,12 +96,13 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
     <PayoutSetup performerId={performer.id} onStatus={setConnect} />
 
     <section className="pl-registration__section" aria-label="活動メニュー">
-      <h2 className="pl-h2">活動メニュー</h2>
+      <h2 className="pl-h2">ファンとつながる活動</h2>
       <div className="pl-registration__actions">
-        <button className="pl-btn pl-btn--ghost" onClick={onEdit}><Pencil size={18} />プロフィール・SNS</button>
-        <button className="pl-btn pl-btn--ghost" disabled={!status.approved} onClick={onLive}><Camera size={18} />{performer.is_live ? 'LIVEを管理' : 'LIVE開始'}</button>
-        <button className="pl-btn pl-btn--ghost" onClick={onMerch}><ShoppingBag size={18} />グッズ・注文管理</button>
-        <a className="pl-btn pl-btn--ghost" href={FESTIVAL_PATH}><CalendarDays size={18} />イベント・出演情報</a>
+        <button className="pl-activity-card" onClick={onEdit}><Pencil size={20} /><strong>プロフィール</strong><span>あなたの魅力を伝えて、新しいファンに知ってもらおう</span><em>編集する</em></button>
+        <button className="pl-activity-card" disabled={!status.approved} onClick={onLive}><Camera size={20} /><strong>LIVE</strong><span>会場に来られないファンにも、パフォーマンスを届けよう</span><em>{performer.is_live ? 'LIVEを管理' : '配信を準備する'}</em></button>
+        <button className="pl-activity-card" onClick={onMerch}><ShoppingBag size={20} /><strong>グッズ</strong><span>好きになってくれた瞬間を、グッズ購入につなげよう</span><em>商品・注文を管理</em></button>
+        <button className="pl-activity-card" onClick={onSchedule}><CalendarDays size={20} /><strong>出演予定</strong><span>次に会える時間と場所を届けて、見逃しを減らそう</span><em>予定を見る</em></button>
+        <button className="pl-activity-card" onClick={onEarnings}><WalletCards size={20} /><strong>売上</strong><span>投げ銭とグッズの売上、お金の流れを確認できます</span><em>売上を見る</em></button>
         {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />プロフィールを共有</button> : null}
       </div>
       {!status.approved ? <p className="pl-muted">公開・LIVE・販売開始は運営承認後に利用できます。グッズは先に下書きを作れます。</p> : null}
@@ -114,7 +117,8 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
         <div><dt>売上合計</dt><dd>{formatYen(summary.amount_total)}</dd></div>
         <div><dt>運営手数料</dt><dd>{formatYen(summary.fee_total)}</dd></div>
       </dl>
-      <p className="pl-muted">振込額・振込予定はStripeで確認できます。グッズの売上は「グッズ・注文管理」へ。</p>
+      <p className="pl-muted">ここは投げ銭の売上です。グッズを含む内訳と入金の説明は「売上」から確認できます。</p>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onEarnings}>売上・入金について確認</button>
       {tips.map((tip) => <div key={tip.id} className="pl-registration__sale"><strong>{formatYen(tip.amount_cents)}</strong><span>{new Date(tip.created_at).toLocaleDateString('ja-JP')}</span></div>)}
     </section>
 

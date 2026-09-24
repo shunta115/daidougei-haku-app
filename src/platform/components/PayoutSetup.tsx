@@ -73,13 +73,14 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
 
   return <section className="pl-registration__section" aria-labelledby="payout-heading">
     <h2 id="payout-heading" className="pl-h2">売上の受取設定</h2>
+    <p className="pl-muted">投げ銭やグッズの売上を、あなたの銀行口座で受け取るために必要な設定です。</p>
     <p className="pl-registration__status" role="status">
       {status?.complete ? <><CheckCircle2 size={18} />受取設定が完了しました</> : status?.needsInformation ? '追加の入力が必要です' : status?.underReview ? 'Stripeで本人確認中です' : status?.connected ? '受取設定を続けてください' : busy ? '受取状況を確認しています…' : '本人確認・振込口座を登録'}
     </p>
     <p className="pl-muted">本名・本人確認書類・振込口座はStripeの画面に入力します。公開プロフィールには表示しません。</p>
     {status?.underReview && !status.needsInformation && !status.complete ? <p className="pl-muted">確認が終わると状態が更新されます。追加のご案内がある場合はStripeからのメールをご確認ください。</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
-    {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? 'Stripeで登録を続ける' : 'Stripeで受取設定を始める'}</button> : null}
+    {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? 'Stripeで設定を続ける' : '受取口座を設定する'}</button> : <a className="pl-btn pl-btn--ghost pl-btn--block" href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer"><ExternalLink size={18} />Stripeで入金を確認</a>}
     <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} />{busy ? '確認中…' : '状態を更新'}</button>
   </section>
 }

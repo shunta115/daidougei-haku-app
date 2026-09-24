@@ -43,6 +43,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [title, setTitle] = useState(performer?.live_title ?? '')
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
+  const [previewState, setPreviewState] = useState<'idle' | 'preparing' | 'ready' | 'denied' | 'ended'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [viewers, setViewers] = useState(0)
@@ -253,6 +254,26 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
   }
 
+  const preparePreview = async () => {
+    if (!performer.is_approved) { setError('運営の承認後にLIVEを開始できます。登録状況をご確認ください。'); return }
+    setBusy(true)
+    setError(null)
+    setPreviewState('preparing')
+    try {
+      if (!roomRef.current) await connectHostRoom()
+      else attachLocalPreview(roomRef.current)
+      setPreviewState('ready')
+    } catch (e) {
+      const room = roomRef.current
+      roomRef.current = null
+      if (room) void room.disconnect()
+      const message = e instanceof Error ? e.message : ''
+      const denied = /permission|notallowed|denied|許可/i.test(message)
+      setPreviewState(denied ? 'denied' : 'idle')
+      setError(denied ? 'カメラまたはマイクが許可されていません。iPhoneの設定でSafariのカメラ・マイクを許可して、もう一度お試しください。' : e instanceof LiveKitClientError ? e.message : 'カメラを準備できませんでした。通信を確認して、もう一度お試しください。')
+    } finally { setBusy(false) }
+  }
+
   const stopLive = async () => {
     setBusy(true)
     setError(null)
@@ -264,6 +285,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       await endLive(performer.id)
       await refreshProfile()
       setPhase('ready')
+      setPreviewState('ended')
       setElapsed(0)
       setViewers(0)
       peakRef.current = 0
@@ -302,7 +324,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
         {phase === 'live' && performer ? (
           <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} />
         ) : null}
-        {phase === 'ready' ? <div className="pl-live__placeholder">カメラ準備</div> : null}
+        {phase === 'ready' && previewState !== 'ready' ? <div className="pl-live__placeholder">{previewState === 'preparing' ? 'カメラ・マイクの許可を待っています…' : previewState === 'denied' ? 'カメラ・マイクを許可してください' : previewState === 'ended' ? 'LIVE配信を終了しました' : 'ここにカメラ映像が表示されます'}</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
             戻る
@@ -320,8 +342,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
       {phase === 'ready' ? (
         <div className="pl-live__panel">
-          <h1 className="pl-h1">LIVE開始</h1>
-          <p className="pl-muted">URL不要。カメラとマイクだけで、いま配信を始めます。</p>
+          <p className="pl-brand">LIVE FOR YOUR FANS</p><h1 className="pl-h1">会場に来られないファンにも届けよう</h1>
+          <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
+          <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
           <label>
             <span className="pl-label">タイトル（任意）</span>
             <input
@@ -340,8 +363,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
             />
             <span><strong>現在地を共有してMAPに表示</strong><small>LIVE中だけ現在地を更新します。いつでもOFFにできます。</small></span>
           </label>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy} onClick={() => void goLive()}>
-            {busy ? 'カメラを準備中…' : 'LIVEを開始'}
+          {previewState !== 'ready' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void preparePreview()}>{busy ? 'カメラを準備中…' : 'カメラ・マイクを準備する'}</button> : <p className="pl-registration__notice" role="status">映像の準備ができました。画面を確認してから配信を開始してください。</p>}
+          <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy || previewState !== 'ready'} onClick={() => void goLive()}>
+            {busy ? 'LIVE開始処理中…' : 'LIVE配信を開始'}
           </button>
         </div>
       ) : (

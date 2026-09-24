@@ -32,7 +32,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
     : role === 'performer'
       ? [
           { key: 'performer-home', label: t('home'), icon: Home },
-          { key: 'event-home', label: labels.event, href: FESTIVAL_PATH, icon: CalendarDays },
+          { key: 'performer-schedule', label: labels.event, icon: CalendarDays },
           { key: 'performer-live', label: t('live'), icon: Video },
           { key: 'performer-merch', label: labels.goods, icon: ShoppingBag },
         ]

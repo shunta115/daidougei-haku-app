@@ -202,7 +202,7 @@ export function MerchDetailScreen({
   return (
     <>
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
-        Back
+        戻る
       </button>
       <div className="pl-merch-detail">
         {product.image_url ? <img className="pl-merch-detail__image" src={product.image_url} alt="" /> : <div className="pl-merch-detail__image" aria-hidden="true" />}
@@ -225,7 +225,7 @@ export function MerchDetailScreen({
           />
         </label>
         <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available} onClick={() => void buy()}>
-          {busy ? 'Processing…' : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
+          {busy ? '購入画面を準備中…' : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
         </button>
         </div>
       </div>
@@ -248,6 +248,8 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
     status: 'draft' as MerchProduct['status'],
   })
   const [busy, setBusy] = useState(false)
+  const [imageStatus, setImageStatus] = useState<'idle' | 'preview' | 'uploading' | 'success' | 'error'>('idle')
+  const [imagePreview, setImagePreview] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -268,6 +270,8 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
 
   const resetDraft = () => {
     setDraft({ id: '', name: '', description: '', image_url: '', price_yen: 1000, stock: 10, status: 'draft' })
+    setImagePreview('')
+    setImageStatus('idle')
   }
 
   const save = async () => {
@@ -300,14 +304,22 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
 
   const onImage = async (file: File | null) => {
     if (!file || !performer) return
+    const reader = new FileReader()
+    reader.onload = () => { setImagePreview(typeof reader.result === 'string' ? reader.result : '') }
+    reader.readAsDataURL(file)
     setBusy(true)
+    setImageStatus('uploading')
     setError(null)
+    setMsg(null)
     try {
       const url = await uploadMerchImage(performer.id, file)
       setDraft((d) => ({ ...d, image_url: url }))
-      setMsg('画像をアップロードしました')
+      setImagePreview(url)
+      setImageStatus('success')
+      setMsg('商品画像をアップロードしました。商品を保存すると登録が完了します。')
     } catch (e) {
-      setError(e instanceof Error ? e.message : '画像アップロードに失敗しました')
+      setImageStatus('error')
+      setError(e instanceof Error ? e.message : '画像をアップロードできませんでした。5MB以下のJPEG・PNG・WebP・GIFでお試しください。')
     } finally {
       setBusy(false)
     }
@@ -318,31 +330,32 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
   return (
     <>
       <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
-        Back
+        戻る
       </button>
       <h1 className="pl-h1">グッズ管理</h1>
-      <p className="pl-muted">商品登録、在庫、販売状態、注文を確認できます。</p>
+      <p className="pl-muted">パフォーマンスを好きになってくれたファンへ、あなたのオリジナルグッズを届けられます。</p>
       {msg ? <p className="pl-muted">{msg}</p> : null}
       {error ? <p className="pl-error">{error}</p> : null}
 
       <div className="pl-card">
-        <input className="pl-input" placeholder="商品名" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        <textarea className="pl-textarea" placeholder="説明" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-        <label className="pl-btn pl-btn--ghost" style={{ display: 'inline-block', marginBottom: 10 }}>
-          商品画像
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => void onImage(e.target.files?.[0] ?? null)} />
+        <label><span className="pl-label">商品名</span><input className="pl-input" placeholder="例：オリジナルTシャツ" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
+        <label><span className="pl-label">商品説明</span><textarea className="pl-textarea" placeholder="サイズ、素材、受け渡し方法など" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+        <span className="pl-label">商品画像</span>
+        <label className="pl-btn pl-btn--ghost" style={{ display: 'inline-flex', marginBottom: 10 }}>
+          {imageStatus === 'uploading' ? 'アップロード中…' : draft.image_url || imagePreview ? '画像を変更' : '画像を選択'}
+          <input aria-label="商品画像" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={(e) => void onImage(e.target.files?.[0] ?? null)} />
         </label>
-        {draft.image_url ? <img className="pl-merch-hero" src={draft.image_url} alt="" /> : null}
-        <input className="pl-input" type="number" min={100} max={1000000} value={draft.price_yen} onChange={(e) => setDraft({ ...draft, price_yen: Number(e.target.value) || 100 })} />
-        <input className="pl-input" type="number" min={0} max={9999} value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) || 0 })} />
-        <select className="pl-input" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as MerchProduct['status'] })}>
+        {imagePreview || draft.image_url ? <figure className="pl-merch-upload-preview"><img className="pl-merch-hero" src={imagePreview || draft.image_url} alt="選択した商品画像のプレビュー" /><figcaption>{imageStatus === 'uploading' ? '画像をアップロードしています…' : imageStatus === 'success' ? '画像アップロード完了' : imageStatus === 'error' ? '画像をアップロードできませんでした' : '選択した画像のプレビュー'}</figcaption></figure> : null}
+        <label><span className="pl-label">価格（税込・円）</span><input className="pl-input" type="number" min={100} max={1000000} value={draft.price_yen} onChange={(e) => setDraft({ ...draft, price_yen: Number(e.target.value) || 100 })} /></label>
+        <label><span className="pl-label">在庫数</span><input className="pl-input" type="number" min={0} max={9999} value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) || 0 })} /></label>
+        <label><span className="pl-label">販売状態</span><select className="pl-input" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as MerchProduct['status'] })}>
           <option value="draft">下書き</option>
           <option value="active">販売中</option>
           <option value="sold_out">売り切れ</option>
           <option value="archived">非公開</option>
-        </select>
+        </select></label>
         <button type="button" className="pl-btn pl-btn--block" disabled={busy || !draft.name.trim()} onClick={() => void save()}>
-          {busy ? 'Saving…' : draft.id ? '更新する' : '登録する'}
+          {busy ? '保存中…' : draft.id ? '商品を更新する' : products.length ? 'グッズを追加する' : '最初の商品を登録する'}
         </button>
       </div>
 
@@ -355,15 +368,11 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
             <div style={{ fontWeight: 700 }}>{p.name}</div>
             <div className="pl-muted">{formatYen(p.price_yen)} · 在庫 {p.stock} · {p.status}</div>
           </div>
-          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setDraft({
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            image_url: p.image_url ?? '',
-            price_yen: p.price_yen,
-            stock: p.stock,
-            status: p.status,
-          })}>
+          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
+            setDraft({ id: p.id, name: p.name, description: p.description, image_url: p.image_url ?? '', price_yen: p.price_yen, stock: p.stock, status: p.status })
+            setImagePreview(p.image_url ?? '')
+            setImageStatus(p.image_url ? 'success' : 'idle')
+          }}>
             編集
           </button>
         </div>

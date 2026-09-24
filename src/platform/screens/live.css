@@ -156,6 +156,9 @@
   min-width: 0;
   padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
 }
+.pl-live__setup-steps { display: grid; gap: 7px; margin: 2px 0 8px; padding: 0; list-style: none; }
+.pl-live__setup-steps li { padding: 10px 12px; border: 1px solid rgba(139,195,255,.18); border-radius: 12px; color: rgba(235,244,255,.7); background: rgba(57,140,255,.06); font-size: 13px; }
+.pl-live__setup-steps li[data-done='true'] { color: #bff1d7; border-color: rgba(104,220,163,.32); }
 
 .pl-live__location-consent {
   display: grid;

@@ -417,6 +417,18 @@ export async function listTipsForPerformer(performerId: string): Promise<TipRow[
   return (data as TipRow[]) ?? []
 }
 
+export async function listPerformerTipTransactions(performerId: string): Promise<TipRow[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('tips')
+    .select('*')
+    .eq('performer_id', performerId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return (data as TipRow[]) ?? []
+}
+
 export async function tipSummaryForPerformer(performerId: string): Promise<TipSummary> {
   const tips = await listTipsForPerformer(performerId)
   return {
@@ -681,6 +693,15 @@ export async function getTipFeeBps(): Promise<number> {
   return Math.floor(n)
 }
 
+export async function getMerchFeeBps(): Promise<number> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'merch_fee_bps').maybeSingle()
+  if (error || data?.value == null) return 1000
+  const n = Number(data.value)
+  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1000
+  return Math.floor(n)
+}
+
 export async function setTipFeeBps(bps: number) {
   const sb = requireSupabase()
   const value = Math.max(0, Math.min(5000, Math.floor(bps)))
@@ -773,6 +794,23 @@ export type EventSlotRow = {
   performance_type?: 'regular' | 'special_final'
   round_no?: number | null
   ranking_position?: number | null
+}
+
+export type PerformerEventSlot = EventSlotRow & {
+  events: { name_ja: string; slug: string } | null
+  event_venues: { name_ja: string } | null
+}
+
+export async function listPerformerEventSlots(performerId: string): Promise<PerformerEventSlot[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('event_slots')
+    .select('*,events(name_ja,slug),event_venues(name_ja)')
+    .eq('performer_id', performerId)
+    .order('date')
+    .order('start_time')
+  if (error) throw error
+  return (data as PerformerEventSlot[]) ?? []
 }
 
 export async function listApprovedPerformers(): Promise<Performer[]> {

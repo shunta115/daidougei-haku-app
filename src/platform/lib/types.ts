@@ -196,6 +196,8 @@ export type PlatformScreen =
   | 'performer-home'
   | 'performer-edit'
   | 'performer-merch'
+  | 'performer-schedule'
+  | 'performer-earnings'
   | 'performer-live'
   | 'performer-history'
   | 'live-watch'
