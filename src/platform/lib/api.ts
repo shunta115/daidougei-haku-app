@@ -517,7 +517,14 @@ export async function approvePerformer(id: string) {
   if (!data?.length) throw new Error('Approve failed: performer row not updated (check RLS/grants)')
 
   const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
-  if (perr) throw perr
+  if (perr) {
+    const { error: rollbackError } = await sb
+      .from('performers')
+      .update({ is_approved: false, is_live: false, share_location: false })
+      .eq('id', id)
+    if (rollbackError) throw new Error('Approval could not be completed or safely rolled back')
+    throw perr
+  }
 }
 
 export async function unpublishPerformer(id: string) {

@@ -26,6 +26,10 @@ function PasswordProbe() {
   const auth = useAuth()
   return <><button onClick={() => void auth.sendPasswordReset('fan@example.com')}>reset</button><button onClick={() => void auth.updatePassword('new-password')}>update</button></>
 }
+function SignupProbe() {
+  const auth = useAuth()
+  return <button onClick={() => void auth.signUp('performer@example.com', 'fixture-password', 'performer', '登録芸名')}>signup</button>
+}
 function emit(session: unknown) {
   fake.insideCallback = true
   const returned = fake.listener?.('SIGNED_IN', session)
@@ -37,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   fake.resetPasswordForEmail.mockResolvedValue({ error: null })
   fake.updateUser.mockResolvedValue({ error: null })
+  fake.signUp.mockResolvedValue({ data: { session: null }, error: null })
   fake.from.mockImplementation((table) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === 'profiles' ? { id: 'fixture', role: 'performer', display_name: '芸名' } : { id: 'fixture', stage_name: '芸名' }, error: null }) }) }) }))
 })
 afterEach(cleanup)
@@ -71,4 +76,17 @@ it('uses Supabase recovery APIs without exposing password reset details to the d
   }))
   screen.getByText('update').click()
   await waitFor(() => expect(fake.updateUser).toHaveBeenCalledWith({ password: 'new-password' }))
+})
+
+it('preserves the performer role and returns email confirmation to the performer app', async () => {
+  render(<AuthProvider><SignupProbe /></AuthProvider>)
+  screen.getByText('signup').click()
+  await waitFor(() => expect(fake.signUp).toHaveBeenCalledWith({
+    email: 'performer@example.com',
+    password: 'fixture-password',
+    options: {
+      data: { role: 'performer', display_name: '登録芸名' },
+      emailRedirectTo: `${window.location.origin}/live`,
+    },
+  }))
 })
