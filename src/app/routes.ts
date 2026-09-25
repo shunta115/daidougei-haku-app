@@ -3,13 +3,20 @@ import { trackProductEvent } from '../platform/lib/track'
 /** 来場者向けイベント情報（開催情報・時間割・マップ） */
 export const FESTIVAL_PATH = '/event'
 
+/** 常設プラットフォーム内のイベント一覧と個別イベント */
+export const EVENTS_PATH = '/events'
+
 /** 配信・投げ銭・ログイン（既存 Platform） */
 export const PLATFORM_PATH = '/live'
 
 export function isPlatformPath(pathname: string): boolean {
   // All public routes render inside the MASTER experience. /live remains a
   // stable alias because registration and shared LIVE links already use it.
-  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
+  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === EVENTS_PATH || pathname.startsWith(`${EVENTS_PATH}/`) || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
+}
+
+export function eventPath(slug: string): string {
+  return `${EVENTS_PATH}/${encodeURIComponent(slug)}`
 }
 
 /** フルリロードせず Festival / Platform を切り替える */

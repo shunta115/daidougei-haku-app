@@ -191,6 +191,8 @@ export type PlatformScreen =
   | 'merch-detail'
   | 'live-list'
   | 'map-schedule'
+  | 'event-list'
+  | 'event-detail'
   | 'profile'
   | 'notifications'
   | 'performer-home'

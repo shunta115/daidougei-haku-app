@@ -662,8 +662,26 @@ export type FeaturedEvent = {
   hours_label: string
   official_url: string
   weather_note_ja: string
+  weather_note_en?: string
   starts_on?: string | null
   ends_on?: string | null
+  status?: 'draft' | 'published' | 'archived'
+  is_featured?: boolean
+  hero_kicker_ja?: string
+  main_copy_ja?: string
+  sub_copy_ja?: string
+  admission_label?: string
+  guide_enabled?: boolean
+  results_published_at?: string | null
+}
+
+export type EventVoteRule = {
+  event_id: string
+  voting_open: boolean
+  votes_per_user_per_day: number
+  voting_starts_at: string | null
+  voting_ends_at: string | null
+  updated_at: string
 }
 
 export async function getFeaturedEvent(): Promise<FeaturedEvent | null> {
@@ -678,9 +696,50 @@ export async function getFeaturedEvent(): Promise<FeaturedEvent | null> {
   return ((data?.[0] as FeaturedEvent | undefined) ?? null)
 }
 
+export async function listPublishedEvents(): Promise<FeaturedEvent[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('events').select('*').in('status', ['published', 'archived']).order('starts_on', { ascending: false })
+  if (error) throw error
+  return (data as FeaturedEvent[]) ?? []
+}
+
+export async function listManagedEvents(): Promise<FeaturedEvent[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('events').select('*').order('starts_on', { ascending: false })
+  if (error) throw error
+  return (data as FeaturedEvent[]) ?? []
+}
+
+export async function getEventBySlug(slug: string): Promise<FeaturedEvent | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('events').select('*').eq('slug', slug).maybeSingle()
+  if (error) throw error
+  return (data as FeaturedEvent) ?? null
+}
+
+export async function createEvent(input: Pick<FeaturedEvent, 'slug' | 'name_ja' | 'name_en'>): Promise<FeaturedEvent> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('events').insert({ ...input, status: 'draft', is_featured: false }).select('*').single()
+  if (error) throw error
+  return data as FeaturedEvent
+}
+
 export async function saveFeaturedEventPatch(id: string, patch: Partial<FeaturedEvent>) {
   const sb = requireSupabase()
   const { error } = await sb.from('events').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function getEventVoteRule(eventId: string): Promise<EventVoteRule | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('event_vote_rules').select('*').eq('event_id', eventId).maybeSingle()
+  if (error) throw error
+  return (data as EventVoteRule) ?? null
+}
+
+export async function saveEventVoteRule(eventId: string, patch: Partial<EventVoteRule>) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('event_vote_rules').upsert({ event_id: eventId, ...patch, updated_at: new Date().toISOString() })
   if (error) throw error
 }
 
@@ -709,32 +768,39 @@ export async function setTipFeeBps(bps: number) {
   if (error) throw error
 }
 
-export async function voteForPerformer(eventId: string, performerId: string, fanId: string) {
+export async function voteForPerformer(eventId: string, performerId: string, _fanId: string) {
   const sb = requireSupabase()
-  await sb.from('event_votes').delete().eq('event_id', eventId).eq('fan_id', fanId)
-  const { error } = await sb.from('event_votes').insert({ event_id: eventId, performer_id: performerId, fan_id: fanId })
+  const { error } = await sb.rpc('cast_event_vote', { p_event_id: eventId, p_performer_id: performerId })
   if (error) throw error
   trackProductEvent('vote_complete', { performerId, eventId })
 }
 
 export async function getMyVote(eventId: string, fanId: string): Promise<string | null> {
+  const votes = await getMyVotes(eventId, fanId)
+  return votes[0] ?? null
+}
+
+export async function getMyVotes(eventId: string, fanId: string): Promise<string[]> {
   const sb = requireSupabase()
-  const { data } = await sb.from('event_votes').select('performer_id').eq('event_id', eventId).eq('fan_id', fanId).maybeSingle()
-  return (data?.performer_id as string) ?? null
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
+  const { data } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId).eq('fan_id', fanId).eq('vote_date', today).order('created_at', { ascending: false }).limit(10)
+  return (data ?? []).map((row) => row.performer_id as string)
 }
 
 export async function listVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('event_votes').select('performer_id').eq('event_id', eventId)
+  const { data, error } = await sb.rpc('get_public_event_results', { p_event_id: eventId })
+  if (error) throw error
+  return ((data ?? []) as Array<{ performer_id: string; votes: number | string }>).map((row) => ({ performer_id: row.performer_id, votes: Number(row.votes) || 0 }))
+}
+
+export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId)
   if (error) throw error
   const counts = new Map<string, number>()
-  for (const row of data ?? []) {
-    const id = row.performer_id as string
-    counts.set(id, (counts.get(id) ?? 0) + 1)
-  }
-  return [...counts.entries()]
-    .map(([performer_id, votes]) => ({ performer_id, votes }))
-    .sort((a, b) => b.votes - a.votes)
+  for (const row of data ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
+  return [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes)
 }
 
 export async function createBookingInquiry(organizerId: string, performerId: string, message: string) {
@@ -775,6 +841,7 @@ export type EventVenueRow = {
   lat: number | null
   lng: number | null
   sort_order: number
+  venue_type?: 'stage' | 'statue' | 'roving' | 'food' | 'other'
 }
 
 export type EventSlotRow = {
@@ -883,6 +950,16 @@ export async function listEventLineup(eventId: string): Promise<string[]> {
   const { data, error } = await sb.from('event_lineup').select('performer_id').eq('event_id', eventId).order('sort_order')
   if (error) throw error
   return (data ?? []).map((r) => r.performer_id as string)
+}
+
+export async function listEventLineupPerformers(eventId: string): Promise<Performer[]> {
+  const ids = await listEventLineup(eventId)
+  if (ids.length === 0) return []
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  if (error) throw error
+  const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
+  return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
 }
 
 export async function addEventLineup(eventId: string, performerId: string) {

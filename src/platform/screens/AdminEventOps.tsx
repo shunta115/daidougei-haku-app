@@ -3,30 +3,40 @@ import {
   addEventLineup,
   deleteEventSlot,
   deleteEventVenue,
+  createEvent,
+  getEventVoteRule,
   getFeaturedEvent,
   getTipFeeBps,
+  listAdminVoteRanking,
   listApprovedPerformers,
   listEventLineup,
   listEventLiveSessions,
   listEventSlots,
   listEventVenues,
+  listManagedEvents,
   notifyEventAppearances,
   removeEventLineup,
   saveFeaturedEventPatch,
+  saveEventVoteRule,
   setTipFeeBps,
   upsertEventSlot,
   upsertEventVenue,
   type EventSlotRow,
   type EventVenueRow,
+  type EventVoteRule,
+  type FeaturedEvent,
 } from '../lib/api'
 import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
 
-type Tab = 'meta' | 'venues' | 'slots' | 'lineup' | 'live'
+type Tab = 'meta' | 'venues' | 'slots' | 'lineup' | 'voting' | 'live'
 
 export function AdminEventScreen() {
   const [tab, setTab] = useState<Tab>('meta')
   const [event, setEvent] = useState<Awaited<ReturnType<typeof getFeaturedEvent>>>(null)
+  const [events, setEvents] = useState<FeaturedEvent[]>([])
+  const [voteRule, setVoteRule] = useState<EventVoteRule | null>(null)
+  const [voteRanking, setVoteRanking] = useState<Array<{ performer_id: string; votes: number }>>([])
   const [feeBps, setFeeBps] = useState(1000)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
@@ -36,7 +46,7 @@ export function AdminEventScreen() {
   const [error, setError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const [venueDraft, setVenueDraft] = useState({ id: '', name_ja: '', name_en: '', blurb_ja: '', lat: '', lng: '' })
+  const [venueDraft, setVenueDraft] = useState({ id: '', name_ja: '', name_en: '', blurb_ja: '', lat: '', lng: '', venue_type: 'stage' as EventVenueRow['venue_type'] })
   const [slotDraft, setSlotDraft] = useState({
     date: '2026-10-10',
     start_time: '12:00',
@@ -46,27 +56,37 @@ export function AdminEventScreen() {
     stage_ja: '',
     status: 'scheduled',
     is_stream: false,
+    performance_type: 'regular' as 'regular' | 'special_final',
+    round_no: '' as '' | '1' | '2' | '3',
+    ranking_position: '' as '' | '1' | '2' | '3',
   })
   const [lineupPick, setLineupPick] = useState('')
+  const [newEvent, setNewEvent] = useState({ slug: '', name_ja: '', name_en: '' })
 
-  const reload = async () => {
+  const reload = async (preferredId?: string) => {
     try {
-      const [ev, bps] = await Promise.all([getFeaturedEvent(), getTipFeeBps()])
+      const [managed, featured, bps] = await Promise.all([listManagedEvents(), getFeaturedEvent(), getTipFeeBps()])
+      const ev = managed.find((item) => item.id === (preferredId || event?.id)) ?? featured ?? managed[0] ?? null
+      setEvents(managed)
       setEvent(ev)
       setFeeBps(bps)
       if (ev) {
-        const [v, s, l, p, sessions] = await Promise.all([
+        const [v, s, l, p, sessions, rule, ranking] = await Promise.all([
           listEventVenues(ev.id),
           listEventSlots(ev.id),
           listEventLineup(ev.id),
           listApprovedPerformers(),
           listEventLiveSessions(ev.id),
+          getEventVoteRule(ev.id).catch(() => null),
+          listAdminVoteRanking(ev.id).catch(() => []),
         ])
         setVenues(v)
         setSlots(s)
         setLineup(l)
         setApproved(p)
         setLives(sessions)
+        setVoteRule(rule)
+        setVoteRanking(ranking)
         setSlotDraft((d) => ({ ...d, venue_id: d.venue_id || v[0]?.id || '' }))
         setLineupPick((cur) => cur || p[0]?.id || '')
       }
@@ -92,12 +112,58 @@ export function AdminEventScreen() {
         place_label: event.place_label,
         hours_label: event.hours_label,
         weather_note_ja: event.weather_note_ja,
+        hero_kicker_ja: event.hero_kicker_ja,
+        main_copy_ja: event.main_copy_ja,
+        sub_copy_ja: event.sub_copy_ja,
+        admission_label: event.admission_label,
+        starts_on: event.starts_on,
+        ends_on: event.ends_on,
+        status: event.status,
+        is_featured: event.is_featured,
+        results_published_at: event.results_published_at,
       })
       setMsg('イベントを保存しました')
       await refreshLiveCatalog()
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存に失敗しました')
     }
+  }
+
+  const addEvent = async () => {
+    if (!newEvent.slug.trim() || !newEvent.name_ja.trim()) return
+    try {
+      const created = await createEvent({ slug: newEvent.slug.trim(), name_ja: newEvent.name_ja.trim(), name_en: newEvent.name_en.trim() || newEvent.name_ja.trim() })
+      setNewEvent({ slug: '', name_ja: '', name_en: '' })
+      setMsg('下書きイベントを作成しました')
+      await reload(created.id)
+    } catch (e) { setError(e instanceof Error ? e.message : 'イベントを作成できませんでした') }
+  }
+
+  const saveVoting = async () => {
+    if (!event || !voteRule) return
+    try { await saveEventVoteRule(event.id, voteRule); setMsg('投票設定を保存しました'); await reload(event.id) }
+    catch (e) { setError(e instanceof Error ? e.message : '投票設定を保存できませんでした') }
+  }
+
+  const publishResults = async (published: boolean) => {
+    if (!event) return
+    try {
+      await saveEventVoteRule(event.id, { voting_open: false })
+      await saveFeaturedEventPatch(event.id, { results_published_at: published ? new Date().toISOString() : null })
+      setMsg(published ? '投票結果を公開しました' : '投票結果を非公開にしました')
+      await reload(event.id)
+    } catch (e) { setError(e instanceof Error ? e.message : '結果公開を更新できませんでした') }
+  }
+
+  const assignFinalists = async () => {
+    if (!event || voteRanking.length < 3) return
+    const finals = slots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
+    if (finals.length !== 3 || !window.confirm('現在の上位3組をSPECIAL NIGHT出演枠へ設定しますか？')) return
+    try {
+      await Promise.all(finals.map((slot, index) => upsertEventSlot({ ...slot, performer_id: voteRanking[index].performer_id })))
+      setMsg('上位3組をSPECIAL NIGHTへ設定しました。公開前に時間と会場を確認してください。')
+      await reload(event.id)
+    } catch (e) { setError(e instanceof Error ? e.message : '上位3組を設定できませんでした') }
   }
 
   const saveFee = async () => {
@@ -122,8 +188,9 @@ export function AdminEventScreen() {
         lat: venueDraft.lat ? Number(venueDraft.lat) : null,
         lng: venueDraft.lng ? Number(venueDraft.lng) : null,
         sort_order: venues.length,
+        venue_type: venueDraft.venue_type,
       })
-      setVenueDraft({ id: '', name_ja: '', name_en: '', blurb_ja: '', lat: '', lng: '' })
+      setVenueDraft({ id: '', name_ja: '', name_en: '', blurb_ja: '', lat: '', lng: '', venue_type: 'stage' })
       setMsg('会場を保存しました')
       await reload()
     } catch (e) {
@@ -147,6 +214,9 @@ export function AdminEventScreen() {
         note_ja: '',
         note_en: '',
         is_stream: slotDraft.is_stream,
+        performance_type: slotDraft.performance_type,
+        round_no: slotDraft.performance_type === 'regular' && slotDraft.round_no ? Number(slotDraft.round_no) : null,
+        ranking_position: slotDraft.performance_type === 'special_final' && slotDraft.ranking_position ? Number(slotDraft.ranking_position) : null,
       })
       setMsg('出演枠を追加しました')
       await reload()
@@ -162,10 +232,15 @@ export function AdminEventScreen() {
       {error ? <p className="pl-error">{error}</p> : null}
       {msg ? <p className="pl-muted">{msg}</p> : null}
 
+      <div className="pl-card">
+        <label><span className="pl-label">管理するイベント</span><select className="pl-input" value={event?.id ?? ''} onChange={(e) => void reload(e.target.value)}>{events.map((item) => <option key={item.id} value={item.id}>{item.name_ja}（{item.status}）</option>)}</select></label>
+        <details><summary>新しいイベントを下書き作成</summary><label><span className="pl-label">URL slug</span><input className="pl-input" value={newEvent.slug} onChange={(e) => setNewEvent({ ...newEvent, slug: e.target.value })} placeholder="event-name-2027" /></label><label><span className="pl-label">イベント名</span><input className="pl-input" value={newEvent.name_ja} onChange={(e) => setNewEvent({ ...newEvent, name_ja: e.target.value })} /></label><label><span className="pl-label">英語名</span><input className="pl-input" value={newEvent.name_en} onChange={(e) => setNewEvent({ ...newEvent, name_en: e.target.value })} /></label><button type="button" className="pl-btn pl-btn--block" onClick={() => void addEvent()}>下書きを作成</button></details>
+      </div>
+
       <div className="pl-live-tabs">
-        {(['meta', 'venues', 'slots', 'lineup', 'live'] as const).map((key) => (
+        {(['meta', 'venues', 'slots', 'lineup', 'voting', 'live'] as const).map((key) => (
           <button key={key} type="button" className="pl-live-tabs__btn" data-active={tab === key} onClick={() => setTab(key)}>
-            {key === 'meta' ? '開催情報' : key === 'venues' ? '会場' : key === 'slots' ? '時間割' : key === 'lineup' ? '出演者' : 'LIVE'}
+            {key === 'meta' ? '開催情報' : key === 'venues' ? '会場' : key === 'slots' ? '時間割' : key === 'lineup' ? '出演者' : key === 'voting' ? '投票' : 'LIVE'}
           </button>
         ))}
       </div>
@@ -202,6 +277,14 @@ export function AdminEventScreen() {
                 <span className="pl-label">運営メモ</span>
                 <textarea className="pl-textarea" value={event.weather_note_ja} onChange={(e) => setEvent({ ...event, weather_note_ja: e.target.value })} />
               </label>
+              <label><span className="pl-label">Hero上部コピー</span><input className="pl-input" value={event.hero_kicker_ja ?? ''} onChange={(e) => setEvent({ ...event, hero_kicker_ja: e.target.value })} /></label>
+              <label><span className="pl-label">メインコピー</span><input className="pl-input" value={event.main_copy_ja ?? ''} onChange={(e) => setEvent({ ...event, main_copy_ja: e.target.value })} /></label>
+              <label><span className="pl-label">サブコピー</span><input className="pl-input" value={event.sub_copy_ja ?? ''} onChange={(e) => setEvent({ ...event, sub_copy_ja: e.target.value })} /></label>
+              <label><span className="pl-label">入場案内</span><input className="pl-input" value={event.admission_label ?? ''} onChange={(e) => setEvent({ ...event, admission_label: e.target.value })} /></label>
+              <label><span className="pl-label">開始日</span><input className="pl-input" type="date" value={event.starts_on ?? ''} onChange={(e) => setEvent({ ...event, starts_on: e.target.value })} /></label>
+              <label><span className="pl-label">終了日</span><input className="pl-input" type="date" value={event.ends_on ?? ''} onChange={(e) => setEvent({ ...event, ends_on: e.target.value })} /></label>
+              <label><span className="pl-label">公開状態</span><select className="pl-input" value={event.status ?? 'draft'} onChange={(e) => setEvent({ ...event, status: e.target.value as FeaturedEvent['status'] })}><option value="draft">非公開（下書き）</option><option value="published">公開</option><option value="archived">アーカイブ</option></select></label>
+              <label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={Boolean(event.is_featured)} onChange={(e) => setEvent({ ...event, is_featured: e.target.checked })} />HAKUの注目イベントに設定</label>
               <button type="button" className="pl-btn pl-btn--block" onClick={() => void saveEvent()}>
                 開催情報を保存
               </button>
@@ -256,7 +339,7 @@ export function AdminEventScreen() {
                 onClick={() => {
                   if (!window.confirm(`${v.name_ja} を削除します。実行しますか？`)) return
                   void deleteEventVenue(v.id)
-                    .then(reload)
+                    .then(() => reload())
                     .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
                 }}
               >
@@ -270,6 +353,7 @@ export function AdminEventScreen() {
             <input className="pl-input" placeholder="会場名 JA" value={venueDraft.name_ja} onChange={(e) => setVenueDraft({ ...venueDraft, name_ja: e.target.value })} />
             <input className="pl-input" placeholder="会場名 EN" value={venueDraft.name_en} onChange={(e) => setVenueDraft({ ...venueDraft, name_en: e.target.value })} />
             <input className="pl-input" placeholder="説明" value={venueDraft.blurb_ja} onChange={(e) => setVenueDraft({ ...venueDraft, blurb_ja: e.target.value })} />
+            <select className="pl-input" value={venueDraft.venue_type} onChange={(e) => setVenueDraft({ ...venueDraft, venue_type: e.target.value as EventVenueRow['venue_type'] })}><option value="stage">ステージ</option><option value="statue">スタチュー</option><option value="roving">回遊</option><option value="food">グルメ / キッチンカー</option><option value="other">その他</option></select>
             <input className="pl-input" placeholder="緯度" value={venueDraft.lat} onChange={(e) => setVenueDraft({ ...venueDraft, lat: e.target.value })} />
             <input className="pl-input" placeholder="経度" value={venueDraft.lng} onChange={(e) => setVenueDraft({ ...venueDraft, lng: e.target.value })} />
             <button type="button" className="pl-btn pl-btn--block" onClick={() => void saveVenue()}>
@@ -302,7 +386,7 @@ export function AdminEventScreen() {
                   onClick={() => {
                     if (!window.confirm(`${s.date} ${s.start_time} の出演枠を削除します。実行しますか？`)) return
                     void deleteEventSlot(s.id)
-                      .then(reload)
+                      .then(() => reload())
                       .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
                   }}
                 >
@@ -339,6 +423,8 @@ export function AdminEventScreen() {
               <option value="next">NEXT</option>
               <option value="cancelled">中止</option>
             </select>
+            <select className="pl-input" value={slotDraft.performance_type} onChange={(e) => setSlotDraft({ ...slotDraft, performance_type: e.target.value as 'regular' | 'special_final', round_no: '', ranking_position: '' })}><option value="regular">通常公演</option><option value="special_final">SPECIAL NIGHT</option></select>
+            {slotDraft.performance_type === 'regular' ? <select className="pl-input" value={slotDraft.round_no} onChange={(e) => setSlotDraft({ ...slotDraft, round_no: e.target.value as '' | '1' | '2' | '3' })}><option value="">公演回（任意）</option><option value="1">1回目</option><option value="2">2回目</option><option value="3">3回目</option></select> : <select className="pl-input" value={slotDraft.ranking_position} onChange={(e) => setSlotDraft({ ...slotDraft, ranking_position: e.target.value as '' | '1' | '2' | '3' })}><option value="">順位枠</option><option value="1">1位</option><option value="2">2位</option><option value="3">3位</option></select>}
             <label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
               <input
                 type="checkbox"
@@ -374,7 +460,7 @@ export function AdminEventScreen() {
                     if (!event) return
                     if (!window.confirm(`${p?.stage_name ?? id} をラインナップから外します。実行しますか？`)) return
                     void removeEventLineup(event.id, id)
-                      .then(reload)
+                      .then(() => reload())
                       .catch((e) => setError(e instanceof Error ? e.message : '削除失敗'))
                   }}
                 >
@@ -397,7 +483,7 @@ export function AdminEventScreen() {
               onClick={() =>
                 event && lineupPick
                   ? void addEventLineup(event.id, lineupPick)
-                      .then(reload)
+                      .then(() => reload())
                       .catch((e) => setError(e instanceof Error ? e.message : '追加失敗'))
                   : undefined
               }
@@ -405,6 +491,13 @@ export function AdminEventScreen() {
               出演者を追加
             </button>
           </div>
+        </>
+      ) : null}
+
+      {tab === 'voting' ? (
+        <>
+          {!voteRule ? <p className="pl-error">安全な投票migrationが未適用です。適用前は投票を開始できません。</p> : <div className="pl-card"><h2 className="pl-h2">投票受付</h2><label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={voteRule.voting_open} onChange={(e) => setVoteRule({ ...voteRule, voting_open: e.target.checked })} />投票受付を開始</label><label><span className="pl-label">1日あたりの投票上限</span><input className="pl-input" type="number" min={1} max={10} value={voteRule.votes_per_user_per_day} onChange={(e) => setVoteRule({ ...voteRule, votes_per_user_per_day: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} /></label><label><span className="pl-label">投票開始日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_starts_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_starts_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label><label><span className="pl-label">投票終了日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_ends_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_ends_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label><button className="pl-btn pl-btn--block" onClick={() => void saveVoting()}>投票設定を保存</button></div>}
+          <div className="pl-card"><h2 className="pl-h2">途中集計（運営のみ）</h2>{voteRanking.length === 0 ? <p className="pl-muted">投票はまだありません。</p> : voteRanking.map((row, index) => <p key={row.performer_id}><strong>{index + 1}位 {approved.find((performer) => performer.id === row.performer_id)?.stage_name ?? row.performer_id}</strong>・{row.votes}票</p>)}<button className="pl-btn pl-btn--ghost pl-btn--block" disabled={voteRanking.length < 3} onClick={() => void assignFinalists()}>上位3組をSPECIAL NIGHTへ設定</button><button className="pl-btn pl-btn--block" onClick={() => void publishResults(!event?.results_published_at)}>{event?.results_published_at ? '結果を非公開に戻す' : '投票を終了して結果を公開'}</button><p className="pl-muted">結果公開までは一般ユーザーに途中順位を表示しません。</p></div>
         </>
       ) : null}
 

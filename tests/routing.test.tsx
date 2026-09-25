@@ -11,10 +11,14 @@ vi.mock('../src/platform/screens/AuthScreen', () => ({ AuthScreen: ({ initialRol
 vi.mock('../src/platform/screens/PerformerHomeScreen', () => ({ PerformerHomeScreen: () => <p>performer-dashboard</p> }))
 vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: () => <p>fan-home</p> }))
 vi.mock('../src/platform/screens/MapScheduleScreen', () => ({ MapScheduleScreen: () => <p>master-event</p> }))
+vi.mock('../src/platform/screens/EventScreens', () => ({
+  EventListScreen: ({ onOpen }: { onOpen: (slug: string) => void }) => <button onClick={() => onOpen('award-winning-performers-2026')}>event-list</button>,
+  EventDetailScreen: ({ slug }: { slug: string }) => <p>event-detail:{slug}</p>,
+}))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
-import { FESTIVAL_PATH, isPlatformPath } from '../src/app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath } from '../src/app/routes'
 
 beforeEach(() => {
   const storage = new JSDOM('', { url: 'http://localhost' }).window
@@ -32,6 +36,32 @@ it('keeps the public root, event and live routes inside the MASTER experience', 
   expect(isPlatformPath('/live/register')).toBe(true)
   expect(FESTIVAL_PATH).toBe('/event')
   expect(isPlatformPath(FESTIVAL_PATH)).toBe(true)
+  expect(EVENTS_PATH).toBe('/events')
+  expect(isPlatformPath(EVENTS_PATH)).toBe(true)
+  expect(isPlatformPath(eventPath('award-winning-performers-2026'))).toBe(true)
+})
+
+it('opens a QR event URL directly without requiring authentication', async () => {
+  window.history.replaceState({}, '', eventPath('award-winning-performers-2026'))
+  render(<PlatformApp />)
+  await screen.findByText('event-detail:award-winning-performers-2026')
+})
+
+it('opens the generic event list and routes to the selected event', async () => {
+  window.history.replaceState({}, '', EVENTS_PATH)
+  render(<PlatformApp />)
+  screen.getByRole('button', { name: 'event-list' }).click()
+  await screen.findByText('event-detail:award-winning-performers-2026')
+  expect(window.location.pathname).toBe(eventPath('award-winning-performers-2026'))
+})
+
+it('keeps event UI in sync with Safari back navigation', async () => {
+  window.history.replaceState({}, '', eventPath('award-winning-performers-2026'))
+  render(<PlatformApp />)
+  await screen.findByText('event-detail:award-winning-performers-2026')
+  window.history.pushState({}, '', EVENTS_PATH)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  await screen.findByRole('button', { name: 'event-list' })
 })
 
 it('opens the event in MASTER UI and can return through the shared bottom navigation', async () => {

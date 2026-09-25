@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { FESTIVAL_PATH, PLATFORM_PATH, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
@@ -26,6 +26,7 @@ import { AdminOpsScreen } from './screens/AdminOpsScreen'
 import { OrganizerHomeScreen } from './screens/OrganizerHomeScreen'
 import { MerchDetailScreen, MerchListScreen, PerformerMerchScreen } from './screens/MerchScreens'
 import { SplashScreen } from './screens/SplashScreen'
+import { EventDetailScreen, EventListScreen } from './screens/EventScreens'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
@@ -110,6 +111,8 @@ function homeForRole(role: string | undefined): PlatformScreen {
 function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
+    if (window.location.pathname === EVENTS_PATH) return 'event-list'
+    if (window.location.pathname.startsWith(`${EVENTS_PATH}/`)) return 'event-detail'
     if (window.location.pathname === FESTIVAL_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
@@ -139,6 +142,7 @@ function PlatformShell() {
   const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
+  const [eventSlug, setEventSlug] = useState<string | null>(() => window.location.pathname.startsWith(`${EVENTS_PATH}/`) ? decodeURIComponent(window.location.pathname.slice(EVENTS_PATH.length + 1)) : null)
   const [tipFlash, setTipFlash] = useState<string | null>(null)
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
@@ -146,6 +150,25 @@ function PlatformShell() {
     if (!import.meta.env.PROD || window.location.pathname !== '/' || window.location.search) return false
     try { return window.localStorage.getItem('pl-master-splash-seen') !== '1' } catch { return false }
   })
+
+  useEffect(() => {
+    const syncEventRoute = () => {
+      const path = window.location.pathname
+      if (path === EVENTS_PATH) {
+        setEventSlug(null)
+        setScreen('event-list')
+        return
+      }
+      if (path.startsWith(`${EVENTS_PATH}/`)) {
+        setEventSlug(decodeURIComponent(path.slice(EVENTS_PATH.length + 1)))
+        setScreen('event-detail')
+        return
+      }
+      if (path === FESTIVAL_PATH) setScreen('map-schedule')
+    }
+    window.addEventListener('popstate', syncEventRoute)
+    return () => window.removeEventListener('popstate', syncEventRoute)
+  }, [])
 
   useEffect(() => {
     if (screen === 'performer-home' || screen === 'performer-edit' || screen === 'admin') window.scrollTo(0, 0)
@@ -296,6 +319,8 @@ function PlatformShell() {
         s === 'tip' ||
         s === 'search' ||
         s === 'map-schedule' ||
+        s === 'event-list' ||
+        s === 'event-detail' ||
         s === 'merch-list' ||
         s === 'merch-detail'
           ? s
@@ -357,6 +382,14 @@ function PlatformShell() {
     if (openAccount) {
       window.sessionStorage.removeItem('pl-open-account')
       setScreen(profile.role === 'fan' ? 'profile' : homeForRole(profile.role))
+      return
+    }
+    const eventReturn = window.sessionStorage.getItem('pl-event-return')
+    if (eventReturn) {
+      window.sessionStorage.removeItem('pl-event-return')
+      setEventSlug(eventReturn)
+      window.history.replaceState({}, '', eventPath(eventReturn))
+      setScreen('event-detail')
       return
     }
     const raw = window.sessionStorage.getItem('pl-tip-return')
@@ -454,6 +487,18 @@ function PlatformShell() {
     setScreen('merch-detail')
   }
 
+  const openEventList = () => {
+    setEventSlug(null)
+    window.history.pushState({}, '', EVENTS_PATH)
+    setScreen('event-list')
+  }
+
+  const openEvent = (slug: string) => {
+    setEventSlug(slug)
+    window.history.pushState({}, '', eventPath(slug))
+    setScreen('event-detail')
+  }
+
   if (!user) {
     let guestBody: ReactNode = null
 
@@ -523,6 +568,10 @@ function PlatformShell() {
       guestBody = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
     } else if (screen === 'map-schedule') {
       guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
+    } else if (screen === 'event-list') {
+      guestBody = <EventListScreen onOpen={openEvent} />
+    } else if (screen === 'event-detail' && eventSlug) {
+      guestBody = <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onRequireAuth={() => setScreen('auth')} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
@@ -560,6 +609,7 @@ function PlatformShell() {
               onNavigate={(key) => {
                 setPerformerId(null)
                 setMerchProductId(null)
+                if (key === 'event-list') { openEventList(); return }
                 if (key === 'profile') {
                   setScreen('auth')
                   return
@@ -669,6 +719,12 @@ function PlatformShell() {
         break
       case 'map-schedule':
         body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
+        break
+      case 'event-list':
+        body = <EventListScreen onOpen={openEvent} />
+        break
+      case 'event-detail':
+        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'notifications':
         body = (
@@ -783,6 +839,7 @@ function PlatformShell() {
           onNavigate={(key) => {
             setPerformerId(null)
             setMerchProductId(null)
+            if (key === 'event-list') { openEventList(); return }
             setScreen(key as PlatformScreen)
           }}
         />

@@ -48,4 +48,17 @@ describe('P0 migration safety', () => {
     expect(sql).toMatch(/stripe_onboarding_complete = false/i)
     expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
   })
+
+  it('adds secure event voting without destructive data operations', () => {
+    const sql = read('supabase/migrations/20260925_event_experience_and_secure_voting.sql')
+    expect(sql).toMatch(/create table if not exists public\.event_ballots/i)
+    expect(sql).toMatch(/create or replace function public\.cast_event_vote/i)
+    expect(sql).toMatch(/pg_advisory_xact_lock/i)
+    expect(sql).toMatch(/used_votes >= rule\.votes_per_user_per_day/i)
+    expect(sql).toMatch(/role = 'fan' and status = 'active'/i)
+    expect(sql).toMatch(/results_published_at <= now\(\) or public\.is_admin\(\)/i)
+    expect(sql).toMatch(/status in \('published', 'archived'\)/i)
+    expect(sql).toMatch(/revoke insert, delete on public\.event_votes from authenticated/i)
+    expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
+  })
 })
