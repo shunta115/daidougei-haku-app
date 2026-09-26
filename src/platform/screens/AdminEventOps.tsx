@@ -67,10 +67,10 @@ export function AdminEventScreen() {
   const forceEndLive = async (session: LiveSession) => {
     if (!window.confirm('このLIVEを強制終了しますか？配信者の画面にも終了状態が反映されます。')) return
     try {
-      const response = await fetch('/api/livekit/force-end', {
+      const response = await fetch('/api/livekit/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
-        body: JSON.stringify({ sessionId: session.id }),
+        body: JSON.stringify({ action: 'force-end', sessionId: session.id }),
       })
       if (!response.ok) throw new Error('force end failed')
       setMsg('LIVEを強制終了しました。')

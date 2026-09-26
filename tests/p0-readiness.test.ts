@@ -65,14 +65,13 @@ describe('P0 migration safety', () => {
   it('adds LIVE heartbeat tracking without destructive schema operations', () => {
     const sql = read('supabase/migrations/20260926_live_presence_heartbeat.sql')
     const presence = read('api/livekit/presence.ts')
-    const forceEnd = read('api/livekit/force-end.ts')
     expect(sql).toMatch(/add column if not exists heartbeat_at timestamptz/i)
     expect(sql).toMatch(/add column if not exists ended_reason text/i)
     expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
     expect(presence).toMatch(/STALE_SECONDS = 90/)
     expect(presence).toMatch(/heartbeat_timeout/)
-    expect(forceEnd).toMatch(/requireAdmin/)
-    expect(forceEnd).toMatch(/admin_forced/)
+    expect(presence).toMatch(/requireAdmin/)
+    expect(presence).toMatch(/admin_forced/)
   })
 
   it('keeps guest tips server-priced and preserves Direct Charges', () => {
