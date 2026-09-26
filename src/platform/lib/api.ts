@@ -21,6 +21,13 @@ export type PerformerSearchFilters = {
   overseasOnly?: boolean
 }
 
+let lastPresenceReconcile = 0
+export async function reconcileLivePresence() {
+  if (Date.now() - lastPresenceReconcile < 20_000) return
+  lastPresenceReconcile = Date.now()
+  await fetch('/api/livekit/presence', { cache: 'no-store' }).catch(() => undefined)
+}
+
 export async function searchPerformers(query: string, filters: PerformerSearchFilters = {}): Promise<Performer[]> {
   const sb = requireSupabase()
   let q = sb.from('performers').select('*').eq('is_approved', true)
@@ -881,6 +888,7 @@ export async function listPerformerEventSlots(performerId: string): Promise<Perf
 }
 
 export async function listApprovedPerformers(): Promise<Performer[]> {
+  await reconcileLivePresence()
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select('*').eq('is_approved', true).order('stage_name')
   if (error) throw error

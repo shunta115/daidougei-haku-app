@@ -188,22 +188,19 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
         ) : live.length === 0 ? (
           <p className="pl-muted">出演者一覧から次に応援したい人を探せます。</p>
         ) : null}
-        {ended.length > 0 ? (
-          <>
-            <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 20 }}>{t('endedLives')}</h2>
-            {ended.slice(0, 8).map((s) => {
+        {ended.some((session) => Boolean(session.stream_url)) ? (
+          <details className="pl-live-archive">
+            <summary>{t('endedLives')} <span>{ended.filter((session) => Boolean(session.stream_url)).length}</span></summary>
+            {ended.filter((session) => Boolean(session.stream_url)).slice(0, 6).map((s) => {
               const act = acts.find((p) => p.id === s.performer_id)
               return (
-                <div key={s.id} className="pl-card">
-                  <div className="pl-muted">{t('liveEnded')}</div>
-                  <div style={{ fontWeight: 700 }}>{act?.stage_name ?? s.performer_id}</div>
-                  <div className="pl-muted">
-                    {s.title || '—'} · 👁 {s.viewer_peak}
-                  </div>
-                </div>
+                <a key={s.id} className="pl-live-archive__row" href={s.stream_url ?? undefined} target="_blank" rel="noopener noreferrer">
+                  <span><strong>{s.title || act?.stage_name || 'LIVEアーカイブ'}</strong><small>{act?.stage_name ?? 'パフォーマー'} · 視聴 {s.viewer_peak}</small></span>
+                  <em>再生</em>
+                </a>
               )
             })}
-          </>
+          </details>
         ) : null}
         </>
       ) : null}

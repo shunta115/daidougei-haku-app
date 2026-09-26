@@ -61,4 +61,37 @@ describe('P0 migration safety', () => {
     expect(sql).toMatch(/revoke insert, delete on public\.event_votes from authenticated/i)
     expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
   })
+
+  it('adds LIVE heartbeat tracking without destructive schema operations', () => {
+    const sql = read('supabase/migrations/20260926_live_presence_heartbeat.sql')
+    const presence = read('api/livekit/presence.ts')
+    const forceEnd = read('api/livekit/force-end.ts')
+    expect(sql).toMatch(/add column if not exists heartbeat_at timestamptz/i)
+    expect(sql).toMatch(/add column if not exists ended_reason text/i)
+    expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
+    expect(presence).toMatch(/STALE_SECONDS = 90/)
+    expect(presence).toMatch(/heartbeat_timeout/)
+    expect(forceEnd).toMatch(/requireAdmin/)
+    expect(forceEnd).toMatch(/admin_forced/)
+  })
+
+  it('keeps guest tips server-priced and preserves Direct Charges', () => {
+    const tip = read('api/stripe/tip.ts')
+    const screen = read('src/platform/screens/TipScreen.tsx')
+    expect(tip).toMatch(/getOptionalAuthUser/)
+    expect(tip).toMatch(/fan_id: payerId/)
+    expect(tip).toMatch(/application_fee_amount: fee/)
+    expect(tip).toMatch(/stripeAccount: connectedAccountId/)
+    expect(screen).toMatch(/登録なしでStripeの安全な決済へ進めます/)
+    expect(screen).not.toMatch(/if \(!user\) \{\s*window\.sessionStorage\.setItem\('pl-tip-to'/)
+  })
+
+  it('keeps MAP in the fan bottom navigation and search in HOME', () => {
+    const nav = read('src/platform/components/BottomNav.tsx')
+    const app = read('src/platform/PlatformApp.tsx')
+    const fanNav = nav.slice(nav.lastIndexOf(': ['))
+    expect(nav).toMatch(/key: 'map-schedule'.*MapPinned/)
+    expect(fanNav).not.toMatch(/key: 'search', label: labels\.discover, icon: Search/)
+    expect(app).toMatch(/onOpenSearch=\{\(\) => setScreen\('search'\)\}/)
+  })
 })

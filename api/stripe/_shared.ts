@@ -126,3 +126,11 @@ export async function requireAuthUser(
   }
   return data.user
 }
+
+export async function getOptionalAuthUser(req: VercelRequest): Promise<User | null> {
+  const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
+  if (!authHeader) return null
+  const sb = userClient(authHeader)
+  const { data, error } = await sb.auth.getUser()
+  return error ? null : data.user
+}

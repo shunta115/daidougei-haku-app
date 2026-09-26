@@ -56,6 +56,8 @@ export type LiveSession = {
   event_id?: string | null
   venue_id?: string | null
   event_slot_id?: string | null
+  heartbeat_at?: string | null
+  ended_reason?: string | null
 }
 
 export type LiveTipEvent = {

@@ -4,7 +4,7 @@ import { BrandLogo } from '../../brand/BrandLogo'
 import { useAuth } from '../lib/auth'
 import { LanguageToggle, useLang } from '../../i18n/LangProvider'
 import { trackProductEvent } from '../lib/track'
-import { PERFORMER_REGISTER_PATH, registrationError } from '../lib/onboarding'
+import { registrationError } from '../lib/onboarding'
 import { requireSupabase } from '../lib/supabase'
 
 type Props = {
@@ -87,7 +87,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
   return (
     <div className="pl-shell pl-shell--flush pl-registration">
       <div className="pl-registration__heading">
-        <a href="/" aria-label={t('appName')}><BrandLogo size={28} variant="lockup" className="pl-registration__logo" /></a><LanguageToggle />
+        <a href="/" aria-label={t('appName')}><BrandLogo size={64} variant="official" className="pl-registration__logo pl-registration__logo--official" /></a><LanguageToggle />
       </div>
       <div className="pl-registration__intro"><p>{role === 'performer' ? 'PERFORMER ENTRY' : 'YOUR ACCOUNT'}</p><h1 className="pl-h1">{mode === 'in' ? 'ログイン' : mode === 'reset' ? 'パスワード再設定' : mode === 'new-password' ? '新しいパスワード' : role === 'performer' ? 'パフォーマー登録' : t('signUp')}</h1>
       <span>{mode === 'reset' ? '登録したメールアドレスへ再設定リンクを送ります。' : mode === 'new-password' ? '今後ログインに使うパスワードを設定してください。' : role === 'performer' ? '芸名で登録して、あなたの活動を届けましょう。' : '登録済みの方はログインして続けられます。'}</span></div>
@@ -97,10 +97,12 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
         <fieldset className="pl-registration__roles">
           <legend>登録するアカウント</legend>
           {(['fan', 'performer'] as const).map((item) => (
-            <label key={item}><input type="radio" name="role" checked={role === item} onChange={() => setRole(item)} />{t(item)}</label>
+            <label key={item}><input type="radio" name="role" aria-label={t(item)} checked={role === item} onChange={() => setRole(item)} /><span><strong>{t(item)}</strong><small>{item === 'fan' ? 'LIVE・イベント・投票・フォローで、大道芸をもっと楽しむ' : 'LIVE・投げ銭・出演情報・グッズで、ファンとつながる'}</small></span></label>
           ))}
         </fieldset>
       ) : null}
+
+      {mode === 'up' ? <p className="pl-registration__guest-note">イベント閲覧とLIVE視聴は、登録なしでも利用できます。</p> : null}
 
       <form onSubmit={(e) => void submit(e)}>
         {mode === 'up' ? <label><span className="pl-label">{role === 'performer' ? '芸名（公開されます）' : t('displayName')}</span>
@@ -124,7 +126,6 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       {mode === 'in' ? <button type="button" className="pl-registration__text-button" disabled={busy} onClick={() => { setMode('reset'); setError(null); setInfo(null); setPassword('') }}>パスワードを忘れた方</button> : null}
       {mode === 'in' ? <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void resend()}>確認メールを再送</button> : null}
       {role === 'performer' ? <p className="pl-muted">プロフィール・受取設定の完了後、運営が確認して公開します。本名・本人確認・振込口座はStripeの画面で登録します。</p> : null}
-      {!performerEntry && role !== 'performer' ? <a className="pl-registration__link" href={PERFORMER_REGISTER_PATH}>パフォーマーとして登録する</a> : null}
       <a className="pl-registration__link" href={FESTIVAL_PATH}>イベントを見る</a>
       {performerEntry ? <a className="pl-registration__link" href={`${PLATFORM_PATH}?auth=1`}>ファンとして登録</a> : null}
     </div>

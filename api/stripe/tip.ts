@@ -7,8 +7,8 @@ import {
   getAppUrl,
   getBpsSetting,
   getIntSetting,
+  getOptionalAuthUser,
   getStripe,
-  requireAuthUser,
   requireConnectedAccountChargeReady,
 } from './_shared.js'
 
@@ -24,8 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const user = await requireAuthUser(req, res)
-    if (!user) return
+    const user = await getOptionalAuthUser(req)
 
     const { performerId, fanId, amountYen, returnTo, anonymous } = req.body as {
       performerId?: string
@@ -35,12 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       anonymous?: boolean
     }
 
-    if (fanId && fanId !== user.id) {
+    if (fanId && fanId !== user?.id) {
       res.status(403).json({ error: 'fanId must match the signed-in user' })
       return
     }
 
-    const payerId = user.id
+    const payerId = user?.id ?? null
     const sb = getAdminSupabase()
     const minTipAmount = await getIntSetting(sb, 'tip_min_amount_yen', MIN_TIP_AMOUNT_YEN, 100, 100000)
     if (!performerId || !Number.isInteger(amountYen) || amountYen < minTipAmount || amountYen > 100000) {
@@ -109,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       kind: 'tip',
       tip_id: tip.id,
       performer_id: performerId,
-      fan_id: payerId,
+      fan_id: payerId ?? 'guest',
       anonymous: anonymous ? '1' : '0',
       connected_account_id: connectedAccountId,
       charge_type: 'direct',

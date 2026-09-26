@@ -38,12 +38,6 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   }, [performerId])
 
   const pay = async () => {
-    if (!user) {
-      window.sessionStorage.setItem('pl-tip-to', performerId)
-      if (onRequireAuth) onRequireAuth()
-      else spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
-      return
-    }
     setBusy(true)
     setError(null)
     trackProductEvent('tip_checkout_start', { performerId, props: { amount_yen: amount } })
@@ -53,7 +47,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
         headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
         body: JSON.stringify({
           performerId,
-          fanId: user.id,
+          fanId: user?.id,
           amountYen: amount,
           returnTo: returnToLive ? 'live' : undefined,
         }),
@@ -124,6 +118,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
       <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
         {busy ? t('processing') : `❤️ 応援を届ける ${formatYen(amount)}`}
       </button>
+      {!user ? <p className="pl-tip-guest-note">登録なしでStripeの安全な決済へ進めます。カード情報をHAKUが保存することはありません。</p> : null}
       </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onBack}>
         {t('cancel')}
@@ -138,7 +133,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
             else spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
           }}
         >
-          {t('loginToContinue')}
+          ログインして応援履歴を残す
         </button>
       ) : null}
       {error ? <p className="pl-error">{error}</p> : null}

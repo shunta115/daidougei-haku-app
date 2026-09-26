@@ -108,7 +108,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   return (
     <main className="pl-experience pl-home-v7">
       <header className="pl-home-v7__masthead">
-        <div className="pl-home-v7__identity"><BrandLogo size={29} variant="lockup" /></div>
+        <div className="pl-home-v7__identity"><BrandLogo size={42} variant="official" /></div>
         <div className="pl-home-v7__tools">
           <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label="パフォーマーを検索"><Search size={19} /></button>
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label="通知"><Bell size={19} /></button>

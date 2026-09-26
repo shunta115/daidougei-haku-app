@@ -133,9 +133,13 @@ export function GoogleVenueMap({
     if (!apiKey || !containerRef.current) return
     let active = true
     setMapState('loading')
+    const slowTimer = window.setTimeout(() => {
+      if (active) setMapState('error')
+    }, 8_000)
     void loadGoogleMaps(apiKey)
       .then((api) => {
         if (!active || !containerRef.current) return
+        window.clearTimeout(slowTimer)
         const nextMap = new api.maps.Map(containerRef.current, {
           center: centerSeed,
           zoom: 15,
@@ -152,8 +156,8 @@ export function GoogleVenueMap({
         setMap(nextMap)
         setMapState('ready')
       })
-      .catch(() => { if (active) setMapState('error') })
-    return () => { active = false }
+      .catch(() => { window.clearTimeout(slowTimer); if (active) setMapState('error') })
+    return () => { active = false; window.clearTimeout(slowTimer) }
   }, [apiKey, centerSeed])
 
   useEffect(() => {
@@ -304,7 +308,7 @@ export function GoogleVenueMap({
       {mapState === 'missing-key' || mapState === 'error' ? (
         <div className="pl-google-map__error" role="status">
           <MapPin size={20} />
-          <span>{mapState === 'missing-key' ? '地図の公開設定が未完了です。' : '地図を読み込めませんでした。'}</span>
+          <span>{mapState === 'missing-key' ? '地図の公開設定が未完了です。会場一覧はこの下で確認できます。' : '地図の読み込みに時間がかかっています。会場一覧はこの下で確認できます。'}</span>
           <a href={mapsHref} target="_blank" rel="noopener noreferrer">Google Mapsを開く</a>
         </div>
       ) : null}

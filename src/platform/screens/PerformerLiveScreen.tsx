@@ -23,6 +23,7 @@ import {
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import type { LiveComment } from '../lib/types'
+import { supabaseAuthHeaders } from '../lib/supabase'
 import './live.css'
 
 type Props = {
@@ -111,6 +112,28 @@ export function PerformerLiveScreen({ onBack }: Props) {
       location_updated_at: null,
     }).catch(() => undefined)
   }, [performer, phase, shareLocation])
+
+  useEffect(() => {
+    if (!performer || phase !== 'live') return
+    let active = true
+    const heartbeat = async () => {
+      try {
+        const headers = await supabaseAuthHeaders()
+        if (!active) return
+        await fetch('/api/livekit/presence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ performerId: performer.id }),
+          keepalive: true,
+        })
+      } catch {
+        // LIVE transport remains independent; the next heartbeat retries automatically.
+      }
+    }
+    void heartbeat()
+    const timer = window.setInterval(() => void heartbeat(), 20_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [performer, phase])
 
   useEffect(() => {
     if (phase !== 'live') return

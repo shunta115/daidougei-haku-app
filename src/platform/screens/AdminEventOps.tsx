@@ -28,6 +28,7 @@ import {
 } from '../lib/api'
 import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
+import { supabaseAuthHeaders } from '../lib/supabase'
 
 type Tab = 'meta' | 'venues' | 'slots' | 'lineup' | 'voting' | 'live'
 
@@ -62,6 +63,20 @@ export function AdminEventScreen() {
   })
   const [lineupPick, setLineupPick] = useState('')
   const [newEvent, setNewEvent] = useState({ slug: '', name_ja: '', name_en: '' })
+
+  const forceEndLive = async (session: LiveSession) => {
+    if (!window.confirm('このLIVEを強制終了しますか？配信者の画面にも終了状態が反映されます。')) return
+    try {
+      const response = await fetch('/api/livekit/force-end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+        body: JSON.stringify({ sessionId: session.id }),
+      })
+      if (!response.ok) throw new Error('force end failed')
+      setMsg('LIVEを強制終了しました。')
+      await reload(event?.id)
+    } catch { setError('LIVEを終了できませんでした。再読み込みしてもう一度お試しください。') }
+  }
 
   const reload = async (preferredId?: string) => {
     try {
@@ -521,6 +536,7 @@ export function AdminEventScreen() {
                     {s.ended_at ? ` → ${s.ended_at}` : ''}
                     {s.venue_id ? ` · ${s.venue_id}` : ''}
                   </div>
+                  {liveNow ? <button type="button" className="pl-btn pl-btn--danger pl-btn--block" onClick={() => void forceEndLive(s)}>LIVEを強制終了</button> : null}
                 </div>
               )
             })

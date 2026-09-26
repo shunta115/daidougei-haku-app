@@ -43,6 +43,7 @@
 .pl-home-v7__identity { display: flex; align-items: center; gap: 8px; }
 .pl-home-v7__identity > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(145deg, #ff3b89, #785cff 58%, #35b8ff); color: white; box-shadow: 0 0 20px rgba(120,92,255,.3); }
 .pl-home-v7__identity > img { display: block; width: 116px; height: auto; }
+.pl-home-v7__identity > img[src*="haku-official"] { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }
 .pl-home-v7__brand { margin: 0; font-size: 17px; font-weight: 900; }
 .pl-icon-button {
   display: inline-grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--xp-line);
@@ -358,6 +359,27 @@
 
 /* MASTER REFERENCE: midnight city, cinematic media, restrained glass. */
 .pl-bg__vignette { opacity: .25; background: linear-gradient(180deg, transparent 45%, rgba(2,8,16,.72)); }
+
+.pl-map-directory { margin: 12px 0; padding: 14px; border: 1px solid rgba(134,185,230,.2); border-radius: 14px; background: rgba(8,31,51,.82); }
+.pl-map-directory header { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.pl-map-directory header p, .pl-map-directory header h2 { margin: 0; }
+.pl-map-directory header p { color: #75bdff; font-size: 10px; font-weight: 900; }
+.pl-map-directory header h2 { font-size: 17px; }
+.pl-map-directory header > span { color: var(--xp-muted); font-size: 11px; }
+.pl-map-directory > div { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.pl-map-directory > div > button { min-width: min(78vw, 280px); min-height: 64px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(134,185,230,.18); border-radius: 10px; background: rgba(255,255,255,.06); color: white; text-align: left; scroll-snap-align: start; }
+.pl-map-directory > div > button span { min-width: 0; display: grid; gap: 3px; }
+.pl-map-directory > div > button strong, .pl-map-directory > div > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-map-directory > div > button small { color: var(--xp-muted); }
+.pl-map-directory > div > p { margin: 0; color: var(--xp-muted); font-size: 12px; }
+.pl-live-archive { margin-top: 18px; border-top: 1px solid var(--xp-line); }
+.pl-live-archive summary { min-height: 48px; display: flex; align-items: center; gap: 7px; cursor: pointer; color: var(--xp-muted); font-size: 13px; font-weight: 800; }
+.pl-live-archive summary span { padding: 2px 6px; border-radius: 10px; background: rgba(255,255,255,.08); }
+.pl-live-archive__row { min-height: 58px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--xp-line); color: white; text-decoration: none; }
+.pl-live-archive__row > span { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.pl-live-archive__row strong, .pl-live-archive__row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-live-archive__row small { color: var(--xp-muted); }
+.pl-live-archive__row em { color: #79c2ff; font-style: normal; font-size: 11px; }
 .pl-home-v7__tools { display: flex; gap: 8px; }
 .pl-home-v7__channels { position: relative; z-index: 8; display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; padding: 4px; border: 1px solid rgba(255,255,255,.13); border-radius: 16px; background: rgba(11,34,51,.7); backdrop-filter: blur(20px) saturate(1.15); -webkit-backdrop-filter: blur(20px) saturate(1.15); }
 .pl-home-v7__channels button { flex: 1; min-width: 0; min-height: 38px; border: 0; border-radius: 12px; background: transparent; color: rgba(255,255,255,.62); font-size: 11px; font-weight: 850; }
@@ -511,6 +533,7 @@
 .pl-splash__shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, rgba(3,12,23,.18), rgba(4,14,26,.35) 42%, rgba(4,14,26,.97)); }
 .pl-splash__content { position: absolute; left: 24px; right: 24px; bottom: calc(28px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
 .pl-splash__logo { width: 168px; height: auto; margin-bottom: 4px; }
+.pl-splash__logo--official { width: 104px; height: 104px; border-radius: 14px; object-fit: cover; box-shadow: 0 18px 48px rgba(0,0,0,.34); }
 .pl-splash__content p, .pl-splash__content h1 { margin: 0; }
 .pl-splash__content p { color: #9bc9f6; font-size: 10px; font-weight: 900; }
 .pl-splash__content h1 { max-width: none; font-family: var(--font-display); font-size: 46px; line-height: 1.02; white-space: nowrap; }

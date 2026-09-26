@@ -147,6 +147,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
       {view === 'map' ? (
         <>
+          <section className="pl-map-directory" aria-label="会場と現在の出演">
+            <header><div><p>VENUES</p><h2>練馬城址公園 会場MAP</h2></div><span>{venues.length}会場</span></header>
+            <div>
+              {venues.map((venue) => {
+                const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
+                const active = venueSlots.find((slot) => timeLabel(slot.start_time) <= timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })) && timeLabel(slot.end_time) > timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })))
+                const upcoming = active ?? venueSlots[0]
+                const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
+                return <button type="button" key={venue.id} onClick={() => { setSelectedVenue(venue.id); setSelectedPerformer(null) }}>
+                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? '開催中' : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? 'フード / キッチンカー' : '出演予定を確認')}</small></span><ChevronRight size={17} />
+                </button>
+              })}
+              {venues.length === 0 ? <p>会場情報を準備しています。Google Mapsは引き続き利用できます。</p> : null}
+            </div>
+          </section>
           <GoogleVenueMap
             venues={venues}
             livePerformers={liveMapPerformers}
