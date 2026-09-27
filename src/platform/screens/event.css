@@ -1027,3 +1027,26 @@
   }
 }
 
+@media (orientation: landscape) and (max-height: 500px) {
+  .pl-event-index,.pl-event-detail {
+    padding-bottom:calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+  .pl-event-hero {
+    margin-inline:0;
+    padding:16px 14px 14px;
+  }
+  .pl-event-hero>h1 {
+    font-size:clamp(1.45rem, 3.4vw, 1.8rem);
+  }
+  .pl-event-hero>h2 {
+    font-size:clamp(1rem, 2.6vw, 1.25rem);
+  }
+  .pl-event-jump {
+    margin-inline:0;
+  }
+  .pl-event-schedule__dates {
+    max-width:420px;
+    margin-inline:auto;
+  }
+}
+
