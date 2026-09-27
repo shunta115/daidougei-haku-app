@@ -280,4 +280,17 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       {performers.length > 0 ? (
         <section className="pl-event-lineup" aria-label="出演パフォーマー">
           <header><div><p>PERFORMERS</p><h2>出演パフォーマー</h2></div><span>{performers.length}組</span></header>
-          <div className="p
+          <div className="pl-event-lineup__rail">
+            {performers.slice(0, 12).map((performer) => (
+              <button type="button" key={performer.id} onClick={() => performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id)}>
+                <span>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}</span>
+                <strong>{performer.stage_name}</strong>
+                <small>{performer.is_live ? 'LIVE中' : performer.genre || 'Performance'}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </main>
+  )
+}
