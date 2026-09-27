@@ -27,6 +27,16 @@ function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
 
+function scheduleDateCard(iso: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!match) return { month: '', day: iso.slice(-2), weekday: '' }
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const weekday = new Intl.DateTimeFormat('ja-JP', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(new Date(`${iso}T12:00:00+09:00`))
+  const sportsDay = month === 10 && weekday === '月' && day >= 8 && day <= 14
+  return { month: `${month}月`, day: String(day), weekday: sportsDay ? `${weekday}・祝` : weekday }
+}
+
 export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map' }: Props) {
   const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
@@ -245,7 +255,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       ) : (
         <section className="pl-schedule-v7">
           <div className="pl-schedule-v7__dates" role="tablist" aria-label="開催日">
-            {dates.map((date) => <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><strong>{date.slice(8)}</strong><small>10月</small></button>)}
+            {dates.map((date) => { const card = scheduleDateCard(date); return <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><small>{card.month}</small><strong>{card.day}</strong><em>{card.weekday}</em></button> })}
           </div>
           {dateSlots.length === 0 ? (
             <div className="pl-schedule-preview" role="status">
@@ -270,17 +280,4 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       {performers.length > 0 ? (
         <section className="pl-event-lineup" aria-label="出演パフォーマー">
           <header><div><p>PERFORMERS</p><h2>出演パフォーマー</h2></div><span>{performers.length}組</span></header>
-          <div className="pl-event-lineup__rail">
-            {performers.slice(0, 12).map((performer) => (
-              <button type="button" key={performer.id} onClick={() => performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id)}>
-                <span>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}</span>
-                <strong>{performer.stage_name}</strong>
-                <small>{performer.is_live ? 'LIVE中' : performer.genre || 'Performance'}</small>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-    </main>
-  )
-}
+          <div className="p

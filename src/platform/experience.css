@@ -433,9 +433,9 @@
 .pl-spatial-map__roads { opacity: .3; background: repeating-linear-gradient(118deg, transparent 0 54px, rgba(135,191,238,.22) 55px 58px, transparent 59px 112px); }
 .pl-venue-sheet { background: rgba(8,24,41,.88); }
 .pl-schedule-v7__dates { display: grid; grid-template-columns: repeat(3,1fr); overflow: visible; }
-.pl-schedule-v7__dates button { min-height: 58px; display: grid; place-items: center; align-content: center; gap: 1px; border: 1px solid var(--xp-line); border-radius: 16px; background: rgba(12,29,48,.65); color: var(--xp-muted); }
-.pl-schedule-v7__dates button strong { font-family: var(--font-display); font-size: 18px; }
-.pl-schedule-v7__dates button small { font-size: 9px; }
+.pl-schedule-v7__dates button { min-height: 88px; display: grid; place-items: center; align-content: center; gap: 2px; padding: 8px 4px; border: 1px solid var(--xp-line); border-radius: 16px; background: rgba(12,29,48,.65); color: var(--xp-muted); }
+.pl-schedule-v7__dates button strong { font-family: var(--font-display); font-size: 28px; line-height: 1; }
+.pl-schedule-v7__dates button small, .pl-schedule-v7__dates button em { font-size: 11px; font-style: normal; font-weight: 700; line-height: 1.2; }
 .pl-schedule-v7__dates button[data-active='true'] { border-color: rgba(75,163,255,.55); background: rgba(57,140,255,.19); color: white; box-shadow: 0 10px 30px rgba(30,100,190,.14); }
 .pl-schedule-row { border-color: rgba(127,179,224,.15); background: rgba(12,29,48,.68); }
 .pl-schedule-row__time { color: #8bc3ff; }
@@ -570,108 +570,4 @@
 
 @media (max-width: 440px) {
   .pl-cinema-hero { height: 252px; min-height: 252px; }
-  .pl-cinema-hero h2 { font-size: 25px; }
-  .pl-page-intro h1 { font-size: var(--font-page-title); }
-  .pl-profile-stage { min-height: 552px; }
-  .pl-profile-stage__name { font-size: 38px; }
-  .pl-live__panel--live { padding-right: 68px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pl-experience > *, .pl-profile-tabs, .pl-profile-panel, .pl-my-hero, .pl-my-menu { animation: none; }
-  .pl-splash__video { display: none; }
-}
-
-@media (orientation: landscape) and (max-height: 500px) {
-  .pl-shell {
-    max-width: min(680px, 100%);
-    margin-inline: auto;
-    padding-top: max(8px, env(safe-area-inset-top, 0px));
-    padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-  }
-  .pl-page-intro { gap: 4px; padding-top: 0; }
-  .pl-page-intro h1 { font-size: clamp(1.2rem, 3.2vw, 1.55rem); }
-  .pl-cinema-hero { height: auto; min-height: 232px; }
-  .pl-cinema-hero__content {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 52px;
-    grid-template-rows: auto auto minmax(20px, 1fr) auto;
-    align-items: end;
-    gap: 12px;
-    min-height: 232px;
-    padding: 14px;
-  }
-  .pl-cinema-hero__status { grid-column: 1; grid-row: 1; align-self: start; }
-  .pl-cinema-hero h2 {
-    position: static;
-    grid-column: 1;
-    grid-row: 2;
-    max-width: 100%;
-    margin: 0;
-    font-size: clamp(1.15rem, 2.8vw, 1.4rem);
-    line-height: 1.3;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-  }
-  .pl-cinema-hero__play {
-    position: static;
-    grid-column: 2;
-    grid-row: 2;
-    justify-self: end;
-    align-self: center;
-    width: 48px;
-    height: 48px;
-  }
-  .pl-cinema-hero__live-meta {
-    position: static;
-    grid-column: 1 / -1;
-    grid-row: 4;
-    margin-top: 4px;
-  }
-  .pl-segment,
-  .pl-schedule-v7__dates,
-  .pl-event-schedule__dates {
-    max-width: 420px;
-    margin-inline: auto;
-  }
-  .pl-schedule-v7__dates button { min-height: 46px; }
-  .pl-schedule-v7__dates button strong { font-size: 16px; }
-  .pl-nav,
-  .pl-nav--fan {
-    left: calc(50% + (env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) / 2);
-    right: auto;
-    bottom: max(6px, env(safe-area-inset-bottom, 0px));
-    width: min(680px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 12px));
-    height: 52px;
-    margin: 0;
-    transform: translateX(-50%);
-    padding: 0 4px;
-    box-sizing: border-box;
-  }
-  .pl-nav__inner,
-  .pl-nav--fan .pl-nav__inner {
-    width: 100%;
-    max-width: none;
-    height: 100%;
-    padding: 3px;
-  }
-  .pl-nav__btn,
-  .pl-nav--fan .pl-nav__btn {
-    min-height: 0;
-    height: 100%;
-    gap: 1px;
-    padding: 0 1px;
-    font-size: 10px;
-  }
-  .pl-nav__icon { height: 18px; }
-  .pl-nav--fan .pl-nav__btn--live .pl-nav__icon {
-    width: 32px;
-    height: 32px;
-    margin-top: -8px;
-  }
-}
+  .pl-cinema-hero h2 { font-size: 25px
