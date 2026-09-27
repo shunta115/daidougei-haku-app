@@ -24,7 +24,7 @@
 
 .pl-event-index__head h1 {
   margin:5px 0 8px;
-  font-size:30px;
+  font-size:var(--font-page-title);
 }
 
 .pl-event-index__head span,.pl-event-schedule header>span,.pl-event-lineup-full header>span,.pl-event-map>span,.pl-event-support>span {
@@ -115,12 +115,13 @@
 
 .pl-event-card__body h2 {
   margin:7px 0;
-  font-size:25px;
+  font-size:var(--font-card-title);
   line-height:1.2;
 }
 
 .pl-event-card__body button {
   width:100%;
+  font-size:var(--font-button);
 }
 
 .pl-event-card__body span {
