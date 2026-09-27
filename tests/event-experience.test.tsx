@@ -92,8 +92,26 @@ it('lists published events from the database and opens the selected slug', async
   const open = vi.fn()
   render(<EventListScreen onOpen={open} />)
   await screen.findByText('受賞者たち')
+  expect(screen.getByRole('img', { name: '受賞者たち 公式チラシ' }).getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer.jpg')
+  for (const fact of ['10/10〜12', '10:00〜19:00', '東京・練馬城址公園', '入場無料', 'Presented by 大道芸博 2026']) {
+    expect(screen.getByText(fact)).toBeTruthy()
+  }
   fireEvent.click(screen.getByRole('button', { name: /イベントを楽しむ/ }))
   expect(open).toHaveBeenCalledWith(event.slug)
+})
+
+it('shows a readable hero and opens the official flyer without using it as the background', async () => {
+  render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  await screen.findByRole('heading', { name: '受賞者たち' })
+  expect(document.querySelector('.pl-event-hero__art')).toBeNull()
+  expect(screen.getByText('観る。選ぶ。もう一度、沸く。')).toBeTruthy()
+  expect(screen.getByText('あなたの一票で、夜のステージが決まる。')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '今日のイベントを楽しむ' }))
+  fireEvent.click(screen.getByRole('button', { name: '公式チラシを見る' }))
+  const flyer = screen.getByRole('dialog', { name: '受賞者たち2026 公式チラシ' })
+  const image = flyer.querySelector('img')
+  expect(image?.getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer.jpg')
+  expect(image?.getAttribute('alt')).toBe('受賞者たち Presented by 大道芸博 2026 公式チラシ')
 })
 
 it('allows anonymous event viewing while hiding unpublished intermediate results', async () => {

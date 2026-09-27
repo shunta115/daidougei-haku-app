@@ -57,9 +57,27 @@ function slotState(slot: EventSlotRow, clock: { date: string; time: string }) {
   return '予定'
 }
 
-function eventDateLabel(event: FeaturedEvent) {
-  return [event.date_label, event.hours_label, event.place_label, event.admission_label].filter(Boolean).join(' · ')
+function compactEventDate(event: FeaturedEvent) {
+  const parse = (value: string | null | undefined) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey(value))
+    if (!match) return null
+    return { month: Number(match[2]), day: Number(match[3]) }
+  }
+  const from = parse(event.starts_on)
+  const to = parse(event.ends_on)
+  if (from && to) {
+    if (from.month === to.month && from.day === to.day) return `${from.month}/${from.day}`
+    if (from.month === to.month) return `${from.month}/${from.day}〜${to.day}`
+    return `${from.month}/${from.day}〜${to.month}/${to.day}`
+  }
+  return event.date_label
 }
+
+function eventFactLines(event: FeaturedEvent) {
+  return [compactEventDate(event), event.hours_label, event.place_label, event.admission_label].map((line) => String(line ?? '').trim()).filter(Boolean)
+}
+
+const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer.jpg'
 
 type EventPhase = 'before' | 'during' | 'after'
 
@@ -89,8 +107,11 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
     {!loading && !error && events.length === 0 ? <section className="pl-event-empty"><CalendarDays size={30} /><h2>公開中のイベントはありません</h2><p>次のイベントが決まり次第、ここでお知らせします。</p></section> : null}
     <div className="pl-event-index__list">
       {events.map((event) => <article className="pl-event-card" key={event.id} data-archived={event.status === 'archived'}>
-        <div className="pl-event-card__visual"><img src="/events/award-winning-performers-2026/official-flyer.jpg" alt="" loading="lazy" /><span>{event.status === 'archived' ? 'ARCHIVE' : '2026 EVENT'}</span><strong>AWP</strong></div>
-        <div className="pl-event-card__body"><p>{event.presenter_ja}</p><h2>{event.name_ja}</h2><span>{eventDateLabel(event)}</span><button type="button" onClick={() => onOpen(event.slug)}>イベントを楽しむ<ChevronRight size={18} /></button></div>
+        <div className="pl-event-card__visual" data-flyer={event.slug === 'award-winning-performers-2026' ? 'true' : undefined}>
+          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={`${event.name_ja} 公式チラシ`} /> : <strong>AWP</strong>}
+          <span>{event.status === 'archived' ? 'ARCHIVE' : '2026 EVENT'}</span>
+        </div>
+        <div className="pl-event-card__body"><p>{event.presenter_ja}</p><h2>{event.name_ja}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>イベントを楽しむ<ChevronRight size={18} /></button></div>
       </article>)}
     </div>
   </main>
@@ -187,7 +208,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
   return <main className="pl-event-detail">
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />イベント一覧</button>
-    <section className="pl-event-hero"><img className="pl-event-hero__art" src="/events/award-winning-performers-2026/official-flyer.jpg" alt="" /><div className="pl-event-hero__shade" /><div className="pl-event-hero__content"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{event.presenter_ja}</p><h1>{event.name_ja}</h1><strong>観る。選ぶ。もう一度、沸く。</strong><h2>あなたの一票で、夜のステージが決まる。</h2><small>{eventDateLabel(event)}</small>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">開催まであと {countdown}日</b> : null}<div><button onClick={() => jump('event-schedule')}>{phase === 'during' ? '今の出演を見る' : phase === 'after' ? '結果を見る' : '出演予定を見る'}</button><button onClick={() => setFlyerOpen(true)}><Image size={16} />チラシを見る</button></div></div></section>
+    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{event.presenter_ja}</p><h1>{event.name_ja}</h1><strong>{event.main_copy_ja || '観る。選ぶ。もう一度、沸く。'}</strong><h2>{event.sub_copy_ja || 'あなたの一票で、夜のステージが決まる。'}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">開催まであと {countdown}日</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? '今の出演を見る' : phase === 'after' ? '結果を見る' : '出演予定を見る'}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />公式チラシを見る</button></div></section>
 
     <nav className="pl-event-jump" aria-label="イベント内メニュー"><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>時間割</button><button onClick={() => jump('event-vote')}>投票</button><button onClick={() => jump('event-lineup')}>出演者</button><button onClick={onOpenMap}>MAP</button></nav>
 
@@ -208,6 +229,6 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>最高だった！をその場で届けよう</h2><span>投票はSPECIAL NIGHTの出演者を選ぶもの。投げ銭はパフォーマー本人へ直接「ありがとう」を届ける応援です。</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>投票したパフォーマーを応援する</button> : <button onClick={() => jump('event-lineup')}>応援したい人を選ぶ</button>}</section>
 
     {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>受賞者たち Presented by 大道芸博 2026</p><h2 id="event-onboarding-title">受賞者たち2026へようこそ</h2><span>あなたの一票で、夜のステージが決まる。</span><ul><li>今と次の出演をすぐ確認</li><li>MAPで会場を迷わず移動</li><li>心に残った人へイベント投票</li><li>LIVEとプロフィールから応援</li></ul><button onClick={closeGuide}>今日のイベントを楽しむ</button></div></div> : null}
-    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label="受賞者たち2026 公式チラシ"><button className="pl-event-flyer__close" onClick={() => setFlyerOpen(false)} aria-label="閉じる"><X size={22} /></button><div><img src="/events/award-winning-performers-2026/official-flyer.jpg" alt="受賞者たち Presented by 大道芸博 2026 公式チラシ" /></div></div> : null}
+    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label="受賞者たち2026 公式チラシ"><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label="閉じる"><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt="受賞者たち Presented by 大道芸博 2026 公式チラシ" /></div></div> : null}
   </main>
 }
