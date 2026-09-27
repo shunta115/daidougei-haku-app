@@ -38,14 +38,14 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         setError(null)
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'マイページの読み込みに失敗しました')
+        if (!cancelled) setError(e instanceof Error ? e.message : t('profileLoadError'))
       })
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [t, user])
 
-  if (!profile) return <p className="pl-muted">Loading…</p>
+  if (!profile) return <p className="pl-muted">{t('processing')}</p>
   const username = (profile.email?.split('@')[0] || profile.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '')
 
   return (
@@ -61,13 +61,13 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
           <h1>{profile.display_name}</h1>
           <span>@{username || profile.id.slice(0, 8)}</span>
         </div>
-        <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>フォロー</span><span><strong>0</strong>フォロワー</span><span><strong>0</strong>応援した数</span></div>
+        <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>{t('profileFollows')}</span><span><strong>0</strong>{t('profileFollowers')}</span><span><strong>0</strong>{t('profileCheers')}</span></div>
       </section>
       {error ? <p className="pl-error">{error}</p> : null}
 
       <section className="pl-card" aria-labelledby="pl-my-follows">
-        <h2 id="pl-my-follows" className="pl-h2" style={{ marginTop: 0 }}>フォロー</h2>
-        {follows.length === 0 ? <p className="pl-muted">気になるパフォーマーをフォローすると、ここからすぐ戻れます。</p> : null}
+        <h2 id="pl-my-follows" className="pl-h2" style={{ marginTop: 0 }}>{t('profileFollows')}</h2>
+        {follows.length === 0 ? <p className="pl-muted">{t('profileFollowEmpty')}</p> : null}
         {follows.map((p) => (
           <button
             key={p.id}
@@ -78,25 +78,25 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
             <Avatar url={p.photo_url} name={p.stage_name} />
             <span>
               <strong>{p.stage_name}</strong>
-              <small>{p.is_live ? 'LIVE中' : p.genre || 'Performance'}</small>
+              <small>{p.is_live ? t('liveNow') : p.genre || 'Performance'}</small>
             </span>
           </button>
         ))}
       </section>
 
-      <section className="pl-my-menu" aria-label="マイメニュー">
-        <button type="button" onClick={() => scrollTo('pl-my-follows')}><span><Heart size={19} />お気に入り</span><ChevronRight size={18} /></button>
-        <div><span><History size={19} />応援履歴</span><small>準備中</small></div>
-        <div><span><Ticket size={19} />チケット</span><small>準備中</small></div>
-        <button type="button" onClick={() => scrollTo('pl-my-orders')}><span><ShoppingBag size={19} />グッズ購入履歴</span><ChevronRight size={18} /></button>
-        <button type="button" onClick={onOpenNotifications}><span><Bell size={19} />通知</span><ChevronRight size={18} /></button>
-        <div><span><Settings size={19} />設定・ヘルプ</span><small>準備中</small></div>
+      <section className="pl-my-menu" aria-label={t('profileMenu')}>
+        <button type="button" onClick={() => scrollTo('pl-my-follows')}><span><Heart size={19} />{t('profileFavorites')}</span><ChevronRight size={18} /></button>
+        <div><span><History size={19} />{t('profileHistory')}</span><small>{t('profileSoon')}</small></div>
+        <div><span><Ticket size={19} />{t('profileTickets')}</span><small>{t('profileSoon')}</small></div>
+        <button type="button" onClick={() => scrollTo('pl-my-orders')}><span><ShoppingBag size={19} />{t('profileMerchHistory')}</span><ChevronRight size={18} /></button>
+        <button type="button" onClick={onOpenNotifications}><span><Bell size={19} />{t('notifications')}</span><ChevronRight size={18} /></button>
+        <div><span><Settings size={19} />{t('profileSettings')}</span><small>{t('profileSoon')}</small></div>
       </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>{t('signOut')}</button>
 
       <section className="pl-card" aria-labelledby="pl-my-orders">
-        <h2 id="pl-my-orders" className="pl-h2" style={{ marginTop: 0 }}>購入履歴</h2>
-        {orders.length === 0 ? <p className="pl-muted">グッズ購入後、注文内容をここで確認できます。</p> : null}
+        <h2 id="pl-my-orders" className="pl-h2" style={{ marginTop: 0 }}>{t('profileOrders')}</h2>
+        {orders.length === 0 ? <p className="pl-muted">{t('profileOrdersEmpty')}</p> : null}
         {orders.map((o) => (
           <button
             key={o.id}
@@ -105,7 +105,7 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
             onClick={() => onOpenProduct?.(o.product_id)}
           >
             <strong>{o.product_name}</strong>
-            <span>{formatYen(o.amount_yen)} · {o.quantity}点 · {o.status}</span>
+            <span>{formatYen(o.amount_yen)} · {t('orderPieces', { n: o.quantity })} · {o.status}</span>
           </button>
         ))}
       </section>

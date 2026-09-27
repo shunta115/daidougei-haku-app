@@ -67,6 +67,7 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', storage.localStorage)
   vi.stubGlobal('sessionStorage', storage.sessionStorage)
   Object.defineProperty(window, 'localStorage', { configurable: true, value: storage.localStorage })
+  storage.localStorage.setItem('daidougei-lang', 'ja')
   Object.defineProperty(window, 'sessionStorage', { configurable: true, value: storage.sessionStorage })
   fake.auth = { user: null, profile: null }
   fake.listPublishedEvents.mockResolvedValue([event])

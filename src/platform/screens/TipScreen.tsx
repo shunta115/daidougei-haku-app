@@ -18,7 +18,7 @@ type TipProps = {
 
 export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: TipProps) {
   const { user } = useAuth()
-  const { lang, t } = useLang()
+  const { t } = useLang()
   const [p, setP] = useState<Performer | null>(null)
   const [amount, setAmount] = useState<number>(TIP_PRESETS_JPY[1])
   const [busy, setBusy] = useState(false)
@@ -73,19 +73,19 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
       >
         <div className="pl-tip-hero__shade" />
         <div className="pl-tip-hero__body">
-          <p className="pl-tip-hero__k">{lang === 'ja' ? '応援' : 'Support'}</p>
+          <p className="pl-tip-hero__k">{t('tipKicker')}</p>
           <h1 id="pl-tip-title" className="pl-tip-hero__name">
-            {p?.stage_name ? `${p.stage_name}へ応援を届ける` : t('tipHeading')}
+            {p?.stage_name ? t('tipTo', { name: p.stage_name }) : t('tipHeading')}
           </h1>
           <p className="pl-tip-hero__copy">
-            {p?.support_blurb || '気持ちが動いた瞬間に、拍手の続きとして応援できます。決済はStripeで安全に処理されます。'}
+            {p?.support_blurb || t('tipFallback')}
           </p>
         </div>
       </section>
 
-      <section className="pl-tip-decision" aria-label="応援金額の選択">
+      <section className="pl-tip-decision" aria-label={t('tipPickAmount')}>
       <p className="pl-tip__amount">{formatYen(amount)}</p>
-      <div className="pl-tip-presets" aria-label="応援金額">
+      <div className="pl-tip-presets" aria-label={t('tipAmountLabel')}>
         {TIP_PRESETS_JPY.map((yen) => (
           <button
             key={yen}
@@ -96,7 +96,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
           >
             <span className="pl-tip-preset__label">{TIP_PRESET_LABELS_JA[yen].label}</span>
             <span className="pl-tip-preset__amount">{formatYen(yen)}</span>
-            {TIP_PRESET_LABELS_JA[yen].note ? <span className="pl-tip-preset__note">{TIP_PRESET_LABELS_JA[yen].note}</span> : null}
+            {TIP_PRESET_LABELS_JA[yen].note ? <span className="pl-tip-preset__note">{t('tipPresetNote')}</span> : null}
           </button>
         ))}
       </div>
@@ -116,9 +116,9 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
       </label>
 
       <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
-        {busy ? t('processing') : `❤️ 応援を届ける ${formatYen(amount)}`}
+        {busy ? t('processing') : `❤️ ${t('tipSend', { amount: formatYen(amount) })}`}
       </button>
-      {!user ? <p className="pl-tip-guest-note">登録なしでStripeの安全な決済へ進めます。カード情報をHAKUが保存することはありません。</p> : null}
+      {!user ? <p className="pl-tip-guest-note">{t('tipGuest')}</p> : null}
       </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={onBack}>
         {t('cancel')}
@@ -133,7 +133,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
             else spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
           }}
         >
-          ログインして応援履歴を残す
+          {t('tipLoginHistory')}
         </button>
       ) : null}
       {error ? <p className="pl-error">{error}</p> : null}

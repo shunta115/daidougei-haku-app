@@ -12,12 +12,13 @@ type BottomNavProps = {
 type NavItem = { key: string; label: string; href?: string; icon: LucideIcon }
 
 export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
-  const { lang, t } = useLang()
+  const { t } = useLang()
   const labels = {
-    discover: lang === 'ja' ? '探す' : 'Discover',
-    goods: lang === 'ja' ? 'グッズ' : 'Goods',
-    account: lang === 'ja' ? 'マイページ' : 'Me',
-    map: 'MAP',
+    discover: t('navDiscover'),
+    goods: t('navGoods'),
+    account: t('navMyPage'),
+    map: t('navMap'),
+    live: t('navLive'),
     event: t('eventHome'),
   }
 
@@ -33,7 +34,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
       ? [
           { key: 'performer-home', label: t('home'), icon: Home },
           { key: 'performer-schedule', label: labels.event, icon: CalendarDays },
-          { key: 'performer-live', label: t('live'), icon: Video },
+          { key: 'performer-live', label: labels.live, icon: Video },
           { key: 'performer-merch', label: labels.goods, icon: ShoppingBag },
         ]
       : role === 'organizer'
@@ -46,7 +47,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
         : [
             { key: 'fan-home', label: t('home'), icon: Home },
             { key: 'event-list', label: labels.event, icon: CalendarDays },
-            { key: 'live-list', label: 'LIVE', icon: Radio },
+            { key: 'live-list', label: labels.live, icon: Radio },
             { key: 'map-schedule', label: labels.map, icon: MapPinned },
             { key: 'profile', label: labels.account, icon: User },
           ]

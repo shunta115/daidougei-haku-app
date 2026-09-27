@@ -18,9 +18,9 @@ function liveDuration(startedAt: string | null) {
   const sec = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
   const m = Math.floor(sec / 60)
   const s = sec % 60
-  if (m >= 60) {
+    if (m >= 60) {
     const h = Math.floor(m / 60)
-    return `${h}時間${m % 60}分`
+    return `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
   return `${m}:${String(s).padStart(2, '0')}`
 }
@@ -70,7 +70,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
         }
         setError(null)
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : '読み込みに失敗しました')
+        if (!cancelled) setError(e instanceof Error ? e.message : t('liveLoadError'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -83,11 +83,11 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [t])
 
   return (
     <main className="pl-experience pl-live-hub">
-      <header className="pl-page-intro"><p>LIVE STAGE</p><h1>いま起きている熱狂へ。</h1><span>視聴は無料。気になるパフォーマーを、その瞬間から好きになれる。</span></header>
+      <header className="pl-page-intro"><p>LIVE STAGE</p><h1>{t('liveTitle')}</h1><span>{t('liveLead')}</span></header>
 
       <div className="pl-live-tabs">
         <button type="button" className="pl-live-tabs__btn" data-active={tab === 'list'} onClick={() => setTab('list')}>
@@ -107,14 +107,14 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
       {!loading && tab === 'list' ? (
         <>
         {live.length === 0 ? (
-          <section className="pl-live-empty-next" aria-label="次に見るパフォーマー">
-            <p className="pl-live-empty-next__k">次に見る</p>
-            <h2>いまは注目パフォーマーから探せます</h2>
-            <p>LIVEが始まっていない時間も、プロフィール・出演予定・応援から好きな人を見つけられます。</p>
+          <section className="pl-live-empty-next" aria-label={t('liveNextAria')}>
+            <p className="pl-live-empty-next__k">{t('liveNextKicker')}</p>
+            <h2>{t('liveNextTitle')}</h2>
+            <p>{t('liveNextBody')}</p>
             {suggestions[0] ? (
               <div className="pl-live-empty-next__actions">
                 <button type="button" className="pl-btn pl-btn--block" onClick={() => onOpenPerformer(suggestions[0].id)}>
-                  注目パフォーマーを見る
+                  {t('liveSeeFeatured')}
                 </button>
               </div>
             ) : null}
@@ -186,7 +186,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
             ))}
           </div>
         ) : live.length === 0 ? (
-          <p className="pl-muted">出演者一覧から次に応援したい人を探せます。</p>
+          <p className="pl-muted">{t('liveFindFromActs')}</p>
         ) : null}
         {ended.some((session) => Boolean(session.stream_url)) ? (
           <details className="pl-live-archive">
@@ -195,8 +195,8 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
               const act = acts.find((p) => p.id === s.performer_id)
               return (
                 <a key={s.id} className="pl-live-archive__row" href={s.stream_url ?? undefined} target="_blank" rel="noopener noreferrer">
-                  <span><strong>{s.title || act?.stage_name || 'LIVEアーカイブ'}</strong><small>{act?.stage_name ?? 'パフォーマー'} · 視聴 {s.viewer_peak}</small></span>
-                  <em>再生</em>
+                  <span><strong>{s.title || act?.stage_name || t('liveArchive')}</strong><small>{act?.stage_name ?? t('liveArchiveAct')} · {t('mapViewers', { n: s.viewer_peak })}</small></span>
+                  <em>{t('livePlay')}</em>
                 </a>
               )
             })}
@@ -207,10 +207,10 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
 
       {!loading && tab === 'rank' ? (
         rank.length === 0 ? (
-          <section className="pl-live-empty-next" aria-label="LIVEランキング準備中">
-            <p className="pl-live-empty-next__k">応援はこれから</p>
-            <h2>最初のLIVE後にランキングが育ちます</h2>
-            <p>いまは注目パフォーマーを見て、気になる人をフォローできます。</p>
+          <section className="pl-live-empty-next" aria-label={t('liveRankAria')}>
+            <p className="pl-live-empty-next__k">{t('liveRankKicker')}</p>
+            <h2>{t('liveRankTitle')}</h2>
+            <p>{t('liveRankBody')}</p>
           </section>
         ) : (
           rank.map((row, i) => (
@@ -236,7 +236,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
                 </div>
                 <div style={{ fontWeight: 700 }}>{row.performer.stage_name}</div>
                 <div className="pl-muted">
-                  応援 {row.tip_count}件 · 視聴ピーク {row.viewer_peak}
+                  {t('liveSupportStats', { count: row.tip_count, peak: row.viewer_peak })}
                 </div>
               </div>
             </button>
@@ -246,10 +246,10 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
 
       {!loading && tab === 'votes' ? (
         votes.length === 0 ? (
-          <section className="pl-live-empty-next" aria-label="投票導線">
-            <p className="pl-live-empty-next__k">人気投票</p>
-            <h2>投票はプロフィールからできます</h2>
-            <p>気になるパフォーマーを見つけたら、プロフィールで投票・フォロー・応援へ進めます。</p>
+          <section className="pl-live-empty-next" aria-label={t('liveVoteAria')}>
+            <p className="pl-live-empty-next__k">{t('votes')}</p>
+            <h2>{t('liveVoteTitle')}</h2>
+            <p>{t('liveVoteBody')}</p>
           </section>
         ) : (
           votes.map((row, i) => (
@@ -266,7 +266,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer, initialTab = 'lis
               <Avatar url={row.performer.photo_url} name={row.performer.stage_name} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700 }}>{row.performer.stage_name}</div>
-                <div className="pl-muted">{row.votes}票</div>
+                <div className="pl-muted">{t('liveVoteCount', { n: row.votes })}</div>
               </div>
             </button>
           ))

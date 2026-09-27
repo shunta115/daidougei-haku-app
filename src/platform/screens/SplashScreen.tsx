@@ -1,9 +1,11 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
+import { useLang } from '../../i18n/LangProvider'
 import { searchPerformers } from '../lib/api'
 
 export function SplashScreen({ onStart }: { onStart: () => void }) {
+  const { t } = useLang()
   const [image, setImage] = useState<string | null>(null)
   const [videoAvailable, setVideoAvailable] = useState(true)
   const [reduceMotion, setReduceMotion] = useState(false)
@@ -50,8 +52,8 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       <div className="pl-splash__shade" aria-hidden="true" />
       <section className="pl-splash__content">
         <BrandLogo size={104} variant="official" className="pl-splash__logo pl-splash__logo--official" />
-        <h1>街は、<br />ステージになる。</h1>
-        <button type="button" onClick={onStart}>はじめる <ArrowRight size={19} /></button>
+        <h1>{t('splashLine1')}<br />{t('splashLine2')}</h1>
+        <button type="button" onClick={onStart}>{t('start')} <ArrowRight size={19} /></button>
       </section>
     </main>
   )

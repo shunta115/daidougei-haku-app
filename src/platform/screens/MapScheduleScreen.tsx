@@ -13,6 +13,8 @@ import {
   type FeaturedEvent,
 } from '../lib/api'
 import { distanceKm, formatMapDistance, isFreshLiveLocation, walkingMinutes } from '../lib/mapLocation'
+import { useLang } from '../../i18n/LangProvider'
+import type { Lang } from '../../i18n'
 import type { Performer } from '../lib/types'
 
 type Props = {
@@ -27,17 +29,22 @@ function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
 
-function scheduleDateCard(iso: string) {
+function scheduleDateCard(iso: string, lang: Lang, holiday: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!match) return { month: '', day: iso.slice(-2), weekday: '' }
   const month = Number(match[2])
   const day = Number(match[3])
-  const weekday = new Intl.DateTimeFormat('ja-JP', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(new Date(`${iso}T12:00:00+09:00`))
-  const sportsDay = month === 10 && weekday === '月' && day >= 8 && day <= 14
-  return { month: `${month}月`, day: String(day), weekday: sportsDay ? `${weekday}・祝` : weekday }
+  const date = new Date(`${iso}T12:00:00+09:00`)
+  const locale = lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP'
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date)
+  const monday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date) === 'Mon'
+  const sportsDay = month === 10 && monday && day >= 8 && day <= 14
+  const monthLabel = lang === 'en' ? new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'Asia/Tokyo' }).format(date) : `${month}月`
+  return { month: monthLabel, day: String(day), weekday: sportsDay ? `${weekday}・${holiday}` : weekday }
 }
 
 export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map' }: Props) {
+  const { t, lang } = useLang()
   const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
@@ -81,11 +88,11 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         setSlots(slotRows)
         setSelectedDate(String(slotRows[0]?.date || '2026-10-10').slice(0, 10))
       } catch {
-        if (!cancelled) setError('会場情報を読み込めませんでした。通信を確認して、もう一度開いてください。')
+        if (!cancelled) setError(t('mapLoadError'))
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (view !== 'map') return
@@ -144,21 +151,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     <main className="pl-experience pl-map-schedule">
       <header className="pl-page-intro">
         <p>FIND THE STAGE</p>
-        <h1>今いる場所から、次の熱狂へ。</h1>
-        <span>{event ? `${event.date_label} · ${event.place_label}` : '会場と出演予定'}</span>
+        <h1>{t('mapHeadline')}</h1>
+        <span>{event ? `${event.date_label} · ${event.place_label}` : t('mapFallback')}</span>
       </header>
 
-      <div className="pl-segment" role="tablist" aria-label="MAPとスケジュール">
-        <button type="button" role="tab" aria-selected={view === 'map'} data-active={view === 'map'} onClick={() => setView('map')}><MapIcon size={17} /> MAP</button>
-        <button type="button" role="tab" aria-selected={view === 'schedule'} data-active={view === 'schedule'} onClick={() => setView('schedule')}><CalendarDays size={17} /> スケジュール</button>
+      <div className="pl-segment" role="tablist" aria-label={t('mapAndSchedule')}>
+        <button type="button" role="tab" aria-selected={view === 'map'} data-active={view === 'map'} onClick={() => setView('map')}><MapIcon size={17} /> {t('mapTab')}</button>
+        <button type="button" role="tab" aria-selected={view === 'schedule'} data-active={view === 'schedule'} onClick={() => setView('schedule')}><CalendarDays size={17} /> {t('scheduleTab')}</button>
       </div>
 
       {error ? <p className="pl-error">{error}</p> : null}
 
       {view === 'map' ? (
         <>
-          <section className="pl-map-directory" aria-label="会場と現在の出演">
-            <header><div><p>VENUES</p><h2>練馬城址公園 会場MAP</h2></div><span>{venues.length}会場</span></header>
+          <section className="pl-map-directory" aria-label={t('mapVenues')}>
+            <header><div><p>VENUES</p><h2>{t('mapVenueMap')}</h2></div><span>{t('mapVenueCount', { n: venues.length })}</span></header>
             <div>
               {venues.map((venue) => {
                 const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
@@ -166,10 +173,10 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 const upcoming = active ?? venueSlots[0]
                 const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
                 return <button type="button" key={venue.id} onClick={() => { setSelectedVenue(venue.id); setSelectedPerformer(null) }}>
-                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? '開催中' : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? 'フード / キッチンカー' : '出演予定を確認')}</small></span><ChevronRight size={17} />
+                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
                 </button>
               })}
-              {venues.length === 0 ? <p>会場情報を準備しています。Google Mapsは引き続き利用できます。</p> : null}
+              {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}
             </div>
           </section>
           <GoogleVenueMap
@@ -190,20 +197,20 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const venue = matchingSlot ? venueById.get(matchingSlot.venue_id) : null
             const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${point.lat},${point.lng}&travelmode=walking`
             return (
-              <section className="pl-venue-sheet pl-live-map-sheet" aria-label={`${performer.stage_name}のLIVE情報`}>
+              <section className="pl-venue-sheet pl-live-map-sheet" aria-label={t('mapLiveSheet', { name: performer.stage_name })}>
                 <div className="pl-venue-sheet__top">
-                  <div><p>LIVE NOW{km != null ? ` · 徒歩約${walkingMinutes(km)}分` : ''}</p><h2>{performer.stage_name}</h2><span>{performer.genre || 'Performance'} · {venue?.name_ja || performer.city || '現在地を共有中'}</span></div>
+                  <div><p>LIVE NOW{km != null ? ` · ${t('mapWalk', { n: walkingMinutes(km) })}` : ''}</p><h2>{performer.stage_name}</h2><span>{performer.genre || 'Performance'} · {venue?.name_ja || performer.city || t('mapSharing')}</span></div>
                   {performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-live-map-sheet__avatar">{performer.stage_name.slice(0, 2)}</span>}
                 </div>
                 <div className="pl-live-map-sheet__facts">
-                  <span><Radio size={14} /> LIVE中</span>
-                  {km != null ? <span><Navigation size={14} /> 現在地から {formatMapDistance(km)}</span> : null}
-                  <span><UserRound size={14} /> 視聴 {viewerPeaks[performer.id] ?? 0}</span>
+                  <span><Radio size={14} /> {t('liveNow')}</span>
+                  {km != null ? <span><Navigation size={14} /> {t('mapFromHere', { distance: formatMapDistance(km) })}</span> : null}
+                  <span><UserRound size={14} /> {t('mapViewers', { n: viewerPeaks[performer.id] ?? 0 })}</span>
                 </div>
                 <div className="pl-venue-sheet__actions">
-                  <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> LIVEを見る</button>
-                  <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> プロフィール</button>
-                  <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> ここへ行く</a>
+                  <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> {t('eventWatchLive')}</button>
+                  <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> {t('eventProfile')}</button>
+                  <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> {t('mapGo')}</a>
                 </div>
               </section>
             )
@@ -219,7 +226,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             return (
               <section className="pl-venue-sheet">
                 <div className="pl-venue-sheet__top">
-                  <div><p>STAGE{walkMinutes ? ` · 徒歩約${walkMinutes}分` : ''}</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || '次の出演をチェック'}</span></div>
+                  <div><p>STAGE{walkMinutes ? ` · ${t('mapWalk', { n: walkMinutes })}` : ''}</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || t('mapNextCheck')}</span></div>
                   {act?.photo_url ? <img src={act.photo_url} alt="" /> : null}
                 </div>
                 {first && act ? (
@@ -229,37 +236,37 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                   </button>
                 ) : null}
                 <div className="pl-venue-sheet__actions">
-                  {directions ? <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> ここへ行く</a> : null}
-                  {act ? <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(act.id)}><UserRound size={17} /> プロフィール</button> : null}
-                  {act?.is_live ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(act.id)}><Radio size={17} /> LIVEを見る</button> : null}
+                  {directions ? <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> {t('mapGo')}</a> : null}
+                  {act ? <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(act.id)}><UserRound size={17} /> {t('eventProfile')}</button> : null}
+                  {act?.is_live ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(act.id)}><Radio size={17} /> {t('eventWatchLive')}</button> : null}
                 </div>
               </section>
             )
           })() : null}
 
-          <section className="pl-near-live" aria-label="近くでLIVE中">
-            <header><div><p>NEAR YOU</p><h2>近くでLIVE中</h2></div><span>{nearbyLive.length}組</span></header>
+          <section className="pl-near-live" aria-label={t('mapNear')}>
+            <header><div><p>NEAR YOU</p><h2>{t('mapNear')}</h2></div><span>{t('mapGroupCount', { n: nearbyLive.length })}</span></header>
             {nearbyLive.length > 0 ? (
               <div className="pl-near-live__rail">
                 {nearbyLive.map(({ performer, distance }) => (
                   <button type="button" key={performer.id} onClick={() => { setSelectedPerformer(performer.id); setSelectedVenue(null) }}>
                     <span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>LIVE</i></span>
-                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><em>{distance != null ? `現在地から ${formatMapDistance(distance)}` : '位置共有中'} · 視聴 {viewerPeaks[performer.id] ?? 0}</em></span>
+                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><em>{distance != null ? t('mapFromHere', { distance: formatMapDistance(distance) }) : t('mapSharingShort')} · {t('mapViewers', { n: viewerPeaks[performer.id] ?? 0 })}</em></span>
                     <ChevronRight size={18} />
                   </button>
                 ))}
               </div>
-            ) : <p className="pl-near-live__empty">現在地を共有しているLIVEはまだありません。</p>}
+            ) : <p className="pl-near-live__empty">{t('mapNoShared')}</p>}
           </section>
         </>
       ) : (
         <section className="pl-schedule-v7">
-          <div className="pl-schedule-v7__dates" role="tablist" aria-label="開催日">
-            {dates.map((date) => { const card = scheduleDateCard(date); return <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><small>{card.month}</small><strong>{card.day}</strong><em>{card.weekday}</em></button> })}
+          <div className="pl-schedule-v7__dates" role="tablist" aria-label={t('mapDates')}>
+            {dates.map((date) => { const card = scheduleDateCard(date, lang, t('holiday')); return <button type="button" role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}><small>{card.month}</small><strong>{card.day}</strong><em>{card.weekday}</em></button> })}
           </div>
           {dateSlots.length === 0 ? (
             <div className="pl-schedule-preview" role="status">
-              <p className="pl-schedule-preview__note">この日の出演スケジュールは近日公開します。</p>
+              <p className="pl-schedule-preview__note">{t('mapSchedulePending')}</p>
             </div>
           ) : null}
           {dateSlots.map((slot) => {
@@ -278,14 +285,14 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       )}
 
       {performers.length > 0 ? (
-        <section className="pl-event-lineup" aria-label="出演パフォーマー">
-          <header><div><p>PERFORMERS</p><h2>出演パフォーマー</h2></div><span>{performers.length}組</span></header>
+        <section className="pl-event-lineup" aria-label={t('eventLineup')}>
+          <header><div><p>PERFORMERS</p><h2>{t('eventLineup')}</h2></div><span>{t('mapGroupCount', { n: performers.length })}</span></header>
           <div className="pl-event-lineup__rail">
             {performers.slice(0, 12).map((performer) => (
               <button type="button" key={performer.id} onClick={() => performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id)}>
                 <span>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}</span>
                 <strong>{performer.stage_name}</strong>
-                <small>{performer.is_live ? 'LIVE中' : performer.genre || 'Performance'}</small>
+                <small>{performer.is_live ? t('liveNow') : performer.genre || 'Performance'}</small>
               </button>
             ))}
           </div>

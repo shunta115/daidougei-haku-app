@@ -1,4 +1,11 @@
-export type Lang = 'ja' | 'en'
+import { baseZh } from './base-zh'
+import { extra } from './extra'
+import type { I18nKey as BaseKey } from './keys'
+import { more } from './more'
+
+export type Lang = 'ja' | 'en' | 'zh-TW'
+export type I18nKey = BaseKey | keyof typeof extra.ja | keyof typeof more.ja
+type Vars = Record<string, string | number>
 
 const KEY = 'daidougei-lang'
 
@@ -227,16 +234,56 @@ const dict = {
   },
 } as const
 
-export type I18nKey = keyof typeof dict.ja
+function isBaseKey(key: I18nKey): key is BaseKey {
+  return key in dict.ja
+}
 
-export function readLang(): Lang {
+function isExtraKey(key: I18nKey): key is keyof typeof extra.ja {
+  return key in extra.ja
+}
+
+function applyVars(value: string, vars?: Vars) {
+  if (!vars) return value
+  return Object.entries(vars).reduce((text, [name, raw]) => text.replaceAll(`{${name}}`, String(raw)), value)
+}
+
+function textOf(lang: Lang, key: I18nKey): string {
+  if (isExtraKey(key)) {
+    const table = lang === 'en' ? extra.en : lang === 'zh-TW' ? extra.zh : extra.ja
+    return table[key]
+  }
+  if (!isBaseKey(key)) {
+    const table = lang === 'en' ? more.en : lang === 'zh-TW' ? more.zh : more.ja
+    return table[key]
+  }
+  if (lang === 'en') return dict.en[key]
+  if (lang === 'zh-TW') return baseZh[key]
+  return dict.ja[key]
+}
+
+function detectLang(): Lang {
   try {
-    const v = localStorage.getItem(KEY)
-    if (v === 'en' || v === 'ja') return v
+    const list = navigator.languages?.length ? navigator.languages : [navigator.language]
+    for (const raw of list) {
+      const code = String(raw || '').toLowerCase()
+      if (code.startsWith('zh')) return 'zh-TW'
+      if (code.startsWith('en')) return 'en'
+      if (code.startsWith('ja')) return 'ja'
+    }
   } catch {
     /* ignore */
   }
   return 'ja'
+}
+
+export function readLang(): Lang {
+  try {
+    const stored = localStorage.getItem(KEY)
+    if (stored === 'en' || stored === 'ja' || stored === 'zh-TW') return stored
+  } catch {
+    /* ignore */
+  }
+  return detectLang()
 }
 
 export function writeLang(lang: Lang) {
@@ -245,9 +292,9 @@ export function writeLang(lang: Lang) {
   } catch {
     /* ignore */
   }
-  document.documentElement.lang = lang === 'en' ? 'en' : 'ja'
+  document.documentElement.lang = lang === 'en' ? 'en' : lang === 'zh-TW' ? 'zh-Hant' : 'ja'
 }
 
-export function t(key: I18nKey, lang: Lang = readLang()): string {
-  return dict[lang][key]
+export function t(key: I18nKey, lang: Lang = readLang(), vars?: Vars): string {
+  return applyVars(textOf(lang, key), vars)
 }

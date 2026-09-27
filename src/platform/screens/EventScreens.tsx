@@ -16,6 +16,7 @@ import {
   type FeaturedEvent,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import './event.css'
 
@@ -94,30 +95,32 @@ function daysUntil(date: string | null | undefined) {
 }
 
 export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) {
+  const { t } = useLang()
   const [events, setEvents] = useState<FeaturedEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    listPublishedEvents().then(setEvents).catch(() => setError('イベントを読み込めませんでした。通信を確認して、もう一度お試しください。')).finally(() => setLoading(false))
-  }, [])
+    listPublishedEvents().then(setEvents).catch(() => setError(t('eventLoadError'))).finally(() => setLoading(false))
+  }, [t])
   return <main className="pl-event-index">
-    <header className="pl-event-index__head"><p>HAKU EVENTS</p><h1>街で生まれる熱狂へ。</h1><span>今日どこで誰が出演するか、イベントごとにすぐ確認できます。</span></header>
-    {loading ? <p role="status">イベントを確認しています…</p> : null}
+    <header className="pl-event-index__head"><p>HAKU EVENTS</p><h1>{t('eventListTitle')}</h1><span>{t('eventListLead')}</span></header>
+    {loading ? <p role="status">{t('eventLoading')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
-    {!loading && !error && events.length === 0 ? <section className="pl-event-empty"><CalendarDays size={30} /><h2>公開中のイベントはありません</h2><p>次のイベントが決まり次第、ここでお知らせします。</p></section> : null}
+    {!loading && !error && events.length === 0 ? <section className="pl-event-empty"><CalendarDays size={30} /><h2>{t('eventEmptyTitle')}</h2><p>{t('eventEmptyBody')}</p></section> : null}
     <div className="pl-event-index__list">
       {events.map((event) => <article className="pl-event-card" key={event.id} data-archived={event.status === 'archived'}>
         <div className="pl-event-card__visual" data-flyer={event.slug === 'award-winning-performers-2026' ? 'true' : undefined}>
-          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={`${event.name_ja} 公式チラシ`} /> : <strong>AWP</strong>}
+          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={t('eventFlyerAlt', { name: event.name_ja })} /> : <strong>AWP</strong>}
           <span>{event.status === 'archived' ? 'ARCHIVE' : '2026 EVENT'}</span>
         </div>
-        <div className="pl-event-card__body"><p>{event.presenter_ja}</p><h2>{event.name_ja}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>イベントを楽しむ<ChevronRight size={18} /></button></div>
+        <div className="pl-event-card__body"><p>{event.presenter_ja}</p><h2>{event.name_ja}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>{t('eventEnjoy')}<ChevronRight size={18} /></button></div>
       </article>)}
     </div>
   </main>
 }
 
 export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, onTip, onOpenMap, onRequireAuth }: DetailProps) {
+  const { t } = useLang()
   const { user, profile } = useAuth()
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
@@ -153,11 +156,11 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
         const key = `pl-event-guide:${slug}`
         setGuideOpen(Boolean(nextEvent.guide_enabled) && localStorage.getItem(key) !== '1')
       } catch {
-        if (active) setError('イベント情報を読み込めませんでした。URLまたは通信状態をご確認ください。')
+        if (active) setError(t('eventDetailError'))
       } finally { if (active) setLoading(false) }
     })()
     return () => { active = false }
-  }, [slug, user])
+  }, [slug, t, user])
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
@@ -182,53 +185,53 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
   const castVote = async (performer: Performer) => {
     if (!user) { sessionStorage.setItem('pl-event-return', slug); onRequireAuth(); return }
-    if (profile?.role !== 'fan') { setError('投票はファンアカウントから参加できます。'); return }
-    if (!event || !window.confirm(`${performer.stage_name}に投票しますか？`)) return
+    if (profile?.role !== 'fan') { setError(t('eventVoteFanOnly')); return }
+    if (!event || !window.confirm(t('eventVoteConfirm', { name: performer.stage_name }))) return
     try {
       await voteForPerformer(event.id, performer.id, user.id)
       setMyVotes((currentVotes) => [...new Set([...currentVotes, performer.id])]); setVoteComplete(true); setError(null)
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
-      setError(message.includes('daily_vote_limit') ? '本日の投票上限に達しました。' : message.includes('voting_') ? '現在は投票を受け付けていません。' : '投票を受け付けられませんでした。通信を確認して、もう一度お試しください。')
+      setError(message.includes('daily_vote_limit') ? t('eventVoteLimit') : message.includes('voting_') ? t('eventVoteShut') : t('eventVoteFail'))
     }
   }
 
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const closeGuide = () => { localStorage.setItem(`pl-event-guide:${slug}`, '1'); setGuideOpen(false) }
 
-  if (loading) return <p role="status">イベントを準備しています…</p>
-  if (error && !event) return <main className="pl-event-detail"><button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />イベント一覧</button><p className="pl-error">{error}</p></main>
+  if (loading) return <p role="status">{t('eventPreparing')}</p>
+  if (error && !event) return <main className="pl-event-detail"><button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button><p className="pl-error">{error}</p></main>
   if (!event) return null
   const renderSpot = (slot: EventSlotRow | undefined, label: string) => {
     if (!slot) return null
     const performer = slot.performer_id ? performerById.get(slot.performer_id) : null
     const venue = venueById.get(slot.venue_id)
-    return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{performer?.stage_name || slot.stage_ja || '出演者調整中'}</h3><span>{venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />LIVEを見る</button> : null}<button onClick={onOpenMap}><MapPin size={16} />MAPで見る</button></div></article>
+    return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</h3><span>{venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={onOpenMap}><MapPin size={16} />{t('eventSeeOnMap')}</button></div></article>
   }
 
   return <main className="pl-event-detail">
-    <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />イベント一覧</button>
-    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{event.presenter_ja}</p><h1>{event.name_ja}</h1><strong>{event.main_copy_ja || '観る。選ぶ。もう一度、沸く。'}</strong><h2>{event.sub_copy_ja || 'あなたの一票で、夜のステージが決まる。'}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">開催まであと {countdown}日</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? '今の出演を見る' : phase === 'after' ? '結果を見る' : '出演予定を見る'}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />公式チラシを見る</button></div></section>
+    <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{event.presenter_ja}</p><h1>{event.name_ja}</h1><strong>{event.main_copy_ja || t('eventCopy')}</strong><h2>{event.sub_copy_ja || t('eventSub')}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button></div></section>
 
-    <nav className="pl-event-jump" aria-label="イベント内メニュー"><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>時間割</button><button onClick={() => jump('event-vote')}>投票</button><button onClick={() => jump('event-lineup')}>出演者</button><button onClick={onOpenMap}>MAP</button></nav>
+    <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={onOpenMap}>{t('mapTab')}</button></nav>
 
-    {phase === 'during' ? <section className="pl-event-now" id="event-now"><header><p>RIGHT NOW</p><h2>いま観られる・次に始まる</h2></header>{current || next ? <div>{renderSpot(current, 'LIVE / NOW')}{renderSpot(next, 'NEXT')}</div> : <p className="pl-event-inline-empty">次の出演情報を準備しています。時間割またはMAPをご確認ください。</p>}</section> : phase === 'before' ? <section className="pl-event-pre" id="event-now"><CalendarDays size={24} /><div><p>BEFORE THE EVENT</p><h2>{countdown === 0 ? '本日開催' : `開催まであと ${countdown ?? '—'}日`}</h2><span>出演予定と会場を先に確認して、気になるパフォーマーを見つけよう。</span></div><button onClick={() => jump('event-lineup')}>出演者を見る</button></section> : null}
+    {phase === 'during' ? <section className="pl-event-now" id="event-now"><header><p>RIGHT NOW</p><h2>{t('eventRightNow')}</h2></header>{current || next ? <div>{renderSpot(current, 'LIVE / NOW')}{renderSpot(next, 'NEXT')}</div> : <p className="pl-event-inline-empty">{t('eventRightNowEmpty')}</p>}</section> : phase === 'before' ? <section className="pl-event-pre" id="event-now"><CalendarDays size={24} /><div><p>BEFORE THE EVENT</p><h2>{countdown === 0 ? t('eventToday') : t('eventCountdown', { n: countdown ?? '—' })}</h2><span>{t('eventPreLead')}</span></div><button onClick={() => jump('event-lineup')}>{t('eventSeePerformers')}</button></section> : null}
 
-    {phase === 'during' ? <details className="pl-event-guide"><summary>今日の楽しみ方</summary><ol><li><em>10:00〜16:00</em><strong>昼公演を楽しむ</strong></li><li><em>STEP 2</em><strong>心に残った人へ投票</strong></li><li><em>16時以降</em><strong>結果発表</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
+    {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:00</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:00+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
 
-    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>本日のタイムテーブル</h2><span>時間・場所・LIVEをまとめて確認</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">この日の出演予定は確定後に表示します。</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const state = slotState(slot, clock); return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{timeKey(slot.end_time)}まで</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{performer?.stage_name || slot.stage_ja || '出演者調整中'}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{state}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>LIVE</button> : null}</article>})}</section>
+    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const state = slotState(slot, clock); const soon = /^あと(\d+)分$/.exec(state); const stateLabel = state === '終了' ? t('slotEnded') : state === '開催中' ? t('slotLive') : state === '予定' ? t('slotPlanned') : soon ? t('slotSoon', { n: soon[1] }) : state; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{stateLabel}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
 
-    <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>受賞者たち2026 観客投票</p><h2>今日いちばん心に残ったパフォーマーを選ぼう</h2><span>あなたの一票でSPECIAL NIGHT出演者が決まります。HAKU全体の人気ランキングや投げ銭とは別の、このイベント限定の無料投票です。</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>投票完了！</h3><p>あなたの一票を受け付けました。結果発表は16時以降！</p><button onClick={() => jump('event-schedule')}>次のパフォーマンスを見る</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">投票受付時間になると、ここから投票できます。</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">本日の投票を受け付けました。結果発表をお待ちください。</p> : null}<div className="pl-event-vote__grid">{performers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>プロフィール</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? '投票済み' : '投票する'}</button></div></article>)}</div></section>
+    <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{performers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>
 
-    <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? 'SPECIAL NIGHT 出演決定' : '観客投票で選ばれた3組が、夜のステージへ。'}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{index + 1}位</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}` : '出演時間は運営発表をご確認ください'}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>プロフィール</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>LIVE</button> : null}</article> }) : <p>途中順位は公開しません。運営発表後に上位3組を表示します。</p>}</section>
+    <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? t('eventNightSet') : t('eventNightOpen')}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{t('eventRank', { n: index + 1 })}</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}` : t('eventTimePending')}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>{t('eventProfile')}</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>{t('navLive')}</button> : null}</article> }) : <p>{t('eventNoRank')}</p>}</section>
 
-    <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>出演パフォーマー</h2><span>気になる人を見つけたら、プロフィールからフォローしてイベント後もつながれます。</span></header><div>{performers.map((performer) => <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{performer.is_live ? <em>LIVE</em> : null}<button>プロフィールを見る</button></article>)}</div></section>
+    <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{t('eventSeeProfile')}</button></article>)}</div></section>
 
-    <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>次はどこで観る？</h2><span>ステージや回遊エリアを確認して、次のパフォーマンスへ。</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? 'グルメ / キッチンカー' : venue.blurb_ja || '出演予定を見る'}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />MAPを開く</button></section>
+    <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section>
 
-    <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>最高だった！をその場で届けよう</h2><span>投票はSPECIAL NIGHTの出演者を選ぶもの。投げ銭はパフォーマー本人へ直接「ありがとう」を届ける応援です。</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>投票したパフォーマーを応援する</button> : <button onClick={() => jump('event-lineup')}>応援したい人を選ぶ</button>}</section>
+    <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
 
-    {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>受賞者たち Presented by 大道芸博 2026</p><h2 id="event-onboarding-title">受賞者たち2026へようこそ</h2><span>あなたの一票で、夜のステージが決まる。</span><ul><li>今と次の出演をすぐ確認</li><li>MAPで会場を迷わず移動</li><li>心に残った人へイベント投票</li><li>LIVEとプロフィールから応援</li></ul><button onClick={closeGuide}>今日のイベントを楽しむ</button></div></div> : null}
-    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label="受賞者たち2026 公式チラシ"><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label="閉じる"><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt="受賞者たち Presented by 大道芸博 2026 公式チラシ" /></div></div> : null}
+    {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>{t('eventWelcomeKicker')}</p><h2 id="event-onboarding-title">{t('eventWelcomeTitle')}</h2><span>{event.sub_copy_ja || t('eventSub')}</span><ul><li>{t('eventGuide1')}</li><li>{t('eventGuide2')}</li><li>{t('eventGuide3')}</li><li>{t('eventGuide4')}</li></ul><button onClick={closeGuide}>{t('eventWelcomeCta')}</button></div></div> : null}
+    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label={t('eventFlyerDialog')}><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label={t('eventClose')}><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt={t('eventFlyerImage')} /></div></div> : null}
   </main>
 }

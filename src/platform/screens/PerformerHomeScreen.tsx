@@ -6,6 +6,7 @@ import { listLiveHistory, listTipsForPerformer, tipSummaryForPerformer, updatePe
 import { useAuth } from '../lib/auth'
 import { formatYen } from '../lib/money'
 import { performerRegistrationStatus, registrationError } from '../lib/onboarding'
+import { useLang } from '../../i18n/LangProvider'
 import { PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
@@ -18,6 +19,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   onSchedule: () => void
   onEarnings: () => void
 }) {
+  const { t, lang } = useLang()
   const { performer, profile, refreshProfile, signOut } = useAuth()
   const [recent, setRecent] = useState<LiveSession[]>([])
   const [tips, setTips] = useState<TipRow[]>([])
@@ -41,13 +43,13 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
         ])
         if (!active) return
         setRecent(rows.slice(0, 3)); setTips(tipRows.slice(0, 5)); setSummary(tipSum)
-      } catch { if (active) setError('売上情報を読み込めませんでした。時間をおいてページを開き直してください。') }
+      } catch { if (active) setError(t('salesLoadError')) }
       finally { loading = false }
     }
     void load()
     const timer = window.setInterval(() => { if (!document.hidden) void load() }, 30_000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [performerId])
+  }, [performerId, t])
 
   useEffect(() => {
     const refresh = () => { void refreshProfile().catch(() => undefined) }
@@ -56,81 +58,82 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh) }
   }, [refreshProfile])
 
-  if (!performer || !profile) return <p className="pl-muted">登録情報を確認しています…</p>
+  if (!performer || !profile) return <p className="pl-muted">{t('regChecking')}</p>
   const status = performerRegistrationStatus({ ...performer, ...(connect ? { stripe_onboarding_complete: connect.complete, stripe_account_id: connect.connected ? 'connected' : null } : {}) })
+  const missing = status.missing.map((item) => item === '芸名' ? t('editStage') : item === 'ジャンル' ? t('editGenre') : item === '自己紹介' ? t('editBio') : item === '活動地域' ? t('editArea') : item === 'プロフィール写真' ? t('editPhoto') : item)
   const steps = [
-    { label: 'プロフィール', done: status.profileComplete, detail: status.profileComplete ? '登録済み' : status.missing.join('・') },
-    { label: '売上の受取設定', done: status.payoutsComplete, detail: status.payoutsComplete ? '完了' : connect?.underReview ? 'Stripeで確認中' : '本人確認・振込口座' },
-    { label: '運営確認・公開', done: status.approved, detail: status.approved ? '公開中' : status.profileComplete && status.payoutsComplete ? '運営の確認待ち' : '登録完了後に運営が確認' },
+    { label: t('stepProfile'), done: status.profileComplete, detail: status.profileComplete ? t('stepRegistered') : missing.join('・') },
+    { label: t('stepPayout'), done: status.payoutsComplete, detail: status.payoutsComplete ? t('stepDone') : connect?.underReview ? t('stepStripeReview') : t('stepIdentity') },
+    { label: t('stepPublish'), done: status.approved, detail: status.approved ? t('stepLive') : status.profileComplete && status.payoutsComplete ? t('stepWaiting') : t('stepAfterRegister') },
   ]
   const share = async () => {
     const url = `${window.location.origin}${PLATFORM_PATH}?profile=${encodeURIComponent(performer.id)}`
     try {
       if (navigator.share) await navigator.share({ title: performer.stage_name, url })
-      else { await navigator.clipboard.writeText(url); setMessage('プロフィールのリンクをコピーしました。') }
+      else { await navigator.clipboard.writeText(url); setMessage(t('copiedLink')) }
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) setError('共有できませんでした。公開プロフィールを開いて、ブラウザから共有してください。')
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setError(t('shareFail'))
     }
   }
 
   return <div className="pl-registration">
     <div className="pl-registration__identity">
       <Avatar url={performer.photo_url ?? profile.avatar_url} name={performer.stage_name} large />
-      <div><h1 className="pl-h1">{performer.stage_name}</h1><p className="pl-muted">{status.approved ? '公開中' : '登録を進めましょう'}{performer.is_live ? '・LIVE中' : ''}</p></div>
+      <div><h1 className="pl-h1">{performer.stage_name}</h1><p className="pl-muted">{status.approved ? t('stepLive') : t('continueReg')}{performer.is_live ? `・${t('liveNow')}` : ''}</p></div>
     </div>
 
     <section className="pl-registration__section" aria-labelledby="registration-heading">
-      <h2 id="registration-heading" className="pl-h2">{status.next === 'complete' ? '登録が完了しました' : '登録状況'}</h2>
+      <h2 id="registration-heading" className="pl-h2">{status.next === 'complete' ? t('regComplete') : t('regStatus')}</h2>
       <ol className="pl-registration__steps">
         {steps.map((step) => <li key={step.label} data-done={step.done}>
           {step.done ? <CheckCircle2 size={22} /> : <Circle size={22} />}
           <div><strong>{step.label}</strong><span>{step.detail}</span></div>
         </li>)}
       </ol>
-      {status.next === 'profile' ? <button className="pl-btn pl-btn--block" onClick={onEdit}><Pencil size={18} />プロフィールを完成させる</button> : null}
-      {status.next === 'payouts' ? <a className="pl-btn pl-btn--block" href="#payout-heading">受取設定へ進む</a> : null}
-      {status.next === 'approval' ? <p className="pl-registration__notice">必要な登録が完了しました。追加の申請操作は不要です。運営の承認後に公開され、通知でもお知らせします。</p> : null}
-      {status.approved ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onPreview}>公開プロフィールを見る</button> : null}
+      {status.next === 'profile' ? <button className="pl-btn pl-btn--block" onClick={onEdit}><Pencil size={18} />{t('finishProfile')}</button> : null}
+      {status.next === 'payouts' ? <a className="pl-btn pl-btn--block" href="#payout-heading">{t('goPayout')}</a> : null}
+      {status.next === 'approval' ? <p className="pl-registration__notice">{t('approvalNotice')}</p> : null}
+      {status.approved ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onPreview}>{t('seePublic')}</button> : null}
     </section>
 
     <PayoutSetup performerId={performer.id} onStatus={setConnect} />
 
-    <section className="pl-registration__section" aria-label="活動メニュー">
-      <h2 className="pl-h2">ファンとつながる活動</h2>
+    <section className="pl-registration__section" aria-label={t('activityMenu')}>
+      <h2 className="pl-h2">{t('activityTitle')}</h2>
       <div className="pl-registration__actions">
-        <button className="pl-activity-card" onClick={onEdit}><Pencil size={20} /><strong>プロフィール</strong><span>あなたの魅力を伝えて、新しいファンに知ってもらおう</span><em>編集する</em></button>
-        <button className="pl-activity-card" disabled={!status.approved} onClick={onLive}><Camera size={20} /><strong>LIVE</strong><span>会場に来られないファンにも、パフォーマンスを届けよう</span><em>{performer.is_live ? 'LIVEを管理' : '配信を準備する'}</em></button>
-        <button className="pl-activity-card" onClick={onMerch}><ShoppingBag size={20} /><strong>グッズ</strong><span>好きになってくれた瞬間を、グッズ購入につなげよう</span><em>商品・注文を管理</em></button>
-        <button className="pl-activity-card" onClick={onSchedule}><CalendarDays size={20} /><strong>出演予定</strong><span>次に会える時間と場所を届けて、見逃しを減らそう</span><em>予定を見る</em></button>
-        <button className="pl-activity-card" onClick={onEarnings}><WalletCards size={20} /><strong>売上</strong><span>投げ銭とグッズの売上、お金の流れを確認できます</span><em>売上を見る</em></button>
-        {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />プロフィールを共有</button> : null}
+        <button className="pl-activity-card" onClick={onEdit}><Pencil size={20} /><strong>{t('stepProfile')}</strong><span>{t('editCardBody')}</span><em>{t('editAction')}</em></button>
+        <button className="pl-activity-card" disabled={!status.approved} onClick={onLive}><Camera size={20} /><strong>{t('navLive')}</strong><span>{t('liveCardBody')}</span><em>{performer.is_live ? t('liveManage') : t('livePrepare')}</em></button>
+        <button className="pl-activity-card" onClick={onMerch}><ShoppingBag size={20} /><strong>{t('navGoods')}</strong><span>{t('merchCardBody')}</span><em>{t('merchAction')}</em></button>
+        <button className="pl-activity-card" onClick={onSchedule}><CalendarDays size={20} /><strong>{t('scheduleTitle')}</strong><span>{t('scheduleCardBody')}</span><em>{t('scheduleAction')}</em></button>
+        <button className="pl-activity-card" onClick={onEarnings}><WalletCards size={20} /><strong>{t('earnTitle')}</strong><span>{t('salesCardBody')}</span><em>{t('salesAction')}</em></button>
+        {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />{t('shareProfile')}</button> : null}
       </div>
-      {!status.approved ? <p className="pl-muted">公開・LIVE・販売開始は運営承認後に利用できます。グッズは先に下書きを作れます。</p> : null}
+      {!status.approved ? <p className="pl-muted">{t('pendingNote')}</p> : null}
     </section>
 
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
-    <section className="pl-registration__section" aria-label="投げ銭の売上">
-      <h2 className="pl-h2">投げ銭の売上</h2>
+    <section className="pl-registration__section" aria-label={t('tipSales')}>
+      <h2 className="pl-h2">{t('tipSales')}</h2>
       <dl className="pl-registration__totals">
-        <div><dt>応援件数</dt><dd>{summary.count}件</dd></div>
-        <div><dt>売上合計</dt><dd>{formatYen(summary.amount_total)}</dd></div>
-        <div><dt>運営手数料</dt><dd>{formatYen(summary.fee_total)}</dd></div>
+        <div><dt>{t('tipCount')}</dt><dd>{t('countItems', { n: summary.count })}</dd></div>
+        <div><dt>{t('salesTotal')}</dt><dd>{formatYen(summary.amount_total)}</dd></div>
+        <div><dt>{t('salesFee')}</dt><dd>{formatYen(summary.fee_total)}</dd></div>
       </dl>
-      <p className="pl-muted">ここは投げ銭の売上です。グッズを含む内訳と入金の説明は「売上」から確認できます。</p>
-      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onEarnings}>売上・入金について確認</button>
+      <p className="pl-muted">{t('tipSalesNote')}</p>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onEarnings}>{t('seeEarnings')}</button>
       {tips.map((tip) => <div key={tip.id} className="pl-registration__sale"><strong>{formatYen(tip.amount_cents)}</strong><span>{new Date(tip.created_at).toLocaleDateString('ja-JP')}</span></div>)}
     </section>
 
-    <details className="pl-registration__details"><summary>LIVE履歴・位置情報・アカウント</summary>
-      {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString('ja-JP')}・{session.ended_at ? '終了' : 'LIVE中'}・{formatYen(session.tip_amount_total)}</p>)}
-      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onHistory}>LIVE履歴</button>
+    <details className="pl-registration__details"><summary>{t('liveHistoryMenu')}</summary>
+      {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP')}・{session.ended_at ? t('endedShort') : t('liveNow')}・{formatYen(session.tip_amount_total)}</p>)}
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onHistory}>{t('liveHistory')}</button>
       <label className="pl-registration__toggle"><input type="checkbox" checked={performer.share_location} disabled={busy} onChange={(e) => {
         const checked = e.target.checked
         setBusy(true)
         void updatePerformer(performer.id, { share_location: checked }).then(refreshProfile).catch((e) => setError(registrationError(e))).finally(() => setBusy(false))
-      }} />LIVE中の位置情報を公開</label>
-      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>ログアウト</button>
+      }} />{t('locationShare')}</label>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>{t('signOut')}</button>
     </details>
   </div>
 }

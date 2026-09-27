@@ -48,7 +48,8 @@
 .pl-registration__heading > a { min-height: 44px; display: inline-flex; align-items: center; }
 .pl-registration__logo { display: block; width: 116px; height: auto; }
 .pl-registration__logo--official { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
-.pl-registration__heading .fe-lang__btn { min-width: 44px; min-height: 44px; }
+.pl-registration__heading .fe-lang { flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+.pl-registration__heading .fe-lang__btn { min-width: 0; min-height: 36px; padding: 0 8px; font-size: 12px; }
 .pl-registration__intro { margin: 34px 0 22px; }
 .pl-registration__intro p, .pl-registration__intro h1, .pl-registration__intro span { margin: 0; }
 .pl-registration__intro p { color: #8bc3ff; font-size: 10px; font-weight: 900; }

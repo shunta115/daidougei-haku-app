@@ -310,16 +310,18 @@
   margin:0 -12px;
   padding:8px 12px;
   display:flex;
+  flex-wrap:wrap;
   gap:7px;
-  overflow-x:auto;
+  overflow:visible;
   background:rgba(6,21,34,.92);
   backdrop-filter:blur(18px);
   scrollbar-width:none;
 }
 
 .pl-event-jump button {
-  min-width:max-content;
+  min-width:0;
   min-height:40px;
+  white-space:normal;
   padding:0 13px;
   border:1px solid rgba(145,196,237,.22);
   border-radius:20px;

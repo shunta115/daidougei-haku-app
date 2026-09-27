@@ -75,7 +75,7 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
         {t('start')}
       </button>
       <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
-        グッズを見る
+        {t('navGoods')}
       </button>
       <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(FESTIVAL_PATH)}>
         {t('seeEvent')}
@@ -418,7 +418,7 @@ function PlatformShell() {
       <div className="pl-app">
         <div className="pl-shell">
           <BrandLogo size={36} variant="lockup" className="pl-boot-logo" />
-          <p className="pl-muted" role="status">登録情報を確認しています…</p>
+          <p className="pl-muted" role="status">{t('regChecking')}</p>
         </div>
       </div>
     )
@@ -441,18 +441,18 @@ function PlatformShell() {
 
   if (user && profileError) {
     return <div className="pl-app"><div className="pl-shell pl-registration">
-      <h1 className="pl-h1">登録情報の確認</h1><p className="pl-error" role="alert">{profileError}</p>
-      <button className="pl-btn pl-btn--block" onClick={() => void refreshProfile().catch(() => undefined)}>再読み込み</button>
-      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>ログアウトしてやり直す</button>
+      <h1 className="pl-h1">{t('regCheckTitle')}</h1><p className="pl-error" role="alert">{profileError}</p>
+      <button className="pl-btn pl-btn--block" onClick={() => void refreshProfile().catch(() => undefined)}>{t('regReload')}</button>
+      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>{t('regSignOutRetry')}</button>
     </div></div>
   }
 
   if (registrationEntry && profile && profile.role !== 'performer' && profile.role !== 'admin') {
     return <div className="pl-app"><div className="pl-shell pl-registration">
-      <h1 className="pl-h1">パフォーマー登録</h1>
-      <p className="pl-muted">現在は{profile.role === 'fan' ? 'ファン' : '主催者'}のアカウントでログインしています。パフォーマー用のアカウントでログインするか、別のメールアドレスで登録してください。</p>
-      <button className="pl-btn pl-btn--block" onClick={() => void signOut()}>ログアウトして登録へ</button>
-      <a className="pl-registration__link" href={PLATFORM_PATH}>今のアカウントで戻る</a>
+      <h1 className="pl-h1">{t('authPerformerTitle')}</h1>
+      <p className="pl-muted">{t('authWrongRole', { role: profile.role === 'fan' ? t('fan') : t('organizer') })}</p>
+      <button className="pl-btn pl-btn--block" onClick={() => void signOut()}>{t('authSignOutRegister')}</button>
+      <a className="pl-registration__link" href={PLATFORM_PATH}>{t('authBackAccount')}</a>
     </div></div>
   }
 
@@ -595,7 +595,7 @@ function PlatformShell() {
                       setScreen('profile')
                     }}
                   >
-                    プロフィールでフォロー
+                    {t('tipFollowOnProfile')}
                   </button>
                 ) : null}
               </div>
@@ -825,7 +825,7 @@ function PlatformShell() {
                   setScreen('profile')
                 }}
               >
-                プロフィールでフォロー
+                {t('tipFollowOnProfile')}
               </button>
             ) : null}
           </div>

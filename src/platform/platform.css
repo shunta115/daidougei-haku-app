@@ -234,14 +234,30 @@ a { color: var(--neon); }
   flex: 0 0 auto;
 }
 
+.fe-lang {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+
+.fe-lang__btn {
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .pl-unified-topbar .fe-lang {
   gap: 4px;
 }
 
 .pl-unified-topbar .fe-lang__btn {
-  min-width: 40px;
-  min-height: 38px;
-  padding: 0 10px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
 }
 
 .pl-unified-topbar__account {
@@ -322,7 +338,10 @@ a { color: var(--neon); }
   border: none;
   border-radius: 980px;
   min-height: 46px;
-  padding: 0 20px;
+  padding: 10px 16px;
+  white-space: normal;
+  line-height: 1.3;
+  text-wrap: balance;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
