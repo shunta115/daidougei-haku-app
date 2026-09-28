@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { Avatar } from '../components/Avatar'
-import { LanguageToggle, useLang } from '../../i18n/LangProvider'
+import { useLang } from '../../i18n/LangProvider'
 import { listFollowedPerformers, listMyMerchOrders } from '../lib/api'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
@@ -50,9 +50,6 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-        <LanguageToggle />
-      </div>
       <section className="pl-my-hero">
         <div className="pl-my-hero__glow" aria-hidden="true" />
         <Avatar url={profile.avatar_url} name={profile.display_name} large />

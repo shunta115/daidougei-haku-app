@@ -1,6 +1,6 @@
 /* Production PWA shell. Authenticated API responses are deliberately never cached. */
-const CACHE = 'daidougei-platform-v7-master-ui'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']
+const CACHE = 'daidougei-platform-v8-haku-icon'
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/favicon-32.png', '/favicon-48.png', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))

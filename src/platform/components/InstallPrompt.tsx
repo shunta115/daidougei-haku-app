@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowUp, Download, PlusSquare, Share, X } from 'lucide-react'
+import { useLang } from '../../i18n/LangProvider'
 
 type InstallChoice = { outcome: 'accepted' | 'dismissed' }
 type InstallEvent = Event & {
@@ -21,6 +22,7 @@ function isIphoneSafari() {
 }
 
 export function InstallPrompt() {
+  const { t } = useLang()
   const [eligible, setEligible] = useState(false)
   const [open, setOpen] = useState(false)
   const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null)
@@ -62,25 +64,25 @@ export function InstallPrompt() {
 
   return (
     <>
-      <section className="pl-install-card" aria-label="ホーム画面に追加">
+      <section className="pl-install-card" aria-label={t('installAria')}>
         <span className="pl-install-card__icon"><Download size={19} /></span>
-        <div><strong>大道芸博をアプリにする</strong><small>ホーム画面から、すぐにLIVEへ。</small></div>
-        <button type="button" onClick={() => void beginInstall()}>追加</button>
-        <button type="button" className="pl-install-card__dismiss" onClick={dismiss} aria-label="ホーム画面への追加案内を閉じる"><X size={16} /></button>
+        <div><strong>{t('installTitle')}</strong><small>{t('installLead')}</small></div>
+        <button type="button" onClick={() => void beginInstall()}>{t('installAdd')}</button>
+        <button type="button" className="pl-install-card__dismiss" onClick={dismiss} aria-label={t('installDismiss')}><X size={16} /></button>
       </section>
 
       {open ? (
         <div className="pl-install-sheet" role="dialog" aria-modal="true" aria-labelledby="pl-install-title">
-          <button type="button" className="pl-install-sheet__backdrop" onClick={() => setOpen(false)} aria-label="閉じる" />
+          <button type="button" className="pl-install-sheet__backdrop" onClick={() => setOpen(false)} aria-label={t('eventClose')} />
           <section className="pl-install-sheet__panel">
             <div className="pl-install-sheet__handle" aria-hidden="true" />
-            <header><div><p>ADD TO HOME SCREEN</p><h2 id="pl-install-title">大道芸博をアプリにする</h2></div><button type="button" onClick={() => setOpen(false)} aria-label="閉じる"><X size={20} /></button></header>
+            <header><div><p>ADD TO HOME SCREEN</p><h2 id="pl-install-title">{t('installTitle')}</h2></div><button type="button" onClick={() => setOpen(false)} aria-label={t('eventClose')}><X size={20} /></button></header>
             <ol>
-              <li><span><Share size={20} /></span><div><strong>Safariの共有を押す</strong><small>画面下の <ArrowUp size={13} /> が目印です</small></div></li>
-              <li><span><PlusSquare size={20} /></span><div><strong>「ホーム画面に追加」</strong><small>メニューを少し下へスクロール</small></div></li>
-              <li><b>3</b><div><strong>右上の「追加」</strong><small>次回からアイコンですぐに開けます</small></div></li>
+              <li><span><Share size={20} /></span><div><strong>{t('installShare')}</strong><small>{t('installShareHint')} <ArrowUp size={13} /></small></div></li>
+              <li><span><PlusSquare size={20} /></span><div><strong>{t('installHome')}</strong><small>{t('installHomeHint')}</small></div></li>
+              <li><b>3</b><div><strong>{t('installConfirm')}</strong><small>{t('installConfirmHint')}</small></div></li>
             </ol>
-            <button type="button" className="pl-install-sheet__done" onClick={dismiss}>わかりました</button>
+            <button type="button" className="pl-install-sheet__done" onClick={dismiss}>{t('installDone')}</button>
           </section>
         </div>
       ) : null}

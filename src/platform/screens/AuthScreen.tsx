@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { FESTIVAL_PATH, PLATFORM_PATH } from '../../app/routes'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { useAuth } from '../lib/auth'
-import { LanguageToggle, useLang } from '../../i18n/LangProvider'
+import { useLang } from '../../i18n/LangProvider'
 import { trackProductEvent } from '../lib/track'
 import { registrationError } from '../lib/onboarding'
 import { requireSupabase } from '../lib/supabase'
@@ -87,7 +87,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
   return (
     <div className="pl-shell pl-shell--flush pl-registration">
       <div className="pl-registration__heading">
-        <a href="/" aria-label={t('appName')}><BrandLogo size={64} variant="official" className="pl-registration__logo pl-registration__logo--official" /></a><LanguageToggle />
+        <a href="/" aria-label={t('appName')}><BrandLogo size={64} variant="official" className="pl-registration__logo pl-registration__logo--official" /></a>
       </div>
       <div className="pl-registration__intro"><p>{role === 'performer' ? 'PERFORMER ENTRY' : 'YOUR ACCOUNT'}</p><h1 className="pl-h1">{mode === 'in' ? t('signIn') : mode === 'reset' ? t('authResetTitle') : mode === 'new-password' ? t('authNewPasswordTitle') : role === 'performer' ? t('authPerformerTitle') : t('signUp')}</h1>
       <span>{mode === 'reset' ? t('authLeadReset') : mode === 'new-password' ? t('authLeadNewPassword') : role === 'performer' ? t('authLeadPerformer') : t('authLeadReturning')}</span></div>

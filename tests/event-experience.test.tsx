@@ -94,7 +94,7 @@ it('lists published events from the database and opens the selected slug', async
   render(<EventListScreen onOpen={open} />)
   await screen.findByText('受賞者たち')
   expect(screen.getByRole('img', { name: '受賞者たち 公式チラシ' }).getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer.jpg')
-  for (const fact of ['10/10〜12', '10:00〜19:00', '東京・練馬城址公園', '入場無料', 'Presented by 大道芸博 2026']) {
+  for (const fact of ['10/10〜12', '10:00〜19:00', '東京 練馬城址公園', '入場無料', 'Presented by 大道芸博 2026']) {
     expect(screen.getByText(fact)).toBeTruthy()
   }
   fireEvent.click(screen.getByRole('button', { name: /イベントを楽しむ/ }))

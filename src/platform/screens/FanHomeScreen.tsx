@@ -68,7 +68,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const [followed, setFollowed] = useState<Performer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel })
+  const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel, slug: 'award-winning-performers-2026' })
 
   useEffect(() => {
     let cancelled = false
@@ -76,7 +76,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
       if (cancelled) return
       if (event) {
-        setEventLabel({ date: event.date_label, place: event.place_label })
+        setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
         const lineup = await listEventLineup(event.id).catch((): string[] => [])
         if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
       } else setRoster(allRows)
@@ -158,7 +158,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <InstallPrompt />
 
       <section className="pl-event-glass" aria-label={t('eventHome')}>
-        <div><p>DAIDOUGEI HAKU 2026</p><h2>{eventLabel.date || '10.10-10.12'}</h2><span><MapPin size={14} /> {eventLabel.place || t('homeVenue')}</span></div>
+        <div><p>DAIDOUGEI HAKU 2026</p><h2>{eventLabel.date || '10.10-10.12'}</h2><span><MapPin size={14} /> {eventLabel.slug === 'award-winning-performers-2026' ? t('awpPlace') : (eventLabel.place || t('homeVenue'))}</span></div>
         <button type="button" className="pl-action pl-action--glass" onClick={onOpenMap}>{t('homeMapCta')} <ArrowRight size={17} /></button>
       </section>
       {error ? <p className="pl-error" role="status">{error}</p> : null}

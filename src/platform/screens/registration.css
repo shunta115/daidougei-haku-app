@@ -44,7 +44,7 @@
 .pl-registration button:focus-visible,
 .pl-registration a:focus-visible,
 .pl-registration summary:focus-visible { outline: 2px solid #84cce4; outline-offset: 3px; }
-.pl-registration__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pl-registration__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-right: 78px; }
 .pl-registration__heading > a { min-height: 44px; display: inline-flex; align-items: center; }
 .pl-registration__logo { display: block; width: 116px; height: auto; }
 .pl-registration__logo--official { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }

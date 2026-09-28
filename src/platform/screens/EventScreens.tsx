@@ -74,8 +74,27 @@ function compactEventDate(event: FeaturedEvent) {
   return event.date_label
 }
 
-function eventFactLines(event: FeaturedEvent) {
-  return [compactEventDate(event), event.hours_label, event.place_label, event.admission_label].map((line) => String(line ?? '').trim()).filter(Boolean)
+function eventFactLines(event: FeaturedEvent, place: string, admission: string | undefined) {
+  return [compactEventDate(event), event.hours_label, place, admission].map((line) => String(line ?? '').trim()).filter(Boolean)
+}
+
+const AWP_SLUG = 'award-winning-performers-2026'
+
+function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'presenter' | 'awpPlace' | 'awpAdmission') => string) {
+  if (event.slug === AWP_SLUG) {
+    return {
+      name: translate('eventName'),
+      presenter: translate('presenter'),
+      place: translate('awpPlace'),
+      admission: translate('awpAdmission'),
+    }
+  }
+  return {
+    name: event.name_ja,
+    presenter: event.presenter_ja,
+    place: event.place_label,
+    admission: event.admission_label,
+  }
 }
 
 const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer.jpg'
@@ -108,13 +127,16 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {!loading && !error && events.length === 0 ? <section className="pl-event-empty"><CalendarDays size={30} /><h2>{t('eventEmptyTitle')}</h2><p>{t('eventEmptyBody')}</p></section> : null}
     <div className="pl-event-index__list">
-      {events.map((event) => <article className="pl-event-card" key={event.id} data-archived={event.status === 'archived'}>
+      {events.map((event) => {
+        const chrome = eventChrome(event, t)
+        return <article className="pl-event-card" key={event.id} data-archived={event.status === 'archived'}>
         <div className="pl-event-card__visual" data-flyer={event.slug === 'award-winning-performers-2026' ? 'true' : undefined}>
-          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={t('eventFlyerAlt', { name: event.name_ja })} /> : <strong>AWP</strong>}
+          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={t('eventFlyerAlt', { name: chrome.name })} /> : <strong>AWP</strong>}
           <span>{event.status === 'archived' ? 'ARCHIVE' : '2026 EVENT'}</span>
         </div>
-        <div className="pl-event-card__body"><p>{event.presenter_ja}</p><h2>{event.name_ja}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>{t('eventEnjoy')}<ChevronRight size={18} /></button></div>
-      </article>)}
+        <div className="pl-event-card__body"><p>{chrome.presenter}</p><h2>{chrome.name}</h2><ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>{t('eventEnjoy')}<ChevronRight size={18} /></button></div>
+      </article>
+      })}
     </div>
   </main>
 }
@@ -202,6 +224,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   if (loading) return <p role="status">{t('eventPreparing')}</p>
   if (error && !event) return <main className="pl-event-detail"><button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button><p className="pl-error">{error}</p></main>
   if (!event) return null
+  const chrome = eventChrome(event, t)
   const renderSpot = (slot: EventSlotRow | undefined, label: string) => {
     if (!slot) return null
     const performer = slot.performer_id ? performerById.get(slot.performer_id) : null
@@ -211,7 +234,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
   return <main className="pl-event-detail">
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
-    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{event.presenter_ja}</p><h1>{event.name_ja}</h1><strong>{event.main_copy_ja || t('eventCopy')}</strong><h2>{event.sub_copy_ja || t('eventSub')}</h2><ul className="pl-event-facts">{eventFactLines(event).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button></div></section>
+    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{chrome.presenter}</p><h1>{chrome.name}</h1><strong>{event.main_copy_ja || t('eventCopy')}</strong><h2>{event.sub_copy_ja || t('eventSub')}</h2><ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button></div></section>
 
     <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={onOpenMap}>{t('mapTab')}</button></nav>
 

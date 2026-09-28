@@ -3,7 +3,7 @@ import type { I18nKey } from './keys'
 /** Traditional Chinese for the original dictionary keys. */
 export const baseZh: Record<I18nKey, string> = {
   appName: '大道藝博',
-  eventName: '獲獎者們',
+  eventName: '獲獎表演者',
   presenter: 'Presented by 大道藝博 2026',
   signIn: '登入',
   signUp: '建立帳號',

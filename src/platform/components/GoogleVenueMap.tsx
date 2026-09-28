@@ -3,6 +3,8 @@ import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucid
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
+import { mapsLocale, type Lang } from '../../i18n'
+import { useLang } from '../../i18n/LangProvider'
 
 type Props = {
   venues: EventVenueRow[]
@@ -37,22 +39,30 @@ const MAP_STYLE = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#8bbbd3' }] },
 ]
 
-function loadGoogleMaps(apiKey: string) {
+function loadGoogleMaps(apiKey: string, lang: Lang) {
+  const { language, region } = mapsLocale(lang)
+  const tag = `${language}:${region}`
+  const existing = document.querySelector<HTMLScriptElement>('script[data-daido-google-maps]')
+  if (existing && existing.dataset.mapsLocale !== tag) {
+    return Promise.reject(new Error('Google Maps locale mismatch'))
+  }
   if (window.google?.maps) return Promise.resolve(window.google)
   if (window.__daidougeiGoogleMaps) return window.__daidougeiGoogleMaps
+
   window.__daidougeiGoogleMaps = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-daido-google-maps]')
-    const script = existing ?? document.createElement('script')
-    const done = () => window.google?.maps ? resolve(window.google) : reject(new Error('Google Maps could not start'))
-    script.addEventListener('load', done, { once: true })
-    script.addEventListener('error', () => reject(new Error('Google Maps could not load')), { once: true })
-    if (!existing) {
-      script.dataset.daidoGoogleMaps = 'true'
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`
-      script.async = true
-      script.defer = true
-      document.head.appendChild(script)
+    const callback = `__daidougeiMapsReady_${language.replace('-', '_')}`
+    ;(window as Window & { [key: string]: unknown })[callback] = () => {
+      if (window.google?.maps) resolve(window.google)
+      else reject(new Error('Google Maps could not start'))
     }
+    const script = document.createElement('script')
+    script.dataset.daidoGoogleMaps = 'true'
+    script.dataset.mapsLocale = tag
+    script.async = true
+    script.defer = true
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&language=${encodeURIComponent(language)}&region=${encodeURIComponent(region)}&callback=${callback}`
+    script.addEventListener('error', () => reject(new Error('Google Maps could not load')), { once: true })
+    document.head.appendChild(script)
   })
   return window.__daidougeiGoogleMaps
 }
@@ -66,6 +76,7 @@ export function GoogleVenueMap({
   onSelectVenue,
   onLocationChange,
 }: Props) {
+  const { t, lang } = useLang()
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ?? ''
   const containerRef = useRef<HTMLDivElement>(null)
   const watchIdRef = useRef<number | null>(null)
@@ -136,7 +147,7 @@ export function GoogleVenueMap({
     const slowTimer = window.setTimeout(() => {
       if (active) setMapState('error')
     }, 8_000)
-    void loadGoogleMaps(apiKey)
+    void loadGoogleMaps(apiKey, lang)
       .then((api) => {
         if (!active || !containerRef.current) return
         window.clearTimeout(slowTimer)
@@ -148,6 +159,7 @@ export function GoogleVenueMap({
           fullscreenControl: false,
           mapTypeControl: false,
           streetViewControl: false,
+          zoomControl: true,
           cameraControl: false,
           styles: MAP_STYLE,
         })
@@ -158,7 +170,7 @@ export function GoogleVenueMap({
       })
       .catch(() => { window.clearTimeout(slowTimer); if (active) setMapState('error') })
     return () => { active = false; window.clearTimeout(slowTimer) }
-  }, [apiKey, centerSeed])
+  }, [apiKey, centerSeed, lang])
 
   useEffect(() => {
     if (!map) return
@@ -184,7 +196,7 @@ export function GoogleVenueMap({
         strokeColor: '#ffffff',
         strokeWeight: 3,
       },
-      title: '現在地',
+      title: t('mapsHere'),
     })
     const accuracy = new googleApi.maps.Circle({
       map,
@@ -197,7 +209,7 @@ export function GoogleVenueMap({
       strokeWeight: 1,
     })
     return () => { dot.setMap(null); accuracy.setMap(null) }
-  }, [googleApi, location, map])
+  }, [googleApi, location, map, t])
 
   useEffect(() => {
     if (!map || !googleApi) return
@@ -216,7 +228,7 @@ export function GoogleVenueMap({
         element = document.createElement('button')
         element.type = 'button'
         element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : ''}${input.active ? ' pl-google-marker--active' : ''}`
-        element.setAttribute('aria-label', `${input.label}${input.live ? 'のLIVEを表示' : 'を表示'}`)
+        element.setAttribute('aria-label', input.live ? t('mapsShowLive', { name: input.label }) : t('mapsShowPlace', { name: input.label }))
         const portrait = input.image ? document.createElement('img') : document.createElement('b')
         if (portrait instanceof HTMLImageElement) {
           portrait.src = input.image ?? ''
@@ -271,7 +283,7 @@ export function GoogleVenueMap({
       })
     })
     return () => overlays.forEach((overlay) => overlay.setMap(null))
-  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, venues])
+  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, t, venues])
 
   const recenter = () => {
     if (!map || !location) return
@@ -282,17 +294,17 @@ export function GoogleVenueMap({
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${EVENT_CENTER.lat},${EVENT_CENTER.lng}`
 
   return (
-    <section className="pl-google-map" aria-label="Google Maps会場マップ">
+    <section className="pl-google-map" aria-label={t('mapsAria')}>
       <div ref={containerRef} className="pl-google-map__canvas" />
       {mapState === 'ready' ? (
-        <div className="pl-google-map__type" role="group" aria-label="地図表示">
+        <div className="pl-google-map__type" role="group" aria-label={t('mapsMode')}>
           <button
             type="button"
             aria-pressed={displayMode === 'roadmap'}
             data-active={displayMode === 'roadmap'}
             onClick={() => setDisplayMode('roadmap')}
           >
-            <MapIcon size={14} /> 地図
+            <MapIcon size={14} /> {t('mapsRoad')}
           </button>
           <button
             type="button"
@@ -300,26 +312,26 @@ export function GoogleVenueMap({
             data-active={displayMode === 'hybrid'}
             onClick={() => setDisplayMode('hybrid')}
           >
-            <Satellite size={14} /> 航空写真
+            <Satellite size={14} /> {t('mapsSatellite')}
           </button>
         </div>
       ) : null}
-      {mapState === 'loading' ? <div className="pl-google-map__loading" aria-label="地図を読み込み中"><span /><span /><span /></div> : null}
+      {mapState === 'loading' ? <div className="pl-google-map__loading" aria-label={t('mapsLoading')}><span /><span /><span /></div> : null}
       {mapState === 'missing-key' || mapState === 'error' ? (
         <div className="pl-google-map__error" role="status">
           <MapPin size={20} />
-          <span>{mapState === 'missing-key' ? '地図の公開設定が未完了です。会場一覧はこの下で確認できます。' : '地図の読み込みに時間がかかっています。会場一覧はこの下で確認できます。'}</span>
-          <a href={mapsHref} target="_blank" rel="noopener noreferrer">Google Mapsを開く</a>
+          <span>{mapState === 'missing-key' ? t('mapsMissing') : t('mapsSlow')}</span>
+          <a href={mapsHref} target="_blank" rel="noopener noreferrer">{t('mapsOpen')}</a>
         </div>
       ) : null}
       {locationState !== 'granted' ? (
         <div className="pl-google-map__permission">
           <LocateFixed size={20} />
-          <span>{locationState === 'requesting' ? '現在地を確認しています…' : locationState === 'denied' ? '位置情報がOFFです。許可すると近くのLIVEが分かります。' : '現在地を取得できませんでした。'}</span>
-          {locationState !== 'requesting' ? <button type="button" onClick={requestLocation}><Crosshair size={16} /> 再取得</button> : null}
+          <span>{locationState === 'requesting' ? t('mapsLocating') : locationState === 'denied' ? t('mapsDenied') : t('mapsUnavailable')}</span>
+          {locationState !== 'requesting' ? <button type="button" onClick={requestLocation}><Crosshair size={16} /> {t('mapsRetry')}</button> : null}
         </div>
       ) : map ? (
-        <button type="button" className="pl-google-map__recenter" onClick={recenter} aria-label="現在地へ戻る">
+        <button type="button" className="pl-google-map__recenter" onClick={recenter} aria-label={t('mapsRecenter')}>
           <LocateFixed size={19} />
         </button>
       ) : null}

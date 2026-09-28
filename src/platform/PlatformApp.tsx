@@ -39,10 +39,7 @@ function SetupScreen() {
   const { t } = useLang()
   return (
     <div className="pl-shell pl-shell--flush">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <p className="pl-brand">{t('appName')}</p>
-        <LanguageToggle />
-      </div>
+      <p className="pl-brand">{t('appName')}</p>
       <h1 className="pl-h1">{t('setupNeeded')}</h1>
       <p className="pl-muted">{t('setupHint')}</p>
       <button type="button" className="pl-btn pl-btn--block" onClick={() => spaGo(FESTIVAL_PATH)}>
@@ -57,10 +54,7 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
   const meta = PUBLIC_EVENT_META
   return (
     <div className="pl-shell pl-shell--flush">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <p className="pl-brand">{t('appName')}</p>
-        <LanguageToggle />
-      </div>
+      <p className="pl-brand">{t('appName')}</p>
       <h1 className="pl-h1">{t('welcomeTitle')}</h1>
       <p className="pl-muted">
         {meta.eventNameJa} {meta.dateLabel} · {meta.placeLabel}
@@ -92,7 +86,6 @@ function PlatformTopBar({ accountLabel, onAccount }: { accountLabel: string; onA
         <BrandLogo size={24} variant="lockup" className="pl-unified-topbar__logo" />
       </button>
       <div className="pl-unified-topbar__actions">
-        <LanguageToggle />
         <button type="button" className="pl-unified-topbar__account" onClick={onAccount}>
           {accountLabel}
         </button>
@@ -852,6 +845,7 @@ export function PlatformApp() {
   return (
     <>
       <PlatformBackground />
+      <LanguageToggle />
       <PlatformShell />
     </>
   )

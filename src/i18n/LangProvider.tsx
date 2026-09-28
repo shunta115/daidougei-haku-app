@@ -1,11 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { readLang, t, writeLang, type I18nKey, type Lang } from './index'
 
 const listeners = new Set<() => void>()
-
-function emit() {
-  listeners.forEach((fn) => fn())
-}
 
 function subscribe(fn: () => void) {
   listeners.add(fn)
@@ -24,6 +20,12 @@ type LangContextValue = {
 
 const LangContext = createContext<LangContextValue | null>(null)
 
+function applyLang(next: Lang, current: Lang) {
+  if (next === current) return
+  writeLang(next)
+  window.location.reload()
+}
+
 export function LangProvider({ children }: { children: ReactNode }) {
   const lang = useSyncExternalStore(subscribe, readLang, () => 'ja' as Lang)
   useEffect(() => {
@@ -32,10 +34,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LangContextValue>(
     () => ({
       lang,
-      setLang: (next: Lang) => {
-        writeLang(next)
-        emit()
-      },
+      setLang: (next: Lang) => applyLang(next, lang),
       t: (key: I18nKey, vars?: Vars) => t(key, lang, vars),
     }),
     [lang],
@@ -48,38 +47,60 @@ export function useLang(): LangContextValue {
   if (!ctx) {
     return {
       lang: readLang(),
-      setLang: (next: Lang) => {
-        writeLang(next)
-        emit()
-      },
+      setLang: (next: Lang) => applyLang(next, readLang()),
       t: (key: I18nKey, vars?: Vars) => t(key, readLang(), vars),
     }
   }
   return ctx
 }
 
-const LANG_OPTIONS: Array<{ id: Lang; label: string }> = [
-  { id: 'ja', label: '日本語' },
-  { id: 'en', label: 'EN' },
-  { id: 'zh-TW', label: '繁中' },
+const LANG_OPTIONS: Array<{ id: Lang; short: string; label: string }> = [
+  { id: 'ja', short: 'JA', label: '日本語' },
+  { id: 'en', short: 'EN', label: 'English' },
+  { id: 'zh-TW', short: '繁中', label: '繁體中文' },
 ]
 
 export function LanguageToggle() {
   const { lang, setLang } = useLang()
+  const [open, setOpen] = useState(false)
+  const current = LANG_OPTIONS.find((option) => option.id === lang) ?? LANG_OPTIONS[0]
+
   return (
-    <div className="pl-chip-row fe-lang" role="group" aria-label="Language" style={{ margin: 0 }}>
-      {LANG_OPTIONS.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          className="pl-chip fe-lang__btn"
-          data-on={lang === option.id}
-          aria-pressed={lang === option.id}
-          onClick={() => setLang(option.id)}
-        >
-          {option.label}
-        </button>
-      ))}
+    <div className="pl-lang-switch">
+      <button
+        type="button"
+        className="pl-lang-switch__trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={current.label}
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">🌐</span>
+        <span>{current.short}</span>
+      </button>
+      {open ? (
+        <div className="pl-lang-sheet" role="dialog" aria-modal="true" aria-label="Language">
+          <button type="button" className="pl-lang-sheet__backdrop" aria-label="Close" onClick={() => setOpen(false)} />
+          <div className="pl-lang-sheet__panel">
+            <div className="pl-lang-sheet__handle" aria-hidden="true" />
+            {LANG_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="pl-lang-sheet__option"
+                data-on={lang === option.id}
+                aria-pressed={lang === option.id}
+                onClick={() => {
+                  if (option.id === lang) setOpen(false)
+                  else setLang(option.id)
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

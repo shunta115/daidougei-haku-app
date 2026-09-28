@@ -298,3 +298,7 @@ export function writeLang(lang: Lang) {
 export function t(key: I18nKey, lang: Lang = readLang(), vars?: Vars): string {
   return applyVars(textOf(lang, key), vars)
 }
+
+export function mapsLocale(lang: Lang): { language: 'ja' | 'en' | 'zh-TW'; region: 'JP' } {
+  return { language: lang === 'en' ? 'en' : lang === 'zh-TW' ? 'zh-TW' : 'ja', region: 'JP' }
+}
