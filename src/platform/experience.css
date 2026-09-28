@@ -702,4 +702,24 @@
     width: 100%;
     max-width: none;
     height: 100%;
-    padding:
+    padding: 3px;
+  }
+  .pl-nav__btn,
+  .pl-nav--fan .pl-nav__btn {
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 1px;
+    font-size: 10px;
+  }
+  .pl-nav__icon { height: 18px; }
+  .pl-nav--fan .pl-nav__btn--live .pl-nav__icon {
+    width: 28px;
+    height: 28px;
+    margin-top: 0;
+  }
+}
