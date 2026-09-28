@@ -172,8 +172,37 @@
 .pl-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--xp-line); border-radius: 15px; background: rgba(255,255,255,.06); }
 .pl-segment button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 0; border-radius: 11px; background: none; color: var(--xp-muted); font-weight: 800; }
 .pl-segment button[data-active='true'] { background: var(--xp-text); color: #111; }
-.pl-google-map { position: relative; min-height: 52dvh; overflow: hidden; border: 1px solid var(--xp-line); border-radius: var(--xp-radius-lg); background: #0d2940; box-shadow: var(--xp-shadow); }
-.pl-google-map iframe, .pl-google-map__canvas { width: 100%; min-height: 52dvh; display: block; border: 0; }
+.pl-map-schedule {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: clip;
+}
+.pl-google-map {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+  justify-self: stretch;
+  overflow: hidden;
+  min-height: 52dvh;
+  border: 1px solid var(--xp-line);
+  border-radius: var(--xp-radius-lg);
+  background: #0d2940;
+  box-shadow: var(--xp-shadow);
+}
+.pl-google-map iframe, .pl-google-map__canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 52dvh;
+  box-sizing: border-box;
+  border: 0;
+}
 .pl-google-map__loading { position: absolute; z-index: 4; inset: 0; display: flex; align-items: center; justify-content: center; gap: 7px; background: linear-gradient(145deg,#102f49,#091c2f); }
 .pl-google-map__loading span { width: 8px; height: 8px; border-radius: 50%; background: #8bc3ff; animation: pl-map-load 1s ease-in-out infinite alternate; }
 .pl-google-map__loading span:nth-child(2) { animation-delay: .2s; }
@@ -673,24 +702,4 @@
     width: 100%;
     max-width: none;
     height: 100%;
-    padding: 3px;
-  }
-  .pl-nav__btn,
-  .pl-nav--fan .pl-nav__btn {
-    min-height: 0;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 1px;
-    font-size: 10px;
-  }
-  .pl-nav__icon { height: 18px; }
-  .pl-nav--fan .pl-nav__btn--live .pl-nav__icon {
-    width: 28px;
-    height: 28px;
-    margin-top: 0;
-  }
-}
+    padding:
