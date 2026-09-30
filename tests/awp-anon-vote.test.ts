@@ -9,6 +9,16 @@ it('keeps extra i18n keys aligned across ja, en, and zh-TW', () => {
   expect(Object.keys(extra.zh).sort()).toEqual(Object.keys(extra.ja).sort())
 })
 
+it('uses three-vote copy on the AWP poster landing', () => {
+  expect(extra.ja.eventSub).toContain('3票')
+  expect(extra.en.eventSub.toLowerCase()).toContain('3')
+  expect(extra.zh.eventSub).toContain('3')
+  expect(extra.ja.awpHeroFree).toContain('登録不要')
+  expect(extra.ja.awpHeroFree).toContain('投票無料')
+  expect(extra.ja.awpHeroBasicFree).toContain('基本機能は無料')
+  expect(extra.ja.awpHeroCta).toContain('投票はこちら')
+})
+
 it('routes the AWP poster vote URL without a performer-specific path', () => {
   expect(eventVotePath()).toBe(`/events/${AWP_EVENT_SLUG}/vote`)
   expect(parseEventsPath(`/events/${AWP_EVENT_SLUG}/vote`)).toEqual({ kind: 'vote', slug: AWP_EVENT_SLUG })

@@ -18,7 +18,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
-import { EventVoteDesk } from './EventVoteDesk'
+import { AwpHeroVoteLaunch, EventVoteDesk } from './EventVoteDesk'
 import './event.css'
 
 type DetailProps = {
@@ -28,6 +28,7 @@ type DetailProps = {
   onWatchLive: (id: string) => void
   onTip: (id: string) => void
   onOpenMap: () => void
+  onOpenVote?: () => void
   onRequireAuth: () => void
 }
 
@@ -142,7 +143,7 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
   </main>
 }
 
-export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, onTip, onOpenMap, onRequireAuth }: DetailProps) {
+export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, onTip, onOpenMap, onOpenVote, onRequireAuth }: DetailProps) {
   const { t } = useLang()
   const { user, profile } = useAuth()
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
@@ -235,7 +236,20 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
   return <main className="pl-event-detail">
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
-    <section className="pl-event-hero"><div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div><p>{chrome.presenter}</p><h1>{chrome.name}</h1><strong>{event.main_copy_ja || t('eventCopy')}</strong><h2>{event.sub_copy_ja || t('eventSub')}</h2><ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>{phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}<div><button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button><button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button></div></section>
+    <section className={`pl-event-hero${slug === AWP_SLUG ? ' pl-event-hero--awp' : ''}`}>
+      <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
+      <p>{chrome.presenter}</p>
+      <h1>{chrome.name}</h1>
+      <strong>{slug === AWP_SLUG ? t('eventCopy') : (event.main_copy_ja || t('eventCopy'))}</strong>
+      <h2>{slug === AWP_SLUG ? t('eventSub') : (event.sub_copy_ja || t('eventSub'))}</h2>
+      {slug === AWP_SLUG ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
+      <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
+      {phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}
+      <div className="pl-event-hero__more">
+        <button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button>
+        <button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button>
+      </div>
+    </section>
 
     <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={onOpenMap}>{t('mapTab')}</button></nav>
 

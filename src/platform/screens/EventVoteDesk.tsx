@@ -13,6 +13,47 @@ import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import './event.css'
 
+export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; onOpenVote: () => void }) {
+  const { t } = useLang()
+  const voterId = useMemo(() => readOrCreateAnonVoterId(), [])
+  const [remaining, setRemaining] = useState<number | null>(null)
+  const [maxVotes, setMaxVotes] = useState(3)
+
+  useEffect(() => {
+    let active = true
+    void getAnonVoteState(eventId, voterId)
+      .then((state) => {
+        if (!active) return
+        setMaxVotes(state.max_votes)
+        setRemaining(state.remaining)
+      })
+      .catch(() => {
+        if (active) setRemaining(null)
+      })
+    return () => { active = false }
+  }, [eventId, voterId])
+
+  const left = remaining
+  const used = left == null ? 0 : Math.max(0, maxVotes - left)
+
+  return (
+    <div className="pl-event-hero__vote">
+      <p className="pl-event-hero__support">{t('awpHeroSupport')}</p>
+      <p className="pl-event-hero__free">{t('awpHeroFree')}</p>
+      <small className="pl-event-hero__basic">{t('awpHeroBasicFree')}</small>
+      <button type="button" className="pl-event-hero__vote-btn" onClick={onOpenVote}>{t('awpHeroCta')}</button>
+      {left != null ? (
+        <div className="pl-event-hero__hearts" aria-live="polite">
+          <span aria-hidden="true">
+            {Array.from({ length: maxVotes }, (_, index) => (index < used ? '♥' : '♡')).join(' ')}
+          </span>
+          <em>{left > 0 ? t('awpVoteLeft', { n: left }) : t('awpVoteAllDone')}</em>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 type DeskProps = {
   event: FeaturedEvent
   performers: Performer[]
