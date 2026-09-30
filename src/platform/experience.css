@@ -172,12 +172,49 @@
 .pl-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--xp-line); border-radius: 15px; background: rgba(255,255,255,.06); }
 .pl-segment button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 0; border-radius: 11px; background: none; color: var(--xp-muted); font-weight: 800; }
 .pl-segment button[data-active='true'] { background: var(--xp-text); color: #111; }
+.pl-shell:has(.pl-map-schedule) {
+  width: 100%;
+  max-width: min(520px, 100%);
+  min-width: 0;
+  box-sizing: border-box;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
 .pl-map-schedule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  overflow-x: clip;
+  margin-inline: auto;
+}
+.pl-map-schedule > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  animation: none;
+}
+.pl-map-schedule .pl-page-intro {
+  padding: 8px 72px 0 0;
+}
+.pl-map-schedule .pl-page-intro h1 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.pl-map-schedule .pl-map-directory > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.pl-map-schedule .pl-map-directory > div > button {
+  min-width: min(80%, 280px);
+  max-width: 100%;
+}
+.pl-map-schedule .pl-event-lineup__rail,
+.pl-map-schedule .pl-schedule-v7,
+.pl-map-schedule .pl-schedule-v7__dates {
+  min-width: 0;
+  max-width: 100%;
 }
 .pl-google-map {
   position: relative;
