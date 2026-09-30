@@ -244,78 +244,73 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const moreLabel = phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')
   return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
-    <section className={`pl-event-hero${isAwp ? ' pl-event-hero--awp' : ''}`}>
-      {isAwp ? (
-        <div className="pl-event-hero__orbs" aria-hidden="true">
-          <span className="pl-event-hero__ring" />
-          <span className="pl-event-hero__orb pl-event-hero__orb--a" />
-          <span className="pl-event-hero__orb pl-event-hero__orb--b" />
+    {isAwp ? (
+      <section className="awp-fv">
+        <div className="awp-fv__hero">
+          <div className="awp-fv__copy">
+            <div className="awp-fv__mark"><span>AWP</span><em>2026</em></div>
+            <p>{chrome.presenter}</p>
+            <h1>{chrome.name}</h1>
+            <strong>{t('eventCopy')}</strong>
+            <h2>{accentThrees(t('eventSub'))}</h2>
+          </div>
+          <div className="awp-fv__art" aria-hidden="true">
+            <span className="awp-fv__ring" />
+            <span className="awp-fv__ball awp-fv__ball--a" />
+            <span className="awp-fv__ball awp-fv__ball--b" />
+            <span className="awp-fv__figure"><img src={AWP_FLYER_SRC} alt="" /></span>
+          </div>
         </div>
-      ) : null}
-      <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
-      <p>{chrome.presenter}</p>
-      <h1>{chrome.name}</h1>
-      <strong>{isAwp ? t('eventCopy') : (event.main_copy_ja || t('eventCopy'))}</strong>
-      <h2>{isAwp ? accentThrees(t('eventSub')) : (event.sub_copy_ja || t('eventSub'))}</h2>
-      {isAwp ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
-      {isAwp ? (
-        <div className="pl-event-hero__meta">
-          <ul className="pl-event-facts pl-event-facts--awp">
+        <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} />
+        <div className="awp-fv__meta">
+          <ul>
             <li><CalendarDays size={14} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
             <li><MapPin size={14} aria-hidden="true" /><span>{chrome.place}</span></li>
             {chrome.admission ? <li><Ticket size={14} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
           </ul>
           {phase === 'before' && countdown !== null ? (
-            <div className="pl-event-hero__count">
+            <div className="awp-fv__count">
               <span>{t('eventCountdownLead')}</span>
-              <strong>{countdown}</strong>
+              <b>{countdown}</b>
               <small>{t('eventCountdownUnit')}</small>
             </div>
           ) : null}
         </div>
-      ) : (
-        <>
-          <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
-          {phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}
-        </>
-      )}
+        <div className="awp-fv__cards">
+          <button type="button" onClick={() => jump('event-schedule')}>
+            <span className="awp-fv__thumb" aria-hidden="true"><CalendarDays size={22} /></span>
+            <span>{moreLabel}</span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => setFlyerOpen(true)}>
+            <span className="awp-fv__thumb awp-fv__thumb--flyer" aria-hidden="true"><img src={AWP_FLYER_SRC} alt="" /></span>
+            <span>{t('eventFlyer')}</span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+    ) : (
+    <section className="pl-event-hero">
+      <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
+      <p>{chrome.presenter}</p>
+      <h1>{chrome.name}</h1>
+      <strong>{event.main_copy_ja || t('eventCopy')}</strong>
+      <h2>{event.sub_copy_ja || t('eventSub')}</h2>
+      <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
+      {phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}
       <div className="pl-event-hero__more">
-        <button type="button" onClick={() => jump('event-schedule')}>
-          {isAwp ? <span className="pl-event-hero__more-art" aria-hidden="true"><CalendarDays size={22} /></span> : null}
-          <span>{moreLabel}</span>
-          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
-        </button>
-        <button type="button" onClick={() => setFlyerOpen(true)}>
-          {isAwp ? (
-            <span className="pl-event-hero__more-art pl-event-hero__more-art--flyer" aria-hidden="true">
-              <img src={AWP_FLYER_SRC} alt="" />
-            </span>
-          ) : <Image size={16} />}
-          <span>{t('eventFlyer')}</span>
-          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
-        </button>
+        <button type="button" onClick={() => jump('event-schedule')}>{moreLabel}</button>
+        <button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button>
       </div>
     </section>
+    )}
 
     <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={onOpenMap}>{t('mapTab')}</button></nav>
 
-    {phase === 'during' ? <section className="pl-event-now" id="event-now"><header><p>RIGHT NOW</p><h2>{t('eventRightNow')}</h2></header>{current || next ? <div>{renderSpot(current, 'LIVE / NOW')}{renderSpot(next, 'NEXT')}</div> : <p className="pl-event-inline-empty">{t('eventRightNowEmpty')}</p>}</section> : phase === 'before' ? <section className="pl-event-pre" id="event-now"><CalendarDays size={24} /><div><p>BEFORE THE EVENT</p><h2>{countdown === 0 ? t('eventToday') : t('eventCountdown', { n: countdown ?? '—' })}</h2><span>{t('eventPreLead')}</span></div><button onClick={() => jump('event-lineup')}>{t('eventSeePerformers')}</button></section> : null}
+    {phase === 'during' ? <section className="pl-event-now" id="event-now"><header><p>RIGHT NOW</p><h2>{t('eventRightNow')}</h2></header>{current || next ? <div>{renderSpot(current, 'LIVE / NOW')}{renderSpot(next, 'NEXT')}</div> : <p className="pl-event-inline-empty">{t('eventRightNowEmpty')}</p>}</section> : isAwp ? <div id="event-now" /> : phase === 'before' ? <section className="pl-event-pre" id="event-now"><CalendarDays size={24} /><div><p>BEFORE THE EVENT</p><h2>{countdown === 0 ? t('eventToday') : t('eventCountdown', { n: countdown ?? '—' })}</h2><span>{t('eventPreLead')}</span></div><button onClick={() => jump('event-lineup')}>{t('eventSeePerformers')}</button></section> : null}
 
     {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:00</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:00+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
 
     <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const state = slotState(slot, clock); const soon = /^あと(\d+)分$/.exec(state); const stateLabel = state === '終了' ? t('slotEnded') : state === '開催中' ? t('slotLive') : state === '予定' ? t('slotPlanned') : soon ? t('slotSoon', { n: soon[1] }) : state; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{stateLabel}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
 
-    {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{performers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
-
-    <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? t('eventNightSet') : t('eventNightOpen')}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{t('eventRank', { n: index + 1 })}</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}` : t('eventTimePending')}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>{t('eventProfile')}</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>{t('navLive')}</button> : null}</article> }) : <p>{t('eventNoRank')}</p>}</section>
-
-    <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{t('eventSeeProfile')}</button></article>)}</div></section>
-
-    <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section>
-
-    <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
-
-    {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>{t('eventWelcomeKicker')}</p><h2 id="event-onboarding-title">{t('eventWelcomeTitle')}</h2><span>{event.sub_copy_ja || t('eventSub')}</span><ul><li>{t('eventGuide1')}</li><li>{t('eventGuide2')}</li><li>{t('eventGuide3')}</li><li>{t('eventGuide4')}</li></ul><button onClick={closeGuide}>{t('eventWelcomeCta')}</button></div></div> : null}
-    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label={t('eventFlyerDialog')}><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label={t('eventClose')}><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt={t('eventFlyerImage')} /></div></div> : null}
-  </main>
-}
+    {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{performers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="p
