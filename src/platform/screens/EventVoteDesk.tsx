@@ -46,19 +46,26 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
           <span>{t('awpHeroVoteFree')}</span>
         </div>
       </div>
-      <p className="pl-event-vote-card__support">{t('awpHeroSupport')}</p>
-      <p className="pl-event-vote-card__once">{t('awpHeroOnce')}</p>
-      {left != null ? (
-        <div className="pl-event-vote-card__meter" aria-live="polite">
-          <p className="pl-event-vote-card__hearts" aria-hidden="true">
-            {Array.from({ length: maxVotes }, (_, index) => (index < used ? '♥' : '♡')).join('  ')}
-          </p>
-          <p className="pl-event-vote-card__left">
-            {done ? t('awpHeroVoteDone') : <>{t('awpHeroLeft')} <em>{left}</em> {t('awpHeroLeftUnit')}</>}
-          </p>
-        </div>
-      ) : null}
-      <button type="button" className="pl-event-vote-card__cta" onClick={onOpenVote}>{t('awpHeroCta')}</button>
+      <div className="pl-event-vote-card__row">
+        {left != null ? (
+          <div className="pl-event-vote-card__hearts" aria-hidden="true">
+            {Array.from({ length: maxVotes }, (_, index) => (
+              <span key={index} data-used={index < used ? 'true' : 'false'}>{index < used ? '♥' : '♡'}</span>
+            ))}
+          </div>
+        ) : <span className="pl-event-vote-card__hearts" />}
+        <i className="pl-event-vote-card__rule" aria-hidden="true" />
+        <p className="pl-event-vote-card__left" aria-live="polite">
+          {left == null ? null : done ? t('awpHeroVoteDone') : (
+            <>
+              <span>{t('awpHeroLeft')}</span>
+              <em>{left}</em>
+              <small>{t('awpHeroLeftUnit')}</small>
+            </>
+          )}
+        </p>
+        <button type="button" className="pl-event-vote-card__cta" onClick={onOpenVote}>{t('awpHeroCta')}</button>
+      </div>
       <small className="pl-event-vote-card__basic">{t('awpHeroBasicFree')}</small>
     </div>
   )

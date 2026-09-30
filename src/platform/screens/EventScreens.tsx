@@ -246,8 +246,10 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
     <section className={`pl-event-hero${isAwp ? ' pl-event-hero--awp' : ''}`}>
       {isAwp ? (
-        <div className="pl-event-hero__visual" aria-hidden="true">
-          <img src={AWP_FLYER_SRC} alt="" />
+        <div className="pl-event-hero__orbs" aria-hidden="true">
+          <span className="pl-event-hero__ring" />
+          <span className="pl-event-hero__orb pl-event-hero__orb--a" />
+          <span className="pl-event-hero__orb pl-event-hero__orb--b" />
         </div>
       ) : null}
       <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
@@ -257,33 +259,40 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       <h2>{isAwp ? accentThrees(t('eventSub')) : (event.sub_copy_ja || t('eventSub'))}</h2>
       {isAwp ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
       {isAwp ? (
-        <ul className="pl-event-facts pl-event-facts--awp">
-          <li><CalendarDays size={14} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
-          <li><MapPin size={14} aria-hidden="true" /><span>{chrome.place}</span></li>
-          {chrome.admission ? <li><Ticket size={14} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
-        </ul>
+        <div className="pl-event-hero__meta">
+          <ul className="pl-event-facts pl-event-facts--awp">
+            <li><CalendarDays size={14} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
+            <li><MapPin size={14} aria-hidden="true" /><span>{chrome.place}</span></li>
+            {chrome.admission ? <li><Ticket size={14} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
+          </ul>
+          {phase === 'before' && countdown !== null ? (
+            <div className="pl-event-hero__count">
+              <span>{t('eventCountdownLead')}</span>
+              <strong>{countdown}</strong>
+              <small>{t('eventCountdownUnit')}</small>
+            </div>
+          ) : null}
+        </div>
       ) : (
-        <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
+        <>
+          <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
+          {phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}
+        </>
       )}
-      {phase === 'before' && countdown !== null ? (
-        isAwp ? (
-          <div className="pl-event-hero__count">
-            <span>{t('eventCountdownLead')}</span>
-            <strong>{countdown}</strong>
-            <small>{t('eventCountdownUnit')}</small>
-          </div>
-        ) : <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b>
-      ) : null}
       <div className="pl-event-hero__more">
         <button type="button" onClick={() => jump('event-schedule')}>
-          {isAwp ? <CalendarDays size={16} aria-hidden="true" /> : null}
+          {isAwp ? <span className="pl-event-hero__more-art" aria-hidden="true"><CalendarDays size={22} /></span> : null}
           <span>{moreLabel}</span>
-          {isAwp ? <ChevronRight size={14} aria-hidden="true" /> : null}
+          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
         </button>
         <button type="button" onClick={() => setFlyerOpen(true)}>
-          <Image size={16} aria-hidden="true" />
+          {isAwp ? (
+            <span className="pl-event-hero__more-art pl-event-hero__more-art--flyer" aria-hidden="true">
+              <img src={AWP_FLYER_SRC} alt="" />
+            </span>
+          ) : <Image size={16} />}
           <span>{t('eventFlyer')}</span>
-          {isAwp ? <ChevronRight size={14} aria-hidden="true" /> : null}
+          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
         </button>
       </div>
     </section>
