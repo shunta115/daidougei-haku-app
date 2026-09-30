@@ -164,30 +164,16 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
       {view === 'map' ? (
         <>
-          <section className="pl-map-directory" aria-label={t('mapVenues')}>
-            <header><div><p>VENUES</p><h2>{t('mapVenueMap')}</h2></div><span>{t('mapVenueCount', { n: venues.length })}</span></header>
-            <div>
-              {venues.map((venue) => {
-                const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
-                const active = venueSlots.find((slot) => timeLabel(slot.start_time) <= timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })) && timeLabel(slot.end_time) > timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })))
-                const upcoming = active ?? venueSlots[0]
-                const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
-                return <button type="button" key={venue.id} onClick={() => { setSelectedVenue(venue.id); setSelectedPerformer(null) }}>
-                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
-                </button>
-              })}
-              {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}
-            </div>
-          </section>
-          <GoogleVenueMap
-            venues={venues}
-            livePerformers={liveMapPerformers}
-            selectedPerformerId={selectedPerformer}
-            selectedVenueId={selectedVenue}
-            onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
-            onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
-            onLocationChange={setUserLocation}
-          />
+          <div className="pl-map-stage">
+            <GoogleVenueMap
+              venues={venues}
+              livePerformers={liveMapPerformers}
+              selectedPerformerId={selectedPerformer}
+              selectedVenueId={selectedVenue}
+              onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
+              onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
+              onLocationChange={setUserLocation}
+            />
 
           {selectedLivePerformer ? (() => {
             const performer = selectedLivePerformer
@@ -195,17 +181,20 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const km = userLocation ? distanceKm(userLocation, point) : null
             const matchingSlot = dateSlots.find((slot) => slot.performer_id === performer.id)
             const venue = matchingSlot ? venueById.get(matchingSlot.venue_id) : null
+            const place = venue?.name_ja || performer.city || ''
+            const meta = [performer.genre, place].filter(Boolean).join(' · ')
+            const viewers = viewerPeaks[performer.id]
             const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${point.lat},${point.lng}&travelmode=walking`
             return (
-              <section className="pl-venue-sheet pl-live-map-sheet" aria-label={t('mapLiveSheet', { name: performer.stage_name })}>
+              <section className="pl-venue-sheet pl-live-map-sheet pl-map-stage__sheet" aria-label={t('mapLiveSheet', { name: performer.stage_name })}>
                 <div className="pl-venue-sheet__top">
-                  <div><p>LIVE NOW{km != null ? ` · ${t('mapWalk', { n: walkingMinutes(km) })}` : ''}</p><h2>{performer.stage_name}</h2><span>{performer.genre || 'Performance'} · {venue?.name_ja || performer.city || t('mapSharing')}</span></div>
+                  <div><p>LIVE NOW{km != null ? ` · ${t('mapWalk', { n: walkingMinutes(km) })}` : ''}</p><h2>{performer.stage_name}</h2>{meta ? <span>{meta}</span> : null}</div>
                   {performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-live-map-sheet__avatar">{performer.stage_name.slice(0, 2)}</span>}
                 </div>
                 <div className="pl-live-map-sheet__facts">
                   <span><Radio size={14} /> {t('liveNow')}</span>
                   {km != null ? <span><Navigation size={14} /> {t('mapFromHere', { distance: formatMapDistance(km) })}</span> : null}
-                  <span><UserRound size={14} /> {t('mapViewers', { n: viewerPeaks[performer.id] ?? 0 })}</span>
+                  {viewers != null ? <span><UserRound size={14} /> {t('mapViewers', { n: viewers })}</span> : null}
                 </div>
                 <div className="pl-venue-sheet__actions">
                   <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> {t('eventWatchLive')}</button>
@@ -224,7 +213,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const walkMinutes = km == null ? null : walkingMinutes(km)
             const directions = venuePosition ? `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${venuePosition.lat},${venuePosition.lng}&travelmode=walking` : null
             return (
-              <section className="pl-venue-sheet">
+              <section className="pl-venue-sheet pl-map-stage__sheet">
                 <div className="pl-venue-sheet__top">
                   <div><p>STAGE{walkMinutes ? ` · ${t('mapWalk', { n: walkMinutes })}` : ''}</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || t('mapNextCheck')}</span></div>
                   {act?.photo_url ? <img src={act.photo_url} alt="" /> : null}
@@ -243,6 +232,23 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               </section>
             )
           })() : null}
+          </div>
+
+          <section className="pl-map-directory" aria-label={t('mapVenues')}>
+            <header><div><p>VENUES</p><h2>{t('mapVenueMap')}</h2></div><span>{t('mapVenueCount', { n: venues.length })}</span></header>
+            <div>
+              {venues.map((venue) => {
+                const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
+                const active = venueSlots.find((slot) => timeLabel(slot.start_time) <= timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })) && timeLabel(slot.end_time) > timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })))
+                const upcoming = active ?? venueSlots[0]
+                const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
+                return <button type="button" key={venue.id} onClick={() => { setSelectedVenue(venue.id); setSelectedPerformer(null) }}>
+                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
+                </button>
+              })}
+              {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}
+            </div>
+          </section>
 
           <section className="pl-near-live" aria-label={t('mapNear')}>
             <header><div><p>NEAR YOU</p><h2>{t('mapNear')}</h2></div><span>{t('mapGroupCount', { n: nearbyLive.length })}</span></header>

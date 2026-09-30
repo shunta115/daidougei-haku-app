@@ -173,6 +173,18 @@ export function GoogleVenueMap({
   }, [apiKey, centerSeed, lang])
 
   useEffect(() => {
+    if (!map || !containerRef.current) return
+    const node = containerRef.current
+    const refresh = () => {
+      try { window.google?.maps?.event?.trigger(map, 'resize') } catch { /* keep current view */ }
+    }
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(refresh) : null
+    observer?.observe(node)
+    refresh()
+    return () => observer?.disconnect()
+  }, [map])
+
+  useEffect(() => {
     if (!map) return
     map.setMapTypeId(displayMode)
   }, [displayMode, map])
@@ -227,7 +239,7 @@ export function GoogleVenueMap({
       overlay.onAdd = () => {
         element = document.createElement('button')
         element.type = 'button'
-        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : ''}${input.active ? ' pl-google-marker--active' : ''}`
+        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : ' pl-google-marker--venue'}${input.active ? ' pl-google-marker--active' : ''}`
         element.setAttribute('aria-label', input.live ? t('mapsShowLive', { name: input.label }) : t('mapsShowPlace', { name: input.label }))
         const portrait = input.image ? document.createElement('img') : document.createElement('b')
         if (portrait instanceof HTMLImageElement) {
