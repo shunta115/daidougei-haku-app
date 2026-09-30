@@ -245,6 +245,11 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
     <section className={`pl-event-hero${isAwp ? ' pl-event-hero--awp' : ''}`}>
+      {isAwp ? (
+        <div className="pl-event-hero__visual" aria-hidden="true">
+          <img src={AWP_FLYER_SRC} alt="" />
+        </div>
+      ) : null}
       <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
       <p>{chrome.presenter}</p>
       <h1>{chrome.name}</h1>
@@ -253,9 +258,9 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       {isAwp ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
       {isAwp ? (
         <ul className="pl-event-facts pl-event-facts--awp">
-          <li><CalendarDays size={16} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
-          <li><MapPin size={16} aria-hidden="true" /><span>{chrome.place}</span></li>
-          {chrome.admission ? <li><Ticket size={16} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
+          <li><CalendarDays size={14} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
+          <li><MapPin size={14} aria-hidden="true" /><span>{chrome.place}</span></li>
+          {chrome.admission ? <li><Ticket size={14} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
         </ul>
       ) : (
         <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
@@ -271,14 +276,14 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       ) : null}
       <div className="pl-event-hero__more">
         <button type="button" onClick={() => jump('event-schedule')}>
-          {isAwp ? <CalendarDays size={18} aria-hidden="true" /> : null}
+          {isAwp ? <CalendarDays size={16} aria-hidden="true" /> : null}
           <span>{moreLabel}</span>
-          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
+          {isAwp ? <ChevronRight size={14} aria-hidden="true" /> : null}
         </button>
         <button type="button" onClick={() => setFlyerOpen(true)}>
-          <Image size={18} aria-hidden="true" />
+          <Image size={16} aria-hidden="true" />
           <span>{t('eventFlyer')}</span>
-          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
+          {isAwp ? <ChevronRight size={14} aria-hidden="true" /> : null}
         </button>
       </div>
     </section>
