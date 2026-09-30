@@ -35,21 +35,31 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
 
   const left = remaining
   const used = left == null ? 0 : Math.max(0, maxVotes - left)
+  const done = left === 0
 
   return (
-    <div className="pl-event-hero__vote">
-      <p className="pl-event-hero__support">{t('awpHeroSupport')}</p>
-      <p className="pl-event-hero__free">{t('awpHeroFree')}</p>
-      <small className="pl-event-hero__basic">{t('awpHeroBasicFree')}</small>
-      <button type="button" className="pl-event-hero__vote-btn" onClick={onOpenVote}>{t('awpHeroCta')}</button>
+    <div className="pl-event-vote-card">
+      <div className="pl-event-vote-card__top">
+        <p className="pl-event-vote-card__title">{t('awpHeroVoteTitle')}</p>
+        <div className="pl-event-vote-card__badges">
+          <span>{t('awpHeroNoSignUp')}</span>
+          <span>{t('awpHeroVoteFree')}</span>
+        </div>
+      </div>
+      <p className="pl-event-vote-card__support">{t('awpHeroSupport')}</p>
+      <p className="pl-event-vote-card__once">{t('awpHeroOnce')}</p>
       {left != null ? (
-        <div className="pl-event-hero__hearts" aria-live="polite">
-          <span aria-hidden="true">
-            {Array.from({ length: maxVotes }, (_, index) => (index < used ? '♥' : '♡')).join(' ')}
-          </span>
-          <em>{left > 0 ? t('awpVoteLeft', { n: left }) : t('awpVoteAllDone')}</em>
+        <div className="pl-event-vote-card__meter" aria-live="polite">
+          <p className="pl-event-vote-card__hearts" aria-hidden="true">
+            {Array.from({ length: maxVotes }, (_, index) => (index < used ? '♥' : '♡')).join('  ')}
+          </p>
+          <p className="pl-event-vote-card__left">
+            {done ? t('awpHeroVoteDone') : <>{t('awpHeroLeft')} <em>{left}</em> {t('awpHeroLeftUnit')}</>}
+          </p>
         </div>
       ) : null}
+      <button type="button" className="pl-event-vote-card__cta" onClick={onOpenVote}>{t('awpHeroCta')}</button>
+      <small className="pl-event-vote-card__basic">{t('awpHeroBasicFree')}</small>
     </div>
   )
 }

@@ -17,6 +17,9 @@ it('uses three-vote copy on the AWP poster landing', () => {
   expect(extra.ja.awpHeroFree).toContain('投票無料')
   expect(extra.ja.awpHeroBasicFree).toContain('基本機能は無料')
   expect(extra.ja.awpHeroCta).toContain('投票はこちら')
+  expect(extra.ja.awpHeroNoSignUp).toBe('登録不要')
+  expect(extra.ja.awpHeroVoteFree).toBe('投票無料')
+  expect(extra.ja.awpHeroVoteDone).toBe('投票完了')
 })
 
 it('routes the AWP poster vote URL without a performer-specific path', () => {

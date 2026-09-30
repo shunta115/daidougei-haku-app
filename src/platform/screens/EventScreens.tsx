@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Gift, Image, MapPin, Radio, Sparkles, Trophy, Vote, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Gift, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote, X } from 'lucide-react'
 import {
   getEventBySlug,
   getEventVoteRule,
@@ -81,6 +81,12 @@ function eventFactLines(event: FeaturedEvent, place: string, admission: string |
 }
 
 const AWP_SLUG = 'award-winning-performers-2026'
+
+function accentThrees(text: string) {
+  return text.split(/(3)/).map((part, index) => (
+    part === '3' ? <em key={index} className="pl-event-hero__accent">3</em> : part
+  ))
+}
 
 function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'presenter' | 'awpPlace' | 'awpAdmission') => string) {
   if (event.slug === AWP_SLUG) {
@@ -234,20 +240,46 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</h3><span>{venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={onOpenMap}><MapPin size={16} />{t('eventSeeOnMap')}</button></div></article>
   }
 
-  return <main className="pl-event-detail">
+  const isAwp = slug === AWP_SLUG
+  const moreLabel = phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')
+  return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
-    <section className={`pl-event-hero${slug === AWP_SLUG ? ' pl-event-hero--awp' : ''}`}>
+    <section className={`pl-event-hero${isAwp ? ' pl-event-hero--awp' : ''}`}>
       <div className="pl-event-hero__mark"><span>AWP</span><em>2026</em></div>
       <p>{chrome.presenter}</p>
       <h1>{chrome.name}</h1>
-      <strong>{slug === AWP_SLUG ? t('eventCopy') : (event.main_copy_ja || t('eventCopy'))}</strong>
-      <h2>{slug === AWP_SLUG ? t('eventSub') : (event.sub_copy_ja || t('eventSub'))}</h2>
-      {slug === AWP_SLUG ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
-      <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
-      {phase === 'before' && countdown !== null ? <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b> : null}
+      <strong>{isAwp ? t('eventCopy') : (event.main_copy_ja || t('eventCopy'))}</strong>
+      <h2>{isAwp ? accentThrees(t('eventSub')) : (event.sub_copy_ja || t('eventSub'))}</h2>
+      {isAwp ? <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} /> : null}
+      {isAwp ? (
+        <ul className="pl-event-facts pl-event-facts--awp">
+          <li><CalendarDays size={16} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
+          <li><MapPin size={16} aria-hidden="true" /><span>{chrome.place}</span></li>
+          {chrome.admission ? <li><Ticket size={16} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
+        </ul>
+      ) : (
+        <ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul>
+      )}
+      {phase === 'before' && countdown !== null ? (
+        isAwp ? (
+          <div className="pl-event-hero__count">
+            <span>{t('eventCountdownLead')}</span>
+            <strong>{countdown}</strong>
+            <small>{t('eventCountdownUnit')}</small>
+          </div>
+        ) : <b className="pl-event-hero__countdown">{t('eventCountdown', { n: countdown })}</b>
+      ) : null}
       <div className="pl-event-hero__more">
-        <button type="button" onClick={() => jump('event-schedule')}>{phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')}</button>
-        <button type="button" onClick={() => setFlyerOpen(true)}><Image size={16} />{t('eventFlyer')}</button>
+        <button type="button" onClick={() => jump('event-schedule')}>
+          {isAwp ? <CalendarDays size={18} aria-hidden="true" /> : null}
+          <span>{moreLabel}</span>
+          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
+        </button>
+        <button type="button" onClick={() => setFlyerOpen(true)}>
+          <Image size={18} aria-hidden="true" />
+          <span>{t('eventFlyer')}</span>
+          {isAwp ? <ChevronRight size={16} aria-hidden="true" /> : null}
+        </button>
       </div>
     </section>
 
