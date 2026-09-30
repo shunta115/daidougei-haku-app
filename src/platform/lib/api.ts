@@ -686,6 +686,8 @@ export type EventVoteRule = {
   event_id: string
   voting_open: boolean
   votes_per_user_per_day: number
+  votes_per_voter?: number
+  allow_anonymous?: boolean
   voting_starts_at: string | null
   voting_ends_at: string | null
   updated_at: string
@@ -782,6 +784,68 @@ export async function voteForPerformer(eventId: string, performerId: string, _fa
   trackProductEvent('vote_complete', { performerId, eventId })
 }
 
+export type AnonVoteState = {
+  voting_open: boolean
+  max_votes: number
+  used: number
+  remaining: number
+  voted: string[]
+}
+
+export async function getAnonVoteState(eventId: string, voterId: string): Promise<AnonVoteState> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('get_anon_vote_state', { p_event_id: eventId, p_voter_id: voterId })
+  if (error) throw error
+  const row = (data ?? {}) as Partial<AnonVoteState>
+  const voted = Array.isArray(row.voted) ? row.voted.map(String) : []
+  return {
+    voting_open: Boolean(row.voting_open),
+    max_votes: Number(row.max_votes) || 3,
+    used: Number(row.used) || voted.length,
+    remaining: Number(row.remaining) || 0,
+    voted,
+  }
+}
+
+export async function castAnonEventVote(eventId: string, performerId: string, voterId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.rpc('cast_anon_event_vote', {
+    p_event_id: eventId,
+    p_performer_id: performerId,
+    p_voter_id: voterId,
+  })
+  if (error) throw error
+  trackProductEvent('vote_complete', { performerId, eventId, props: { mode: 'anon' } })
+}
+
+export type AdminVoteDesk = {
+  voting_open: boolean
+  allow_anonymous: boolean
+  votes_per_voter: number
+  total_votes: number
+  unique_voters: number
+  ranking: Array<{ performer_id: string; votes: number }>
+  hourly: Array<{ hour: string; votes: number }>
+  anomalies: Array<{ voter_prefix: string; votes: number; span_seconds: number; kind: string }>
+}
+
+export async function getAdminVoteDesk(eventId: string): Promise<AdminVoteDesk> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.rpc('admin_event_vote_desk', { p_event_id: eventId })
+  if (error) throw error
+  const row = (data ?? {}) as Partial<AdminVoteDesk>
+  return {
+    voting_open: Boolean(row.voting_open),
+    allow_anonymous: Boolean(row.allow_anonymous),
+    votes_per_voter: Number(row.votes_per_voter) || 3,
+    total_votes: Number(row.total_votes) || 0,
+    unique_voters: Number(row.unique_voters) || 0,
+    ranking: Array.isArray(row.ranking) ? row.ranking.map((item) => ({ performer_id: String(item.performer_id), votes: Number(item.votes) || 0 })) : [],
+    hourly: Array.isArray(row.hourly) ? row.hourly.map((item) => ({ hour: String(item.hour), votes: Number(item.votes) || 0 })) : [],
+    anomalies: Array.isArray(row.anomalies) ? row.anomalies : [],
+  }
+}
+
 export async function getMyVote(eventId: string, fanId: string): Promise<string | null> {
   const votes = await getMyVotes(eventId, fanId)
   return votes[0] ?? null
@@ -802,12 +866,17 @@ export async function listVoteRanking(eventId: string): Promise<Array<{ performe
 }
 
 export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId)
-  if (error) throw error
-  const counts = new Map<string, number>()
-  for (const row of data ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
-  return [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes)
+  try {
+    const desk = await getAdminVoteDesk(eventId)
+    return desk.ranking
+  } catch {
+    const sb = requireSupabase()
+    const { data, error } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId)
+    if (error) throw error
+    const counts = new Map<string, number>()
+    for (const row of data ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
+    return [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes)
+  }
 }
 
 export async function createBookingInquiry(organizerId: string, performerId: string, message: string) {

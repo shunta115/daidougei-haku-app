@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, parseEventsPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
@@ -27,6 +27,8 @@ import { OrganizerHomeScreen } from './screens/OrganizerHomeScreen'
 import { MerchDetailScreen, MerchListScreen, PerformerMerchScreen } from './screens/MerchScreens'
 import { SplashScreen } from './screens/SplashScreen'
 import { EventDetailScreen, EventListScreen } from './screens/EventScreens'
+import { EventVoteScreen } from './screens/EventVoteDesk'
+import { AdminVoteDeskScreen } from './screens/AdminVoteDeskScreen'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
@@ -105,7 +107,9 @@ function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
     if (window.location.pathname === EVENTS_PATH) return 'event-list'
-    if (window.location.pathname.startsWith(`${EVENTS_PATH}/`)) return 'event-detail'
+    const eventRoute = parseEventsPath(window.location.pathname)
+    if (eventRoute?.kind === 'vote') return 'event-vote'
+    if (eventRoute?.kind === 'detail') return 'event-detail'
     if (window.location.pathname === FESTIVAL_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
@@ -135,7 +139,10 @@ function PlatformShell() {
   const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(null)
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
-  const [eventSlug, setEventSlug] = useState<string | null>(() => window.location.pathname.startsWith(`${EVENTS_PATH}/`) ? decodeURIComponent(window.location.pathname.slice(EVENTS_PATH.length + 1)) : null)
+  const [eventSlug, setEventSlug] = useState<string | null>(() => {
+    const eventRoute = parseEventsPath(window.location.pathname)
+    return eventRoute && eventRoute.kind !== 'list' ? eventRoute.slug : null
+  })
   const [tipFlash, setTipFlash] = useState<string | null>(null)
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
@@ -146,18 +153,18 @@ function PlatformShell() {
 
   useEffect(() => {
     const syncEventRoute = () => {
-      const path = window.location.pathname
-      if (path === EVENTS_PATH) {
+      const eventRoute = parseEventsPath(window.location.pathname)
+      if (!eventRoute) {
+        if (window.location.pathname === FESTIVAL_PATH) setScreen('map-schedule')
+        return
+      }
+      if (eventRoute.kind === 'list') {
         setEventSlug(null)
         setScreen('event-list')
         return
       }
-      if (path.startsWith(`${EVENTS_PATH}/`)) {
-        setEventSlug(decodeURIComponent(path.slice(EVENTS_PATH.length + 1)))
-        setScreen('event-detail')
-        return
-      }
-      if (path === FESTIVAL_PATH) setScreen('map-schedule')
+      setEventSlug(eventRoute.slug)
+      setScreen(eventRoute.kind === 'vote' ? 'event-vote' : 'event-detail')
     }
     window.addEventListener('popstate', syncEventRoute)
     return () => window.removeEventListener('popstate', syncEventRoute)
@@ -183,6 +190,9 @@ function PlatformShell() {
     const account = url.searchParams.get('account')
     const merchProduct = url.searchParams.get('merchProduct')
     const merchProductResultId = url.searchParams.get('productId')
+    if (url.searchParams.get('adminVotes') === '1') {
+      window.sessionStorage.setItem('pl-admin-votes', '1')
+    }
     if (watch) {
       setPerformerId(watch)
       window.sessionStorage.setItem('pl-watch', watch)
@@ -314,6 +324,7 @@ function PlatformShell() {
         s === 'map-schedule' ||
         s === 'event-list' ||
         s === 'event-detail' ||
+        s === 'event-vote' ||
         s === 'merch-list' ||
         s === 'merch-detail'
           ? s
@@ -378,6 +389,11 @@ function PlatformShell() {
       return
     }
     const eventReturn = window.sessionStorage.getItem('pl-event-return')
+    if (window.sessionStorage.getItem('pl-admin-votes') && profile.role === 'admin') {
+      window.sessionStorage.removeItem('pl-admin-votes')
+      setScreen('admin-votes')
+      return
+    }
     if (eventReturn) {
       window.sessionStorage.removeItem('pl-event-return')
       setEventSlug(eventReturn)
@@ -565,6 +581,8 @@ function PlatformShell() {
       guestBody = <EventListScreen onOpen={openEvent} />
     } else if (screen === 'event-detail' && eventSlug) {
       guestBody = <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onRequireAuth={() => setScreen('auth')} />
+    } else if (screen === 'event-vote' && eventSlug) {
+      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
@@ -719,6 +737,9 @@ function PlatformShell() {
       case 'event-detail':
         body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
         break
+      case 'event-vote':
+        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} /> : <EventListScreen onOpen={openEvent} />
+        break
       case 'notifications':
         body = (
           <NotificationsScreen
@@ -772,6 +793,9 @@ function PlatformShell() {
         break
       case 'admin-event':
         body = <AdminEventScreen />
+        break
+      case 'admin-votes':
+        body = <AdminVoteDeskScreen />
         break
       case 'admin-users':
         body = <AdminUsersScreen />

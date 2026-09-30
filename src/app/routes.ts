@@ -5,6 +5,7 @@ export const FESTIVAL_PATH = '/event'
 
 /** 常設プラットフォーム内のイベント一覧と個別イベント */
 export const EVENTS_PATH = '/events'
+export const AWP_EVENT_SLUG = 'award-winning-performers-2026'
 
 /** 配信・投げ銭・ログイン（既存 Platform） */
 export const PLATFORM_PATH = '/live'
@@ -17,6 +18,21 @@ export function isPlatformPath(pathname: string): boolean {
 
 export function eventPath(slug: string): string {
   return `${EVENTS_PATH}/${encodeURIComponent(slug)}`
+}
+
+export function eventVotePath(slug = AWP_EVENT_SLUG): string {
+  return `${eventPath(slug)}/vote`
+}
+
+export function parseEventsPath(pathname: string): { kind: 'list' } | { kind: 'detail'; slug: string } | { kind: 'vote'; slug: string } | null {
+  if (pathname === EVENTS_PATH) return { kind: 'list' }
+  if (!pathname.startsWith(`${EVENTS_PATH}/`)) return null
+  const rest = decodeURIComponent(pathname.slice(EVENTS_PATH.length + 1))
+  if (rest.endsWith('/vote')) {
+    const slug = rest.slice(0, -'/vote'.length)
+    return slug ? { kind: 'vote', slug } : { kind: 'list' }
+  }
+  return rest ? { kind: 'detail', slug: rest } : { kind: 'list' }
 }
 
 /** フルリロードせず Festival / Platform を切り替える */
