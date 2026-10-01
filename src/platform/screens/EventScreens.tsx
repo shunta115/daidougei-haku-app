@@ -169,6 +169,13 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const clock = nowJst()
 
   useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]')
+    const previous = meta?.getAttribute('content')
+    meta?.setAttribute('content', '#050505')
+    return () => { if (previous) meta?.setAttribute('content', previous) }
+  }, [])
+
+  useEffect(() => {
     let active = true
     void (async () => {
       try {

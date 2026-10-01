@@ -317,6 +317,29 @@
 }
 .pl-event-detail--awp .pl-event-back { color:#fff; }
 
+html:has(.pl-event-detail),
+body:has(.pl-event-detail),
+#root:has(.pl-event-detail) {
+  background:#050505;
+}
+html:has(.pl-event-detail) .pl-app,
+html:has(.pl-event-detail) .pl-shell,
+html:has(.pl-event-detail) .pl-bg {
+  background:#050505;
+  border:0;
+  outline:0;
+  box-shadow:none;
+}
+html:has(.pl-event-detail) .pl-bg__mesh,
+html:has(.pl-event-detail) .pl-bg__orb,
+html:has(.pl-event-detail) .pl-bg__grid,
+html:has(.pl-event-detail) .pl-bg__vignette,
+html:has(.pl-event-detail) .pl-bg__grain {
+  display:none;
+  background:none;
+  box-shadow:none;
+}
+
 .awp-fv {
   position:relative;
   z-index:1;
