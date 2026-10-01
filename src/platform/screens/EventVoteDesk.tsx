@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ChevronRight, CircleDollarSign, MapPin, User, Vote } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
   getAnonVoteState,
@@ -12,6 +12,11 @@ import { canCastAnonVote, readOrCreateAnonVoterId } from '../lib/anonVoter'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import './event.css'
+
+function AwpVoteTitle({ text }: { text: string }) {
+  if (text.startsWith('投票')) return <><em>投票</em>{text.slice(2)}</>
+  return <>{text}</>
+}
 
 export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; onOpenVote: () => void }) {
   const { t } = useLang()
@@ -40,16 +45,16 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
   return (
     <div className="awp-vote">
       <div className="awp-vote__top">
-        <p className="awp-vote__title"><Vote size={16} aria-hidden="true" />{t('awpHeroVoteTitle').replace(/^🗳\s*/, '')}</p>
-        <span><User size={12} aria-hidden="true" />{t('awpHeroNoSignUp')}</span>
-        <span><CircleDollarSign size={12} aria-hidden="true" />{t('awpHeroVoteFree')}</span>
+        <p className="awp-vote__title"><Vote size={16} aria-hidden="true" /><AwpVoteTitle text={t('awpHeroVoteTitle').replace(/^🗳\s*/, '')} /></p>
+        <span className="awp-vote__pill"><User size={12} aria-hidden="true" />{t('awpHeroNoSignUp')}</span>
+        <span className="awp-vote__pill"><CircleDollarSign size={12} aria-hidden="true" />{t('awpHeroVoteFree')}</span>
       </div>
       <p className="awp-vote__lead">{t('awpHeroSupport')}</p>
       <p className="awp-vote__once">※{t('awpHeroOnce')}</p>
       <div className="awp-vote__row">
         <div className="awp-vote__hearts" aria-hidden="true">
           {Array.from({ length: maxVotes }, (_, index) => (
-            <span key={index} data-used={index < used ? 'true' : 'false'}>{index < used ? '♥' : '♡'}</span>
+            <Heart key={index} size={26} strokeWidth={1.7} data-used={index < used ? 'true' : 'false'} fill={index < used ? 'currentColor' : 'none'} />
           ))}
         </div>
         <i className="awp-vote__rule" aria-hidden="true" />

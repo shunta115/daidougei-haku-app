@@ -106,6 +106,7 @@ function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'prese
 }
 
 const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer.jpg'
+const AWP_HERO_SRC = '/events/award-winning-performers-2026/hero-performer.jpg'
 
 type EventPhase = 'before' | 'during' | 'after'
 
@@ -256,7 +257,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
           </div>
           <div className="awp-fv__art" aria-hidden="true">
             <span className="awp-fv__halo" />
-            <span className="awp-fv__figure"><img src={AWP_FLYER_SRC} alt="" /></span>
+            <span className="awp-fv__figure"><img src={AWP_HERO_SRC} alt="" /></span>
           </div>
         </div>
         <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} />
@@ -277,11 +278,9 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
         </div>
         <div className="awp-fv__cards">
           <button type="button" onClick={() => jump('event-schedule')}>
-            <span className="awp-fv__thumb awp-fv__thumb--sched" aria-hidden="true">
-              <img src={AWP_FLYER_SRC} alt="" />
-              <CalendarDays size={18} />
-            </span>
+            <CalendarDays size={18} aria-hidden="true" />
             <span>{t('eventSeeSchedule')}</span>
+            <span className="awp-fv__thumb awp-fv__thumb--sched" aria-hidden="true"><img src={AWP_HERO_SRC} alt="" /></span>
             <ChevronRight size={16} aria-hidden="true" />
           </button>
           <button type="button" onClick={() => setFlyerOpen(true)}>
