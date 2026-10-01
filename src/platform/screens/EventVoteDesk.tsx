@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ChevronRight, MapPin } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CircleDollarSign, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
   getAnonVoteState,
@@ -33,30 +33,28 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
     return () => { active = false }
   }, [eventId, voterId])
 
-  const left = remaining
-  const used = left == null ? 0 : Math.max(0, maxVotes - left)
-  const done = left === 0
+  const left = remaining ?? maxVotes
+  const used = remaining == null ? 0 : Math.max(0, maxVotes - remaining)
+  const done = remaining === 0
 
   return (
     <div className="awp-vote">
       <div className="awp-vote__top">
-        <p className="awp-vote__title">{t('awpHeroVoteTitle')}</p>
-        <span>{t('awpHeroNoSignUp')}</span>
-        <span>{t('awpHeroVoteFree')}</span>
+        <p className="awp-vote__title"><Vote size={16} aria-hidden="true" />{t('awpHeroVoteTitle').replace(/^🗳\s*/, '')}</p>
+        <span><User size={12} aria-hidden="true" />{t('awpHeroNoSignUp')}</span>
+        <span><CircleDollarSign size={12} aria-hidden="true" />{t('awpHeroVoteFree')}</span>
       </div>
       <p className="awp-vote__lead">{t('awpHeroSupport')}</p>
       <p className="awp-vote__once">※{t('awpHeroOnce')}</p>
       <div className="awp-vote__row">
         <div className="awp-vote__hearts" aria-hidden="true">
-          {left == null
-            ? null
-            : Array.from({ length: maxVotes }, (_, index) => (
-              <span key={index} data-used={index < used ? 'true' : 'false'}>{index < used ? '♥' : '♡'}</span>
-            ))}
+          {Array.from({ length: maxVotes }, (_, index) => (
+            <span key={index} data-used={index < used ? 'true' : 'false'}>{index < used ? '♥' : '♡'}</span>
+          ))}
         </div>
         <i className="awp-vote__rule" aria-hidden="true" />
         <p className="awp-vote__remain" aria-live="polite">
-          {left == null ? null : done ? t('awpHeroVoteDone') : (
+          {done ? t('awpHeroVoteDone') : (
             <>
               <span>{t('awpHeroLeft')}</span>
               <em>{left}</em>
@@ -65,11 +63,11 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
           )}
         </p>
         <button type="button" className="awp-vote__cta" onClick={onOpenVote}>
+          <Vote size={16} aria-hidden="true" />
           {t('awpHeroCtaShort')}
           <ChevronRight size={16} aria-hidden="true" />
         </button>
       </div>
-      <small className="awp-vote__basic">{t('awpHeroBasicFree')}</small>
     </div>
   )
 }

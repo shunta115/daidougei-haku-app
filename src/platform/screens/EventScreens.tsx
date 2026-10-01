@@ -255,21 +255,20 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
             <h2>{accentThrees(t('eventSub'))}</h2>
           </div>
           <div className="awp-fv__art" aria-hidden="true">
-            <span className="awp-fv__ring" />
-            <span className="awp-fv__ball awp-fv__ball--a" />
-            <span className="awp-fv__ball awp-fv__ball--b" />
+            <span className="awp-fv__halo" />
             <span className="awp-fv__figure"><img src={AWP_FLYER_SRC} alt="" /></span>
           </div>
         </div>
         <AwpHeroVoteLaunch eventId={event.id} onOpenVote={() => (onOpenVote ? onOpenVote() : jump('event-vote'))} />
         <div className="awp-fv__meta">
           <ul>
-            <li><CalendarDays size={14} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
-            <li><MapPin size={14} aria-hidden="true" /><span>{chrome.place}</span></li>
-            {chrome.admission ? <li><Ticket size={14} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
+            <li><CalendarDays size={15} aria-hidden="true" /><span>{[compactEventDate(event), event.hours_label].filter(Boolean).join('　')}</span></li>
+            <li><MapPin size={15} aria-hidden="true" /><span>{chrome.place}</span></li>
+            {chrome.admission ? <li><Ticket size={15} aria-hidden="true" /><span>{chrome.admission}</span></li> : null}
           </ul>
           {phase === 'before' && countdown !== null ? (
             <div className="awp-fv__count">
+              <CalendarDays size={22} aria-hidden="true" />
               <span>{t('eventCountdownLead')}</span>
               <b>{countdown}</b>
               <small>{t('eventCountdownUnit')}</small>
@@ -278,8 +277,11 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
         </div>
         <div className="awp-fv__cards">
           <button type="button" onClick={() => jump('event-schedule')}>
-            <span className="awp-fv__thumb" aria-hidden="true"><CalendarDays size={22} /></span>
-            <span>{moreLabel}</span>
+            <span className="awp-fv__thumb awp-fv__thumb--sched" aria-hidden="true">
+              <img src={AWP_FLYER_SRC} alt="" />
+              <CalendarDays size={18} />
+            </span>
+            <span>{t('eventSeeSchedule')}</span>
             <ChevronRight size={16} aria-hidden="true" />
           </button>
           <button type="button" onClick={() => setFlyerOpen(true)}>
