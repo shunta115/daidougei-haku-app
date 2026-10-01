@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BadgeCheck, Copy, Download, Expand, Heart, MapPin, Play, QrCode, Share2 } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
 import {
-  countFollowers,
   follow,
   getPerformer,
   isFollowing,
   listEventVenues,
   listPerformerEventSlots,
   listSellerMerchProducts,
+  sumLiveViews,
   tipSummaryForPerformer,
   unfollow,
   type EventVenueRow,
@@ -58,10 +58,24 @@ function slotPhase(slot: PerformerEventSlot): 'now' | 'upcoming' | 'past' {
   return 'past'
 }
 
-function dateLabel(value: string) {
+function weekdayJa(value: string) {
   const day = String(value).slice(0, 10)
+  const date = new Date(`${day}T12:00:00+09:00`)
+  return ['日', '月', '火', '水', '木', '金', '土'][date.getDay()] ?? ''
+}
+
+function dateTimeRange(slot: PerformerEventSlot) {
+  const day = String(slot.date).slice(0, 10)
   const [, m, d] = day.split('-')
-  return m && d ? `${Number(m)}/${Number(d)}` : day
+  const start = String(slot.start_time).slice(0, 5)
+  const end = String(slot.end_time).slice(0, 5)
+  const wk = weekdayJa(day)
+  return `${Number(m)}/${Number(d)}（${wk}） ${start}–${end}`
+}
+
+function compactCount(n: number) {
+  if (n >= 10000) return `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}K`
+  return String(n)
 }
 
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive, onRequireAuth }: Props) {
@@ -70,17 +84,15 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   useTrackView('performer_view', { performerId })
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
-  const [followers, setFollowers] = useState(0)
   const [merch, setMerch] = useState<MerchProduct[]>([])
   const [supportCount, setSupportCount] = useState(0)
+  const [liveViews, setLiveViews] = useState(0)
   const [slots, setSlots] = useState<PerformerEventSlot[]>([])
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [section, setSection] = useState<SectionId>('about')
-  const [bioOpen, setBioOpen] = useState(false)
+  const [section, setSection] = useState<SectionId>('media')
   const [qrOpen, setQrOpen] = useState(false)
-  const [qrFull, setQrFull] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
@@ -95,11 +107,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     getPerformer(performerId)
       .then((row) => { if (alive) setP(row) })
       .catch(() => { if (alive) setError(t('hpLoadFail')) })
-    countFollowers(performerId).then((n) => { if (alive) setFollowers(n) }).catch(() => { if (alive) setFollowers(0) })
     listSellerMerchProducts(performerId)
       .then((items) => { if (alive) setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out')) })
       .catch(() => { if (alive) setMerch([]) })
     tipSummaryForPerformer(performerId).then((summary) => { if (alive) setSupportCount(summary.count) }).catch(() => { if (alive) setSupportCount(0) })
+    sumLiveViews(performerId).then((n) => { if (alive) setLiveViews(n) }).catch(() => { if (alive) setLiveViews(0) })
     listPerformerEventSlots(performerId)
       .then(async (rows) => {
         if (!alive) return
@@ -144,7 +156,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
       setFollowing(!following)
-      setFollowers((n) => Math.max(0, n + (following ? -1 : 1)))
     } catch {
       setError(t('hpFollowFail'))
     } finally {
@@ -166,7 +177,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         return
       }
     } catch {
-      /* user cancelled or unsupported */
+      /* cancelled */
     }
     await copyLink()
   }
@@ -199,293 +210,246 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     }
   }
 
+  const openMap = (venue: EventVenueRow | null) => {
+    if (venue?.lat != null && venue?.lng != null) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${venue.lat},${venue.lng}`, '_blank', 'noopener,noreferrer')
+      return
+    }
+    spaGo(FESTIVAL_PATH)
+  }
+
   if (!p && !error) return <p className="pl-muted hp-page">{t('hpLoading')}</p>
   if (!p) return <p className="pl-error hp-page">{error}</p>
 
   const handle = handleOf(p)
-  const catchCopy = p.support_blurb || (p.genre ? t('hpCatch', { genre: p.genre }) : '')
+  const catchCopy = p.support_blurb || (p.bio ? p.bio.split('\n')[0] : '')
   const bio = p.bio || t('profileReady')
-  const bioLong = bio.length > 120
-  const visibleBio = bioOpen || !bioLong ? bio : `${bio.slice(0, 120)}…`
-  const area = [p.city, p.country].filter(Boolean).join(' · ')
   const upcoming = slots.filter((slot) => slotPhase(slot) !== 'past')
   const next = upcoming[0] ?? null
   const nextVenue = next ? venues.find((venue) => venue.id === next.venue_id) ?? null : null
-  const nextNow = next ? slotPhase(next) === 'now' : false
   const videoHref = safeExternalHref(p.video_url ?? undefined)
   const snsLinks = Array.isArray(p.sns_json)
     ? p.sns_json.map((s) => ({ label: s.label, href: safeExternalHref(s.url) })).filter((s): s is { label: string; href: string } => Boolean(s.href))
     : []
   const goodsPreview = merch.slice(0, 4)
+  const later = upcoming.slice(1)
   const goSection = (id: SectionId) => {
     setSection(id)
     window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
-    <article className="hp-page">
-      <header className="hp-bar">
-        <button type="button" className="hp-icon" onClick={onBack} aria-label={t('back')}>
-          <ArrowLeft size={18} />
-        </button>
-        <div className="hp-bar__actions">
-          <button type="button" className="hp-icon" onClick={() => { setQrOpen(true); setQrFull(false) }} aria-label={t('hpQr')}>
-            <QrCode size={18} />
+    <article className={`hp-page${p.is_live ? ' hp-page--live' : ''}`}>
+      <div className="hp-hero">
+        {p.photo_url ? <img src={p.photo_url} alt="" /> : <span className="hp-hero__empty" />}
+        <div className="hp-hero__fade" />
+        {p.is_live ? <em className="hp-hero__live">LIVE</em> : null}
+        <header className="hp-bar">
+          <button type="button" className="hp-icon" onClick={onBack} aria-label={t('back')}>
+            <ArrowLeft size={16} />
           </button>
-          <button type="button" className="hp-icon" onClick={() => void shareProfile()} aria-label={t('hpShare')}>
-            <Share2 size={18} />
-          </button>
-        </div>
-      </header>
-
-      <section className="hp-head" aria-labelledby="hp-name">
-        <PerformerAvatar
-          url={p.photo_url}
-          name={p.stage_name}
-          isLive={p.is_live}
-          size={92}
-          onClick={p.is_live ? onWatchLive : undefined}
-        />
-        <div className="hp-id">
-          <h1 id="hp-name">
-            {p.stage_name}
-            {p.is_approved ? <BadgeCheck size={16} aria-label={t('hpVerified')} /> : null}
-          </h1>
-          <p className="hp-handle">@{handle}</p>
-          {catchCopy ? <p className="hp-catch">{catchCopy}</p> : null}
-        </div>
-      </section>
-
-      <p className="hp-bio">{visibleBio}</p>
-      {bioLong ? (
-        <button type="button" className="hp-more" onClick={() => setBioOpen((v) => !v)}>
-          {bioOpen ? t('hpLess') : t('hpMore')}
-        </button>
-      ) : null}
-
-      <ul className="hp-meta">
-        {p.genre ? <li>{t('hpGenre')}<strong>{p.genre}</strong></li> : null}
-        {area ? <li>{t('hpArea')}<strong>{area}</strong></li> : null}
-        {p.awards ? <li>{t('hpAwards')}<strong>{p.awards}</strong></li> : null}
-      </ul>
-
-      <dl className="hp-stats">
-        <div><dt>{t('hpFollowers')}</dt><dd>{followers}</dd></div>
-        <div><dt>{t('hpShows')}</dt><dd>{slots.length}</dd></div>
-        <div><dt>{t('hpSupport')}</dt><dd>{supportCount}</dd></div>
-      </dl>
-
-      <div className="hp-cta">
-        <button type="button" className="hp-btn hp-btn--ghost" disabled={busy} onClick={() => void toggleFollow()}>
-          {following ? t('following') : `＋ ${t('follow')}`}
-        </button>
-        <button type="button" className="hp-btn hp-btn--red" onClick={onTip}>
-          <Heart size={16} /> {t('hpCheer')}
-        </button>
-        {p.is_live ? (
-          <button type="button" className="hp-btn hp-btn--live" onClick={onWatchLive}>
-            <span /> {t('hpWatchLive')}
-          </button>
-        ) : null}
+          <div className="hp-bar__actions">
+            <button type="button" className="hp-icon" onClick={() => setQrOpen(true)} aria-label={t('hpQr')}>
+              <QrCode size={16} />
+            </button>
+            <button type="button" className="hp-icon" onClick={() => void shareProfile()} aria-label={t('hpShare')}>
+              <Share2 size={16} />
+            </button>
+          </div>
+        </header>
       </div>
 
-      {next ? (
-        <section className="hp-card hp-next" aria-labelledby="hp-next-title">
-          <p className="hp-kicker">{t('hpNext')}</p>
-          <h2 id="hp-next-title">{nextNow ? t('hpNow') : t('hpNextTitle')}</h2>
-          <div className="hp-next__when">
-            <strong>{dateLabel(next.date)}</strong>
-            <span>{String(next.start_time).slice(0, 5)}</span>
-            {nextNow ? <em>NOW</em> : null}
-            {p.is_live ? <em>LIVE NOW</em> : null}
-          </div>
-          <p>
-            <MapPin size={15} /> {nextVenue?.name_ja || next.events?.name_ja || next.stage_ja}
-            {next.stage_ja ? ` · ${next.stage_ja}` : ''}
-          </p>
-          <div className="hp-next__actions">
-            {next.events?.slug ? (
-              <button type="button" className="hp-btn hp-btn--ghost" onClick={() => spaGo(eventPath(next.events!.slug))}>
-                {t('hpEvent')}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="hp-btn hp-btn--ghost"
-              onClick={() => {
-                if (nextVenue?.lat != null && nextVenue?.lng != null) {
-                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${nextVenue.lat},${nextVenue.lng}`, '_blank', 'noopener,noreferrer')
-                  return
-                }
-                spaGo(FESTIVAL_PATH)
-              }}
-            >
-              {t('hpMap')}
-            </button>
-            {p.is_live || next.is_stream ? (
-              <button type="button" className="hp-btn hp-btn--ghost" onClick={onWatchLive}>{t('hpNavLive')}</button>
-            ) : null}
+      <div className="hp-sheet">
+        <section className="hp-idrow" aria-labelledby="hp-name">
+          <PerformerAvatar
+            url={p.photo_url}
+            name={p.stage_name}
+            isLive={p.is_live}
+            size={72}
+            onClick={p.is_live ? onWatchLive : undefined}
+          />
+          <div className="hp-id">
+            <h1 id="hp-name">
+              {p.stage_name}
+              {p.is_approved ? <BadgeCheck size={16} aria-label={t('hpVerified')} /> : null}
+            </h1>
+            <p className="hp-handle">@{handle}</p>
           </div>
         </section>
-      ) : null}
 
-      <nav className="hp-jump" aria-label={t('hpJump')}>
-        {([
-          ['live', t('hpNavLive')],
-          ['media', t('hpNavVideo')],
-          ['goods', t('hpNavGoods')],
-          ['schedule', t('hpNavSchedule')],
-          ['about', t('hpNavProfile')],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" data-on={section === id} onClick={() => goSection(id)}>{label}</button>
-        ))}
-      </nav>
+        {p.genre ? <p className="hp-genre">{p.genre}</p> : null}
+        {catchCopy ? <p className="hp-catch">{catchCopy}</p> : null}
 
-      <section id="hp-media" className="hp-block" aria-labelledby="hp-media-title">
-        <p className="hp-kicker">PERFORMANCE</p>
-        <h2 id="hp-media-title">{t('hpPerformance')}</h2>
-        {p.photo_url || videoHref ? (
-          <button
-            type="button"
-            className="hp-featured"
-            onClick={() => { if (p.is_live) onWatchLive(); else if (videoHref) window.open(videoHref, '_blank', 'noopener,noreferrer') }}
-          >
-            {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span />}
-            {videoHref || p.is_live ? <i><Play size={22} fill="currentColor" /></i> : null}
-          </button>
-        ) : (
-          <p className="hp-empty">{t('hpNoMedia')}</p>
-        )}
-        <div className="hp-media-grid">
-          {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : null}
-          {videoHref ? (
-            <a href={videoHref} target="_blank" rel="noopener noreferrer" className="hp-clip">
-              <Play size={16} /> {t('hpVideo')}
-            </a>
-          ) : null}
-        </div>
-      </section>
+        <ul className="hp-chips">
+          {p.city ? <li>📍 {p.city}</li> : null}
+          {p.genre ? <li>◉ {p.genre}</li> : null}
+          {p.appearances ? <li>✓ {p.appearances}</li> : p.awards ? <li>✓ {p.awards}</li> : null}
+        </ul>
 
-      <section id="hp-live" className="hp-block" hidden={!p.is_live && !p.live_title}>
+        <dl className="hp-metrics">
+          <div><dd>{compactCount(0)}</dd><dt>{t('hpAudience')}</dt></div>
+          <div><dd>{compactCount(supportCount)}</dd><dt>{t('hpSupport')}</dt></div>
+          <div><dd>{compactCount(liveViews)}</dd><dt>{t('hpLiveViews')}</dt></div>
+        </dl>
+
         {p.is_live ? (
-          <button type="button" className="hp-btn hp-btn--live" onClick={onWatchLive}>
-            <span /> {p.live_title || t('hpWatchLive')}
+          <button type="button" id="hp-live" className="hp-btn hp-btn--live" onClick={onWatchLive}>
+            <span /> {t('hpWatchLive')}
           </button>
-        ) : null}
-      </section>
+        ) : (
+          <span id="hp-live" hidden />
+        )}
 
-      <section id="hp-support" className="hp-block hp-card" aria-labelledby="hp-support-title">
-        <p className="hp-kicker">SUPPORT</p>
-        <h2 id="hp-support-title">{t('hpSupportTitle')}</h2>
-        <p className="hp-lead">{t('hpSupportLead')}</p>
-        <div className="hp-tips">
-          {TIP_PRESETS_JPY.filter((yen) => yen !== 300).map((yen) => (
-            <button key={yen} type="button" data-on={tipPick === yen} onClick={() => setTipPick(yen)}>
-              <small>{TIP_PRESET_LABELS_JA[yen].label}</small>
-              <strong>{formatYen(yen)}</strong>
-            </button>
-          ))}
-          <button type="button" data-on={!TIP_PRESETS_JPY.includes(tipPick as (typeof TIP_PRESETS_JPY)[number])} onClick={onTip}>
-            {t('hpChooseAmount')}
+        <div className="hp-cta">
+          <button type="button" className="hp-btn hp-btn--ghost" disabled={busy} onClick={() => void toggleFollow()}>
+            {following ? t('following') : `＋ ${t('follow')}`}
+          </button>
+          <button type="button" className="hp-btn hp-btn--red" onClick={onTip}>
+            <Heart size={15} /> {t('hpCheer')}
           </button>
         </div>
-        <button type="button" className="hp-btn hp-btn--red" onClick={onTip}>{t('hpSupportSend')}</button>
-      </section>
 
-      <section id="hp-goods" className="hp-block" aria-labelledby="hp-goods-title">
-        <p className="hp-kicker">GOODS</p>
-        <h2 id="hp-goods-title">{t('hpGoods')}</h2>
-        {goodsPreview.length === 0 ? (
-          <p className="hp-empty">{t('hpNoGoods')}</p>
-        ) : (
-          <div className="hp-goods">
-            {goodsPreview.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="hp-good"
-                onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
-              >
-                {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span className="hp-good__ph" />}
-                <strong>{item.name}</strong>
-                <small>{item.status === 'sold_out' ? t('hpSoldOut') : formatYen(item.price_yen)}</small>
+        {next ? (
+          <section className="hp-next" aria-labelledby="hp-next-title">
+            <h2 id="hp-next-title">{t('hpNextTitle')}</h2>
+            <div className="hp-next__row">
+              {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span />}
+              <div>
+                <time>{dateTimeRange(next)}</time>
+                <strong>{next.events?.name_ja || t('hpEvent')}</strong>
+                <p>{nextVenue?.name_ja || next.stage_ja}</p>
+                {next.stage_ja ? <p>{next.stage_ja}</p> : null}
+              </div>
+              <MapPin size={16} />
+            </div>
+            <button type="button" className="hp-map" onClick={() => openMap(nextVenue)}>{t('hpMap')}</button>
+          </section>
+        ) : null}
+
+        <nav className="hp-jump" aria-label={t('hpJump')}>
+          {([
+            ['live', t('hpNavLive')],
+            ['media', t('hpNavVideo')],
+            ['goods', t('hpNavGoods')],
+            ['schedule', t('hpNavSchedule')],
+            ['about', t('hpNavProfile')],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" data-on={section === id} onClick={() => goSection(id)}>{label}</button>
+          ))}
+        </nav>
+
+        <section id="hp-media" className="hp-block">
+          <h2>{t('hpPerformance')}</h2>
+          {p.photo_url || videoHref ? (
+            <button
+              type="button"
+              className="hp-featured"
+              onClick={() => { if (p.is_live) onWatchLive(); else if (videoHref) window.open(videoHref, '_blank', 'noopener,noreferrer') }}
+            >
+              {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span />}
+              {videoHref || p.is_live ? <i><Play size={26} fill="currentColor" /></i> : null}
+            </button>
+          ) : (
+            <p className="hp-empty">{t('hpNoMedia')}</p>
+          )}
+        </section>
+
+        <section id="hp-schedule" className="hp-block">
+          <h2>{t('hpUpcoming')}</h2>
+          {later.length === 0 && !next ? (
+            <p className="hp-empty">{t('hpNoSchedule')}</p>
+          ) : (
+            <ul className="hp-slots">
+              {(later.length ? later : upcoming).map((slot) => {
+                const venue = venues.find((row) => row.id === slot.venue_id)
+                return (
+                  <li key={slot.id}>
+                    {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span />}
+                    <div>
+                      <strong>{dateTimeRange(slot)}</strong>
+                      <p>{slot.events?.name_ja}</p>
+                      <p>{venue?.name_ja}{slot.stage_ja ? ` · ${slot.stage_ja}` : ''}</p>
+                    </div>
+                    {slot.events?.slug ? (
+                      <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section id="hp-support" className="hp-block hp-support">
+          <h2>{t('hpSupportTitle')}</h2>
+          <div className="hp-tips">
+            {TIP_PRESETS_JPY.filter((yen) => yen !== 300).map((yen) => (
+              <button key={yen} type="button" data-on={tipPick === yen} onClick={() => setTipPick(yen)}>
+                <span>{TIP_PRESET_LABELS_JA[yen].label}</span>
+                <strong>{formatYen(yen)}</strong>
               </button>
             ))}
+            <button type="button" className="hp-tips__more" onClick={onTip}>{t('hpChooseAmount')}</button>
           </div>
-        )}
-        {merch.length > 0 ? (
-          <button type="button" className="hp-btn hp-btn--ghost" onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
-            {t('hpAllGoods')}
-          </button>
-        ) : null}
-      </section>
+          <button type="button" className="hp-btn hp-btn--red hp-btn--wide" onClick={onTip}>{t('hpSupportSend')}</button>
+        </section>
 
-      <section id="hp-schedule" className="hp-block" aria-labelledby="hp-schedule-title">
-        <p className="hp-kicker">UPCOMING</p>
-        <h2 id="hp-schedule-title">{t('hpUpcoming')}</h2>
-        {upcoming.length === 0 ? (
-          <p className="hp-empty">{t('hpNoSchedule')}</p>
-        ) : (
-          <ul className="hp-slots">
-            {upcoming.map((slot) => {
-              const venue = venues.find((row) => row.id === slot.venue_id)
-              const now = slotPhase(slot) === 'now'
-              return (
-                <li key={slot.id} className="hp-card">
-                  <strong>{dateLabel(slot.date)} {String(slot.start_time).slice(0, 5)}</strong>
-                  <p>{slot.events?.name_ja || t('hpEvent')}</p>
-                  <p>{venue?.name_ja}{slot.stage_ja ? ` · ${slot.stage_ja}` : ''}</p>
-                  <div className="hp-next__actions">
-                    {slot.events?.slug ? <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button> : null}
-                    <button type="button" className="hp-link" onClick={() => spaGo(FESTIVAL_PATH)}>{t('hpMap')}</button>
-                    {now || p.is_live ? <button type="button" className="hp-link" onClick={onWatchLive}>{t('hpNavLive')}</button> : null}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
+        <section id="hp-goods" className="hp-block">
+          <h2>{t('hpGoods')}</h2>
+          {goodsPreview.length === 0 ? (
+            <p className="hp-empty">{t('hpNoGoods')}</p>
+          ) : (
+            <div className="hp-goods">
+              {goodsPreview.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="hp-good"
+                  onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
+                >
+                  {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span className="hp-good__ph" />}
+                  <strong>{item.name}</strong>
+                  <small>{item.status === 'sold_out' ? t('hpSoldOut') : formatYen(item.price_yen)}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          {merch.length > 0 ? (
+            <button type="button" className="hp-more" onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+              {t('hpAllGoods')}
+            </button>
+          ) : null}
+        </section>
 
-      <section id="hp-about" className="hp-block" aria-labelledby="hp-about-title">
-        <p className="hp-kicker">PROFILE</p>
-        <h2 id="hp-about-title">{t('hpProfile')}</h2>
-        <p className="hp-bio hp-bio--full">{bio}</p>
-        {p.genre ? <p>{t('hpGenre')} {p.genre}</p> : null}
-        {area ? <p>{t('hpArea')} {area}</p> : null}
-        {p.awards ? <p>{t('hpAwards')} {p.awards}</p> : null}
-        {p.appearances ? <p>{t('hpShows')} {p.appearances}</p> : null}
-        {snsLinks.length > 0 ? (
-          <p>
-            {t('hpSns')}{' '}
-            {snsLinks.map((s, i) => (
-              <span key={s.href}>{i > 0 ? ' / ' : null}<a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a></span>
-            ))}
-          </p>
-        ) : null}
-        {videoHref ? <p><a href={videoHref} target="_blank" rel="noopener noreferrer">{t('hpSite')}</a></p> : null}
-      </section>
-
-      <section className="hp-card hp-again" aria-labelledby="hp-again-title">
-        <p className="hp-kicker">FOLLOW & MEET AGAIN</p>
-        <h2 id="hp-again-title">{t('hpFollowAgain')}</h2>
-        <p className="hp-lead">{t('hpFollowAgainLead')}</p>
-        <button type="button" className="hp-btn hp-btn--red" disabled={busy} onClick={() => void toggleFollow()}>
-          {following ? t('following') : t('hpFollowCta')}
-        </button>
-      </section>
+        <section id="hp-about" className="hp-block">
+          <h2>{t('hpProfile')}</h2>
+          <p className="hp-bio">{bio}</p>
+          {snsLinks.length > 0 ? (
+            <p className="hp-sns">
+              {snsLinks.map((s, i) => (
+                <span key={s.href}>{i > 0 ? ' / ' : null}<a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a></span>
+              ))}
+            </p>
+          ) : null}
+        </section>
+      </div>
 
       {error ? <p className="pl-error">{error}</p> : null}
       {toast ? <p className="hp-toast" role="status">{toast}</p> : null}
 
       {qrOpen ? (
-        <div className={`hp-qr${qrFull ? ' hp-qr--full' : ''}`} role="dialog" aria-modal="true" aria-label={t('hpQr')}>
-          <button type="button" className="hp-qr__back" onClick={() => { setQrOpen(false); setQrFull(false) }}>{t('eventClose')}</button>
+        <div className="hp-qr" role="dialog" aria-modal="true" aria-label={t('hpQr')}>
+          {p.photo_url ? <img className="hp-qr__bg" src={p.photo_url} alt="" /> : null}
+          <header className="hp-qr__top">
+            <button type="button" className="hp-icon" onClick={() => setQrOpen(false)} aria-label={t('eventClose')}><X size={16} /></button>
+            <strong>{t('hpQr')}</strong>
+            <span />
+          </header>
           <div className="hp-qr__card">
-            <PerformerAvatar url={p.photo_url} name={p.stage_name} isLive={false} size={64} />
-            <strong>{p.stage_name}</strong>
+            <PerformerAvatar url={p.photo_url} name={p.stage_name} isLive={false} size={56} />
+            <b>{p.stage_name}</b>
             <span>@{handle}</span>
-            <img src={qrSrc} alt="" width={qrFull ? 320 : 240} height={qrFull ? 320 : 240} />
+            {qrSrc ? <img src={qrSrc} alt="" width={220} height={220} /> : null}
             <p>{t('hpQrHint')}</p>
           </div>
           <div className="hp-qr__actions">
@@ -493,9 +457,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
             <button type="button" onClick={() => void copyLink()}><Copy size={16} /> {t('hpCopy')}</button>
             <button type="button" onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
           </div>
-          <button type="button" className="hp-qr__full" onClick={() => setQrFull((v) => !v)}>
-            <Expand size={16} /> {t('hpQrFull')}
-          </button>
         </div>
       ) : null}
     </article>

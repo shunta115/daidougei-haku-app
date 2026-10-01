@@ -445,6 +445,13 @@ export async function tipSummaryForPerformer(performerId: string): Promise<TipSu
   }
 }
 
+export async function sumLiveViews(performerId: string): Promise<number> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('live_sessions').select('viewer_peak').eq('performer_id', performerId)
+  if (error) return 0
+  return (data ?? []).reduce((sum, row) => sum + (Number((row as { viewer_peak?: number }).viewer_peak) || 0), 0)
+}
+
 export async function isFollowing(fanId: string, performerId: string): Promise<boolean> {
   const sb = requireSupabase()
   const { data } = await sb
