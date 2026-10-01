@@ -456,6 +456,16 @@ export async function isFollowing(fanId: string, performerId: string): Promise<b
   return Boolean(data)
 }
 
+export async function countFollowers(performerId: string): Promise<number> {
+  const sb = requireSupabase()
+  const { count, error } = await sb
+    .from('follows')
+    .select('fan_id', { count: 'exact', head: true })
+    .eq('performer_id', performerId)
+  if (error) return 0
+  return count ?? 0
+}
+
 export async function follow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').insert({ fan_id: fanId, performer_id: performerId })

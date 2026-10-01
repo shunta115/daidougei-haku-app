@@ -6,6 +6,7 @@ export const FESTIVAL_PATH = '/event'
 /** 常設プラットフォーム内のイベント一覧と個別イベント */
 export const EVENTS_PATH = '/events'
 export const AWP_EVENT_SLUG = 'award-winning-performers-2026'
+export const PERFORMER_PATH = '/performer'
 
 /** 配信・投げ銭・ログイン（既存 Platform） */
 export const PLATFORM_PATH = '/live'
@@ -13,7 +14,7 @@ export const PLATFORM_PATH = '/live'
 export function isPlatformPath(pathname: string): boolean {
   // All public routes render inside the MASTER experience. /live remains a
   // stable alias because registration and shared LIVE links already use it.
-  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === EVENTS_PATH || pathname.startsWith(`${EVENTS_PATH}/`) || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
+  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === EVENTS_PATH || pathname.startsWith(`${EVENTS_PATH}/`) || pathname === PERFORMER_PATH || pathname.startsWith(`${PERFORMER_PATH}/`) || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
 }
 
 export function eventPath(slug: string): string {
@@ -33,6 +34,16 @@ export function parseEventsPath(pathname: string): { kind: 'list' } | { kind: 'd
     return slug ? { kind: 'vote', slug } : { kind: 'list' }
   }
   return rest ? { kind: 'detail', slug: rest } : { kind: 'list' }
+}
+
+export function performerPath(id: string): string {
+  return `${PERFORMER_PATH}/${encodeURIComponent(id)}`
+}
+
+export function parsePerformerPath(pathname: string): { id: string } | null {
+  if (!pathname.startsWith(`${PERFORMER_PATH}/`)) return null
+  const id = decodeURIComponent(pathname.slice(PERFORMER_PATH.length + 1)).split('/').filter(Boolean)[0]
+  return id ? { id } : null
 }
 
 /** フルリロードせず Festival / Platform を切り替える */

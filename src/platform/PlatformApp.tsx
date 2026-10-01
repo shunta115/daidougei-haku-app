@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
@@ -106,6 +106,7 @@ function homeForRole(role: string | undefined): PlatformScreen {
 function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
+    if (parsePerformerPath(window.location.pathname)) return 'profile'
     if (window.location.pathname === EVENTS_PATH) return 'event-list'
     const eventRoute = parseEventsPath(window.location.pathname)
     if (eventRoute?.kind === 'vote') return 'event-vote'
@@ -137,7 +138,15 @@ function PlatformShell() {
     return role === 'performer' ? role : 'fan'
   })
   const routedUser = useRef<string | null>(null)
-  const [performerId, setPerformerId] = useState<string | null>(null)
+  const [performerId, setPerformerId] = useState<string | null>(() => {
+    const performerRoute = parsePerformerPath(window.location.pathname)
+    if (performerRoute) return performerRoute.id
+    try {
+      return new URLSearchParams(window.location.search).get('profile')
+    } catch {
+      return null
+    }
+  })
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
   const [eventSlug, setEventSlug] = useState<string | null>(() => {
     const eventRoute = parseEventsPath(window.location.pathname)
@@ -153,6 +162,12 @@ function PlatformShell() {
 
   useEffect(() => {
     const syncEventRoute = () => {
+      const performerRoute = parsePerformerPath(window.location.pathname)
+      if (performerRoute) {
+        setPerformerId(performerRoute.id)
+        setScreen('profile')
+        return
+      }
       const eventRoute = parseEventsPath(window.location.pathname)
       if (!eventRoute) {
         if (window.location.pathname === FESTIVAL_PATH) setScreen('map-schedule')
@@ -201,6 +216,7 @@ function PlatformShell() {
     if (publicProfile && !watch && !tipTo) {
       setPerformerId(publicProfile)
       setScreen('profile')
+      window.history.replaceState({}, '', performerPath(publicProfile))
     }
     if (tipTo) {
       setPerformerId(tipTo)
@@ -483,7 +499,13 @@ function PlatformShell() {
 
   const openPerformer = (id: string) => {
     setPerformerId(id)
+    const next = performerPath(id)
+    if (window.location.pathname !== next) window.history.pushState({}, '', next)
     setScreen('profile')
+  }
+
+  const leavePerformerUrl = () => {
+    if (parsePerformerPath(window.location.pathname)) window.history.pushState({}, '', '/')
   }
 
   const openWatch = (id: string) => {
@@ -566,6 +588,7 @@ function PlatformShell() {
           performerId={performerId}
           onBack={() => {
             setPerformerId(null)
+            leavePerformerUrl()
             setScreen('search')
           }}
           onTip={() => {
@@ -622,10 +645,11 @@ function PlatformShell() {
           {guestShowNav ? (
             <BottomNav
               role="fan"
-              active={screen}
+              active={performerId && screen === 'profile' ? 'performer-public' : screen}
               onNavigate={(key) => {
                 setPerformerId(null)
                 setMerchProductId(null)
+                leavePerformerUrl()
                 if (key === 'event-list') { openEventList(); return }
                 if (key === 'profile') {
                   setScreen('auth')
@@ -683,12 +707,13 @@ function PlatformShell() {
     )
   } else if (performerId && screen === 'profile') {
     body = (
-      <PerformerPublicScreen
-        performerId={performerId}
-        onBack={() => {
-          setPerformerId(null)
-          setScreen(homeForRole(role))
-        }}
+        <PerformerPublicScreen
+          performerId={performerId}
+          onBack={() => {
+            setPerformerId(null)
+            leavePerformerUrl()
+            setScreen(homeForRole(role))
+          }}
         onTip={() => {
           trackProductEvent('tip_cta_click', { performerId, props: { surface: 'profile' } })
           setTipReturn('profile')
@@ -858,10 +883,11 @@ function PlatformShell() {
       {showNav ? (
         <BottomNav
           role={navRole}
-          active={screen}
+          active={performerId && screen === 'profile' ? 'performer-public' : screen}
           onNavigate={(key) => {
             setPerformerId(null)
             setMerchProductId(null)
+            leavePerformerUrl()
             if (key === 'event-list') { openEventList(); return }
             setScreen(key as PlatformScreen)
           }}

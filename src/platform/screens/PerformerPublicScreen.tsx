@@ -1,32 +1,28 @@
-import { type CSSProperties, useEffect, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, ExternalLink, Film, Heart, MapPin, Play, Radio, ShoppingBag, UserRound } from 'lucide-react'
-import { Avatar } from '../components/Avatar'
-import { LiveBadge } from '../components/LiveBadge'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, BadgeCheck, Copy, Download, Expand, Heart, MapPin, Play, QrCode, Share2 } from 'lucide-react'
+import { PerformerAvatar } from '../components/PerformerAvatar'
 import {
-  addOshi,
-  createReport,
+  countFollowers,
   follow,
-  getFeaturedEvent,
-  getMyVote,
   getPerformer,
   isFollowing,
-  isOshi,
-  listEventSlots,
   listEventVenues,
+  listPerformerEventSlots,
   listSellerMerchProducts,
-  removeOshi,
-  unfollow,
-  voteForPerformer,
   tipSummaryForPerformer,
-  type EventSlotRow,
+  unfollow,
   type EventVenueRow,
+  type PerformerEventSlot,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
-import { spaGo, PLATFORM_PATH } from '../../app/routes'
+import { eventPath, FESTIVAL_PATH, performerPath, PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
 import type { MerchProduct, Performer } from '../lib/types'
+import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
+import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
+import './performer-home.css'
 
 type Props = {
   performerId: string
@@ -36,283 +32,472 @@ type Props = {
   onRequireAuth?: () => void
 }
 
+type SectionId = 'live' | 'media' | 'goods' | 'schedule' | 'about'
+
+function handleOf(p: Performer) {
+  const fromName = p.stage_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return fromName || p.id.replace(/-/g, '').slice(0, 10)
+}
+
+function tokyoNow() {
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
+  const time = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })
+  return { date, time }
+}
+
+function slotPhase(slot: PerformerEventSlot): 'now' | 'upcoming' | 'past' {
+  if (slot.status === 'cancelled') return 'past'
+  const { date, time } = tokyoNow()
+  const day = String(slot.date).slice(0, 10)
+  const start = String(slot.start_time).slice(0, 5)
+  const end = String(slot.end_time).slice(0, 5)
+  if (day < date) return 'past'
+  if (day > date) return 'upcoming'
+  if (time < start) return 'upcoming'
+  if (time <= end) return 'now'
+  return 'past'
+}
+
+function dateLabel(value: string) {
+  const day = String(value).slice(0, 10)
+  const [, m, d] = day.split('-')
+  return m && d ? `${Number(m)}/${Number(d)}` : day
+}
+
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive, onRequireAuth }: Props) {
   const { user } = useAuth()
-  const { lang, t } = useLang()
+  const { t } = useLang()
   useTrackView('performer_view', { performerId })
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
-  const [oshi, setOshi] = useState(false)
-  const [voted, setVoted] = useState(false)
-  const [eventId, setEventId] = useState<string | null>(null)
+  const [followers, setFollowers] = useState(0)
   const [merch, setMerch] = useState<MerchProduct[]>([])
   const [supportCount, setSupportCount] = useState(0)
-  const [nextAppearance, setNextAppearance] = useState<{ slot: EventSlotRow; venue: EventVenueRow | null } | null>(null)
+  const [slots, setSlots] = useState<PerformerEventSlot[]>([])
+  const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [section, setSection] = useState<'about' | 'schedule' | 'media' | 'goods'>('about')
+  const [section, setSection] = useState<SectionId>('about')
+  const [bioOpen, setBioOpen] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrFull, setQrFull] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const [tipPick, setTipPick] = useState<number>(1000)
+  const [qrSrc, setQrSrc] = useState('')
 
-  useEffect(() => {
-    getPerformer(performerId)
-      .then(setP)
-      .catch(() => setError('パフォーマー情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
-    getFeaturedEvent()
-      .then(async (ev) => {
-        setEventId(ev?.id ?? null)
-        if (!ev) return
-        const [slots, venues] = await Promise.all([listEventSlots(ev.id), listEventVenues(ev.id)])
-        const now = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
-        const slot = slots.find((row) => row.performer_id === performerId && String(row.date).slice(0, 10) >= now && row.status !== 'cancelled')
-        setNextAppearance(slot ? { slot, venue: venues.find((venue) => venue.id === slot.venue_id) ?? null } : null)
-      })
-      .catch(() => { setEventId(null); setNextAppearance(null) })
-    listSellerMerchProducts(performerId)
-      .then((items) => setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out').slice(0, 3)))
-      .catch(() => setMerch([]))
-    tipSummaryForPerformer(performerId).then((summary) => setSupportCount(summary.count)).catch(() => setSupportCount(0))
+  const canonicalUrl = useMemo(() => {
+    const path = performerPath(performerId)
+    return typeof window === 'undefined' ? path : `${window.location.origin}${path}`
   }, [performerId])
 
   useEffect(() => {
-    if (!user) return
-    isFollowing(user.id, performerId).then(setFollowing).catch(() => setFollowing(false))
-    isOshi(user.id, performerId).then(setOshi).catch(() => setOshi(false))
-  }, [user, performerId])
+    let alive = true
+    getPerformer(performerId)
+      .then((row) => { if (alive) setP(row) })
+      .catch(() => { if (alive) setError(t('hpLoadFail')) })
+    countFollowers(performerId).then((n) => { if (alive) setFollowers(n) }).catch(() => { if (alive) setFollowers(0) })
+    listSellerMerchProducts(performerId)
+      .then((items) => { if (alive) setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out')) })
+      .catch(() => { if (alive) setMerch([]) })
+    tipSummaryForPerformer(performerId).then((summary) => { if (alive) setSupportCount(summary.count) }).catch(() => { if (alive) setSupportCount(0) })
+    listPerformerEventSlots(performerId)
+      .then(async (rows) => {
+        if (!alive) return
+        const visible = rows.filter((row) => row.status !== 'cancelled')
+        setSlots(visible)
+        const eventIds = [...new Set(visible.map((row) => row.event_id))]
+        const venueRows = (await Promise.all(eventIds.map((id) => listEventVenues(id).catch(() => [] as EventVenueRow[])))).flat()
+        if (alive) setVenues(venueRows)
+      })
+      .catch(() => { if (alive) { setSlots([]); setVenues([]) } })
+    const timer = window.setInterval(() => {
+      getPerformer(performerId)
+        .then((row) => { if (alive) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
+        .catch(() => undefined)
+    }, 20000)
+    return () => { alive = false; window.clearInterval(timer) }
+  }, [performerId, t])
 
   useEffect(() => {
-    if (!user || !eventId) return
-    getMyVote(eventId, user.id)
-      .then((id) => setVoted(id === performerId))
-      .catch(() => setVoted(false))
-  }, [user, eventId, performerId])
+    let alive = true
+    performerQrDataUrl(canonicalUrl, 420)
+      .then((src) => { if (alive) setQrSrc(src) })
+      .catch(() => { if (alive) setQrSrc('') })
+    return () => { alive = false }
+  }, [canonicalUrl])
+
+  useEffect(() => {
+    if (!user) { setFollowing(false); return }
+    isFollowing(user.id, performerId).then(setFollowing).catch(() => setFollowing(false))
+  }, [user, performerId])
+
+  const requireAuth = () => {
+    if (onRequireAuth) onRequireAuth()
+    else spaGo(`${PLATFORM_PATH}?auth=1`)
+  }
 
   const toggleFollow = async () => {
-    if (!user) {
-      if (onRequireAuth) onRequireAuth()
-      else spaGo(`${PLATFORM_PATH}?auth=1`)
-      return
-    }
+    if (!user) { requireAuth(); return }
     setBusy(true)
     trackProductEvent('follow_click', { performerId, props: { surface: 'profile' } })
     try {
       if (following) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
       setFollowing(!following)
+      setFollowers((n) => Math.max(0, n + (following ? -1 : 1)))
     } catch {
-      setError('フォローを更新できませんでした。通信を確認して、もう一度お試しください。')
+      setError(t('hpFollowFail'))
     } finally {
       setBusy(false)
     }
   }
 
-  if (!p && !error) return <p className="pl-muted">Loading…</p>
-  if (!p) return <p className="pl-error">{error}</p>
+  const showToast = (message: string) => {
+    setToast(message)
+    window.setTimeout(() => setToast(null), 2200)
+  }
 
-  const watchable = Boolean(p.is_live)
+  const shareProfile = async () => {
+    if (!p) return
+    const text = p.support_blurb || p.bio || t('hpQrHint')
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: p.stage_name, text, url: canonicalUrl })
+        return
+      }
+    } catch {
+      /* user cancelled or unsupported */
+    }
+    await copyLink()
+  }
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(canonicalUrl)
+    } catch {
+      const input = document.createElement('input')
+      input.value = canonicalUrl
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      input.remove()
+    }
+    showToast(t('hpCopied'))
+  }
+
+  const saveQr = async () => {
+    if (!p) return
+    try {
+      await downloadQrCard({ url: canonicalUrl, name: p.stage_name, handle: handleOf(p) })
+    } catch {
+      if (qrSrc) {
+        const a = document.createElement('a')
+        a.href = qrSrc
+        a.download = `${handleOf(p)}-qr.png`
+        a.click()
+      }
+    }
+  }
+
+  if (!p && !error) return <p className="pl-muted hp-page">{t('hpLoading')}</p>
+  if (!p) return <p className="pl-error hp-page">{error}</p>
+
+  const handle = handleOf(p)
+  const catchCopy = p.support_blurb || (p.genre ? t('hpCatch', { genre: p.genre }) : '')
+  const bio = p.bio || t('profileReady')
+  const bioLong = bio.length > 120
+  const visibleBio = bioOpen || !bioLong ? bio : `${bio.slice(0, 120)}…`
+  const area = [p.city, p.country].filter(Boolean).join(' · ')
+  const upcoming = slots.filter((slot) => slotPhase(slot) !== 'past')
+  const next = upcoming[0] ?? null
+  const nextVenue = next ? venues.find((venue) => venue.id === next.venue_id) ?? null : null
+  const nextNow = next ? slotPhase(next) === 'now' : false
   const videoHref = safeExternalHref(p.video_url ?? undefined)
   const snsLinks = Array.isArray(p.sns_json)
-    ? p.sns_json
-        .map((s) => ({ label: s.label, href: safeExternalHref(s.url) }))
-        .filter((s): s is { label: string; href: string } => Boolean(s.href))
+    ? p.sns_json.map((s) => ({ label: s.label, href: safeExternalHref(s.url) })).filter((s): s is { label: string; href: string } => Boolean(s.href))
     : []
+  const goodsPreview = merch.slice(0, 4)
+  const goSection = (id: SectionId) => {
+    setSection(id)
+    window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
-    <>
-      <button type="button" className="pl-btn pl-btn--ghost pl-profile-back" onClick={onBack} aria-label={t('back')}>
-        <ArrowLeft size={18} />
-      </button>
-      <section
-        className={`pl-profile-stage${p.photo_url ? ' pl-profile-stage--photo' : ''}${p.is_live ? ' pl-profile-stage--live' : ''}`}
-        style={{ '--pl-profile-photo': p.photo_url ? `url(${p.photo_url})` : 'none' } as CSSProperties}
-        aria-labelledby="pl-profile-title"
-      >
-        <div className="pl-profile-stage__media" aria-hidden="true">
-          {!p.photo_url ? <Avatar url={p.photo_url} name={p.stage_name} large /> : null}
+    <article className="hp-page">
+      <header className="hp-bar">
+        <button type="button" className="hp-icon" onClick={onBack} aria-label={t('back')}>
+          <ArrowLeft size={18} />
+        </button>
+        <div className="hp-bar__actions">
+          <button type="button" className="hp-icon" onClick={() => { setQrOpen(true); setQrFull(false) }} aria-label={t('hpQr')}>
+            <QrCode size={18} />
+          </button>
+          <button type="button" className="hp-icon" onClick={() => void shareProfile()} aria-label={t('hpShare')}>
+            <Share2 size={18} />
+          </button>
         </div>
-        <div className="pl-profile-stage__shade" aria-hidden="true" />
-        <div className="pl-profile-stage__body">
-          {p.is_live ? <LiveBadge /> : <span className="pl-profile-stage__badge"><CheckCircle2 size={13} /> VERIFIED PERFORMER</span>}
-          <h1 id="pl-profile-title" className="pl-profile-stage__name">{p.stage_name}</h1>
-          <p className="pl-profile-stage__genre">
-            {p.genre || 'Performance'}
-            {p.city ? ` · ${p.city}` : ''}
-            {p.country ? ` · ${p.country}` : ''}
+      </header>
+
+      <section className="hp-head" aria-labelledby="hp-name">
+        <PerformerAvatar
+          url={p.photo_url}
+          name={p.stage_name}
+          isLive={p.is_live}
+          size={92}
+          onClick={p.is_live ? onWatchLive : undefined}
+        />
+        <div className="hp-id">
+          <h1 id="hp-name">
+            {p.stage_name}
+            {p.is_approved ? <BadgeCheck size={16} aria-label={t('hpVerified')} /> : null}
+          </h1>
+          <p className="hp-handle">@{handle}</p>
+          {catchCopy ? <p className="hp-catch">{catchCopy}</p> : null}
+        </div>
+      </section>
+
+      <p className="hp-bio">{visibleBio}</p>
+      {bioLong ? (
+        <button type="button" className="hp-more" onClick={() => setBioOpen((v) => !v)}>
+          {bioOpen ? t('hpLess') : t('hpMore')}
+        </button>
+      ) : null}
+
+      <ul className="hp-meta">
+        {p.genre ? <li>{t('hpGenre')}<strong>{p.genre}</strong></li> : null}
+        {area ? <li>{t('hpArea')}<strong>{area}</strong></li> : null}
+        {p.awards ? <li>{t('hpAwards')}<strong>{p.awards}</strong></li> : null}
+      </ul>
+
+      <dl className="hp-stats">
+        <div><dt>{t('hpFollowers')}</dt><dd>{followers}</dd></div>
+        <div><dt>{t('hpShows')}</dt><dd>{slots.length}</dd></div>
+        <div><dt>{t('hpSupport')}</dt><dd>{supportCount}</dd></div>
+      </dl>
+
+      <div className="hp-cta">
+        <button type="button" className="hp-btn hp-btn--ghost" disabled={busy} onClick={() => void toggleFollow()}>
+          {following ? t('following') : `＋ ${t('follow')}`}
+        </button>
+        <button type="button" className="hp-btn hp-btn--red" onClick={onTip}>
+          <Heart size={16} /> {t('hpCheer')}
+        </button>
+        {p.is_live ? (
+          <button type="button" className="hp-btn hp-btn--live" onClick={onWatchLive}>
+            <span /> {t('hpWatchLive')}
+          </button>
+        ) : null}
+      </div>
+
+      {next ? (
+        <section className="hp-card hp-next" aria-labelledby="hp-next-title">
+          <p className="hp-kicker">{t('hpNext')}</p>
+          <h2 id="hp-next-title">{nextNow ? t('hpNow') : t('hpNextTitle')}</h2>
+          <div className="hp-next__when">
+            <strong>{dateLabel(next.date)}</strong>
+            <span>{String(next.start_time).slice(0, 5)}</span>
+            {nextNow ? <em>NOW</em> : null}
+            {p.is_live ? <em>LIVE NOW</em> : null}
+          </div>
+          <p>
+            <MapPin size={15} /> {nextVenue?.name_ja || next.events?.name_ja || next.stage_ja}
+            {next.stage_ja ? ` · ${next.stage_ja}` : ''}
           </p>
-          {p.is_live && p.live_title ? <p className="pl-profile-stage__live-title">{p.live_title}</p> : null}
-          <div className="pl-profile-stage__actions">
-            {watchable ? (
-              <button type="button" className="pl-profile-stage__primary" onClick={onWatchLive}>
-                <Play size={18} fill="currentColor" /> 無料でLIVEを見る
-              </button>
-            ) : (
-              <button type="button" className="pl-profile-stage__primary pl-profile-stage__primary--support" onClick={onTip}>
-                <Heart size={18} /> この人を応援する
-              </button>
-            )}
-            <button type="button" className="pl-profile-stage__secondary" disabled={busy} onClick={() => void toggleFollow()}>
-              <Heart size={17} fill={following ? 'currentColor' : 'none'} /> {following ? t('following') : t('follow')}
-            </button>
-            {watchable ? (
-              <button type="button" className="pl-profile-stage__support" onClick={onTip}>
-                <Heart size={17} /> この人を応援する
+          <div className="hp-next__actions">
+            {next.events?.slug ? (
+              <button type="button" className="hp-btn hp-btn--ghost" onClick={() => spaGo(eventPath(next.events!.slug))}>
+                {t('hpEvent')}
               </button>
             ) : null}
+            <button
+              type="button"
+              className="hp-btn hp-btn--ghost"
+              onClick={() => {
+                if (nextVenue?.lat != null && nextVenue?.lng != null) {
+                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${nextVenue.lat},${nextVenue.lng}`, '_blank', 'noopener,noreferrer')
+                  return
+                }
+                spaGo(FESTIVAL_PATH)
+              }}
+            >
+              {t('hpMap')}
+            </button>
+            {p.is_live || next.is_stream ? (
+              <button type="button" className="hp-btn hp-btn--ghost" onClick={onWatchLive}>{t('hpNavLive')}</button>
+            ) : null}
           </div>
+        </section>
+      ) : null}
+
+      <nav className="hp-jump" aria-label={t('hpJump')}>
+        {([
+          ['live', t('hpNavLive')],
+          ['media', t('hpNavVideo')],
+          ['goods', t('hpNavGoods')],
+          ['schedule', t('hpNavSchedule')],
+          ['about', t('hpNavProfile')],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" data-on={section === id} onClick={() => goSection(id)}>{label}</button>
+        ))}
+      </nav>
+
+      <section id="hp-media" className="hp-block" aria-labelledby="hp-media-title">
+        <p className="hp-kicker">PERFORMANCE</p>
+        <h2 id="hp-media-title">{t('hpPerformance')}</h2>
+        {p.photo_url || videoHref ? (
+          <button
+            type="button"
+            className="hp-featured"
+            onClick={() => { if (p.is_live) onWatchLive(); else if (videoHref) window.open(videoHref, '_blank', 'noopener,noreferrer') }}
+          >
+            {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : <span />}
+            {videoHref || p.is_live ? <i><Play size={22} fill="currentColor" /></i> : null}
+          </button>
+        ) : (
+          <p className="hp-empty">{t('hpNoMedia')}</p>
+        )}
+        <div className="hp-media-grid">
+          {p.photo_url ? <img src={p.photo_url} alt="" loading="lazy" /> : null}
+          {videoHref ? (
+            <a href={videoHref} target="_blank" rel="noopener noreferrer" className="hp-clip">
+              <Play size={16} /> {t('hpVideo')}
+            </a>
+          ) : null}
         </div>
       </section>
 
-      <section className="pl-profile-proof" aria-label="パフォーマー情報">
-        <div><strong>{p.is_live ? 'LIVE中' : '公開中'}</strong><span>{p.is_live ? <Radio size={13} /> : <CheckCircle2 size={13} />} ステータス</span></div>
-        <div><strong>{supportCount}</strong><span><Heart size={13} /> 応援</span></div>
-        <div><strong>{merch.length}</strong><span>グッズ</span></div>
+      <section id="hp-live" className="hp-block" hidden={!p.is_live && !p.live_title}>
+        {p.is_live ? (
+          <button type="button" className="hp-btn hp-btn--live" onClick={onWatchLive}>
+            <span /> {p.live_title || t('hpWatchLive')}
+          </button>
+        ) : null}
       </section>
 
-      <nav className="pl-profile-tabs" aria-label="プロフィールの内容">
-        <button type="button" data-active={section === 'about'} onClick={() => setSection('about')}><UserRound size={15} />概要</button>
-        <button type="button" data-active={section === 'schedule'} onClick={() => setSection('schedule')}><CalendarDays size={15} />予定</button>
-        <button type="button" data-active={section === 'media'} onClick={() => setSection('media')}><Film size={15} />メディア</button>
-        <button type="button" data-active={section === 'goods'} onClick={() => setSection('goods')}><ShoppingBag size={15} />グッズ</button>
-      </nav>
+      <section id="hp-support" className="hp-block hp-card" aria-labelledby="hp-support-title">
+        <p className="hp-kicker">SUPPORT</p>
+        <h2 id="hp-support-title">{t('hpSupportTitle')}</h2>
+        <p className="hp-lead">{t('hpSupportLead')}</p>
+        <div className="hp-tips">
+          {TIP_PRESETS_JPY.filter((yen) => yen !== 300).map((yen) => (
+            <button key={yen} type="button" data-on={tipPick === yen} onClick={() => setTipPick(yen)}>
+              <small>{TIP_PRESET_LABELS_JA[yen].label}</small>
+              <strong>{formatYen(yen)}</strong>
+            </button>
+          ))}
+          <button type="button" data-on={!TIP_PRESETS_JPY.includes(tipPick as (typeof TIP_PRESETS_JPY)[number])} onClick={onTip}>
+            {t('hpChooseAmount')}
+          </button>
+        </div>
+        <button type="button" className="hp-btn hp-btn--red" onClick={onTip}>{t('hpSupportSend')}</button>
+      </section>
 
-      {nextAppearance ? (
-        <section className="pl-next-appearance" aria-label="次回の出演">
-          <header><span><CalendarDays size={16} /> NEXT APPEARANCE</span><h2>次回の出演</h2></header>
-          <div><strong>{String(nextAppearance.slot.date).slice(5).replace('-', '/')}</strong><span><Clock3 size={15} /> {String(nextAppearance.slot.start_time).slice(0, 5)}</span></div>
-          <p><MapPin size={16} /> {nextAppearance.venue?.name_ja || nextAppearance.slot.stage_ja}</p>
-          {nextAppearance.venue?.lat != null && nextAppearance.venue?.lng != null ? (
-            <a className="pl-action pl-action--map" href={`https://www.google.com/maps/dir/?api=1&destination=${nextAppearance.venue.lat},${nextAppearance.venue.lng}`} target="_blank" rel="noopener noreferrer"><MapPin size={16} /> MAPで見る</a>
-          ) : null}
-        </section>
-      ) : null}
-
-      {section === 'about' ? <section className="pl-card pl-profile-story" aria-label="プロフィール">
-        <p>{p.bio || t('profileReady')}</p>
-        {p.awards ? <p className="pl-muted">受賞歴: {p.awards}</p> : null}
-        {p.appearances ? <p className="pl-muted">出演歴: {p.appearances}</p> : null}
-        {videoHref ? (
-          <p className="pl-muted">
-            <a href={videoHref} target="_blank" rel="noopener noreferrer">
-              紹介動画
-            </a>
-          </p>
-        ) : null}
-        {snsLinks.length > 0 ? (
-          <p className="pl-muted">
-            {snsLinks.map((s, index) => {
-              return (
-                <span key={s.href}>
-                  {index > 0 ? ' / ' : null}
-                  <a href={s.href} target="_blank" rel="noopener noreferrer">
-                    {s.label}
-                  </a>
-                </span>
-              )
-            })}
-          </p>
-        ) : null}
-        {p.share_location && p.lat != null && p.lng != null ? <p className="pl-muted">Approx. location shared while live.</p> : null}
-      </section> : null}
-
-      {section === 'schedule' ? (
-        <section className="pl-profile-panel" aria-label="出演スケジュール">
-          <CalendarDays size={24} />
-          <div><h2>出演スケジュール</h2><p>{nextAppearance ? '次回出演は上のカードから会場まで確認できます。' : '出演予定は公開され次第表示されます。'}</p></div>
-        </section>
-      ) : null}
-
-      {section === 'media' ? (
-        <section className="pl-profile-panel pl-profile-media" aria-label="メディア">
-          <Film size={24} />
-          <div><h2>パフォーマンスを見る</h2><p>{videoHref ? '紹介動画から、この人の世界をもっと知る。' : '動画は公開され次第表示されます。'}</p></div>
-          {videoHref ? <a className="pl-action pl-action--primary" href={videoHref} target="_blank" rel="noopener noreferrer">紹介動画を開く <ExternalLink size={16} /></a> : null}
-        </section>
-      ) : null}
-
-      {section === 'goods' && merch.length > 0 ? (
-        <section className="pl-card pl-profile-merch" aria-label="このパフォーマーのグッズ">
-          <div>
-            <p className="pl-profile-merch__eyebrow">{lang === 'ja' ? 'グッズ' : 'Goods'}</p>
-            <h2 className="pl-h2" style={{ marginTop: 2 }}>この人をもっと応援する</h2>
-          </div>
-          <div className="pl-profile-merch__grid">
-            {merch.map((item) => (
+      <section id="hp-goods" className="hp-block" aria-labelledby="hp-goods-title">
+        <p className="hp-kicker">GOODS</p>
+        <h2 id="hp-goods-title">{t('hpGoods')}</h2>
+        {goodsPreview.length === 0 ? (
+          <p className="hp-empty">{t('hpNoGoods')}</p>
+        ) : (
+          <div className="hp-goods">
+            {goodsPreview.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className="pl-profile-merch__item"
+                className="hp-good"
                 onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
               >
-                {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span aria-hidden="true" />}
+                {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span className="hp-good__ph" />}
                 <strong>{item.name}</strong>
-                <small>{item.status === 'sold_out' ? '売り切れ' : '購入できます'}</small>
+                <small>{item.status === 'sold_out' ? t('hpSoldOut') : formatYen(item.price_yen)}</small>
               </button>
             ))}
           </div>
-        </section>
-      ) : null}
-      {section === 'goods' && merch.length === 0 ? <p className="pl-inline-empty">グッズは公開され次第、ここから購入できます。</p> : null}
-
-      {user ? (
-        <div className="pl-profile-next-actions">
-          <button
-            type="button"
-            className="pl-btn pl-btn--block pl-btn--ghost"
-            disabled={busy || !user}
-            onClick={() => {
-              if (!user) return
-              void (async () => {
-                setBusy(true)
-                try {
-                  if (oshi) await removeOshi(user.id, performerId)
-                  else await addOshi(user.id, performerId)
-                  setOshi(!oshi)
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : '推しの更新に失敗しました')
-                } finally {
-                  setBusy(false)
-                }
-              })()
-            }}
-          >
-            {oshi ? t('oshiOn') : t('oshi')}
+        )}
+        {merch.length > 0 ? (
+          <button type="button" className="hp-btn hp-btn--ghost" onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+            {t('hpAllGoods')}
           </button>
-          {eventId ? (
-            <button
-              type="button"
-              className="pl-btn pl-btn--block pl-btn--ghost"
-              disabled={busy || !user || voted}
-              onClick={() => {
-                if (!user || !eventId) return
-                void voteForPerformer(eventId, performerId, user.id)
-                  .then(() => setVoted(true))
-                  .catch((e) => setError(e instanceof Error ? e.message : '投票に失敗しました'))
-              }}
-            >
-              {voted ? t('voted') : `${t('vote')}して応援する`}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="pl-btn pl-btn--ghost"
-            onClick={() => {
-              const reason = window.prompt('通報理由')
-              if (!reason || !user) return
-              void createReport(user.id, 'performer', performerId, reason).catch(() => undefined)
-            }}
-          >
-            通報
+        ) : null}
+      </section>
+
+      <section id="hp-schedule" className="hp-block" aria-labelledby="hp-schedule-title">
+        <p className="hp-kicker">UPCOMING</p>
+        <h2 id="hp-schedule-title">{t('hpUpcoming')}</h2>
+        {upcoming.length === 0 ? (
+          <p className="hp-empty">{t('hpNoSchedule')}</p>
+        ) : (
+          <ul className="hp-slots">
+            {upcoming.map((slot) => {
+              const venue = venues.find((row) => row.id === slot.venue_id)
+              const now = slotPhase(slot) === 'now'
+              return (
+                <li key={slot.id} className="hp-card">
+                  <strong>{dateLabel(slot.date)} {String(slot.start_time).slice(0, 5)}</strong>
+                  <p>{slot.events?.name_ja || t('hpEvent')}</p>
+                  <p>{venue?.name_ja}{slot.stage_ja ? ` · ${slot.stage_ja}` : ''}</p>
+                  <div className="hp-next__actions">
+                    {slot.events?.slug ? <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button> : null}
+                    <button type="button" className="hp-link" onClick={() => spaGo(FESTIVAL_PATH)}>{t('hpMap')}</button>
+                    {now || p.is_live ? <button type="button" className="hp-link" onClick={onWatchLive}>{t('hpNavLive')}</button> : null}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section id="hp-about" className="hp-block" aria-labelledby="hp-about-title">
+        <p className="hp-kicker">PROFILE</p>
+        <h2 id="hp-about-title">{t('hpProfile')}</h2>
+        <p className="hp-bio hp-bio--full">{bio}</p>
+        {p.genre ? <p>{t('hpGenre')} {p.genre}</p> : null}
+        {area ? <p>{t('hpArea')} {area}</p> : null}
+        {p.awards ? <p>{t('hpAwards')} {p.awards}</p> : null}
+        {p.appearances ? <p>{t('hpShows')} {p.appearances}</p> : null}
+        {snsLinks.length > 0 ? (
+          <p>
+            {t('hpSns')}{' '}
+            {snsLinks.map((s, i) => (
+              <span key={s.href}>{i > 0 ? ' / ' : null}<a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a></span>
+            ))}
+          </p>
+        ) : null}
+        {videoHref ? <p><a href={videoHref} target="_blank" rel="noopener noreferrer">{t('hpSite')}</a></p> : null}
+      </section>
+
+      <section className="hp-card hp-again" aria-labelledby="hp-again-title">
+        <p className="hp-kicker">FOLLOW & MEET AGAIN</p>
+        <h2 id="hp-again-title">{t('hpFollowAgain')}</h2>
+        <p className="hp-lead">{t('hpFollowAgainLead')}</p>
+        <button type="button" className="hp-btn hp-btn--red" disabled={busy} onClick={() => void toggleFollow()}>
+          {following ? t('following') : t('hpFollowCta')}
+        </button>
+      </section>
+
+      {error ? <p className="pl-error">{error}</p> : null}
+      {toast ? <p className="hp-toast" role="status">{toast}</p> : null}
+
+      {qrOpen ? (
+        <div className={`hp-qr${qrFull ? ' hp-qr--full' : ''}`} role="dialog" aria-modal="true" aria-label={t('hpQr')}>
+          <button type="button" className="hp-qr__back" onClick={() => { setQrOpen(false); setQrFull(false) }}>{t('eventClose')}</button>
+          <div className="hp-qr__card">
+            <PerformerAvatar url={p.photo_url} name={p.stage_name} isLive={false} size={64} />
+            <strong>{p.stage_name}</strong>
+            <span>@{handle}</span>
+            <img src={qrSrc} alt="" width={qrFull ? 320 : 240} height={qrFull ? 320 : 240} />
+            <p>{t('hpQrHint')}</p>
+          </div>
+          <div className="hp-qr__actions">
+            <button type="button" onClick={() => void shareProfile()}><Share2 size={16} /> {t('hpShare')}</button>
+            <button type="button" onClick={() => void copyLink()}><Copy size={16} /> {t('hpCopy')}</button>
+            <button type="button" onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
+          </div>
+          <button type="button" className="hp-qr__full" onClick={() => setQrFull((v) => !v)}>
+            <Expand size={16} /> {t('hpQrFull')}
           </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          className="pl-btn pl-btn--block pl-profile-auth-cta"
-          style={{ marginTop: 12 }}
-          onClick={() => spaGo(`${PLATFORM_PATH}?auth=1`)}
-        >
-          {lang === 'ja' ? 'ログインしてフォロー・応援する' : 'Sign in to follow and support'}
-        </button>
-      )}
-      {error ? <p className="pl-error">{error}</p> : null}
-    </>
+      ) : null}
+    </article>
   )
 }
