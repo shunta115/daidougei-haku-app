@@ -94,6 +94,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [section, setSection] = useState<SectionId>('media')
   const [qrOpen, setQrOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
 
@@ -171,29 +172,44 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const shareProfile = async () => {
     if (!p) return
     const text = p.support_blurb || p.bio || t('hpQrHint')
-    try {
-      if (navigator.share) {
+    if (navigator.share) {
+      try {
         await navigator.share({ title: p.stage_name, text, url: canonicalUrl })
-        return
+      } catch {
+        /* cancelled */
       }
-    } catch {
-      /* cancelled */
+      return
     }
     await copyLink()
   }
 
+  const writeCanonicalUrl = async () => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(canonicalUrl)
+      return
+    }
+    const input = document.createElement('input')
+    input.value = canonicalUrl
+    input.setAttribute('readonly', '')
+    input.style.position = 'fixed'
+    input.style.opacity = '0'
+    document.body.appendChild(input)
+    input.focus()
+    input.select()
+    input.setSelectionRange(0, canonicalUrl.length)
+    const ok = document.execCommand('copy')
+    input.remove()
+    if (!ok) throw new Error('copy')
+  }
+
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(canonicalUrl)
+      await writeCanonicalUrl()
+      setCopyState('ok')
     } catch {
-      const input = document.createElement('input')
-      input.value = canonicalUrl
-      document.body.appendChild(input)
-      input.select()
-      document.execCommand('copy')
-      input.remove()
+      setCopyState('fail')
     }
-    showToast(t('hpCopied'))
+    window.setTimeout(() => setCopyState('idle'), 1800)
   }
 
   const saveQr = async () => {
@@ -446,15 +462,22 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
             <span />
           </header>
           <div className="hp-qr__card">
-            <PerformerAvatar url={p.photo_url} name={p.stage_name} isLive={false} size={56} />
-            <b>{p.stage_name}</b>
+            <div className="hp-qr__face">
+              <PerformerAvatar url={p.photo_url} name={p.stage_name} isLive={false} size={68} />
+            </div>
+            <b>
+              {p.stage_name}
+              {p.is_approved ? <BadgeCheck size={14} aria-label={t('hpVerified')} /> : null}
+            </b>
             <span>@{handle}</span>
-            {qrSrc ? <img src={qrSrc} alt="" width={220} height={220} /> : null}
+            {qrSrc ? <img className="hp-qr__code" src={qrSrc} alt="" width={240} height={240} /> : null}
             <p>{t('hpQrHint')}</p>
           </div>
           <div className="hp-qr__actions">
             <button type="button" onClick={() => void shareProfile()}><Share2 size={16} /> {t('hpShare')}</button>
-            <button type="button" onClick={() => void copyLink()}><Copy size={16} /> {t('hpCopy')}</button>
+            <button type="button" onClick={() => void copyLink()}>
+              {copyState === 'ok' ? `✓ ${t('hpCopyDone')}` : copyState === 'fail' ? t('hpCopyFail') : <><Copy size={16} /> {t('hpCopy')}</>}
+            </button>
             <button type="button" onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
           </div>
         </div>
