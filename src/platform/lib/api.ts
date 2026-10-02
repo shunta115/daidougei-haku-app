@@ -155,7 +155,19 @@ export async function updateLiveViewerPeak(performerId: string, viewers: number)
   await sb.from('live_sessions').update({ viewer_peak: peak }).eq('id', open.id)
 }
 
+async function assertApprovedActivePerformer(performerId: string) {
+  const sb = requireSupabase()
+  const [{ data: performer }, { data: profile }] = await Promise.all([
+    sb.from('performers').select('is_approved').eq('id', performerId).maybeSingle(),
+    sb.from('profiles').select('status').eq('id', performerId).maybeSingle(),
+  ])
+  if (!performer?.is_approved || profile?.status !== 'active') {
+    throw new Error('運営の承認後にLIVEを開始できます。登録状況をご確認ください。')
+  }
+}
+
 export async function updatePerformer(id: string, patch: Partial<Performer>) {
+  if (patch.is_live === true) await assertApprovedActivePerformer(id)
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').update(patch).eq('id', id).select('id')
   if (error) throw error
@@ -163,6 +175,7 @@ export async function updatePerformer(id: string, patch: Partial<Performer>) {
 }
 
 export async function startLive(performerId: string, title?: string) {
+  await assertApprovedActivePerformer(performerId)
   const sb = requireSupabase()
   const now = new Date().toISOString()
   const liveTitle = title?.trim() || null

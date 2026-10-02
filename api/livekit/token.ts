@@ -56,6 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(403).json({ error: 'Performer is not approved yet' })
         return
       }
+      const { data: hostProfile } = await sb.from('profiles').select('status').eq('id', performerId).maybeSingle()
+      if (hostProfile?.status !== 'active') {
+        res.status(403).json({ error: 'Performer is not approved yet' })
+        return
+      }
     } else if (!performer.is_approved || !performer.is_live) {
       res.status(403).json({ error: 'This live stream is not currently available' })
       return
