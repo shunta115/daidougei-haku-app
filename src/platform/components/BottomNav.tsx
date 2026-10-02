@@ -1,4 +1,4 @@
-import { CalendarDays, Compass, Home, MapPinned, Radio, Search, ShoppingBag, User, Video } from 'lucide-react'
+import { CalendarDays, Compass, Home, MapPinned, Radio, Search, User } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { FESTIVAL_PATH, spaGo } from '../../app/routes'
 import { useLang } from '../../i18n/LangProvider'
@@ -15,12 +15,19 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
   const { t } = useLang()
   const labels = {
     discover: t('navDiscover'),
-    goods: t('navGoods'),
     account: t('navMyPage'),
     map: t('navMap'),
     live: t('navLive'),
     event: t('eventHome'),
   }
+
+  const publicItems: NavItem[] = [
+    { key: 'fan-home', label: t('home'), icon: Home },
+    { key: 'event-list', label: labels.event, icon: CalendarDays },
+    { key: 'live-list', label: labels.live, icon: Radio },
+    { key: 'map-schedule', label: labels.map, icon: MapPinned },
+    { key: 'profile', label: labels.account, icon: User },
+  ]
 
   const items: NavItem[] = role === 'admin'
     ? [
@@ -30,34 +37,23 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
         { key: 'admin-users', label: '利用者', icon: User },
         { key: 'admin-ops', label: '分析', icon: Compass },
       ]
-    : role === 'performer'
+    : role === 'organizer'
       ? [
-          { key: 'performer-home', label: t('home'), icon: Home },
-          { key: 'performer-schedule', label: labels.event, icon: CalendarDays },
-          { key: 'performer-live', label: labels.live, icon: Video },
-          { key: 'performer-merch', label: labels.goods, icon: ShoppingBag },
+          { key: 'event-home', label: labels.event, href: FESTIVAL_PATH, icon: CalendarDays },
+          { key: 'organizer-home', label: 'Desk', icon: Home },
+          { key: 'search', label: labels.discover, icon: Search },
+          { key: 'notifications', label: t('notifications'), icon: User },
         ]
-      : role === 'organizer'
-        ? [
-            { key: 'event-home', label: labels.event, href: FESTIVAL_PATH, icon: CalendarDays },
-            { key: 'organizer-home', label: 'Desk', icon: Home },
-            { key: 'search', label: labels.discover, icon: Search },
-            { key: 'notifications', label: t('notifications'), icon: User },
-          ]
-        : [
-            { key: 'fan-home', label: t('home'), icon: Home },
-            { key: 'event-list', label: labels.event, icon: CalendarDays },
-            { key: 'live-list', label: labels.live, icon: Radio },
-            { key: 'map-schedule', label: labels.map, icon: MapPinned },
-            { key: 'profile', label: labels.account, icon: User },
-          ]
+      : publicItems
+
+  const hakuChrome = role === 'fan' || role === 'performer'
 
   return (
-    <nav className={`pl-nav${role === 'fan' ? ' pl-nav--fan' : ''}`} aria-label="Main">
+    <nav className={`pl-nav${hakuChrome ? ' pl-nav--fan' : ''}`} aria-label="Main">
       <div className="pl-nav__inner">
         {items.map((item) => {
           const Icon = item.icon
-          const live = role === 'fan' && item.key === 'live-list'
+          const live = hakuChrome && item.key === 'live-list'
           return (
             <button
               key={item.key}

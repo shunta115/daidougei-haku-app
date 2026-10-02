@@ -27,6 +27,9 @@ type FanHomeProps = {
   onOpenEvent?: (slug: string) => void
   onOpenNotifications: () => void
   onTip: (id: string) => void
+  onPerformerLive?: () => void
+  onPerformerSchedule?: () => void
+  onPerformerDesk?: () => void
 }
 
 function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }: {
@@ -61,7 +64,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onPerformerLive, onPerformerSchedule, onPerformerDesk }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
@@ -156,6 +159,19 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
+
+      {onPerformerLive && onPerformerSchedule && onPerformerDesk ? (
+        <section className="pl-performer-desk" aria-label={t('performerDeskTitle')}>
+          <p>PERFORMER</p>
+          <h2>{t('performerDeskTitle')}</h2>
+          <span>{t('performerDeskLead')}</span>
+          <div className="pl-performer-desk__row">
+            <button type="button" className="pl-action pl-action--glass" onClick={onPerformerLive}>{t('performerDeskLive')}</button>
+            <button type="button" className="pl-action pl-action--glass" onClick={onPerformerSchedule}>{t('performerDeskSchedule')}</button>
+          </div>
+          <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={onPerformerDesk}>{t('performerManageTitle')}</button>
+        </section>
+      ) : null}
 
       <InstallPrompt />
 

@@ -10,7 +10,7 @@ import { useLang } from '../../i18n/LangProvider'
 import { PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings }: {
+export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings, onNotifications }: {
   onEdit: () => void
   onLive: () => void
   onHistory: () => void
@@ -18,6 +18,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   onPreview: () => void
   onSchedule: () => void
   onEarnings: () => void
+  onNotifications?: () => void
 }) {
   const { t, lang } = useLang()
   const { performer, profile, refreshProfile, signOut } = useAuth()
@@ -93,28 +94,36 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
       {status.next === 'profile' ? <button className="pl-btn pl-btn--block" onClick={onEdit}><Pencil size={18} />{t('finishProfile')}</button> : null}
       {status.next === 'payouts' ? <a className="pl-btn pl-btn--block" href="#payout-heading">{t('goPayout')}</a> : null}
       {status.next === 'approval' ? <p className="pl-registration__notice">{t('approvalNotice')}</p> : null}
-      {status.approved ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onPreview}>{t('seePublic')}</button> : null}
     </section>
 
-    <PayoutSetup performerId={performer.id} onStatus={setConnect} />
-
-    <section className="pl-registration__section" aria-label={t('activityMenu')}>
-      <h2 className="pl-h2">{t('activityTitle')}</h2>
+    <section className="pl-registration__section" aria-label={t('performerMyPublic')}>
+      <h2 className="pl-h2">{t('performerMyPublic')}</h2>
       <div className="pl-registration__actions">
         <button className="pl-activity-card" onClick={onEdit}><Pencil size={20} /><strong>{t('stepProfile')}</strong><span>{t('editCardBody')}</span><em>{t('editAction')}</em></button>
+        <button className="pl-activity-card" onClick={onPreview}><Share2 size={20} /><strong>{t('seePublic')}</strong><span>{t('hpQrHint')}</span><em>{t('seePublic')}</em></button>
+        <button className="pl-activity-card" onClick={onPreview}><Share2 size={20} /><strong>{t('hpQr')}</strong><span>{t('hpQrHint')}</span><em>{t('hpQr')}</em></button>
+      </div>
+      {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />{t('shareProfile')}</button> : null}
+    </section>
+
+    <section className="pl-registration__section" aria-label={t('performerMyActivity')}>
+      <h2 className="pl-h2">{t('performerMyActivity')}</h2>
+      <div className="pl-registration__actions">
         <button className="pl-activity-card" disabled={!status.approved} onClick={onLive}><Camera size={20} /><strong>{t('navLive')}</strong><span>{t('liveCardBody')}</span><em>{performer.is_live ? t('liveManage') : t('livePrepare')}</em></button>
-        <button className="pl-activity-card" onClick={onMerch}><ShoppingBag size={20} /><strong>{t('navGoods')}</strong><span>{t('merchCardBody')}</span><em>{t('merchAction')}</em></button>
         <button className="pl-activity-card" onClick={onSchedule}><CalendarDays size={20} /><strong>{t('scheduleTitle')}</strong><span>{t('scheduleCardBody')}</span><em>{t('scheduleAction')}</em></button>
-        <button className="pl-activity-card" onClick={onEarnings}><WalletCards size={20} /><strong>{t('earnTitle')}</strong><span>{t('salesCardBody')}</span><em>{t('salesAction')}</em></button>
-        {status.approved ? <button className="pl-btn pl-btn--ghost" onClick={() => void share()}><Share2 size={18} />{t('shareProfile')}</button> : null}
+        <button className="pl-activity-card" onClick={onHistory}><Camera size={20} /><strong>{t('liveHistory')}</strong><span>{t('liveHistoryMenu')}</span><em>{t('liveHistory')}</em></button>
       </div>
       {!status.approved ? <p className="pl-muted">{t('pendingNote')}</p> : null}
     </section>
 
-    {error ? <p className="pl-error" role="alert">{error}</p> : null}
-    {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
-    <section className="pl-registration__section" aria-label={t('tipSales')}>
-      <h2 className="pl-h2">{t('tipSales')}</h2>
+    <PayoutSetup performerId={performer.id} onStatus={setConnect} />
+
+    <section className="pl-registration__section" aria-label={t('performerMyRevenue')}>
+      <h2 className="pl-h2">{t('performerMyRevenue')}</h2>
+      <div className="pl-registration__actions">
+        <button className="pl-activity-card" onClick={onEarnings}><WalletCards size={20} /><strong>{t('earnTitle')}</strong><span>{t('salesCardBody')}</span><em>{t('salesAction')}</em></button>
+        <button className="pl-activity-card" onClick={onMerch}><ShoppingBag size={20} /><strong>{t('navGoods')}</strong><span>{t('merchCardBody')}</span><em>{t('merchAction')}</em></button>
+      </div>
       <dl className="pl-registration__totals">
         <div><dt>{t('tipCount')}</dt><dd>{t('countItems', { n: summary.count })}</dd></div>
         <div><dt>{t('salesTotal')}</dt><dd>{formatYen(summary.amount_total)}</dd></div>
@@ -125,15 +134,22 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
       {tips.map((tip) => <div key={tip.id} className="pl-registration__sale"><strong>{formatYen(tip.amount_cents)}</strong><span>{new Date(tip.created_at).toLocaleDateString('ja-JP')}</span></div>)}
     </section>
 
-    <details className="pl-registration__details"><summary>{t('liveHistoryMenu')}</summary>
-      {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP')}・{session.ended_at ? t('endedShort') : t('liveNow')}・{formatYen(session.tip_amount_total)}</p>)}
-      <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onHistory}>{t('liveHistory')}</button>
+    {error ? <p className="pl-error" role="alert">{error}</p> : null}
+    {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
+
+    <section className="pl-registration__section" aria-label={t('performerMyAccount')}>
+      <h2 className="pl-h2">{t('performerMyAccount')}</h2>
+      {onNotifications ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onNotifications}>{t('notifications')}</button> : null}
+      <details className="pl-registration__details"><summary>{t('liveHistoryMenu')}</summary>
+        {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP')}・{session.ended_at ? t('endedShort') : t('liveNow')}・{formatYen(session.tip_amount_total)}</p>)}
+        <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onHistory}>{t('liveHistory')}</button>
+      </details>
       <label className="pl-registration__toggle"><input type="checkbox" checked={performer.share_location} disabled={busy} onChange={(e) => {
         const checked = e.target.checked
         setBusy(true)
         void updatePerformer(performer.id, { share_location: checked }).then(refreshProfile).catch((e) => setError(registrationError(e))).finally(() => setBusy(false))
       }} />{t('locationShare')}</label>
       <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>{t('signOut')}</button>
-    </details>
+    </section>
   </div>
 }

@@ -443,3 +443,40 @@
   font-weight: 800;
   color: #ff4ecd;
 }
+
+.pl-performer-desk {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px;
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(134, 185, 230, 0.22);
+  border-radius: 22px;
+  background: rgba(7, 24, 41, 0.55);
+}
+
+.pl-performer-desk p {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.pl-performer-desk h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.pl-performer-desk > span {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pl-performer-desk__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}

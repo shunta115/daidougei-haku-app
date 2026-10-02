@@ -98,10 +98,18 @@ function PlatformTopBar({ accountLabel, onAccount }: { accountLabel: string; onA
 
 function homeForRole(role: string | undefined): PlatformScreen {
   if (role === 'admin') return 'admin'
-  if (role === 'performer') return 'performer-home'
   if (role === 'organizer') return 'organizer-home'
   return 'fan-home'
 }
+
+const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
+  'performer-home',
+  'performer-edit',
+  'performer-merch',
+  'performer-schedule',
+  'performer-earnings',
+  'performer-history',
+])
 
 function initialGuestScreen(): PlatformScreen {
   try {
@@ -367,7 +375,7 @@ function PlatformShell() {
     const stripeConnect = window.sessionStorage.getItem('pl-stripe-connect')
     if (stripeConnect && profile.role === 'performer') {
       window.sessionStorage.removeItem('pl-stripe-connect')
-      setScreen('performer-home')
+      setScreen('profile')
       return
     }
     const watchId = window.sessionStorage.getItem('pl-watch')
@@ -401,7 +409,7 @@ function PlatformShell() {
     const openAccount = window.sessionStorage.getItem('pl-open-account')
     if (openAccount) {
       window.sessionStorage.removeItem('pl-open-account')
-      setScreen(profile.role === 'fan' ? 'profile' : homeForRole(profile.role))
+      setScreen(profile.role === 'admin' || profile.role === 'organizer' ? homeForRole(profile.role) : 'profile')
       return
     }
     const eventReturn = window.sessionStorage.getItem('pl-event-return')
@@ -647,7 +655,7 @@ function PlatformShell() {
           {guestShowNav ? (
             <BottomNav
               role="fan"
-              active={performerId && screen === 'profile' ? 'performer-public' : screen}
+              active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}
               onNavigate={(key) => {
                 setPerformerId(null)
                 setMerchProductId(null)
@@ -739,6 +747,9 @@ function PlatformShell() {
             onOpenMap={() => setScreen('map-schedule')}
             onOpenEvent={openEvent}
             onOpenNotifications={() => setScreen('notifications')}
+            onPerformerLive={role === 'performer' ? () => setScreen('performer-live') : undefined}
+            onPerformerSchedule={role === 'performer' ? () => setScreen('performer-schedule') : undefined}
+            onPerformerDesk={role === 'performer' ? () => setScreen('profile') : undefined}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home' } })
               setPerformerId(id)
@@ -783,7 +794,18 @@ function PlatformShell() {
         )
         break
       case 'profile':
-        body = (
+        body = role === 'performer' ? (
+          <PerformerHomeScreen
+            onEdit={() => setScreen('performer-edit')}
+            onLive={() => setScreen('performer-live')}
+            onHistory={() => setScreen('performer-history')}
+            onMerch={() => setScreen('performer-merch')}
+            onPreview={() => { if (user) openPerformer(user.id) }}
+            onSchedule={() => setScreen('performer-schedule')}
+            onEarnings={() => setScreen('performer-earnings')}
+            onNotifications={() => setScreen('notifications')}
+          />
+        ) : (
           <FanProfileScreen
             onOpenPerformer={openPerformer}
             onOpenProduct={openMerchProduct}
@@ -801,26 +823,27 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
+            onNotifications={() => setScreen('notifications')}
           />
         )
         break
       case 'performer-schedule':
-        body = <PerformerScheduleScreen onBack={() => setScreen('performer-home')} onLive={() => setScreen('performer-live')} />
+        body = <PerformerScheduleScreen onBack={() => setScreen('profile')} onLive={() => setScreen('performer-live')} />
         break
       case 'performer-earnings':
-        body = <PerformerEarningsScreen onBack={() => setScreen('performer-home')} />
+        body = <PerformerEarningsScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-edit':
-        body = <PerformerEditScreen onBack={() => setScreen('performer-home')} />
+        body = <PerformerEditScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-merch':
-        body = <PerformerMerchScreen onBack={() => setScreen('performer-home')} />
+        body = <PerformerMerchScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-live':
-        body = <PerformerLiveScreen onBack={() => setScreen('performer-home')} />
+        body = <PerformerLiveScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-history':
-        body = <PerformerHistoryScreen onBack={() => setScreen('performer-home')} />
+        body = <PerformerHistoryScreen onBack={() => setScreen('profile')} />
         break
       case 'admin':
         body = <AdminDashboardScreen />
@@ -864,7 +887,7 @@ function PlatformShell() {
   return (
     <div className="pl-app">
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
-        {showNav && screen !== 'fan-home' && navRole !== 'fan' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' ? 'profile' : homeForRole(role)) }} /> : null}
+        {showNav && screen !== 'fan-home' && navRole !== 'fan' && navRole !== 'performer' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' || role === 'performer' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
             {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
@@ -887,7 +910,7 @@ function PlatformShell() {
       {showNav ? (
         <BottomNav
           role={navRole}
-          active={performerId && screen === 'profile' ? 'performer-public' : screen}
+          active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}
           onNavigate={(key) => {
             setPerformerId(null)
             setMerchProductId(null)
