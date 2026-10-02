@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase } from './stripe/_shared.js'
-import { requireAdmin } from './ops/_guard.js'
-import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../shared/fees.js'
+import { getAdminSupabase } from '../stripe/_shared.js'
+import { requireAdmin } from './_guard.js'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../../shared/fees.js'
 
 type Json = Record<string, unknown>
 

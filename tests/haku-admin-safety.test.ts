@@ -13,7 +13,7 @@ describe('HAKU admin and public performer safety', () => {
   })
 
   it('serves HAKU ADMIN through requireAdmin and does not expose service role to the client', () => {
-    const admin = read('api/haku-admin.ts')
+    const admin = read('api/ops/_hakuAdmin.ts')
     const supabase = read('src/platform/lib/supabase.ts')
     expect(admin).toMatch(/requireAdmin/)
     expect(admin).toMatch(/admin_audit/)

@@ -1,7 +1,7 @@
 import { supabaseAuthHeaders } from '../platform/lib/supabase'
 
 export async function hakuAdmin(resource: string, action = 'list', payload: Record<string, unknown> = {}) {
-  const response = await fetch('/api/haku-admin', {
+  const response = await fetch('/api/ops/inbox', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
     body: JSON.stringify({ resource, action, payload }),
