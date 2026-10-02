@@ -17,7 +17,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
   const { t } = useLang()
   const { passwordRecovery, sendPasswordReset, signIn, signUp, updatePassword } = useAuth()
   const [mode, setMode] = useState<'in' | 'up' | 'reset' | 'new-password'>(() => passwordRecovery ? 'new-password' : 'up')
-  const [role, setRole] = useState(initialRole)
+  const [role] = useState(initialRole)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -92,15 +92,6 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       <div className="pl-registration__intro"><p>{role === 'performer' ? 'PERFORMER ENTRY' : 'YOUR ACCOUNT'}</p><h1 className="pl-h1">{mode === 'in' ? t('signIn') : mode === 'reset' ? t('authResetTitle') : mode === 'new-password' ? t('authNewPasswordTitle') : role === 'performer' ? t('authPerformerTitle') : t('signUp')}</h1>
       <span>{mode === 'reset' ? t('authLeadReset') : mode === 'new-password' ? t('authLeadNewPassword') : role === 'performer' ? t('authLeadPerformer') : t('authLeadReturning')}</span></div>
       {role === 'performer' && mode === 'up' ? <p className="pl-registration__progress">{t('authProgress')}</p> : null}
-
-      {mode === 'up' && !performerEntry ? (
-        <fieldset className="pl-registration__roles">
-          <legend>{t('authAccountType')}</legend>
-          {(['fan', 'performer'] as const).map((item) => (
-            <label key={item}><input type="radio" name="role" aria-label={t(item)} checked={role === item} onChange={() => setRole(item)} /><span><strong>{t(item)}</strong><small>{item === 'fan' ? t('authFanBlurb') : t('authPerformerBlurb')}</small></span></label>
-          ))}
-        </fieldset>
-      ) : null}
 
       {mode === 'up' ? <p className="pl-registration__guest-note">{t('authGuestNote')}</p> : null}
 

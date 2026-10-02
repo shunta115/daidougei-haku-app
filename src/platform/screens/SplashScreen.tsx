@@ -2,24 +2,14 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { useLang } from '../../i18n/LangProvider'
-import { searchPerformers } from '../lib/api'
+
+const HERO_POSTER = '/brand/haku-official.jpg'
+const HERO_VIDEO = '/videos/splash.mp4'
 
 export function SplashScreen({ onStart }: { onStart: () => void }) {
   const { t } = useLang()
-  const [image, setImage] = useState<string | null>(null)
   const [videoAvailable, setVideoAvailable] = useState(true)
   const [reduceMotion, setReduceMotion] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    void searchPerformers('')
-      .then((rows) => {
-        const photo = rows.find((row) => row.is_live && row.photo_url)?.photo_url ?? rows.find((row) => row.photo_url)?.photo_url
-        if (active && photo) setImage(photo)
-      })
-      .catch(() => undefined)
-    return () => { active = false }
-  }, [])
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -31,7 +21,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
   }, [])
 
   return (
-    <main className="pl-splash" style={{ '--splash-image': image ? `url(${image})` : 'none' } as CSSProperties}>
+    <main className="pl-splash" style={{ '--splash-image': `url(${HERO_POSTER})` } as CSSProperties}>
       <div className="pl-splash__ambient" aria-hidden="true" />
       <div className="pl-splash__media" aria-hidden="true" />
       {videoAvailable && !reduceMotion ? (
@@ -42,11 +32,11 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
           playsInline
           loop
           preload="metadata"
-          poster={image ?? undefined}
+          poster={HERO_POSTER}
           onError={() => setVideoAvailable(false)}
           aria-hidden="true"
         >
-          <source src="/videos/splash.mp4" type="video/mp4" />
+          <source src={HERO_VIDEO} type="video/mp4" />
         </video>
       ) : null}
       <div className="pl-splash__shade" aria-hidden="true" />

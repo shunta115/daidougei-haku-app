@@ -28,6 +28,10 @@ export async function reconcileLivePresence() {
   await fetch('/api/livekit/presence', { cache: 'no-store' }).catch(() => undefined)
 }
 
+function isPublicTestPerformer(p: Performer): boolean {
+  return /^test performer$/i.test(p.stage_name.trim())
+}
+
 export async function searchPerformers(query: string, filters: PerformerSearchFilters = {}): Promise<Performer[]> {
   const sb = requireSupabase()
   let q = sb.from('performers').select('*').eq('is_approved', true)
@@ -40,6 +44,7 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
   const country = filters.country?.trim().toLowerCase()
   const japanish = /^(japan|日本|jp|jpn|tokyo|東京)$/i
   return rows.filter((p) => {
+    if (isPublicTestPerformer(p)) return false
     if (genre && !p.genre.toLowerCase().includes(genre)) return false
     if (country && !(p.country || '').toLowerCase().includes(country) && !(p.city || '').toLowerCase().includes(country)) return false
     if (filters.overseasOnly) {
@@ -58,7 +63,7 @@ export async function getPerformer(id: string): Promise<Performer | null> {
   const { data, error } = await sb.from('performers').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   const row = (data as Performer) ?? null
-  if (!row || !row.is_approved) return null
+  if (!row || !row.is_approved || isPublicTestPerformer(row)) return null
   return row
 }
 
@@ -71,7 +76,7 @@ export async function listLivePerformers(): Promise<Performer[]> {
     .eq('is_live', true)
     .order('live_started_at', { ascending: false })
   if (error) throw error
-  return (data as Performer[]) ?? []
+  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
 }
 
 export type LiveRankRow = {
@@ -978,7 +983,7 @@ export async function listApprovedPerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select('*').eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return (data as Performer[]) ?? []
+  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
 }
 
 export async function listEventVenues(eventId: string): Promise<EventVenueRow[]> {

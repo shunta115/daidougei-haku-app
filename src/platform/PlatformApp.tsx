@@ -156,8 +156,8 @@ function PlatformShell() {
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
   const [showSplash, setShowSplash] = useState(() => {
-    if (!import.meta.env.PROD || window.location.pathname !== '/' || window.location.search) return false
-    try { return window.localStorage.getItem('pl-master-splash-seen') !== '1' } catch { return false }
+    if (window.location.pathname !== '/' || window.location.search) return false
+    try { return window.localStorage.getItem('pl-master-splash-seen-v2') !== '1' } catch { return false }
   })
 
   useEffect(() => {
@@ -323,7 +323,7 @@ function PlatformShell() {
   useEffect(() => {
     if (!ready) return
     if (!configured) {
-      setScreen('setup')
+      if (!showSplash) setScreen('setup')
       return
     }
     if (!user) {
@@ -436,7 +436,15 @@ function PlatformShell() {
       if (s === 'welcome' || s === 'auth' || s === 'setup' || (firstVisit && s === 'fan-home')) return homeForRole(profile?.role)
       return s
     })
-  }, [ready, configured, user, profile, passwordRecovery, registrationEntry])
+  }, [ready, configured, user, profile, passwordRecovery, registrationEntry, showSplash])
+
+  if (showSplash && screen === 'fan-home') {
+    return <div className="pl-app"><SplashScreen onStart={() => {
+      try { window.localStorage.setItem('pl-master-splash-seen-v2', '1') } catch { /* continue without persistence */ }
+      setShowSplash(false)
+      if (!user) setScreen('auth')
+    }} /></div>
+  }
 
   if (!ready) {
     return (
@@ -455,13 +463,6 @@ function PlatformShell() {
         <SetupScreen />
       </div>
     )
-  }
-
-  if (showSplash && screen === 'fan-home') {
-    return <div className="pl-app"><SplashScreen onStart={() => {
-      try { window.localStorage.setItem('pl-master-splash-seen', '1') } catch { /* continue without persistence */ }
-      setShowSplash(false)
-    }} /></div>
   }
 
   if (user && profileError) {
