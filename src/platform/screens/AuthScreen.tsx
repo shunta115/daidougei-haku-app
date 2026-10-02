@@ -125,7 +125,11 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
           <p>PERFORMER</p>
           <h2>{t('authPerformerEntryKicker')}</h2>
           <span>{t('authPerformerEntryLead')}</span>
-          <a className="pl-btn pl-btn--ghost pl-btn--block" href={PERFORMER_REGISTER_PATH}>{t('authPerformerEntryCta')}</a>
+          <a
+            className="pl-btn pl-btn--ghost pl-btn--block"
+            href={PERFORMER_REGISTER_PATH}
+            onClick={() => { window.location.assign(PERFORMER_REGISTER_PATH) }}
+          >{t('authPerformerEntryCta')}</a>
         </aside>
       ) : null}
     </div>
