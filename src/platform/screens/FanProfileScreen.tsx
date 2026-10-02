@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { Avatar } from '../components/Avatar'
 import { useLang } from '../../i18n/LangProvider'
-import { listFollowedPerformers, listMyMerchOrders } from '../lib/api'
+import { listFollowedPerformers, listMyMerchOrders, updateOwnAvatar } from '../lib/api'
+import { prepareProfilePhoto } from '../lib/profilePhoto'
+import { registrationError } from '../lib/onboarding'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
-import { Bell, ChevronRight, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
+import { Bell, Camera, ChevronRight, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
 
 type Props = {
   onOpenPerformer?: (id: string) => void
@@ -15,10 +17,12 @@ type Props = {
 
 export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotifications }: Props) {
   const { t } = useLang()
-  const { profile, user, signOut } = useAuth()
+  const { profile, user, signOut, refreshProfile } = useAuth()
+  const photoInput = useRef<HTMLInputElement>(null)
   const [follows, setFollows] = useState<Performer[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -45,6 +49,22 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
     }
   }, [t, user])
 
+  const onPhoto = async (file: File | null) => {
+    if (!file || !user || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const photo = await prepareProfilePhoto(file)
+      await updateOwnAvatar(user.id, photo)
+      await refreshProfile()
+    } catch (e) {
+      setError(registrationError(e, t('editPhotoFail')))
+    } finally {
+      setBusy(false)
+      if (photoInput.current) photoInput.current.value = ''
+    }
+  }
+
   if (!profile) return <p className="pl-muted">{t('processing')}</p>
   const username = (profile.email?.split('@')[0] || profile.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '')
 
@@ -52,7 +72,23 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
     <>
       <section className="pl-my-hero">
         <div className="pl-my-hero__glow" aria-hidden="true" />
-        <Avatar url={profile.avatar_url} name={profile.display_name} large />
+        <button
+          type="button"
+          className="pl-my-hero__photo"
+          disabled={busy || !user}
+          onClick={() => photoInput.current?.click()}
+          aria-label={t('profileChangePhoto')}
+        >
+          <Avatar url={profile.avatar_url} name={profile.display_name} large />
+          <span className="pl-my-hero__cam" aria-hidden="true"><Camera size={13} /></span>
+        </button>
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+          hidden
+          onChange={(e) => void onPhoto(e.target.files?.[0] ?? null)}
+        />
         <div>
           <p>MY STREET</p>
           <h1>{profile.display_name}</h1>

@@ -633,11 +633,20 @@ export async function listUsers() {
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
   const sb = requireSupabase()
+  const { data: auth } = await sb.auth.getUser()
+  if (!auth.user || auth.user.id !== userId) throw new Error('自分の写真だけ変更できます')
   const path = `${userId}/${Date.now()}.${validatedImageExt(file)}`
   const { error } = await sb.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
   if (error) throw error
   const { data } = sb.storage.from('avatars').getPublicUrl(path)
   return data.publicUrl
+}
+
+export async function updateOwnAvatar(userId: string, file: File): Promise<string> {
+  const url = await uploadAvatar(userId, file)
+  const { error } = await requireSupabase().from('profiles').update({ avatar_url: url }).eq('id', userId)
+  if (error) throw error
+  return url
 }
 
 function validatedImageExt(file: File): string {

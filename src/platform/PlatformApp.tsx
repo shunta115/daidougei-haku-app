@@ -547,8 +547,9 @@ function PlatformShell() {
           onWatchLive={openWatch}
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
-          onOpenMap={() => setScreen('map-schedule')}
-          onOpenNotifications={() => setScreen('auth')}
+            onOpenMap={() => setScreen('map-schedule')}
+            onOpenEvent={openEvent}
+            onOpenNotifications={() => setScreen('auth')}
           onTip={(id) => {
             trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
             setPerformerId(id)
@@ -736,6 +737,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
+            onOpenEvent={openEvent}
             onOpenNotifications={() => setScreen('notifications')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home' } })
@@ -846,6 +848,7 @@ function PlatformShell() {
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
+            onOpenEvent={openEvent}
             onOpenNotifications={() => setScreen('notifications')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })

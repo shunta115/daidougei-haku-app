@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
+import { AWP_EVENT_SLUG } from '../../app/routes'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
   getFeaturedEvent,
@@ -23,6 +24,7 @@ type FanHomeProps = {
   onOpenSearch: () => void
   onOpenLiveList: () => void
   onOpenMap: () => void
+  onOpenEvent?: (slug: string) => void
   onOpenNotifications: () => void
   onTip: (id: string) => void
 }
@@ -59,7 +61,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenNotifications }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
@@ -158,8 +160,20 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <InstallPrompt />
 
       <section className="pl-event-glass" aria-label={t('eventHome')}>
-        <div><p>DAIDOUGEI HAKU 2026</p><h2>{eventLabel.date || '10.10-10.12'}</h2><span><MapPin size={14} /> {eventLabel.slug === 'award-winning-performers-2026' ? t('awpPlace') : (eventLabel.place || t('homeVenue'))}</span></div>
-        <button type="button" className="pl-action pl-action--glass" onClick={onOpenMap}>{t('homeMapCta')} <ArrowRight size={17} /></button>
+        <div>
+          <p>AWP 2026</p>
+          <h2>{t('eventName')}</h2>
+          <span>{t('presenter')}</span>
+          <strong className="pl-event-glass__date">{eventLabel.date || PUBLIC_EVENT_META.dateLabel}</strong>
+          <span><MapPin size={14} /> {eventLabel.slug === AWP_EVENT_SLUG ? t('awpPlace') : (eventLabel.place || t('homeVenue'))}</span>
+        </div>
+        <button
+          type="button"
+          className="pl-action pl-action--glass"
+          onClick={() => (onOpenEvent ? onOpenEvent(eventLabel.slug || AWP_EVENT_SLUG) : onOpenMap())}
+        >
+          {t('homeMapCta')} <ArrowRight size={17} />
+        </button>
       </section>
       {error ? <p className="pl-error" role="status">{error}</p> : null}
     </main>
