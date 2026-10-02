@@ -52,8 +52,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(404).json({ error: 'Performer not found' })
       return
     }
-    const { data: account } = await sb.from('profiles').select('status').eq('id', performerId).maybeSingle()
-    if (!performer.is_approved || account?.status !== 'active') {
+    const { data: performerAccount } = await sb.from('profiles').select('status').eq('id', performerId).maybeSingle()
+    if (!performer.is_approved || performerAccount?.status !== 'active') {
       res.status(403).json({ error: 'Performer is not approved yet' })
       return
     }
