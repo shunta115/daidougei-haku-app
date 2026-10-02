@@ -14,6 +14,7 @@ type Props = {
   onSelectPerformer: (id: string) => void
   onSelectVenue: (id: string) => void
   onLocationChange: (location: MapCoordinates | null) => void
+  venueFocusNonce?: number
 }
 
 type LocationState = 'requesting' | 'granted' | 'denied' | 'unavailable'
@@ -75,6 +76,7 @@ export function GoogleVenueMap({
   onSelectPerformer,
   onSelectVenue,
   onLocationChange,
+  venueFocusNonce,
 }: Props) {
   const { t, lang } = useLang()
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ?? ''
@@ -297,6 +299,20 @@ export function GoogleVenueMap({
     return () => overlays.forEach((overlay) => overlay.setMap(null))
   }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, t, venues])
 
+  useEffect(() => {
+    if (!map || !selectedVenueId) return
+    const venue = venues.find((item) => item.id === selectedVenueId)
+    if (venue?.lat == null || venue.lng == null) return
+    userMovedMapRef.current = true
+    const focus = () => {
+      map.panTo({ lat: venue.lat, lng: venue.lng })
+      map.setZoom(16)
+      try { window.google?.maps?.event?.trigger(map, 'resize') } catch { /* keep current view */ }
+    }
+    const timer = window.setTimeout(focus, 280)
+    return () => window.clearTimeout(timer)
+  }, [map, selectedVenueId, venueFocusNonce, venues])
+
   const recenter = () => {
     if (!map || !location) return
     userMovedMapRef.current = false
@@ -306,7 +322,7 @@ export function GoogleVenueMap({
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${EVENT_CENTER.lat},${EVENT_CENTER.lng}`
 
   return (
-    <section className="pl-google-map" aria-label={t('mapsAria')}>
+    <section id="haku-venue-map" className="pl-google-map" aria-label={t('mapsAria')}>
       <div ref={containerRef} className="pl-google-map__canvas" />
       {mapState === 'ready' ? (
         <div className="pl-google-map__type" role="group" aria-label={t('mapsMode')}>

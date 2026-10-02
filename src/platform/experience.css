@@ -199,6 +199,10 @@
   min-width: 0;
   box-sizing: border-box;
   margin-inline: auto;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+#haku-venue-map {
+  scroll-margin-top: 12px;
 }
 .pl-map-schedule > * {
   min-width: 0;
@@ -526,6 +530,7 @@
 .pl-map-directory header > span { color: var(--xp-muted); font-size: 11px; }
 .pl-map-directory > div { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .pl-map-directory > div > button { min-width: min(78vw, 280px); min-height: 64px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(134,185,230,.18); border-radius: 10px; background: rgba(255,255,255,.06); color: white; text-align: left; scroll-snap-align: start; }
+.pl-map-directory > div > button[data-active='true'] { border-color: rgba(75,163,255,.7); background: rgba(75,163,255,.14); }
 .pl-map-directory > div > button span { min-width: 0; display: grid; gap: 3px; }
 .pl-map-directory > div > button strong, .pl-map-directory > div > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-map-directory > div > button small { color: var(--xp-muted); }

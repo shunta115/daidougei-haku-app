@@ -137,6 +137,18 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     () => liveMapPerformers.find((performer) => performer.id === selectedPerformer) ?? null,
     [liveMapPerformers, selectedPerformer],
   )
+  const [venueFocusNonce, setVenueFocusNonce] = useState(0)
+
+  const handleVenueSelect = useCallback((venue: EventVenueRow) => {
+    setView('map')
+    setSelectedVenue(venue.id)
+    setSelectedPerformer(null)
+    setVenueFocusNonce((value) => value + 1)
+    window.requestAnimationFrame(() => {
+      document.getElementById('haku-venue-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [])
+
   const nearbyLive = useMemo(() => liveMapPerformers
     .map((performer) => ({
       performer,
@@ -173,6 +185,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
               onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
               onLocationChange={setUserLocation}
+              venueFocusNonce={venueFocusNonce}
             />
 
           {selectedLivePerformer ? (() => {
@@ -242,7 +255,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 const active = venueSlots.find((slot) => timeLabel(slot.start_time) <= timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })) && timeLabel(slot.end_time) > timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })))
                 const upcoming = active ?? venueSlots[0]
                 const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
-                return <button type="button" key={venue.id} onClick={() => { setSelectedVenue(venue.id); setSelectedPerformer(null) }}>
+                return <button type="button" key={venue.id} data-active={selectedVenue === venue.id} onClick={() => handleVenueSelect(venue)}>
                   <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
                 </button>
               })}
