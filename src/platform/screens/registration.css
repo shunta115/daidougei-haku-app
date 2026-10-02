@@ -67,6 +67,12 @@
 .pl-registration input[type='radio'], .pl-registration input[type='checkbox'] { width: 20px; height: 20px; flex-shrink: 0; accent-color: #398cff; }
 .pl-registration__fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pl-registration__link { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #9bcaff; margin: 8px 0; }
+.pl-registration__performer-entry { margin-top: 18px; padding: 18px 16px 16px; border: 1px solid rgba(151,199,240,.18); border-radius: 18px; background: rgba(12,29,48,.58); }
+.pl-registration__performer-entry p, .pl-registration__performer-entry h2, .pl-registration__performer-entry span { margin: 0; }
+.pl-registration__performer-entry p { color: #8bc3ff; font-size: 10px; font-weight: 900; }
+.pl-registration__performer-entry h2 { margin-top: 6px; font-size: 17px; font-weight: 800; }
+.pl-registration__performer-entry span { display: block; margin: 8px 0 14px; color: rgba(224,237,248,.68); font-size: 13px; line-height: 1.55; }
+.pl-registration__performer-entry .pl-btn { min-height: 52px; }
 .pl-registration__notice { padding: 14px 0; color: #c3e5f3; font-size: 14px; line-height: 1.7; border-block: 1px solid #34383e; }
 .pl-registration__identity { display: flex; align-items: center; gap: 16px; margin: 20px 0; }
 .pl-registration__identity > div { min-width: 0; }

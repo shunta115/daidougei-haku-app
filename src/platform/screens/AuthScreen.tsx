@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { FESTIVAL_PATH, PLATFORM_PATH } from '../../app/routes'
+import { PERFORMER_REGISTER_PATH } from '../lib/onboarding'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
@@ -119,6 +120,14 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       {role === 'performer' ? <p className="pl-muted">{t('authPerformerNote')}</p> : null}
       <a className="pl-registration__link" href={FESTIVAL_PATH}>{t('authSeeEvents')}</a>
       {performerEntry ? <a className="pl-registration__link" href={`${PLATFORM_PATH}?auth=1`}>{t('authRegisterFan')}</a> : null}
+      {!performerEntry && (mode === 'up' || mode === 'in') ? (
+        <aside className="pl-registration__performer-entry">
+          <p>PERFORMER</p>
+          <h2>{t('authPerformerEntryKicker')}</h2>
+          <span>{t('authPerformerEntryLead')}</span>
+          <a className="pl-btn pl-btn--ghost pl-btn--block" href={PERFORMER_REGISTER_PATH}>{t('authPerformerEntryCta')}</a>
+        </aside>
+      ) : null}
     </div>
   )
 }
