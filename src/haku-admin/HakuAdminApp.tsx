@@ -1,0 +1,291 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../platform/lib/auth'
+import { AuthScreen } from '../platform/screens/AuthScreen'
+import { formatYen } from '../platform/lib/money'
+import { MERCH_SYSTEM_FEE_PERCENT, TIP_SYSTEM_FEE_PERCENT } from '../../shared/fees'
+import { hakuAdmin } from './api'
+
+type Tab =
+  | 'home'
+  | 'users'
+  | 'performers'
+  | 'events'
+  | 'votes'
+  | 'live'
+  | 'money'
+  | 'reports'
+  | 'preview'
+
+function confirmDanger(message: string) {
+  return window.confirm(`${message}\n\nこの操作は運営ログに残ります。`)
+}
+
+export function HakuAdminApp() {
+  const { ready, profile, signOut } = useAuth()
+  const [tab, setTab] = useState<Tab>('home')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [dash, setDash] = useState<Record<string, unknown> | null>(null)
+  const [users, setUsers] = useState<Array<Record<string, string>>>([])
+  const [performers, setPerformers] = useState<Array<Record<string, unknown>>>([])
+  const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
+  const [eventExtra, setEventExtra] = useState<{ lineup: unknown[]; slots: unknown[]; venues: unknown[] } | null>(null)
+  const [votes, setVotes] = useState<Record<string, unknown> | null>(null)
+  const [live, setLive] = useState<{ open: Array<Record<string, unknown>>; recent: Array<Record<string, unknown>> } | null>(null)
+  const [money, setMoney] = useState<Record<string, unknown> | null>(null)
+  const [reports, setReports] = useState<Array<Record<string, unknown>>>([])
+  const [eventId, setEventId] = useState('')
+
+  const allowed = profile?.role === 'admin' && profile.status === 'active'
+
+  const reload = async (next: Tab = tab) => {
+    setBusy(true)
+    setError(null)
+    try {
+      if (next === 'home') setDash(await hakuAdmin('dashboard'))
+      if (next === 'users') setUsers(((await hakuAdmin('users')).rows as Array<Record<string, string>>) ?? [])
+      if (next === 'performers') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
+      if (next === 'events') {
+        const data = await hakuAdmin('events')
+        const rows = (data.rows as Array<Record<string, unknown>>) ?? []
+        setEvents(rows)
+        const first = String(eventId || rows[0]?.id || '')
+        setEventId(first)
+        if (first) setEventExtra(await hakuAdmin('events', 'lineup', { id: first }) as typeof eventExtra)
+      }
+      if (next === 'votes') {
+        const data = await hakuAdmin('events')
+        const rows = (data.rows as Array<Record<string, unknown>>) ?? []
+        const first = String(eventId || rows[0]?.id || '')
+        setEvents(rows)
+        setEventId(first)
+        if (first) setVotes(await hakuAdmin('votes', 'list', { eventId: first }))
+      }
+      if (next === 'live') setLive(await hakuAdmin('live') as typeof live)
+      if (next === 'money') setMoney(await hakuAdmin('money'))
+      if (next === 'reports') setReports(((await hakuAdmin('reports')).rows as Array<Record<string, unknown>>) ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '読み込みに失敗しました')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (allowed) void reload('home')
+  }, [allowed])
+
+  const moneyBlock = (dash?.money ?? money) as Record<string, unknown> | undefined
+  const recorded = moneyBlock && moneyBlock.kind === 'recorded' ? moneyBlock : null
+
+  const tabs: Array<{ id: Tab; label: string }> = useMemo(() => [
+    { id: 'home', label: '状況' },
+    { id: 'users', label: '利用者' },
+    { id: 'performers', label: '出演者' },
+    { id: 'events', label: 'イベント' },
+    { id: 'votes', label: '投票' },
+    { id: 'live', label: 'LIVE' },
+    { id: 'money', label: '売上' },
+    { id: 'reports', label: '通報' },
+    { id: 'preview', label: 'プレビュー' },
+  ], [])
+
+  if (!ready) return <main className="ha-app"><p>確認しています…</p></main>
+  if (!profile) return <div className="ha-app ha-app--auth"><AuthScreen /></div>
+  if (!allowed) {
+    return (
+      <main className="ha-app">
+        <h1>HAKU ADMIN</h1>
+        <p>このアカウントには運営権限がありません。</p>
+        <button type="button" className="pl-btn" onClick={() => void signOut()}>ログアウト</button>
+      </main>
+    )
+  }
+
+  return (
+    <div className="ha-app">
+      <header className="ha-top">
+        <div>
+          <p className="ha-kicker">HAKU ADMIN</p>
+          <h1>運営コックピット</h1>
+        </div>
+        <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void signOut()}>ログアウト</button>
+      </header>
+      <nav className="ha-tabs" aria-label="運営メニュー">
+        {tabs.map((item) => (
+          <button key={item.id} type="button" data-active={tab === item.id} onClick={() => { setTab(item.id); void reload(item.id) }}>{item.label}</button>
+        ))}
+      </nav>
+      {error ? <p className="pl-error">{error}</p> : null}
+      {busy ? <p role="status">更新しています…</p> : null}
+
+      {tab === 'home' && dash ? (
+        <section className="ha-grid">
+          <article><em>利用者</em><strong>{String(dash.users ?? '—')}</strong></article>
+          <article><em>ファン</em><strong>{String(dash.fans ?? '—')}</strong></article>
+          <article><em>公開中出演者</em><strong>{String(dash.approved ?? '—')}</strong></article>
+          <article><em>承認待ち</em><strong>{String(dash.pendingApproval ?? '—')}</strong></article>
+          <article><em>LIVE中</em><strong>{String(dash.liveNow ?? '—')}</strong></article>
+          <article><em>未対応通報</em><strong>{String(dash.openReports ?? '—')}</strong></article>
+          {recorded ? (
+            <>
+              <article><em>総流通額（DB実績）</em><strong>{formatYen(Number(recorded.gmv_yen) || 0)}</strong></article>
+              <article><em>HAKUシステム利用料（DB実績）</em><strong>{formatYen(Number(recorded.haku_system_fee_yen) || 0)}</strong></article>
+            </>
+          ) : null}
+          <p className="ha-note">投げ銭のシステム利用料は{TIP_SYSTEM_FEE_PERCENT}%、グッズは{MERCH_SYSTEM_FEE_PERCENT}%。決済手数料と支払状況はStripe未接続のため「未取得」です。</p>
+        </section>
+      ) : null}
+
+      {tab === 'users' ? (
+        <section>
+          {users.map((user) => (
+            <article key={user.id} className="ha-card">
+              <h2>{user.display_name}</h2>
+              <p>{user.role} · {user.status} · {user.email}</p>
+              <div className="ha-actions">
+                <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
+                  if (!confirmDanger(`${user.display_name} を停止します。セッションも無効化します。`)) return
+                  void hakuAdmin('users', 'suspend', { id: user.id }).then(() => reload('users')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>停止</button>
+                <button type="button" className="pl-btn pl-btn--danger" onClick={() => {
+                  if (!confirmDanger(`${user.display_name} を削除（論理削除）します。`)) return
+                  void hakuAdmin('users', 'soft-delete', { id: user.id }).then(() => reload('users')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>削除</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === 'performers' ? (
+        <section>
+          {performers.map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <h2>{String(row.stage_name)}</h2>
+              <p>{String(row.genre || 'ジャンル未入力')} · {String(row.city || '地域未入力')}</p>
+              <p>承認: {row.is_approved ? '公開中' : '未承認'} · 口座: {row.stripe_onboarding_complete ? '受取設定完了' : '未完了'} · アカウント: {String(row.account_status)}</p>
+              <p className="ha-note">Stripe口座IDはADMIN APIの内部処理のみで、この画面には出しません。</p>
+              <div className="ha-actions">
+                {!row.is_approved ? (
+                  <button type="button" className="pl-btn" disabled={!row.stripe_onboarding_complete} onClick={() => {
+                    if (!confirmDanger(`${String(row.stage_name)} を承認して公開します。`)) return
+                    void hakuAdmin('performers', 'approve', { id: row.id }).then(() => reload('performers')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                  }}>承認して公開</button>
+                ) : (
+                  <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
+                    if (!confirmDanger(`${String(row.stage_name)} の公開を停止します。`)) return
+                    void hakuAdmin('performers', 'unpublish', { id: row.id }).then(() => reload('performers')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                  }}>公開停止</button>
+                )}
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === 'events' ? (
+        <section>
+          {events.map((event) => (
+            <article key={String(event.id)} className="ha-card">
+              <h2>{String(event.name_ja)}</h2>
+              <p>{String(event.slug)} · {String(event.status)} · {String(event.date_label || '')}</p>
+              <div className="ha-actions">
+                {(['draft', 'published', 'archived'] as const).map((status) => (
+                  <button key={status} type="button" className="pl-btn pl-btn--ghost" onClick={() => {
+                    if (!confirmDanger(`${String(event.name_ja)} を ${status} にします。`)) return
+                    void hakuAdmin('events', 'patch', { id: event.id, patch: { status } }).then(() => reload('events')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                  }}>{status}</button>
+                ))}
+              </div>
+            </article>
+          ))}
+          {eventExtra ? <p className="ha-note">出演 {eventExtra.lineup.length} · 枠 {eventExtra.slots.length} · 会場 {eventExtra.venues.length}</p> : null}
+        </section>
+      ) : null}
+
+      {tab === 'votes' ? (
+        <section className="ha-card">
+          <h2>投票デスク</h2>
+          <p>投票中: {String((votes?.desk as { voting_open?: boolean } | undefined)?.voting_open ? 'OPEN' : 'STOP')} · 票 {String((votes?.desk as { total_votes?: number } | undefined)?.total_votes ?? '—')}</p>
+          <div className="ha-actions">
+            <button type="button" className="pl-btn" onClick={() => {
+              if (!eventId || !confirmDanger('投票をOPENします。')) return
+              void hakuAdmin('votes', 'open', { eventId }).then(() => reload('votes')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+            }}>投票を開く</button>
+            <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
+              if (!eventId || !confirmDanger('投票をSTOPします。')) return
+              void hakuAdmin('votes', 'close', { eventId }).then(() => reload('votes')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+            }}>投票を止める</button>
+          </div>
+          <ol>
+            {(((votes?.desk as { ranking?: Array<{ performer_id: string; votes: number }> } | undefined)?.ranking) ?? []).map((row) => (
+              <li key={row.performer_id}>{row.performer_id.slice(0, 8)}… · {row.votes}票</li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {tab === 'live' ? (
+        <section>
+          <h2>配信中</h2>
+          {(live?.open ?? []).length === 0 ? <p>現在LIVE中の配信はありません。</p> : live?.open.map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <p>{String(row.title || 'LIVE')} · peak {String(row.viewer_peak ?? 0)}</p>
+              <button type="button" className="pl-btn pl-btn--danger" onClick={() => {
+                if (!confirmDanger('このLIVEを強制終了します。')) return
+                void import('../platform/lib/supabase').then(async ({ supabaseAuthHeaders }) => {
+                  const response = await fetch('/api/livekit/presence', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+                    body: JSON.stringify({ action: 'force-end', sessionId: row.id }),
+                  })
+                  if (!response.ok) throw new Error('force end failed')
+                  await reload('live')
+                }).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+              }}>強制終了</button>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === 'money' && money ? (
+        <section>
+          <p className="ha-note">以下はDBに記録された実績です。決済手数料と銀行入金は未取得のため表示しません。</p>
+          <p>投げ銭 {((money.tips as unknown[]) ?? []).length}件 · グッズ {((money.orders as unknown[]) ?? []).length}件</p>
+          {((money.tips as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <p>投げ銭 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · システム利用料 {formatYen(Number(row.platform_fee_yen ?? row.platform_fee_cents) || 0)} · {String(row.status)}</p>
+            </article>
+          ))}
+          {((money.orders as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <p>グッズ {String(row.product_name || '')} {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · システム利用料 {formatYen(Number(row.platform_fee_yen) || 0)} · {String(row.status)}</p>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === 'reports' ? (
+        <section>
+          {reports.length === 0 ? <p>通報はありません。</p> : reports.map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <p>{String(row.target_type)} · {String(row.reason)} · {String(row.status)}</p>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {tab === 'preview' ? (
+        <section className="ha-card">
+          <h2>読み取り専用プレビュー</h2>
+          <p>ADMINのログインはそのままです。投げ銭・購入・LIVE開始はプレビューでは開きません。</p>
+          <div className="ha-actions">
+            <a className="pl-btn" href={`/?hakuPreview=fan`}>お客様として見る</a>
+            <a className="pl-btn pl-btn--ghost" href={`/live?hakuPreview=performer`}>パフォーマー画面を見る</a>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  )
+}

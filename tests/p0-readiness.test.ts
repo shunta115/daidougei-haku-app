@@ -81,7 +81,8 @@ describe('P0 migration safety', () => {
     expect(tip).toMatch(/fan_id: payerId/)
     expect(tip).toMatch(/application_fee_amount: fee/)
     expect(tip).toMatch(/stripeAccount: connectedAccountId/)
-    expect(screen).toMatch(/登録なしでStripeの安全な決済へ進めます/)
+    expect(screen).toMatch(/t\('tipGuest'\)/)
+    expect(read('src/i18n/extra.ts')).toMatch(/登録なしでStripeの安全な決済へ進めます/)
     expect(screen).not.toMatch(/if \(!user\) \{\s*window\.sessionStorage\.setItem\('pl-tip-to'/)
   })
 

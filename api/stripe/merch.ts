@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
-  PLATFORM_FEE_BPS,
+  MERCH_SYSTEM_FEE_BPS_DEFAULT,
   calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
@@ -49,9 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: buyer } = await sb
       .from('profiles')
-      .select('display_name, email')
+      .select('display_name, email, status')
       .eq('id', user.id)
       .maybeSingle()
+    if (buyer?.status === 'suspended' || buyer?.status === 'deleted') {
+      res.status(403).json({ error: 'Account unavailable' })
+      return
+    }
     const buyerDisplayName = String(buyer?.display_name || user.email?.split('@')[0] || 'User').trim().slice(0, 120)
     const buyerEmail = typeof buyer?.email === 'string' ? buyer.email : user.email ?? null
 
@@ -85,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const amount = product.price_yen * qty
-    const feeBps = await getBpsSetting(sb, 'merch_fee_bps', PLATFORM_FEE_BPS)
+    const feeBps = await getBpsSetting(sb, 'merch_fee_bps', MERCH_SYSTEM_FEE_BPS_DEFAULT)
     const fee = calcPlatformFee(amount, feeBps)
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')

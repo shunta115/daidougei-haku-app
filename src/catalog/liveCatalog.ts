@@ -5,6 +5,7 @@ import { SCHEDULE_SLOTS, VENUE_AREAS } from '../festival/data/scheduleData'
 import { isSupabaseConfigured, supabase } from '../platform/lib/supabase'
 import type { Performer as PlatformPerformer } from '../platform/lib/types'
 import { getFeaturedEvent, type FeaturedEvent } from '../platform/lib/api'
+import { PERFORMER_CLIENT_SELECT } from '../platform/lib/performerColumns'
 
 const PARK_GRADIENT = 'linear-gradient(160deg, #061018 0%, #0e2a22 42%, #2bffdd 92%)'
 
@@ -142,7 +143,7 @@ export async function refreshLiveCatalog(): Promise<void> {
       eventId
         ? supabase.from('event_slots').select('*').eq('event_id', eventId).order('date').order('start_time')
         : Promise.resolve({ data: [], error: null }),
-      supabase.from('performers').select('*').eq('is_approved', true).order('is_live', { ascending: false }).limit(200),
+      supabase.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('is_live', { ascending: false }).limit(200),
     ])
 
     const venueRows = (venueRes.data ?? []) as Array<{

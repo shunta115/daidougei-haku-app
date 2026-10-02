@@ -3,6 +3,7 @@ import { CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import { registrationError } from '../lib/onboarding'
 import { useLang } from '../../i18n/LangProvider'
+import { SystemFeeExplain } from './SystemFeeExplain'
 
 export type ConnectStatus = {
   connected: boolean
@@ -80,6 +81,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
       {status?.complete ? <><CheckCircle2 size={18} />{t('payoutDone')}</> : status?.needsInformation ? t('payoutNeedMore') : status?.underReview ? t('payoutReview') : status?.connected ? t('payoutContinue') : busy ? t('payoutChecking') : t('payoutRegister')}
     </p>
     <p className="pl-muted">{t('payoutPrivate')}</p>
+    <SystemFeeExplain compact />
     {status?.underReview && !status.needsInformation && !status.complete ? <p className="pl-muted">{t('payoutReviewNote')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <a className="pl-btn pl-btn--ghost pl-btn--block" href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer"><ExternalLink size={18} />{t('salesOpenStripe')}</a>}

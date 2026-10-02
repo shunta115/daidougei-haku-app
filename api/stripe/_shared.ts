@@ -1,10 +1,18 @@
 import Stripe from 'stripe'
 import { createClient, type User } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import {
+  MERCH_SYSTEM_FEE_BPS,
+  MAX_SYSTEM_FEE_BPS,
+  TIP_SYSTEM_FEE_BPS,
+  systemFeeYen,
+} from '../../shared/fees.js'
 
-export const PLATFORM_FEE_BPS = 1000
+export const TIP_SYSTEM_FEE_BPS_DEFAULT = TIP_SYSTEM_FEE_BPS
+export const MERCH_SYSTEM_FEE_BPS_DEFAULT = MERCH_SYSTEM_FEE_BPS
+export const PLATFORM_FEE_BPS = TIP_SYSTEM_FEE_BPS
 export const MIN_TIP_AMOUNT_YEN = 100
-export const MAX_PLATFORM_FEE_BPS = 5000
+export const MAX_PLATFORM_FEE_BPS = MAX_SYSTEM_FEE_BPS
 
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
@@ -45,9 +53,7 @@ export function getAppUrl(req: VercelRequest) {
 }
 
 export function calcPlatformFee(amountYen: number, feeBps = PLATFORM_FEE_BPS) {
-  if (!Number.isInteger(amountYen) || amountYen <= 0) return 0
-  const safeBps = Number.isInteger(feeBps) && feeBps >= 0 && feeBps <= MAX_PLATFORM_FEE_BPS ? feeBps : PLATFORM_FEE_BPS
-  return Math.floor((amountYen * safeBps) / 10000)
+  return systemFeeYen(amountYen, feeBps)
 }
 
 export async function getBpsSetting(

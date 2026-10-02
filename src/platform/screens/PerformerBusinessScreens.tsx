@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { MerchOrder, TipRow } from '../lib/types'
+import { SystemFeeExplain } from '../components/SystemFeeExplain'
 
 export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void; onLive: () => void }) {
   const { t, lang } = useLang()
@@ -60,7 +61,7 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const { performer } = useAuth()
   const [tips, setTips] = useState<TipRow[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
-  const [fees, setFees] = useState({ tip: 1000, merch: 1000 })
+  const [fees, setFees] = useState({ tip: 1500, merch: 800 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -86,6 +87,7 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
     <dl className="pl-registration__totals"><div><dt>{t('salesPaid')}</dt><dd>{formatYen(gross)}</dd></div><div><dt>{t('salesFee')}</dt><dd>{formatYen(platformFee)}</dd></div><div><dt>{t('salesBeforeStripe')}</dt><dd>{formatYen(Math.max(0, gross - platformFee))}</dd></div></dl>
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesFlowTitle')}</h2><p className="pl-muted">{t('salesFlow', { tip: tipPercent, merch: merchPercent })}</p><p className="pl-muted">{t('salesBankNote')}</p><a className="pl-btn pl-btn--ghost pl-btn--block" href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer"><ExternalLink size={18} />{t('salesOpenStripe')}</a></section>
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesExample')}</h2><div className="pl-registration__money-flow"><span>{t('salesFanPays')}<strong>{formatYen(1000)}</strong></span><span>{t('salesFeeLine', { tip: tipPercent })}<strong>−{formatYen(Math.floor(1000 * fees.tip / 10_000))}</strong></span><span>{t('salesBeforeStripe')}<strong>{formatYen(1000 - Math.floor(1000 * fees.tip / 10_000))}</strong></span></div><p className="pl-muted">{t('salesNotFinal')}</p></section>
+    <SystemFeeExplain />
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesHistory')}</h2>{rows.length === 0 ? <p className="pl-muted">{t('salesEmpty')}</p> : rows.map((row) => <div className="pl-registration__sale" key={row.id}><div><strong>{row.kind === 'tip' ? t('kindTip') : t('kindMerch')}・{formatYen(row.gross)}</strong><span>{new Date(row.date).toLocaleDateString(locale)}・{transactionStatus(row.status, t)}</span></div><span>{t('salesFeeItem', { amount: formatYen(row.fee) })}</span></div>)}</section>
   </div>
 }

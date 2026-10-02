@@ -41,6 +41,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const payerId = user?.id ?? null
     const sb = getAdminSupabase()
+    if (payerId) {
+      const { data: payerAccount } = await sb.from('profiles').select('status').eq('id', payerId).maybeSingle()
+      if (payerAccount && (payerAccount.status === 'suspended' || payerAccount.status === 'deleted')) {
+        res.status(403).json({ error: 'Account unavailable' })
+        return
+      }
+    }
     const minTipAmount = await getIntSetting(sb, 'tip_min_amount_yen', MIN_TIP_AMOUNT_YEN, 100, 100000)
     if (!performerId || !Number.isInteger(amountYen) || amountYen < minTipAmount || amountYen > 100000) {
       res.status(400).json({ error: `performerId and amountYen (${minTipAmount}-100000 JPY) required` })

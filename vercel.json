@@ -1,6 +1,8 @@
 {
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/haku-admin", "destination": "/haku-admin.html" },
+    { "source": "/haku-admin/(.*)", "destination": "/haku-admin.html" },
+    { "source": "/((?!api/)(?!haku-admin).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

@@ -40,8 +40,8 @@ beforeEach(() => {
   fake.listSellerMerchOrders.mockResolvedValue([])
   fake.listPerformerEventSlots.mockResolvedValue([])
   fake.listPerformerTipTransactions.mockResolvedValue([])
-  fake.getTipFeeBps.mockResolvedValue(1000)
-  fake.getMerchFeeBps.mockResolvedValue(1000)
+  fake.getTipFeeBps.mockResolvedValue(1500)
+  fake.getMerchFeeBps.mockResolvedValue(800)
   fake.uploadMerchImage.mockResolvedValue('https://cdn.example.test/product.webp')
 })
 

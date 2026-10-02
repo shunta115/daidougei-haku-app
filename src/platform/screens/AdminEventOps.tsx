@@ -38,7 +38,7 @@ export function AdminEventScreen() {
   const [events, setEvents] = useState<FeaturedEvent[]>([])
   const [voteRule, setVoteRule] = useState<EventVoteRule | null>(null)
   const [voteRanking, setVoteRanking] = useState<Array<{ performer_id: string; votes: number }>>([])
-  const [feeBps, setFeeBps] = useState(1000)
+  const [feeBps, setFeeBps] = useState(1500)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [lineup, setLineup] = useState<string[]>([])
@@ -306,7 +306,7 @@ export function AdminEventScreen() {
             </div>
             <div className="pl-card" style={{ marginTop: 16 }}>
               <label>
-                <span className="pl-label">投げ銭手数料（bps、1000 = 10%）</span>
+                <span className="pl-label">投げ銭のシステム利用料（bps、1500 = 15%）</span>
                 <input
                   className="pl-input"
                   type="number"

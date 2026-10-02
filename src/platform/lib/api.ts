@@ -14,6 +14,7 @@ import type {
 } from './types'
 import { supabaseAuthHeaders } from './supabase'
 import { AWP_ENTRANCE_ZONE } from './venueDisplay'
+import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -35,7 +36,7 @@ function isPublicTestPerformer(p: Performer): boolean {
 
 export async function searchPerformers(query: string, filters: PerformerSearchFilters = {}): Promise<Performer[]> {
   const sb = requireSupabase()
-  let q = sb.from('performers').select('*').eq('is_approved', true)
+  let q = sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true)
   if (filters.liveOnly) q = q.eq('is_live', true)
   const { data, error } = await q.order('is_live', { ascending: false }).limit(100)
   if (error) throw error
@@ -61,7 +62,7 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
 
 export async function getPerformer(id: string): Promise<Performer | null> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', id).maybeSingle()
   if (error) throw error
   const row = (data as Performer) ?? null
   if (!row || !row.is_approved || isPublicTestPerformer(row)) return null
@@ -72,7 +73,7 @@ export async function listLivePerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('performers')
-    .select('*')
+    .select(PERFORMER_CLIENT_SELECT)
     .eq('is_approved', true)
     .eq('is_live', true)
     .order('live_started_at', { ascending: false })
@@ -505,7 +506,7 @@ export async function listFollowedPerformers(fanId: string): Promise<Performer[]
   if (error) throw error
   const ids = (follows ?? []).map((f) => f.performer_id as string)
   if (ids.length === 0) return []
-  const { data, error: perr } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
   return (data as Performer[]) ?? []
 }
@@ -542,7 +543,7 @@ export async function fetchAdminMetrics(): Promise<AdminMetrics | null> {
 
 export async function listPendingPerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('is_approved', false).order('created_at')
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', false).order('created_at')
   if (error) throw error
   return (data as Performer[]) ?? []
 }
@@ -552,7 +553,7 @@ export type PerformerRegistration = Performer & { account_status: string }
 export async function listPerformerRegistrations(): Promise<PerformerRegistration[]> {
   const sb = requireSupabase()
   const [{ data: performers, error }, { data: profiles, error: profileError }] = await Promise.all([
-    sb.from('performers').select('*').order('created_at', { ascending: false }),
+    sb.from('performers').select(PERFORMER_CLIENT_SELECT).order('created_at', { ascending: false }),
     sb.from('profiles').select('id,status').in('role', ['performer', 'admin']),
   ])
   if (error) throw error
@@ -697,7 +698,7 @@ export async function listOshiPerformers(fanId: string): Promise<Performer[]> {
   if (error) throw error
   const ids = (rows ?? []).map((r) => r.performer_id as string)
   if (ids.length === 0) return []
-  const { data, error: perr } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
   return (data as Performer[]) ?? []
 }
@@ -800,18 +801,18 @@ export async function saveEventVoteRule(eventId: string, patch: Partial<EventVot
 export async function getTipFeeBps(): Promise<number> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'tip_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 1000
+  if (error || data?.value == null) return 1500
   const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1000
+  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1500
   return Math.floor(n)
 }
 
 export async function getMerchFeeBps(): Promise<number> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'merch_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 1000
+  if (error || data?.value == null) return 800
   const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1000
+  if (!Number.isFinite(n) || n < 0 || n > 5000) return 800
   return Math.floor(n)
 }
 
@@ -1004,7 +1005,7 @@ export async function listPerformerEventSlots(performerId: string): Promise<Perf
 export async function listApprovedPerformers(): Promise<Performer[]> {
   await reconcileLivePresence()
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('is_approved', true).order('stage_name')
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
   return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
 }
@@ -1090,7 +1091,7 @@ export async function listEventLineupPerformers(eventId: string): Promise<Perfor
   const ids = await listEventLineup(eventId)
   if (ids.length === 0) return []
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (error) throw error
   const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
   return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
@@ -1119,7 +1120,7 @@ export async function listVoteRankingNamed(eventId: string): Promise<Array<{ per
   if (ranks.length === 0) return []
   const sb = requireSupabase()
   const ids = ranks.map((r) => r.performer_id)
-  const { data, error } = await sb.from('performers').select('*').in('id', ids)
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids)
   if (error) throw error
   const map = new Map(((data as Performer[]) ?? []).map((p) => [p.id, p]))
   return ranks

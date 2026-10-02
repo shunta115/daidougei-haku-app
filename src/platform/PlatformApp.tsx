@@ -502,7 +502,9 @@ function PlatformShell() {
   }
 
   const role = profile?.role ?? 'fan'
-  const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
+  const preview = role === 'admin' ? new URLSearchParams(window.location.search).get('hakuPreview') : null
+  const previewOn = preview === 'fan' || preview === 'performer'
+  const navRole = previewOn ? (preview === 'performer' ? 'performer' : 'fan') : role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
@@ -882,6 +884,17 @@ function PlatformShell() {
           />
         )
     }
+  }
+
+  if (previewOn && ['tip', 'merch-detail', 'performer-edit', 'performer-live', 'performer-merch', 'admin', 'admin-event', 'admin-users', 'admin-ops', 'admin-votes'].includes(screen)) {
+    body = (
+      <div className="pl-registration">
+        <p className="pl-brand">PREVIEW</p>
+        <h1 className="pl-h1">読み取り専用プレビュー</h1>
+        <p className="pl-muted">ADMINのまま閲覧しています。投げ銭・購入・LIVE開始・承認などの書き込みはできません。</p>
+        <a className="pl-btn pl-btn--block" href="/haku-admin">HAKU ADMINへ戻る</a>
+      </div>
+    )
   }
 
   return (
