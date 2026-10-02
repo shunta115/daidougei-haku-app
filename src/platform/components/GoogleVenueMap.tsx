@@ -16,6 +16,7 @@ type Props = {
   onSelectVenue: (id: string) => void
   onLocationChange: (location: MapCoordinates | null) => void
   venueFocusNonce?: number
+  venueMarkerLabel?: string
 }
 
 type LocationState = 'requesting' | 'granted' | 'denied' | 'unavailable'
@@ -78,6 +79,7 @@ export function GoogleVenueMap({
   onSelectVenue,
   onLocationChange,
   venueFocusNonce,
+  venueMarkerLabel,
 }: Props) {
   const { t, lang } = useLang()
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ?? ''
@@ -232,6 +234,7 @@ export function GoogleVenueMap({
     const addOverlay = (input: {
       position: { lat: number; lng: number }
       label: string
+      badge?: string
       image?: string | null
       live?: boolean
       active?: boolean
@@ -249,7 +252,7 @@ export function GoogleVenueMap({
           portrait.src = input.image ?? ''
           portrait.alt = ''
         } else {
-          portrait.textContent = input.label.slice(0, 2)
+          portrait.textContent = (input.badge || input.label).slice(0, 4)
         }
         element.appendChild(portrait)
         if (input.live) {
@@ -282,6 +285,7 @@ export function GoogleVenueMap({
       addOverlay({
         position: { lat: venue.lat, lng: venue.lng },
         label: venueMapLabel(venue),
+        badge: venueMarkerLabel,
         active: selectedVenueId === venue.id,
         onClick: () => onSelectVenue(venue.id),
       })
@@ -298,7 +302,7 @@ export function GoogleVenueMap({
       })
     })
     return () => overlays.forEach((overlay) => overlay.setMap(null))
-  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, t, venues])
+  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, t, venueMarkerLabel, venues])
 
   useEffect(() => {
     if (!map || !selectedVenueId) return

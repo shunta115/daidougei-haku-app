@@ -13,6 +13,7 @@ import {
   type FeaturedEvent,
 } from '../lib/api'
 import { distanceKm, formatMapDistance, isFreshLiveLocation, walkingMinutes } from '../lib/mapLocation'
+import { eventMapMarkerLabel, eventVenueCardTitle } from '../lib/venueDisplay'
 import { useLang } from '../../i18n/LangProvider'
 import type { Lang } from '../../i18n'
 import type { Performer } from '../lib/types'
@@ -186,6 +187,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
               onLocationChange={setUserLocation}
               venueFocusNonce={venueFocusNonce}
+              venueMarkerLabel={eventMapMarkerLabel(event)}
             />
 
           {selectedLivePerformer ? (() => {
@@ -248,17 +250,13 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
           </div>
 
           <section className="pl-map-directory" aria-label={t('mapVenues')}>
-            <header><div><p>VENUES</p><h2>{t('mapVenueMap')}</h2></div><span>{t('mapVenueCount', { n: venues.length })}</span></header>
+            <header><div><p>{t('mapVenues')}</p><h2>{eventVenueCardTitle(event, lang)}</h2></div></header>
             <div>
-              {venues.map((venue) => {
-                const venueSlots = dateSlots.filter((slot) => slot.venue_id === venue.id)
-                const active = venueSlots.find((slot) => timeLabel(slot.start_time) <= timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })) && timeLabel(slot.end_time) > timeLabel(new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })))
-                const upcoming = active ?? venueSlots[0]
-                const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
-                return <button type="button" key={venue.id} data-active={selectedVenue === venue.id} onClick={() => handleVenueSelect(venue)}>
-                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{[venue.blurb_ja, act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : null].filter(Boolean).join(' · ') || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
+              {venues.map((venue) => (
+                <button type="button" key={venue.id} data-active={selectedVenue === venue.id} onClick={() => handleVenueSelect(venue)}>
+                  <MapIcon size={17} /><span><strong>📍 {venue.name_ja}</strong><small>{venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><em>{t('mapSeeOnMap')} <ChevronRight size={17} /></em>
                 </button>
-              })}
+              ))}
               {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}
             </div>
           </section>

@@ -534,6 +534,7 @@
 .pl-map-directory > div > button span { min-width: 0; display: grid; gap: 3px; }
 .pl-map-directory > div > button strong, .pl-map-directory > div > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-map-directory > div > button small { color: var(--xp-muted); }
+.pl-map-directory > div > button em { display: inline-flex; align-items: center; gap: 2px; color: var(--xp-muted); font-size: 11px; font-style: normal; font-weight: 800; white-space: nowrap; }
 .pl-map-directory > div > p { margin: 0; color: var(--xp-muted); font-size: 12px; }
 .pl-live-archive { margin-top: 18px; border-top: 1px solid var(--xp-line); }
 .pl-live-archive summary { min-height: 48px; display: flex; align-items: center; gap: 7px; cursor: pointer; color: var(--xp-muted); font-size: 13px; font-weight: 800; }
