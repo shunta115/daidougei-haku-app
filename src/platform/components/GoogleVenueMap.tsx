@@ -3,6 +3,7 @@ import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucid
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
+import { AWP_ENTRANCE_ZONE, venueMapLabel } from '../lib/venueDisplay'
 import { mapsLocale, type Lang } from '../../i18n'
 import { useLang } from '../../i18n/LangProvider'
 
@@ -28,7 +29,7 @@ declare global {
   }
 }
 
-const EVENT_CENTER = { lat: 35.7508, lng: 139.6375 }
+const EVENT_CENTER = { lat: AWP_ENTRANCE_ZONE.lat, lng: AWP_ENTRANCE_ZONE.lng }
 const MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#d7e3ea' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#263b48' }] },
@@ -280,7 +281,7 @@ export function GoogleVenueMap({
       if (venue.lat == null || venue.lng == null) return
       addOverlay({
         position: { lat: venue.lat, lng: venue.lng },
-        label: venue.name_ja,
+        label: venueMapLabel(venue),
         active: selectedVenueId === venue.id,
         onClick: () => onSelectVenue(venue.id),
       })
@@ -319,7 +320,7 @@ export function GoogleVenueMap({
     map.panTo(location)
     map.setZoom(16)
   }
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${EVENT_CENTER.lat},${EVENT_CENTER.lng}`
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${centerSeed.lat},${centerSeed.lng}`
 
   return (
     <section id="haku-venue-map" className="pl-google-map" aria-label={t('mapsAria')}>

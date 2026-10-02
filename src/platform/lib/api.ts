@@ -13,6 +13,7 @@ import type {
   TipSummary,
 } from './types'
 import { supabaseAuthHeaders } from './supabase'
+import { AWP_ENTRANCE_ZONE } from './venueDisplay'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -1008,11 +1009,23 @@ export async function listApprovedPerformers(): Promise<Performer[]> {
   return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
 }
 
+function resolveEventVenue(row: EventVenueRow): EventVenueRow {
+  if (row.id !== 'nerima-joshi-park') return row
+  return {
+    ...row,
+    name_ja: AWP_ENTRANCE_ZONE.name_ja,
+    blurb_ja: AWP_ENTRANCE_ZONE.zone_ja,
+    blurb_en: 'Entrance Exchange Zone',
+    lat: AWP_ENTRANCE_ZONE.lat,
+    lng: AWP_ENTRANCE_ZONE.lng,
+  }
+}
+
 export async function listEventVenues(eventId: string): Promise<EventVenueRow[]> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('event_venues').select('*').eq('event_id', eventId).order('sort_order')
   if (error) throw error
-  return (data as EventVenueRow[]) ?? []
+  return ((data as EventVenueRow[]) ?? []).map(resolveEventVenue)
 }
 
 export async function upsertEventVenue(row: EventVenueRow) {

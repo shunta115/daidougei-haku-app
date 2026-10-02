@@ -256,7 +256,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 const upcoming = active ?? venueSlots[0]
                 const act = upcoming?.performer_id ? performerById.get(upcoming.performer_id) : null
                 return <button type="button" key={venue.id} data-active={selectedVenue === venue.id} onClick={() => handleVenueSelect(venue)}>
-                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
+                  <MapIcon size={17} /><span><strong>{venue.name_ja}</strong><small>{[venue.blurb_ja, act ? `${active ? t('mapOnNow') : timeLabel(upcoming.start_time)} · ${act.stage_name}` : null].filter(Boolean).join(' · ') || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><ChevronRight size={17} />
                 </button>
               })}
               {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}

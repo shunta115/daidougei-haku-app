@@ -353,10 +353,10 @@ select
   e.id,
   '練馬城址公園',
   'Nerima Joshi Park',
-  '東京・練馬。受賞者たちの会場。',
-  'Nerima, Tokyo. Home of Award Winning Performers.',
-  35.7508,
-  139.6375,
+  'エントランス交流ゾーン',
+  'Entrance Exchange Zone',
+  35.7434302,
+  139.6470773,
   0
 from public.events e
 where e.slug = 'award-winning-performers-2026'
