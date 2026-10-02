@@ -157,7 +157,7 @@ function PlatformShell() {
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
   const [showSplash, setShowSplash] = useState(() => {
     if (window.location.pathname !== '/' || window.location.search) return false
-    try { return window.localStorage.getItem('pl-master-splash-seen-v2') !== '1' } catch { return false }
+    try { return window.localStorage.getItem('pl-master-splash-seen-v3') !== '1' } catch { return false }
   })
 
   useEffect(() => {
@@ -440,7 +440,7 @@ function PlatformShell() {
 
   if (showSplash && screen === 'fan-home') {
     return <div className="pl-app"><SplashScreen onStart={() => {
-      try { window.localStorage.setItem('pl-master-splash-seen-v2', '1') } catch { /* continue without persistence */ }
+      try { window.localStorage.setItem('pl-master-splash-seen-v3', '1') } catch { /* continue without persistence */ }
       setShowSplash(false)
       if (!user) setScreen('auth')
     }} /></div>

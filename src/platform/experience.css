@@ -686,7 +686,8 @@
 .pl-splash { --splash-image: none; position: fixed; isolation: isolate; inset: 0; z-index: 100; min-height: 100dvh; overflow: hidden; background: #06111f; color: white; }
 .pl-splash__ambient { position: absolute; z-index: -3; inset: -40px; background-image: var(--splash-image); background-size: cover; background-position: center; filter: blur(50px) saturate(1.18); opacity: .58; transform: scale(1.12); }
 .pl-splash__media { position: absolute; z-index: -2; inset: 0; background-image: var(--splash-image); background-size: cover; background-position: center 20%; }
-.pl-splash__video { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
+.pl-splash__video { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: 0; }
+.pl-splash__video--on { opacity: 1; }
 .pl-splash__shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, rgba(3,12,23,.18), rgba(4,14,26,.35) 42%, rgba(4,14,26,.97)); }
 .pl-splash__content { position: absolute; left: 24px; right: 24px; bottom: calc(28px + env(safe-area-inset-bottom)); display: grid; gap: 10px; }
 .pl-splash__logo { width: 168px; height: auto; margin-bottom: 4px; }
