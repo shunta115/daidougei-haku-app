@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({ auth: {} as Record<string, unknown> }))
@@ -9,11 +9,18 @@ vi.mock('../src/platform/lib/supabase', () => ({ supabase: null, requireSupabase
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn(), useTrackView: vi.fn() }))
 vi.mock('../src/platform/screens/AuthScreen', () => ({ AuthScreen: ({ initialRole }: { initialRole: string }) => <p>register:{initialRole}</p> }))
 vi.mock('../src/platform/screens/PerformerHomeScreen', () => ({ PerformerHomeScreen: () => <p>performer-dashboard</p> }))
-vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: () => <p>fan-home</p> }))
-vi.mock('../src/platform/screens/MapScheduleScreen', () => ({ MapScheduleScreen: () => <p>master-event</p> }))
+vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>fan-home</p><button onClick={() => onOpenPerformer('performer-1')}>home-performer</button></> }))
+vi.mock('../src/platform/screens/MapScheduleScreen', () => ({ MapScheduleScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>master-event</p><button onClick={() => onOpenPerformer('performer-1')}>map-performer</button></> }))
 vi.mock('../src/platform/screens/EventScreens', () => ({
   EventListScreen: ({ onOpen }: { onOpen: (slug: string) => void }) => <button onClick={() => onOpen('award-winning-performers-2026')}>event-list</button>,
-  EventDetailScreen: ({ slug }: { slug: string }) => <p>event-detail:{slug}</p>,
+  EventDetailScreen: ({ slug, onBack, onOpenPerformer }: { slug: string; onBack: () => void; onOpenPerformer: (id: string) => void }) => <><p>event-detail:{slug}</p><button onClick={onBack}>event-back</button><button onClick={() => onOpenPerformer('performer-1')}>event-performer</button></>,
+}))
+vi.mock('../src/platform/screens/PerformerPublicScreen', () => ({ PerformerPublicScreen: ({ onBack }: { onBack: () => void }) => <><p>performer-public</p><button onClick={onBack}>profile-back</button></> }))
+vi.mock('../src/platform/screens/LiveListScreen', () => ({ LiveListScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>live-list</p><button onClick={() => onOpenPerformer('performer-1')}>live-performer</button></> }))
+vi.mock('../src/platform/screens/MerchScreens', () => ({
+  MerchListScreen: ({ onOpenProduct }: { onOpenProduct: (id: string) => void }) => <><p>merch-list</p><button onClick={() => onOpenProduct('product-1')}>open-product</button></>,
+  MerchDetailScreen: ({ onBack }: { onBack: () => void }) => <><p>merch-detail</p><button onClick={onBack}>product-back</button></>,
+  PerformerMerchScreen: () => null,
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
@@ -26,6 +33,7 @@ beforeEach(() => {
   vi.stubGlobal('sessionStorage', storage.sessionStorage)
   vi.stubGlobal('scrollTo', vi.fn())
   Object.defineProperty(window, 'sessionStorage', { configurable: true, value: storage.sessionStorage })
+  window.localStorage.setItem('pl-master-splash-seen-v3', '1')
   fake.auth = { ready: true, configured: true, user: null, profile: null, profileError: null, refreshProfile: vi.fn(), signOut: vi.fn() }
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -62,6 +70,56 @@ it('keeps event UI in sync with Safari back navigation', async () => {
   window.history.pushState({}, '', EVENTS_PATH)
   window.dispatchEvent(new PopStateEvent('popstate'))
   await screen.findByRole('button', { name: 'event-list' })
+})
+
+it('returns from a performer profile to the exact event context', async () => {
+  window.history.replaceState({}, '', EVENTS_PATH)
+  render(<PlatformApp />)
+  fireEvent.click(screen.getByRole('button', { name: 'event-list' }))
+  await screen.findByText('event-detail:award-winning-performers-2026')
+  fireEvent.click(screen.getByRole('button', { name: 'event-performer' }))
+  await screen.findByText('performer-public')
+  fireEvent.click(screen.getByRole('button', { name: 'profile-back' }))
+  await screen.findByText('event-detail:award-winning-performers-2026')
+})
+
+it('returns from a performer profile to HOME', async () => {
+  window.history.replaceState({}, '', '/')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'home-performer' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'profile-back' }))
+  await screen.findByText('fan-home')
+})
+
+it('returns from a performer profile to map and live list contexts', async () => {
+  window.history.replaceState({}, '', FESTIVAL_PATH)
+  const view = render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'map-performer' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'profile-back' }))
+  await screen.findByText('master-event')
+  view.unmount()
+
+  window.history.replaceState({}, '', '/live?live=1')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'live-performer' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'profile-back' }))
+  await screen.findByText('live-list')
+})
+
+it('returns from goods detail to the goods list', async () => {
+  window.history.replaceState({}, '', '/live?merch=1')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'open-product' }))
+  await screen.findByText('merch-detail')
+  fireEvent.click(screen.getByRole('button', { name: 'product-back' }))
+  await screen.findByText('merch-list')
+})
+
+it('uses a safe fallback for a directly opened performer profile', async () => {
+  window.history.replaceState({}, '', '/performer/performer-1')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'profile-back' }))
+  expect(window.location.pathname).toBe('/')
 })
 
 it('opens the event in MASTER UI and can return through the shared bottom navigation', async () => {

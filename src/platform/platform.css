@@ -73,7 +73,8 @@ a { color: var(--neon); }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 32px;
+  min-width: 64px;
+  min-height: 44px;
   padding: 0 8px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
@@ -84,6 +85,29 @@ a { color: var(--neon); }
   letter-spacing: 0.02em;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+.pl-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(7, 17, 28, 0.74);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pl-back-button--icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
 }
 
 .pl-lang-sheet {

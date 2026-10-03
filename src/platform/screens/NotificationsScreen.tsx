@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { listNotifications, markNotificationRead } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { NotificationRow } from '../lib/types'
+import { AppBackButton } from '../components/AppBackButton'
 
 type Props = {
   onOpenLive?: (performerId: string) => void
   onOpenPerformer?: (performerId: string) => void
+  onBack?: () => void
 }
 
 function parseLink(link: string | null): { kind: 'live' | 'profile'; id: string } | null {
@@ -18,7 +20,7 @@ function parseLink(link: string | null): { kind: 'live' | 'profile'; id: string 
   return null
 }
 
-export function NotificationsScreen({ onOpenLive, onOpenPerformer }: Props) {
+export function NotificationsScreen({ onOpenLive, onOpenPerformer, onBack }: Props) {
   const { user } = useAuth()
   const [rows, setRows] = useState<NotificationRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +52,7 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer }: Props) {
 
   return (
     <>
+      {onBack ? <AppBackButton onClick={onBack} label="戻る" /> : null}
       <h1 className="pl-h1">Notifications</h1>
       {error ? <p className="pl-error">{error}</p> : null}
       {rows.length === 0 && !error ? <div className="pl-empty">No notifications.</div> : null}

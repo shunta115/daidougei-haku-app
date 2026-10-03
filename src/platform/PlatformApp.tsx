@@ -38,6 +38,18 @@ import './platform.css'
 import './screens/registration.css'
 import './experience.css'
 
+type NavigationSnapshot = {
+  screen: PlatformScreen
+  performerId: string | null
+  merchProductId: string | null
+  eventSlug: string | null
+}
+
+type HakuHistoryState = {
+  hakuSnapshot?: NavigationSnapshot
+  hakuHasBack?: boolean
+}
+
 function SetupScreen() {
   const { t } = useLang()
   return (
@@ -171,6 +183,14 @@ function PlatformShell() {
 
   useEffect(() => {
     const syncEventRoute = () => {
+      const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
+      if (saved) {
+        setPerformerId(saved.performerId)
+        setMerchProductId(saved.merchProductId)
+        setEventSlug(saved.eventSlug)
+        setScreen(saved.screen)
+        return
+      }
       const performerRoute = parsePerformerPath(window.location.pathname)
       if (performerRoute) {
         setPerformerId(performerRoute.id)
@@ -180,6 +200,8 @@ function PlatformShell() {
       const eventRoute = parseEventsPath(window.location.pathname)
       if (!eventRoute) {
         if (window.location.pathname === FESTIVAL_PATH) setScreen('map-schedule')
+        else if (window.location.pathname === EVENTS_PATH) setScreen('event-list')
+        else if (window.location.pathname === '/' || window.location.pathname === PLATFORM_PATH) setScreen('fan-home')
         return
       }
       if (eventRoute.kind === 'list') {
@@ -514,10 +536,34 @@ function PlatformShell() {
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
+  const currentSnapshot = (): NavigationSnapshot => ({ screen, performerId, merchProductId, eventSlug })
+
+  const pushDetail = (next: NavigationSnapshot, url?: string) => {
+    const currentState = (window.history.state as HakuHistoryState | null) ?? {}
+    window.history.replaceState({ ...currentState, hakuSnapshot: currentSnapshot() }, '', window.location.href)
+    window.history.pushState({ hakuSnapshot: next, hakuHasBack: true } satisfies HakuHistoryState, '', url ?? window.location.href)
+  }
+
+  const backOr = (fallback: () => void) => {
+    const state = (window.history.state as HakuHistoryState | null) ?? {}
+    if (state.hakuHasBack) {
+      window.history.back()
+      return
+    }
+    fallback()
+  }
+
+  const openChildScreen = (nextScreen: PlatformScreen) => {
+    pushDetail({ screen: nextScreen, performerId: null, merchProductId: null, eventSlug })
+    setPerformerId(null)
+    setMerchProductId(null)
+    setScreen(nextScreen)
+  }
+
   const openPerformer = (id: string) => {
+    pushDetail({ screen: 'profile', performerId: id, merchProductId: null, eventSlug }, performerPath(id))
     setPerformerId(id)
-    const next = performerPath(id)
-    if (window.location.pathname !== next) window.history.pushState({}, '', next)
+    setMerchProductId(null)
     setScreen('profile')
   }
 
@@ -526,11 +572,13 @@ function PlatformShell() {
   }
 
   const openWatch = (id: string) => {
+    pushDetail({ screen: 'live-watch', performerId: id, merchProductId: null, eventSlug })
     setPerformerId(id)
     setScreen('live-watch')
   }
 
   const openMerchProduct = (id: string) => {
+    pushDetail({ screen: 'merch-detail', performerId: null, merchProductId: id, eventSlug })
     setMerchProductId(id)
     setScreen('merch-detail')
   }
@@ -542,14 +590,14 @@ function PlatformShell() {
   }
 
   const openEvent = (slug: string) => {
+    pushDetail({ screen: 'event-detail', performerId: null, merchProductId: null, eventSlug: slug }, eventPath(slug))
     setEventSlug(slug)
-    window.history.pushState({}, '', eventPath(slug))
     setScreen('event-detail')
   }
 
   const openEventVote = (slug: string) => {
+    pushDetail({ screen: 'event-vote', performerId: null, merchProductId: null, eventSlug: slug }, eventVotePath(slug))
     setEventSlug(slug)
-    window.history.pushState({}, '', eventVotePath(slug))
     setScreen('event-vote')
   }
 
@@ -579,8 +627,10 @@ function PlatformShell() {
         <LiveWatchScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            setScreen('live-list')
+            backOr(() => {
+              setPerformerId(null)
+              setScreen('live-list')
+            })
           }}
           onTip={() => {
             trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_live' } })
@@ -605,9 +655,11 @@ function PlatformShell() {
         <PerformerPublicScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            leavePerformerUrl()
-            setScreen('search')
+            backOr(() => {
+              setPerformerId(null)
+              leavePerformerUrl()
+              setScreen('fan-home')
+            })
           }}
           onTip={() => {
             trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_profile' } })
@@ -627,13 +679,13 @@ function PlatformShell() {
     } else if (screen === 'event-list') {
       guestBody = <EventListScreen onOpen={openEvent} />
     } else if (screen === 'event-detail' && eventSlug) {
-      guestBody = <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
+      guestBody = <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
     } else if (screen === 'event-vote' && eventSlug) {
-      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} />
+      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
-      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
+      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => backOr(() => setScreen('merch-list'))} onRequireAuth={() => setScreen('auth')} />
     }
 
     if (guestBody) {
@@ -700,8 +752,10 @@ function PlatformShell() {
         performerId={performerId}
         allowPublicTest={previewOn && role === 'admin'}
         onBack={() => {
-          setPerformerId(null)
-          setScreen(homeForRole(role))
+          backOr(() => {
+            setPerformerId(null)
+            setScreen(homeForRole(role))
+          })
         }}
         onTip={() => {
           trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live' } })
@@ -729,9 +783,11 @@ function PlatformShell() {
         <PerformerPublicScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            leavePerformerUrl()
-            setScreen(homeForRole(role))
+            backOr(() => {
+              setPerformerId(null)
+              leavePerformerUrl()
+              setScreen(homeForRole(role))
+            })
           }}
         onTip={() => {
           trackProductEvent('tip_cta_click', { performerId, props: { surface: 'profile' } })
@@ -743,7 +799,7 @@ function PlatformShell() {
       />
     )
   } else if (merchProductId && screen === 'merch-detail') {
-    body = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
+    body = <MerchDetailScreen productId={merchProductId} onBack={() => backOr(() => setScreen('merch-list'))} onRequireAuth={() => setScreen('auth')} />
   } else {
     switch (screen) {
       case 'fan-home':
@@ -755,7 +811,7 @@ function PlatformShell() {
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
             onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
             onPerformerLive={role === 'performer' ? () => setScreen('performer-live') : undefined}
             onPerformerSchedule={role === 'performer' ? () => setScreen('performer-schedule') : undefined}
             onPerformerDesk={role === 'performer' ? () => setScreen('profile') : undefined}
@@ -789,16 +845,17 @@ function PlatformShell() {
         body = <EventListScreen onOpen={openEvent} />
         break
       case 'event-detail':
-        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'event-vote':
-        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'notifications':
         body = (
           <NotificationsScreen
             onOpenLive={openWatch}
             onOpenPerformer={openPerformer}
+            onBack={() => backOr(() => setScreen(role === 'performer' ? 'profile' : 'fan-home'))}
           />
         )
         break
@@ -812,14 +869,14 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
-            onNotifications={() => setScreen('notifications')}
+            onNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
           />
         ) : (
           <FanProfileScreen
             onOpenPerformer={openPerformer}
             onOpenProduct={openMerchProduct}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
           />
         )
@@ -834,7 +891,7 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
-            onNotifications={() => setScreen('notifications')}
+            onNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
           />
         )
@@ -884,7 +941,7 @@ function PlatformShell() {
             onOpenLiveList={() => setScreen('live-list')}
             onOpenMap={() => setScreen('map-schedule')}
             onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)

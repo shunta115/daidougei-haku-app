@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
+import { ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
   getAnonVoteState,
@@ -11,6 +11,7 @@ import {
 import { canCastAnonVote } from '../lib/anonVoter'
 import { useLang } from '../../i18n/LangProvider'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
+import { AppBackButton } from '../components/AppBackButton'
 import type { Performer } from '../lib/types'
 import './event.css'
 
@@ -250,12 +251,12 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
     return () => { active = false }
   }, [slug, t])
 
-  if (error) return <main className="pl-event-detail"><button className="pl-event-back" type="button" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button><p className="pl-error">{error}</p></main>
+  if (error) return <main className="pl-event-detail"><AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} /><p className="pl-error">{error}</p></main>
   if (!event) return <p role="status">{t('eventPreparing')}</p>
 
   return (
     <main className="pl-event-detail pl-event-vote-page">
-      <button className="pl-event-back" type="button" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+      <AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} />
       <GlobalMessageBar />
       <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={onOpenSchedule} onOpenMap={onOpenMap} />
     </main>

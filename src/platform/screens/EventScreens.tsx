@@ -22,6 +22,7 @@ import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import { AwpHeroVoteLaunch, EventVoteDesk } from './EventVoteDesk'
+import { AppBackButton } from '../components/AppBackButton'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import './event.css'
 
@@ -302,7 +303,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   }
 
   if (loading) return <p role="status">{t('eventPreparing')}</p>
-  if (error && !event) return <main className="pl-event-detail"><button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button><p className="pl-error">{error}</p></main>
+  if (error && !event) return <main className="pl-event-detail"><AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} /><p className="pl-error">{error}</p></main>
   if (!event) return null
   const chrome = eventChrome(event, t)
   const renderSpot = (slot: EventSlotRow | undefined, label: string) => {
@@ -316,7 +317,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const isAwp = slug === AWP_SLUG
   const moreLabel = phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')
   return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
-    <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+    <AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} />
     <GlobalMessageBar />
     {isAwp ? (
       <section className="awp-fv">
@@ -410,7 +411,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
 
     {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>{t('eventWelcomeKicker')}</p><h2 id="event-onboarding-title">{t('eventWelcomeTitle')}</h2><span>{event.sub_copy_ja || t('eventSub')}</span><ul><li>{t('eventGuide1')}</li><li>{t('eventGuide2')}</li><li>{t('eventGuide3')}</li><li>{t('eventGuide4')}</li></ul><button onClick={closeGuide}>{t('eventWelcomeCta')}</button></div></div> : null}
-    {mapOpen ? <div className="awp-map-modal" role="dialog" aria-modal="true" aria-label="AWP 2026 公式会場MAP"><button className="awp-map-modal__close" onClick={() => setMapOpen(false)} aria-label="閉じる"><X size={22} /></button><div><header><MapPin size={20} /><span><b>{focusedVenue ? venueById.get(focusedVenue)?.name_ja || '会場MAP' : 'AWP 2026 公式会場MAP'}</b><small>公式会場図で場所を確認してください</small></span></header><img src="/events/award-winning-performers-2026/official-venue-map.webp" alt="AWP 2026 公式会場内マップ" /><p>{focusedVenue ? `選択中：${venueById.get(focusedVenue)?.name_ja || ''}` : 'ステージ1〜4の位置を公式会場図で確認できます。'} 未確定の緯度経度は使用していません。</p></div></div> : null}
+    {mapOpen ? <div className="awp-map-modal" role="dialog" aria-modal="true" aria-label="AWP 2026 公式会場MAP"><button className="awp-map-modal__close" type="button" onClick={() => setMapOpen(false)} aria-label="イベントへ戻る"><ArrowLeft size={20} /><span>イベントへ戻る</span></button><div><header><MapPin size={20} /><span><b>{focusedVenue ? venueById.get(focusedVenue)?.name_ja || '会場MAP' : 'AWP 2026 公式会場MAP'}</b><small>公式会場図で場所を確認してください</small></span></header><img src="/events/award-winning-performers-2026/official-venue-map.webp" alt="AWP 2026 公式会場内マップ" /><p>{focusedVenue ? `選択中：${venueById.get(focusedVenue)?.name_ja || ''}` : 'ステージ1〜4の位置を公式会場図で確認できます。'} 未確定の緯度経度は使用していません。</p></div></div> : null}
     {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label={t('eventFlyerDialog')}><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label={t('eventClose')}><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt={t('eventFlyerImage')} /></div></div> : null}
   </main>
 }

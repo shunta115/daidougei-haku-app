@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
+import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
+import { AppBackButton } from '../components/AppBackButton'
 import {
   follow,
   getPerformer,
@@ -261,9 +262,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         <div className="hp-hero__fade" />
         {p.is_live ? <em className="hp-hero__live">LIVE</em> : null}
         <header className="hp-bar">
-          <button type="button" className="hp-icon" onClick={onBack} aria-label={t('back')}>
-            <ArrowLeft size={16} />
-          </button>
+          <AppBackButton className="hp-icon" iconOnly onClick={onBack} label={t('back')} />
           <div className="hp-bar__actions">
             <button type="button" className="hp-icon" onClick={() => setQrOpen(true)} aria-label={t('hpQr')}>
               <QrCode size={16} />

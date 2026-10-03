@@ -16,6 +16,7 @@ import type { MerchOrder, MerchProduct } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
 import { ShoppingBag, ShoppingCart, Ticket, UsersRound } from 'lucide-react'
+import { AppBackButton } from '../components/AppBackButton'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
@@ -201,9 +202,7 @@ export function MerchDetailScreen({
 
   return (
     <>
-      <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
-        戻る
-      </button>
+      <AppBackButton className="pl-btn pl-btn--ghost" onClick={onBack} label="戻る" />
       <div className="pl-merch-detail">
         {product.image_url ? <img className="pl-merch-detail__image" src={product.image_url} alt="" /> : <div className="pl-merch-detail__image" aria-hidden="true" />}
         <div className="pl-merch-detail__body">
@@ -329,9 +328,7 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <button type="button" className="pl-btn pl-btn--ghost" onClick={onBack}>
-        戻る
-      </button>
+      <AppBackButton className="pl-btn pl-btn--ghost" onClick={onBack} label="戻る" />
       <h1 className="pl-h1">グッズ管理</h1>
       <p className="pl-muted">パフォーマンスを好きになってくれたファンへ、あなたのオリジナルグッズを届けられます。</p>
       {msg ? <p className="pl-muted">{msg}</p> : null}
