@@ -7,15 +7,16 @@ import { prepareProfilePhoto } from '../lib/profilePhoto'
 import { registrationError } from '../lib/onboarding'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
-import { Bell, Camera, ChevronRight, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
+import { Bell, Camera, ChevronRight, Clapperboard, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
 
 type Props = {
   onOpenPerformer?: (id: string) => void
   onOpenProduct?: (id: string) => void
   onOpenNotifications?: () => void
+  onOpenTitle?: () => void
 }
 
-export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotifications }: Props) {
+export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotifications, onOpenTitle }: Props) {
   const { t } = useLang()
   const { profile, user, signOut, refreshProfile } = useAuth()
   const photoInput = useRef<HTMLInputElement>(null)
@@ -124,6 +125,9 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         <button type="button" onClick={() => scrollTo('pl-my-orders')}><span><ShoppingBag size={19} />{t('profileMerchHistory')}</span><ChevronRight size={18} /></button>
         <button type="button" onClick={onOpenNotifications}><span><Bell size={19} />{t('notifications')}</span><ChevronRight size={18} /></button>
         <div><span><Settings size={19} />{t('profileSettings')}</span><small>{t('profileSoon')}</small></div>
+        {onOpenTitle ? (
+          <button type="button" onClick={onOpenTitle}><span><Clapperboard size={19} />{t('openTitleScreen')}</span><ChevronRight size={18} /></button>
+        ) : null}
       </section>
       <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" onClick={() => void signOut()}>{t('signOut')}</button>
 

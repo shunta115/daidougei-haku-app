@@ -10,7 +10,7 @@ import { useLang } from '../../i18n/LangProvider'
 import { PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings, onNotifications }: {
+export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings, onNotifications, onOpenTitle }: {
   onEdit: () => void
   onLive: () => void
   onHistory: () => void
@@ -19,6 +19,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   onSchedule: () => void
   onEarnings: () => void
   onNotifications?: () => void
+  onOpenTitle?: () => void
 }) {
   const { t, lang } = useLang()
   const { performer, profile, refreshProfile, signOut } = useAuth()
@@ -149,6 +150,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
         setBusy(true)
         void updatePerformer(performer.id, { share_location: checked }).then(refreshProfile).catch((e) => setError(registrationError(e))).finally(() => setBusy(false))
       }} />{t('locationShare')}</label>
+      {onOpenTitle ? <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={onOpenTitle}>{t('openTitleScreen')}</button> : null}
       <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void signOut()}>{t('signOut')}</button>
     </section>
   </div>

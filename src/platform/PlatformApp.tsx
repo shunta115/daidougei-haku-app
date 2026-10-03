@@ -451,7 +451,7 @@ function PlatformShell() {
     return <PerformerPreviewApp />
   }
 
-  if (showSplash && screen === 'fan-home') {
+  if (showSplash) {
     return <div className="pl-app"><SplashScreen onStart={() => {
       try { window.localStorage.setItem('pl-master-splash-seen-v3', '1') } catch { /* continue without persistence */ }
       setShowSplash(false)
@@ -811,12 +811,14 @@ function PlatformShell() {
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
             onNotifications={() => setScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         ) : (
           <FanProfileScreen
             onOpenPerformer={openPerformer}
             onOpenProduct={openMerchProduct}
             onOpenNotifications={() => setScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         )
         break
@@ -831,6 +833,7 @@ function PlatformShell() {
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
             onNotifications={() => setScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         )
         break
