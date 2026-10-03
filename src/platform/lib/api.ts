@@ -1099,6 +1099,16 @@ export async function listEventGuestAppearances(eventId: string): Promise<EventG
   return (data as EventGuestAppearanceRow[]) ?? []
 }
 
+/** Approved HAKU profiles by id. Used for official guest cards that are not on the voting lineup. */
+export async function listApprovedPerformersByIds(ids: string[]): Promise<Performer[]> {
+  const unique = [...new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))]
+  if (unique.length === 0) return []
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', unique).eq('is_approved', true)
+  if (error) throw error
+  return ((data as Performer[]) ?? []).filter((performer) => !isPublicTestPerformer(performer))
+}
+
 export async function upsertEventSlot(row: Omit<EventSlotRow, 'id'> & { id?: string }) {
   const sb = requireSupabase()
   const run = async (payload: typeof row) => {

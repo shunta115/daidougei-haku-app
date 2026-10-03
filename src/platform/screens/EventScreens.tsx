@@ -6,6 +6,7 @@ import {
   getMyVotes,
   listEventLineupPerformers,
   listEventGuestAppearances,
+  listApprovedPerformersByIds,
   listVotingEligibleEventLineupPerformers,
   listEventSlots,
   listEventVenues,
@@ -21,6 +22,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
+import { officialAppearanceCategory, performerPlace, resolveLinkedGuestPerformer } from '../lib/officialAppearances'
 import { AwpHeroVoteLaunch, EventVoteDesk } from './EventVoteDesk'
 import { AppBackButton } from '../components/AppBackButton'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
@@ -126,6 +128,42 @@ function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'prese
   }
 }
 
+function OfficialAppearanceCard({
+  name,
+  category,
+  genre,
+  place,
+  photoUrl,
+  linked,
+  pendingLabel,
+  profileLabel,
+  onOpen,
+}: {
+  name: string
+  category: string
+  genre?: string
+  place?: string
+  photoUrl: string | null
+  linked: boolean
+  pendingLabel: string
+  profileLabel: string
+  onOpen?: () => void
+}) {
+  return (
+    <article className="awp-act-card" data-linked={linked ? 'true' : undefined} onClick={() => linked && onOpen?.()}>
+      <div className="awp-act-card__media">
+        {photoUrl ? <img src={photoUrl} alt="" /> : <span aria-hidden="true">{name.slice(0, 2)}</span>}
+      </div>
+      <div className="awp-act-card__body">
+        <h3>{name}</h3>
+        <p>{linked ? (genre || category) : category}</p>
+        {linked && place ? <p className="awp-act-card__place">{place}</p> : null}
+        {linked ? <button type="button">{profileLabel}</button> : <small>{pendingLabel}</small>}
+      </div>
+    </article>
+  )
+}
+
 const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer-2026.webp'
 const AWP_HERO_SRC = '/events/award-winning-performers-2026/hero-performer.jpg'
 
@@ -180,6 +218,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
   const [guestAppearances, setGuestAppearances] = useState<EventGuestAppearanceRow[]>([])
+  const [guestPerformers, setGuestPerformers] = useState<Performer[]>([])
   const [votingPerformers, setVotingPerformers] = useState<Performer[]>([])
   const [rule, setRule] = useState<EventVoteRule | null>(null)
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
@@ -231,8 +270,12 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
           listEventGuestAppearances(nextEvent.id).catch(() => []),
           getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => []),
         ])
+        const linkedIds = guestRows.map((row) => row.linked_performer_id).filter((id): id is string => Boolean(id))
+        const linkedProfiles = typeof listApprovedPerformersByIds === 'function'
+          ? await listApprovedPerformersByIds(linkedIds).catch(() => [])
+          : []
         if (!active) return
-        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setVotingPerformers(eligibleLineup); setGuestAppearances(guestRows); setRule(voteRule); setRanking(results)
+        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setVotingPerformers(eligibleLineup); setGuestAppearances(guestRows); setGuestPerformers(linkedProfiles); setRule(voteRule); setRanking(results)
         const dates = [...new Set(slotRows.map((slot) => dateKey(slot.date)))]
         const fallbackDate = dateKey(nextEvent.starts_on) || dates[0] || clock.date
         setSelectedDate(dates.includes(clock.date) ? clock.date : fallbackDate)
@@ -251,6 +294,11 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   }, [slug, t, user])
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
+  const guestPerformerById = useMemo(() => {
+    const map = new Map(guestPerformers.map((performer) => [performer.id, performer]))
+    for (const performer of performers) map.set(performer.id, performer)
+    return map
+  }, [guestPerformers, performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
   const dates = useMemo(() => {
     const values = [...new Set(slots.map((slot) => dateKey(slot.date)))]
@@ -398,7 +446,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {isAwp ? <section className="awp-special"><header><Trophy size={25} /><div><p>SPECIAL NIGHT</p><h2>あなたの一票で、夜のステージが決まる。</h2></div></header><div>{dateSlots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => timeKey(a.start_time).localeCompare(timeKey(b.start_time))).map((slot) => <article key={slot.id}><time>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</time><strong>{slot.ranking_position === 3 ? '🥉' : slot.ranking_position === 2 ? '🥈' : '🥇'} 投票結果{slot.ranking_position}位</strong><span>{venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}</span></article>)}</div>{votingOpen ? <button onClick={() => onOpenVote ? onOpenVote() : jump('event-vote')}><Vote size={17} />投票する</button> : <p className="awp-special__closed">投票受付前</p>}</section> : null}
 
-    {isAwp ? <section className="pl-event-lineup-full awp-roving"><header><p>STATUE / ROVING</p><h2>会場を歩いて出会おう</h2><span>どこで会えるかは当日のお楽しみ。投票対象とは別のAWP公式出演です。</span></header><div>{guestAppearances.filter((row) => dateKey(row.appearance_date) === selectedDate).map((row) => { const linked = row.linked_performer_id ? performerById.get(row.linked_performer_id) : null; return <article key={row.id} onClick={() => linked && onOpenPerformer(linked.id)}><span>{linked?.photo_url ? <img src={linked.photo_url} alt="" /> : row.official_name_ja.slice(0, 2)}</span><h3>{linked?.stage_name || row.official_name_ja}</h3><p>{row.appearance_type === 'roving' ? '回遊パフォーマー' : row.appearance_type === 'statue' ? 'スタチューパフォーマー' : 'Statue Carnival / 回遊'}</p>{linked ? <button>{t('eventSeeProfile')}</button> : <small>公式出演者（プロフィール準備中）</small>}</article> })}</div></section> : null}
+    {isAwp ? <section className="pl-event-lineup-full awp-roving"><header><p>STATUE / ROVING</p><h2>会場を歩いて出会おう</h2><span>どこで会えるかは当日のお楽しみ。投票対象とは別のAWP公式出演です。</span></header><div>{guestAppearances.filter((row) => dateKey(row.appearance_date) === selectedDate).map((row) => { const linked = resolveLinkedGuestPerformer(row, guestPerformerById); return <OfficialAppearanceCard key={row.id} name={linked?.stage_name || row.official_name_ja} category={officialAppearanceCategory(row.appearance_type)} genre={linked?.genre} place={linked ? performerPlace(linked) : undefined} photoUrl={linked?.photo_url ?? null} linked={Boolean(linked)} pendingLabel="公式出演者（プロフィール準備中）" profileLabel={t('eventSeeProfile')} onOpen={linked ? () => onOpenPerformer(linked.id) : undefined} /> })}</div></section> : null}
 
     {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={votingPerformers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{votingPerformers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
 

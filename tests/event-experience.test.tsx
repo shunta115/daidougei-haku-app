@@ -15,6 +15,8 @@ const fake = vi.hoisted(() => ({
   listVotingEligibleEventLineupPerformers: vi.fn(),
   listEventSlots: vi.fn(),
   listEventVenues: vi.fn(),
+  listEventGuestAppearances: vi.fn(),
+  listApprovedPerformersByIds: vi.fn(),
   listVoteRankingNamed: vi.fn(),
   voteForPerformer: vi.fn(),
 }))
@@ -30,6 +32,8 @@ vi.mock('../src/platform/lib/api', () => ({
   listVotingEligibleEventLineupPerformers: fake.listVotingEligibleEventLineupPerformers,
   listEventSlots: fake.listEventSlots,
   listEventVenues: fake.listEventVenues,
+  listEventGuestAppearances: fake.listEventGuestAppearances,
+  listApprovedPerformersByIds: fake.listApprovedPerformersByIds,
   listPublishedEvents: fake.listPublishedEvents,
   listVoteRankingNamed: fake.listVoteRankingNamed,
   voteForPerformer: fake.voteForPerformer,
@@ -86,10 +90,13 @@ beforeEach(() => {
   fake.listVotingEligibleEventLineupPerformers.mockResolvedValue([performer])
   fake.listEventSlots.mockResolvedValue([])
   fake.listEventVenues.mockResolvedValue([])
+  fake.listEventGuestAppearances.mockResolvedValue([])
+  fake.listApprovedPerformersByIds.mockResolvedValue([])
   fake.listVoteRankingNamed.mockResolvedValue([{ performer: { ...performer, id: 'hidden-rank', stage_name: '途中順位' }, votes: 99 }])
   fake.voteForPerformer.mockResolvedValue(undefined)
   vi.stubGlobal('confirm', vi.fn(() => true))
   vi.stubGlobal('scrollTo', vi.fn())
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 afterEach(() => {
