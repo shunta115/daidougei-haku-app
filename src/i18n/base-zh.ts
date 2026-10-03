@@ -34,7 +34,7 @@ export const baseZh: Record<I18nKey, string> = {
   eventHome: '活動',
   continue: '繼續',
   processing: '處理中…',
-  displayName: '顯示名稱',
+  displayName: '帳號名稱',
   email: '電子郵件',
   password: '密碼',
   firstTime: '第一次使用嗎？',
