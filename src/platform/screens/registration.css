@@ -64,6 +64,18 @@
 .pl-registration__roles label > span { display: grid; gap: 3px; }
 .pl-registration__roles label small { color: rgba(224,237,248,.66); font-size: 12px; line-height: 1.45; }
 .pl-registration__guest-note { margin: -7px 0 18px; color: #9fc3dd; font-size: 12px; line-height: 1.55; }
+.pl-registration__review-note {
+  margin: -6px 0 20px;
+  padding: 13px 14px 14px 15px;
+  border: 1px solid rgba(139, 195, 255, .26);
+  border-left: 3px solid #59adff;
+  border-radius: 14px;
+  background: rgba(12, 29, 48, .72);
+}
+.pl-registration__review-note p,
+.pl-registration__review-note span { margin: 0; }
+.pl-registration__review-note p { color: #8bc3ff; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.pl-registration__review-note span { display: block; margin-top: 7px; color: rgba(224, 237, 248, .88); font-size: 13px; line-height: 1.75; }
 .pl-registration input[type='radio'], .pl-registration input[type='checkbox'] { width: 20px; height: 20px; flex-shrink: 0; accent-color: #398cff; }
 .pl-registration__fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pl-registration__link { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #9bcaff; margin: 8px 0; }

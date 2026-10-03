@@ -95,6 +95,12 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
       {role === 'performer' && mode === 'up' ? <p className="pl-registration__progress">{t('authProgress')}</p> : null}
 
       {mode === 'up' ? <p className="pl-registration__guest-note">{t('authGuestNote')}</p> : null}
+      {role === 'performer' && mode === 'up' ? (
+        <aside className="pl-registration__review-note" role="note" aria-label={t('authReviewLabel')}>
+          <p>{t('authReviewLabel')}</p>
+          <span>{t('authReviewNote')}</span>
+        </aside>
+      ) : null}
 
       <form onSubmit={(e) => void submit(e)}>
         {mode === 'up' ? <label><span className="pl-label">{role === 'performer' ? t('authStageName') : t('displayName')}</span>

@@ -25,6 +25,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('localStorage', new JSDOM('', { url: 'http://localhost' }).window.localStorage)
   localStorage.clear()
+  localStorage.setItem('daidougei-lang', 'ja')
   fake.auth = { performer, profile: { id: performer.id, role: 'performer', status: 'pending' } }
   fake.signUp.mockResolvedValue(null)
   fake.signIn.mockResolvedValue(null)
@@ -40,6 +41,22 @@ describe('smartphone performer registration', () => {
     expect(screen.getByRole('radio', { name: 'ファン' })).toBeTruthy()
     expect(screen.getByRole('radio', { name: 'パフォーマー' })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: '主催者' })).toBeNull()
+  })
+
+  it('shows the review-only notice on performer signup before the stage name field', () => {
+    const { container } = render(<AuthScreen performerEntry initialRole="performer" onDone={vi.fn()} />)
+    const note = screen.getByRole('note')
+    expect(note.textContent).toContain('審査制')
+    expect(note.textContent).toContain('運営による審査を通過した方のみ登録を承認')
+    const guest = container.querySelector('.pl-registration__guest-note')
+    const stage = screen.getByLabelText('芸名（公開されます）')
+    expect(guest?.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(note.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('does not show the performer review notice on fan signup', () => {
+    render(<AuthScreen onDone={vi.fn()} />)
+    expect(screen.queryByRole('note')).toBeNull()
   })
 
   it('submits a performer account from the dedicated entry, never fan', async () => {
