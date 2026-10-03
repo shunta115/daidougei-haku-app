@@ -6,6 +6,20 @@ import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
 
 const STALE_SECONDS = 90
 
+function present(value: string | undefined) {
+  if (!value) return false
+  const normalized = value.trim().replace(/^['"]|['"]$/g, '')
+  return Boolean(normalized) && normalized !== '[SENSITIVE]'
+}
+
+function readiness(res: VercelResponse) {
+  const hasUrl = present(process.env.LIVEKIT_URL) || present(process.env.VITE_LIVEKIT_URL)
+  const hasKey = present(process.env.LIVEKIT_API_KEY)
+  const hasSecret = present(process.env.LIVEKIT_API_SECRET)
+  res.setHeader('Cache-Control', 'no-store')
+  res.status(200).json({ configured: hasUrl && hasKey && hasSecret, hasUrl, hasKey, hasSecret })
+}
+
 async function expireStaleSessions() {
   const sb = getAdminSupabase()
   const cutoff = new Date(Date.now() - STALE_SECONDS * 1000).toISOString()
@@ -99,6 +113,10 @@ async function forceEndSession(req: VercelRequest, res: VercelResponse) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+  if (req.method === 'GET' && req.query.mode === 'status') {
+    readiness(res)
     return
   }
   try {

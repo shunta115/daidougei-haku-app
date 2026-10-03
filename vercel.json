@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/haku-admin", "destination": "/api/ops/inbox" },
+    { "source": "/api/livekit/status", "destination": "/api/livekit/presence?mode=status" },
     { "source": "/haku-admin", "destination": "/haku-admin.html" },
     { "source": "/haku-admin/(.*)", "destination": "/haku-admin.html" },
     { "source": "/((?!api/)(?!haku-admin).*)", "destination": "/index.html" }
