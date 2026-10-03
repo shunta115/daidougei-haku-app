@@ -35,7 +35,8 @@ async function expireStaleSessions() {
         continue
       }
     } catch {
-      // A missing room means the host is gone. Provider outages fall back to the grace timeout.
+      // Fail safe during a LiveKit API outage: do not terminate a possibly healthy broadcast.
+      if (roomService) continue
     }
     trulyStale.push(row)
   }
