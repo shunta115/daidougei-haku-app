@@ -60,12 +60,12 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
   })
 }
 
-export async function getPerformer(id: string): Promise<Performer | null> {
+export async function getPerformer(id: string, includePublicTest = false): Promise<Performer | null> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', id).maybeSingle()
   if (error) throw error
   const row = (data as Performer) ?? null
-  if (!row || !row.is_approved || isPublicTestPerformer(row)) return null
+  if (!row || !row.is_approved || (!includePublicTest && isPublicTestPerformer(row))) return null
   return row
 }
 

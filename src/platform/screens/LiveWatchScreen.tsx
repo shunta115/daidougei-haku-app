@@ -40,6 +40,7 @@ type Props = {
   onBack: () => void
   onTip: () => void
   onRequireAuth?: () => void
+  allowPublicTest?: boolean
 }
 
 function formatDuration(sec: number) {
@@ -48,7 +49,7 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: Props) {
+export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
@@ -85,10 +86,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const fs = useFullscreen(stageRef)
 
   useEffect(() => {
-    getPerformer(performerId)
+    getPerformer(performerId, allowPublicTest)
       .then(setP)
       .catch(() => setError('LIVE情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
-  }, [performerId])
+  }, [performerId, allowPublicTest])
 
   useEffect(() => {
     return subscribePerformerLive(performerId, (row) => {

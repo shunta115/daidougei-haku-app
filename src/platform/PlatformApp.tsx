@@ -698,6 +698,7 @@ function PlatformShell() {
     body = (
       <LiveWatchScreen
         performerId={performerId}
+        allowPublicTest={previewOn && role === 'admin'}
         onBack={() => {
           setPerformerId(null)
           setScreen(homeForRole(role))
