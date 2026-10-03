@@ -730,8 +730,10 @@ export type FeaturedEvent = {
 
 export type EventVoteRule = {
   event_id: string
+  voting_enabled?: boolean
   voting_open: boolean
   votes_per_user_per_day: number
+  votes_per_device?: number
   votes_per_voter?: number
   allow_anonymous?: boolean
   voting_starts_at: string | null
@@ -859,9 +861,7 @@ export async function setTipFeeBps(bps: number) {
 }
 
 export async function voteForPerformer(eventId: string, performerId: string, _fanId: string) {
-  const sb = requireSupabase()
-  const { error } = await sb.rpc('cast_event_vote', { p_event_id: eventId, p_performer_id: performerId })
-  if (error) throw error
+  await castAnonEventVote(eventId, performerId)
   trackProductEvent('vote_complete', { performerId, eventId })
 }
 
@@ -873,11 +873,10 @@ export type AnonVoteState = {
   voted: string[]
 }
 
-export async function getAnonVoteState(eventId: string, voterId: string): Promise<AnonVoteState> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.rpc('get_anon_vote_state', { p_event_id: eventId, p_voter_id: voterId })
-  if (error) throw error
-  const row = (data ?? {}) as Partial<AnonVoteState>
+export async function getAnonVoteState(eventId: string, _legacyVoterId = ''): Promise<AnonVoteState> {
+  const response = await fetch(`/api/votes/device?eventId=${encodeURIComponent(eventId)}`, { credentials: 'same-origin' })
+  const row = await response.json().catch(() => ({})) as Partial<AnonVoteState> & { error?: string }
+  if (!response.ok) throw new Error(row.error || 'vote_service_unavailable')
   const voted = Array.isArray(row.voted) ? row.voted.map(String) : []
   return {
     voting_open: Boolean(row.voting_open),
@@ -888,14 +887,15 @@ export async function getAnonVoteState(eventId: string, voterId: string): Promis
   }
 }
 
-export async function castAnonEventVote(eventId: string, performerId: string, voterId: string) {
-  const sb = requireSupabase()
-  const { error } = await sb.rpc('cast_anon_event_vote', {
-    p_event_id: eventId,
-    p_performer_id: performerId,
-    p_voter_id: voterId,
+export async function castAnonEventVote(eventId: string, performerId: string, _legacyVoterId = '') {
+  const response = await fetch('/api/votes/device', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventId, performerId }),
   })
-  if (error) throw error
+  const body = await response.json().catch(() => ({})) as { error?: string }
+  if (!response.ok) throw new Error(body.error || 'vote_failed')
   trackProductEvent('vote_complete', { performerId, eventId, props: { mode: 'anon' } })
 }
 
@@ -1116,10 +1116,25 @@ export async function deleteEventSlot(id: string) {
 }
 
 export async function listEventLineup(eventId: string): Promise<string[]> {
+  const rows = await listEventLineupRows(eventId)
+  return rows.map((row) => row.performer_id)
+}
+
+export type EventLineupRow = {
+  performer_id: string
+  sort_order: number
+  is_voting_eligible: boolean
+}
+
+export async function listEventLineupRows(eventId: string): Promise<EventLineupRow[]> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('event_lineup').select('performer_id').eq('event_id', eventId).order('sort_order')
+  const { data, error } = await sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', eventId).order('sort_order')
   if (error) throw error
-  return (data ?? []).map((r) => r.performer_id as string)
+  return (data ?? []).map((row) => ({
+    performer_id: String(row.performer_id),
+    sort_order: Number(row.sort_order) || 0,
+    is_voting_eligible: row.is_voting_eligible !== false,
+  }))
 }
 
 export async function listEventLineupPerformers(eventId: string): Promise<Performer[]> {
@@ -1132,9 +1147,32 @@ export async function listEventLineupPerformers(eventId: string): Promise<Perfor
   return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
 }
 
+export async function listVotingEligibleEventLineupPerformers(eventId: string): Promise<Performer[]> {
+  const rows = await listEventLineupRows(eventId)
+  const ids = rows.filter((row) => row.is_voting_eligible).map((row) => row.performer_id)
+  if (ids.length === 0) return []
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
+  if (error) throw error
+  const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
+  return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
+}
+
 export async function addEventLineup(eventId: string, performerId: string) {
   const sb = requireSupabase()
-  const { error } = await sb.from('event_lineup').upsert({ event_id: eventId, performer_id: performerId, sort_order: 0 })
+  const { error } = await sb.from('event_lineup').upsert({ event_id: eventId, performer_id: performerId, sort_order: 0, is_voting_eligible: false }, { onConflict: 'event_id,performer_id', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+export async function setEventLineupVotingEligibility(eventId: string, performerId: string, eligible: boolean) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('event_lineup').update({ is_voting_eligible: eligible }).eq('event_id', eventId).eq('performer_id', performerId)
+  if (error) throw error
+}
+
+export async function clearEventVotingEligibility(eventId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('event_lineup').update({ is_voting_eligible: false }).eq('event_id', eventId)
   if (error) throw error
 }
 

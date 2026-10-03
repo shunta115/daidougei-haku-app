@@ -8,8 +8,11 @@ const fake = vi.hoisted(() => ({
   listPublishedEvents: vi.fn(),
   getEventBySlug: vi.fn(),
   getEventVoteRule: vi.fn(),
+  getAnonVoteState: vi.fn(),
+  castAnonEventVote: vi.fn(),
   getMyVotes: vi.fn(),
   listEventLineupPerformers: vi.fn(),
+  listVotingEligibleEventLineupPerformers: vi.fn(),
   listEventSlots: vi.fn(),
   listEventVenues: vi.fn(),
   listVoteRankingNamed: vi.fn(),
@@ -20,8 +23,11 @@ vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => fake.auth }))
 vi.mock('../src/platform/lib/api', () => ({
   getEventBySlug: fake.getEventBySlug,
   getEventVoteRule: fake.getEventVoteRule,
+  getAnonVoteState: fake.getAnonVoteState,
+  castAnonEventVote: fake.castAnonEventVote,
   getMyVotes: fake.getMyVotes,
   listEventLineupPerformers: fake.listEventLineupPerformers,
+  listVotingEligibleEventLineupPerformers: fake.listVotingEligibleEventLineupPerformers,
   listEventSlots: fake.listEventSlots,
   listEventVenues: fake.listEventVenues,
   listPublishedEvents: fake.listPublishedEvents,
@@ -73,8 +79,11 @@ beforeEach(() => {
   fake.listPublishedEvents.mockResolvedValue([event])
   fake.getEventBySlug.mockResolvedValue(event)
   fake.getEventVoteRule.mockResolvedValue({ event_id: event.id, voting_open: true, votes_per_user_per_day: 1, voting_starts_at: null, voting_ends_at: null, updated_at: '' })
+  fake.getAnonVoteState.mockResolvedValue({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
+  fake.castAnonEventVote.mockResolvedValue(undefined)
   fake.getMyVotes.mockResolvedValue([])
   fake.listEventLineupPerformers.mockResolvedValue([performer])
+  fake.listVotingEligibleEventLineupPerformers.mockResolvedValue([performer])
   fake.listEventSlots.mockResolvedValue([])
   fake.listEventVenues.mockResolvedValue([])
   fake.listVoteRankingNamed.mockResolvedValue([{ performer: { ...performer, id: 'hidden-rank', stage_name: '途中順位' }, votes: 99 }])

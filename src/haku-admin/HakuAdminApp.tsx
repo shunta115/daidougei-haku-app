@@ -30,7 +30,11 @@ export function HakuAdminApp() {
   const [users, setUsers] = useState<Array<Record<string, string>>>([])
   const [performers, setPerformers] = useState<Array<Record<string, unknown>>>([])
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
-  const [eventExtra, setEventExtra] = useState<{ lineup: unknown[]; slots: unknown[]; venues: unknown[] } | null>(null)
+  const [eventExtra, setEventExtra] = useState<{
+    lineup: Array<{ performer_id: string; is_voting_eligible: boolean; performer?: { stage_name?: string; genre?: string } | null }>
+    slots: unknown[]
+    venues: unknown[]
+  } | null>(null)
   const [votes, setVotes] = useState<Record<string, unknown> | null>(null)
   const [live, setLive] = useState<{ open: Array<Record<string, unknown>>; recent: Array<Record<string, unknown>> } | null>(null)
   const [money, setMoney] = useState<Record<string, unknown> | null>(null)
@@ -86,6 +90,30 @@ export function HakuAdminApp() {
 
   const moneyBlock = (dash?.money ?? money) as Record<string, unknown> | undefined
   const recorded = moneyBlock && moneyBlock.kind === 'recorded' ? moneyBlock : null
+
+  const loadEvent = async (id: string) => {
+    setEventId(id)
+    setBusy(true)
+    setError(null)
+    try {
+      setEventExtra(await hakuAdmin('events', 'lineup', { id }) as typeof eventExtra)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'イベント出演者を読み込めませんでした')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changeVotingEligibility = async (row: { performer_id: string; is_voting_eligible: boolean; performer?: { stage_name?: string } | null }) => {
+    const next = !row.is_voting_eligible
+    if (!confirmDanger(`${row.performer?.stage_name || 'この出演者'}を${next ? '投票対象にします' : '投票対象から外します'}。`)) return
+    try {
+      await hakuAdmin('events', 'voting-eligibility', { id: eventId, performerId: row.performer_id, eligible: next })
+      await loadEvent(eventId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '投票資格を更新できませんでした')
+    }
+  }
 
   const tabs: Array<{ id: Tab; label: string }> = useMemo(() => [
     { id: 'home', label: '状況' },
@@ -230,11 +258,25 @@ export function HakuAdminApp() {
 
       {tab === 'events' ? (
         <section>
+          <article className="ha-card">
+            <label>
+              <span className="pl-label">管理するイベント</span>
+              <select className="pl-input" value={eventId} onChange={(e) => void loadEvent(e.target.value)}>
+                {events.map((event) => <option key={String(event.id)} value={String(event.id)}>{String(event.name_ja)}（{String(event.status)}）</option>)}
+              </select>
+            </label>
+          </article>
           {events.map((event) => (
             <article key={String(event.id)} className="ha-card">
               <h2>{String(event.name_ja)}</h2>
               <p>{String(event.slug)} · {String(event.status)} · {String(event.date_label || '')}</p>
+              <p><strong>{(event.vote_rule as { voting_enabled?: boolean } | null)?.voting_enabled ? '🟢 投票機能 ON' : '⚪️ 投票機能 OFF'}</strong></p>
               <div className="ha-actions">
+                <button type="button" className={(event.vote_rule as { voting_enabled?: boolean } | null)?.voting_enabled ? 'pl-btn pl-btn--ghost' : 'pl-btn'} onClick={() => {
+                  const enabled = !Boolean((event.vote_rule as { voting_enabled?: boolean } | null)?.voting_enabled)
+                  if (!confirmDanger(`${String(event.name_ja)}の投票機能を${enabled ? 'ON' : 'OFF'}にします。受付は自動的に停止状態になります。`)) return
+                  void hakuAdmin('events', 'voting-feature', { id: event.id, enabled }).then(() => reload('events')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>{(event.vote_rule as { voting_enabled?: boolean } | null)?.voting_enabled ? '投票機能をOFF' : '投票機能をON'}</button>
                 {(['draft', 'published', 'archived'] as const).map((status) => (
                   <button key={status} type="button" className="pl-btn pl-btn--ghost" onClick={() => {
                     if (!confirmDanger(`${String(event.name_ja)} を ${status} にします。`)) return
@@ -244,14 +286,36 @@ export function HakuAdminApp() {
               </div>
             </article>
           ))}
-          {eventExtra ? <p className="ha-note">出演 {eventExtra.lineup.length} · 枠 {eventExtra.slots.length} · 会場 {eventExtra.venues.length}</p> : null}
+          {eventExtra ? (
+            <>
+              <p className="ha-note">出演 {eventExtra.lineup.length} · 投票対象 {eventExtra.lineup.filter((row) => row.is_voting_eligible).length} · 投票対象外 {eventExtra.lineup.filter((row) => !row.is_voting_eligible).length} · 枠 {eventExtra.slots.length} · 会場 {eventExtra.venues.length}</p>
+              <article className="ha-card">
+                <h2>出演者と投票資格</h2>
+                <p>出演と投票対象はイベントごとの別設定です。</p>
+                <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={eventExtra.lineup.length === 0} onClick={() => {
+                  if (!confirmDanger('このイベントの出演者を全員「投票対象外」にします。既存票は削除されません。')) return
+                  void hakuAdmin('events', 'voting-eligibility-all-off', { id: eventId }).then(() => loadEvent(eventId)).catch((e) => setError(e instanceof Error ? e.message : '一括更新できませんでした'))
+                }}>全員を投票対象外にする</button>
+              </article>
+              {eventExtra.lineup.map((row) => (
+                <article key={row.performer_id} className="ha-card">
+                  <h2>{row.performer?.stage_name || '名称未登録'}</h2>
+                  <p>{row.performer?.genre || ''}</p>
+                  <p><strong>🟢 出演中</strong><br /><strong>{row.is_voting_eligible ? '🟢 投票対象' : '⚪️ 投票対象外'}</strong></p>
+                  <button type="button" className={row.is_voting_eligible ? 'pl-btn pl-btn--ghost pl-btn--block' : 'pl-btn pl-btn--block'} onClick={() => void changeVotingEligibility(row)}>{row.is_voting_eligible ? '投票対象から外す' : '投票対象にする'}</button>
+                </article>
+              ))}
+            </>
+          ) : null}
         </section>
       ) : null}
 
       {tab === 'votes' ? (
         <section className="ha-card">
           <h2>投票デスク</h2>
-          <p>投票中: {String((votes?.desk as { voting_open?: boolean } | undefined)?.voting_open ? 'OPEN' : 'STOP')} · 票 {String((votes?.desk as { total_votes?: number } | undefined)?.total_votes ?? '—')}</p>
+          <p>投票機能: {String((votes?.desk as { voting_enabled?: boolean } | undefined)?.voting_enabled ? 'ON' : 'OFF')} · 受付: {String((votes?.desk as { voting_open?: boolean } | undefined)?.voting_open ? 'OPEN' : 'STOP')}</p>
+          <p>正式票 {String((votes?.desk as { total_votes?: number } | undefined)?.total_votes ?? '—')} · 投票端末 {String((votes?.desk as { unique_voters?: number } | undefined)?.unique_voters ?? '—')} · 1端末最大 {String((votes?.desk as { votes_per_device?: number } | undefined)?.votes_per_device ?? 3)}票</p>
+          {Number((votes?.desk as { legacy_test_votes?: number } | undefined)?.legacy_test_votes) > 0 ? <p className="ha-note">旧方式の開催前テスト票 {(votes?.desk as { legacy_test_votes?: number }).legacy_test_votes}件は正式ランキングから除外して保持しています。</p> : null}
           <div className="ha-actions">
             <button type="button" className="pl-btn" onClick={() => {
               if (!eventId || !confirmDanger('投票をOPENします。')) return
@@ -262,6 +326,7 @@ export function HakuAdminApp() {
               void hakuAdmin('votes', 'close', { eventId }).then(() => reload('votes')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
             }}>投票を止める</button>
           </div>
+          <h3>投票対象ランキング</h3>
           <ol>
             {(((votes?.desk as { ranking?: Array<{ performer_id: string; stage_name?: string; votes: number }> } | undefined)?.ranking) ?? []).map((row, index) => (
               <li key={row.performer_id}>{index + 1}位　{row.stage_name || '名称未登録'}　{row.votes}票</li>

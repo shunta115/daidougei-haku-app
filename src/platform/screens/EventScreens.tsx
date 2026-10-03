@@ -5,6 +5,7 @@ import {
   getEventVoteRule,
   getMyVotes,
   listEventLineupPerformers,
+  listVotingEligibleEventLineupPerformers,
   listEventSlots,
   listEventVenues,
   listPublishedEvents,
@@ -157,6 +158,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
+  const [votingPerformers, setVotingPerformers] = useState<Performer[]>([])
   const [rule, setRule] = useState<EventVoteRule | null>(null)
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
   const [selectedDate, setSelectedDate] = useState('')
@@ -181,12 +183,13 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       try {
         const nextEvent = await getEventBySlug(slug)
         if (!nextEvent) throw new Error('not-found')
-        const [venueRows, slotRows, lineup, voteRule, results] = await Promise.all([
+        const [venueRows, slotRows, lineup, eligibleLineup, voteRule, results] = await Promise.all([
           listEventVenues(nextEvent.id), listEventSlots(nextEvent.id), listEventLineupPerformers(nextEvent.id),
+          listVotingEligibleEventLineupPerformers(nextEvent.id),
           getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => []),
         ])
         if (!active) return
-        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setRule(voteRule); setRanking(results)
+        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setVotingPerformers(eligibleLineup); setRule(voteRule); setRanking(results)
         const dates = [...new Set(slotRows.map((slot) => dateKey(slot.date)))]
         const fallbackDate = dateKey(nextEvent.starts_on) || dates[0] || clock.date
         setSelectedDate(dates.includes(clock.date) ? clock.date : fallbackDate)
@@ -321,7 +324,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const state = slotState(slot, clock); const soon = /^あと(\d+)分$/.exec(state); const stateLabel = state === '終了' ? t('slotEnded') : state === '開催中' ? t('slotLive') : state === '予定' ? t('slotPlanned') : soon ? t('slotSoon', { n: soon[1] }) : state; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{stateLabel}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
 
-    {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{performers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
+    {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={votingPerformers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{votingPerformers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
 
     <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? t('eventNightSet') : t('eventNightOpen')}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{t('eventRank', { n: index + 1 })}</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}` : t('eventTimePending')}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>{t('eventProfile')}</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>{t('navLive')}</button> : null}</article> }) : <p>{t('eventNoRank')}</p>}</section>
 

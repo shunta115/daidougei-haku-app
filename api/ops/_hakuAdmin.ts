@@ -244,9 +244,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (resource === 'events') {
       if (action === 'list' || req.method === 'GET') {
-        const { data, error } = await sb.from('events').select('*').order('starts_on', { ascending: false })
+        const [{ data, error }, { data: rules }] = await Promise.all([
+          sb.from('events').select('*').order('starts_on', { ascending: false }),
+          sb.from('event_vote_rules').select('event_id,voting_enabled,voting_open,votes_per_device'),
+        ])
         if (error) throw error
-        res.status(200).json({ ok: true, rows: data ?? [] })
+        const ruleByEvent = new Map((rules ?? []).map((row) => [String(row.event_id), row]))
+        res.status(200).json({ ok: true, rows: (data ?? []).map((event) => ({ ...event, vote_rule: ruleByEvent.get(String(event.id)) ?? null })) })
         return
       }
       if (action === 'patch') {
@@ -274,11 +278,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === 'lineup') {
         const id = String(payload.id || '')
         const [{ data: lineup }, { data: slots }, { data: venues }] = await Promise.all([
-          sb.from('event_lineup').select('performer_id,sort_order').eq('event_id', id).order('sort_order'),
+          sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
           sb.from('event_slots').select('id,date,start_time,end_time,venue_id,performer_id,stage_ja,status').eq('event_id', id).order('date').order('start_time'),
           sb.from('event_venues').select('id,name_ja,lat,lng').eq('event_id', id).order('sort_order'),
         ])
-        res.status(200).json({ ok: true, lineup: lineup ?? [], slots: slots ?? [], venues: venues ?? [] })
+        const performerIds = (lineup ?? []).map((row) => String(row.performer_id))
+        const { data: names } = performerIds.length ? await sb.from('performers').select('id,stage_name,genre').in('id', performerIds) : { data: [] }
+        const performerById = new Map((names ?? []).map((row) => [String(row.id), row]))
+        res.status(200).json({
+          ok: true,
+          lineup: (lineup ?? []).map((row) => ({ ...row, performer: performerById.get(String(row.performer_id)) ?? null })),
+          slots: slots ?? [],
+          venues: venues ?? [],
+        })
+        return
+      }
+      if (action === 'voting-feature') {
+        const id = String(payload.id || '')
+        const enabled = payload.enabled
+        if (!id || typeof enabled !== 'boolean') {
+          res.status(400).json({ error: 'id and enabled required' })
+          return
+        }
+        const { error } = await sb.from('event_vote_rules').upsert({
+          event_id: id,
+          voting_enabled: enabled,
+          voting_open: false,
+          votes_per_device: 3,
+          updated_at: new Date().toISOString(),
+        })
+        if (error) throw error
+        await audit(admin.id, 'event.voting_feature', id, { enabled })
+        res.status(200).json({ ok: true })
+        return
+      }
+      if (action === 'voting-eligibility' || action === 'voting-eligibility-all-off') {
+        const id = String(payload.id || '')
+        if (!id) {
+          res.status(400).json({ error: 'id required' })
+          return
+        }
+        if (action === 'voting-eligibility-all-off') {
+          const { error } = await sb.from('event_lineup').update({ is_voting_eligible: false }).eq('event_id', id)
+          if (error) throw error
+          await audit(admin.id, 'event.voting_eligibility_all_off', id)
+          res.status(200).json({ ok: true })
+          return
+        }
+        const performerId = String(payload.performerId || '')
+        const eligible = payload.eligible
+        if (!performerId || typeof eligible !== 'boolean') {
+          res.status(400).json({ error: 'performerId and eligible required' })
+          return
+        }
+        const { data, error } = await sb.from('event_lineup').update({ is_voting_eligible: eligible }).eq('event_id', id).eq('performer_id', performerId).select('performer_id').maybeSingle()
+        if (error) throw error
+        if (!data) {
+          res.status(404).json({ error: 'lineup performer not found' })
+          return
+        }
+        await audit(admin.id, 'event.voting_eligibility', performerId, { event_id: id, eligible })
+        res.status(200).json({ ok: true })
         return
       }
     }
@@ -290,6 +350,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (action === 'open' || action === 'close') {
+        if (action === 'open') {
+          const { data: enabledRule } = await sb.from('event_vote_rules').select('voting_enabled').eq('event_id', eventId).maybeSingle()
+          if (!enabledRule?.voting_enabled) {
+            res.status(409).json({ error: 'voting_disabled' })
+            return
+          }
+        }
         const { error } = await sb.from('event_vote_rules').upsert({
           event_id: eventId,
           voting_open: action === 'open',
@@ -309,12 +376,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(200).json({ ok: true, desk: { ...(desk.data as Json), ranking: ranking.map((row) => ({ ...row, stage_name: byId.get(String(row.performer_id)) ?? '名称未登録' })) }, source: 'rpc' })
         return
       }
-      const [{ data: rule }, { data: ballots }] = await Promise.all([
+      const [{ data: rule }, { data: ballots }, { data: legacyBallots }] = await Promise.all([
         sb.from('event_vote_rules').select('*').eq('event_id', eventId).maybeSingle(),
-        sb.from('event_ballots').select('performer_id,fan_id,created_at').eq('event_id', eventId),
+        sb.from('event_device_ballots').select('performer_id,device_hash,created_at').eq('event_id', eventId),
+        sb.from('event_ballots').select('id').eq('event_id', eventId),
       ])
+      const { data: eligibleRows } = await sb.from('event_lineup').select('performer_id').eq('event_id', eventId).eq('is_voting_eligible', true)
+      const eligibleIds = new Set((eligibleRows ?? []).map((row) => String(row.performer_id)))
       const counts = new Map<string, number>()
-      for (const row of ballots ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
+      for (const row of ballots ?? []) {
+        const performerId = String(row.performer_id)
+        if (eligibleIds.has(performerId)) counts.set(performerId, (counts.get(performerId) ?? 0) + 1)
+      }
       const performerIds = [...counts.keys()]
       const { data: performerNames } = performerIds.length ? await sb.from('performers').select('id,stage_name').in('id', performerIds) : { data: [] }
       const nameById = new Map((performerNames ?? []).map((row) => [row.id, row.stage_name]))
@@ -322,9 +395,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true,
         source: 'event_ballots',
         desk: {
+          voting_enabled: Boolean(rule?.voting_enabled),
           voting_open: Boolean(rule?.voting_open),
+          votes_per_device: Number(rule?.votes_per_device) || 3,
           total_votes: (ballots ?? []).length,
-          unique_voters: new Set((ballots ?? []).map((row) => row.fan_id)).size,
+          unique_voters: new Set((ballots ?? []).map((row) => row.device_hash)).size,
+          legacy_test_votes: (legacyBallots ?? []).length,
           ranking: [...counts].map(([performer_id, votes]) => ({ performer_id, stage_name: nameById.get(performer_id) ?? '名称未登録', votes })).sort((a, b) => b.votes - a.votes),
         },
       })

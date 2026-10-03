@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   addEventLineup,
+  clearEventVotingEligibility,
   deleteEventSlot,
   deleteEventVenue,
   createEvent,
@@ -9,7 +10,7 @@ import {
   getTipFeeBps,
   listAdminVoteRanking,
   listApprovedPerformers,
-  listEventLineup,
+  listEventLineupRows,
   listEventLiveSessions,
   listEventSlots,
   listEventVenues,
@@ -18,6 +19,7 @@ import {
   removeEventLineup,
   saveFeaturedEventPatch,
   saveEventVoteRule,
+  setEventLineupVotingEligibility,
   setTipFeeBps,
   upsertEventSlot,
   upsertEventVenue,
@@ -25,6 +27,7 @@ import {
   type EventVenueRow,
   type EventVoteRule,
   type FeaturedEvent,
+  type EventLineupRow,
 } from '../lib/api'
 import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
@@ -42,6 +45,7 @@ export function AdminEventScreen() {
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [lineup, setLineup] = useState<string[]>([])
+  const [lineupRows, setLineupRows] = useState<EventLineupRow[]>([])
   const [lives, setLives] = useState<LiveSession[]>([])
   const [approved, setApproved] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -89,7 +93,7 @@ export function AdminEventScreen() {
         const [v, s, l, p, sessions, rule, ranking] = await Promise.all([
           listEventVenues(ev.id),
           listEventSlots(ev.id),
-          listEventLineup(ev.id),
+          listEventLineupRows(ev.id),
           listApprovedPerformers(),
           listEventLiveSessions(ev.id),
           getEventVoteRule(ev.id).catch(() => null),
@@ -97,7 +101,8 @@ export function AdminEventScreen() {
         ])
         setVenues(v)
         setSlots(s)
-        setLineup(l)
+        setLineupRows(l)
+        setLineup(l.map((row) => row.performer_id))
         setApproved(p)
         setLives(sessions)
         setVoteRule(rule)
@@ -237,6 +242,32 @@ export function AdminEventScreen() {
       await reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : '出演枠の保存に失敗しました')
+    }
+  }
+
+  const setVotingEligibility = async (performerId: string, eligible: boolean) => {
+    if (!event) return
+    const performer = approved.find((item) => item.id === performerId)
+    const label = eligible ? '投票対象にします' : '投票対象から外します'
+    if (!window.confirm(`${performer?.stage_name ?? 'この出演者'}を${label}。よろしいですか？`)) return
+    try {
+      await setEventLineupVotingEligibility(event.id, performerId, eligible)
+      setMsg(eligible ? '投票対象に設定しました' : '投票対象から外しました')
+      await reload(event.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '投票資格を更新できませんでした')
+    }
+  }
+
+  const disableAllVotingEligibility = async () => {
+    if (!event || lineup.length === 0) return
+    if (!window.confirm('このイベントの出演者を全員「投票対象外」にします。既存の投票履歴は削除されません。実行しますか？')) return
+    try {
+      await clearEventVotingEligibility(event.id)
+      setMsg('出演者全員を投票対象外にしました')
+      await reload(event.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '一括更新できませんでした')
     }
   }
 
@@ -457,20 +488,32 @@ export function AdminEventScreen() {
 
       {tab === 'lineup' ? (
         <>
+          <div className="pl-card">
+            <h2 className="pl-h2">出演と投票資格</h2>
+            <p className="pl-muted">出演者としての登録と、このイベントでの投票対象は別設定です。新しく追加した出演者は投票対象外から始まります。</p>
+            <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={lineup.length === 0} onClick={() => void disableAllVotingEligibility()}>全員を投票対象外にする</button>
+          </div>
           {lineup.length === 0 ? (
             <p className="pl-muted">このイベントの公式出演者はまだ未登録です。承認済みパフォーマーから追加できます。</p>
           ) : null}
           {lineup.map((id) => {
             const p = approved.find((x) => x.id === id)
+            const votingEligible = lineupRows.find((row) => row.performer_id === id)?.is_voting_eligible ?? true
             return (
-              <div key={id} className="pl-card pl-row">
-                <div style={{ flex: 1 }}>
+              <div key={id} className="pl-card">
+                <div>
                   <div style={{ fontWeight: 700 }}>{p?.stage_name ?? id}</div>
                   <div className="pl-muted">{p?.genre}</div>
+                  <div style={{ display: 'grid', gap: 4, margin: '10px 0' }}>
+                    <strong>🟢 出演中</strong>
+                    <strong>{votingEligible ? '🟢 投票対象' : '⚪️ 投票対象外'}</strong>
+                  </div>
                 </div>
+                <button type="button" className={votingEligible ? 'pl-btn pl-btn--ghost pl-btn--block' : 'pl-btn pl-btn--block'} onClick={() => void setVotingEligibility(id, !votingEligible)}>{votingEligible ? '投票対象から外す' : '投票対象にする'}</button>
                 <button
                   type="button"
-                  className="pl-btn pl-btn--ghost"
+                  className="pl-btn pl-btn--ghost pl-btn--block"
+                  style={{ marginTop: 8 }}
                   onClick={() => {
                     if (!event) return
                     if (!window.confirm(`${p?.stage_name ?? id} をラインナップから外します。実行しますか？`)) return

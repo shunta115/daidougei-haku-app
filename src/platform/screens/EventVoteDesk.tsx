@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
   getAnonVoteState,
   getEventBySlug,
   getEventVoteRule,
-  listEventLineupPerformers,
+  listVotingEligibleEventLineupPerformers,
   type FeaturedEvent,
 } from '../lib/api'
-import { canCastAnonVote, readOrCreateAnonVoterId } from '../lib/anonVoter'
+import { canCastAnonVote } from '../lib/anonVoter'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import './event.css'
@@ -20,13 +20,12 @@ function AwpVoteTitle({ text }: { text: string }) {
 
 export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; onOpenVote: () => void }) {
   const { t } = useLang()
-  const voterId = useMemo(() => readOrCreateAnonVoterId(), [])
   const [remaining, setRemaining] = useState<number | null>(null)
   const [maxVotes, setMaxVotes] = useState(3)
 
   useEffect(() => {
     let active = true
-    void getAnonVoteState(eventId, voterId)
+    void getAnonVoteState(eventId)
       .then((state) => {
         if (!active) return
         setMaxVotes(state.max_votes)
@@ -36,7 +35,7 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
         if (active) setRemaining(null)
       })
     return () => { active = false }
-  }, [eventId, voterId])
+  }, [eventId])
 
   const left = remaining ?? maxVotes
   const used = remaining == null ? 0 : Math.max(0, maxVotes - remaining)
@@ -86,16 +85,15 @@ type DeskProps = {
 }
 
 function voteErrorKey(message: string): 'eventVoteShut' | 'eventVoteDup' | 'eventVoteLimit' | 'eventVoteSlow' | 'eventVoteFail' {
-  if (message.includes('voting_closed') || message.includes('voting_not_started') || message.includes('voting_ended')) return 'eventVoteShut'
+  if (message.includes('voting_disabled') || message.includes('voting_closed') || message.includes('voting_not_started') || message.includes('voting_ended')) return 'eventVoteShut'
   if (message.includes('already_voted_for_performer')) return 'eventVoteDup'
-  if (message.includes('voter_ballot_limit_reached') || message.includes('daily_vote_limit')) return 'eventVoteLimit'
+  if (message.includes('device_vote_limit_reached') || message.includes('voter_ballot_limit_reached') || message.includes('daily_vote_limit')) return 'eventVoteLimit'
   if (message.includes('vote_rate_limited')) return 'eventVoteSlow'
   return 'eventVoteFail'
 }
 
 export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedule, onOpenMap }: DeskProps) {
   const { t } = useLang()
-  const voterId = useMemo(() => readOrCreateAnonVoterId(), [])
   const [voted, setVoted] = useState<string[]>([])
   const [remaining, setRemaining] = useState(3)
   const [maxVotes, setMaxVotes] = useState(3)
@@ -107,13 +105,13 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
 
   const refresh = async () => {
     const [state, rule] = await Promise.all([
-      getAnonVoteState(event.id, voterId),
+      getAnonVoteState(event.id),
       getEventVoteRule(event.id).catch(() => null),
     ])
     setVoted(state.voted)
     setRemaining(state.remaining)
     setMaxVotes(state.max_votes)
-    setOpen(state.voting_open && Boolean(rule?.allow_anonymous !== false))
+    setOpen(state.voting_open && Boolean(rule?.voting_enabled))
   }
 
   useEffect(() => {
@@ -122,7 +120,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
       .catch(() => { if (active) setError(t('eventVoteFail')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [event.id, voterId, t])
+  }, [event.id, t])
 
   const used = maxVotes - remaining
   const lastPerformer = lastName
@@ -137,7 +135,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
     setBusy(true)
     setError(null)
     try {
-      await castAnonEventVote(event.id, performer.id, voterId)
+      await castAnonEventVote(event.id, performer.id)
       await refresh()
       setLastName(performer.stage_name)
     } catch (e) {
@@ -240,7 +238,7 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
       try {
         const next = await getEventBySlug(slug)
         if (!next) throw new Error('not-found')
-        const lineup = await listEventLineupPerformers(next.id)
+        const lineup = await listVotingEligibleEventLineupPerformers(next.id)
         if (!active) return
         setEvent(next)
         setPerformers(lineup)
