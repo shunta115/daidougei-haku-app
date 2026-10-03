@@ -1460,6 +1460,94 @@ html:has(.pl-event-detail) .pl-bg__grain {
   display:block;
 }
 
+.awp-day-tabs {
+  margin:10px 0 0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+}
+.awp-day-tabs button {
+  min-height:46px;
+  border:1px solid rgba(145,196,237,.22);
+  border-radius:10px;
+  background:rgba(255,255,255,.05);
+  color:#dcebf5;
+  font-weight:900;
+}
+.awp-day-tabs button[data-active='true'] { background:#398cff; border-color:#398cff; color:#fff; }
+.awp-now header>span { color:#9fb5c5; font-size:12px; }
+.awp-now .pl-event-now__item { min-height:0; border-radius:14px; }
+.awp-now .pl-event-now__item>span { display:block; margin-top:6px; color:#b9ccda; }
+.awp-now .pl-event-now__item>div { flex-wrap:wrap; }
+.awp-now .pl-event-now__item button { min-height:42px; }
+
+.awp-wanted {
+  margin-top:12px;
+  border:1px solid rgba(145,196,237,.2);
+  border-radius:14px;
+  background:rgba(7,27,44,.82);
+  overflow:hidden;
+}
+.awp-wanted summary { min-height:48px; padding:0 13px; display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:850; }
+.awp-wanted summary svg { color:#ff6f93; }
+.awp-wanted summary b { margin-left:auto; min-width:24px; height:24px; display:grid; place-items:center; border-radius:50%; background:#e72867; font-size:11px; }
+.awp-wanted>p { margin:0; padding:0 13px 14px; color:#9fb5c5; font-size:12px; }
+.awp-wanted>div { display:grid; padding:0 8px 8px; gap:5px; }
+.awp-wanted>div button { min-height:46px; display:grid; grid-template-columns:46px minmax(0,1fr); align-items:center; padding:6px 8px; border:0; border-radius:9px; background:rgba(255,255,255,.06); color:#fff; text-align:left; }
+.awp-wanted time { grid-row:1/3; color:#86c5ff; font-weight:900; }
+.awp-wanted strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.awp-wanted span { display:flex; align-items:center; gap:3px; color:#9fb5c5; font-size:11px; }
+
+.awp-map-card,.awp-watch-now,.awp-special { padding:20px 0; border-bottom:1px solid rgba(151,199,240,.14); }
+.awp-map-card header,.awp-watch-now header,.awp-special header { display:flex; align-items:center; gap:10px; }
+.awp-map-card header>svg,.awp-watch-now header>svg { color:#72baff; }
+.awp-map-card header p,.awp-watch-now header p,.awp-special header p { margin:0; color:#e72836; font-size:10px; font-weight:900; }
+.awp-map-card h2,.awp-watch-now h2,.awp-special h2 { margin:2px 0 0; font-size:20px; }
+.awp-map-card>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:13px; }
+.awp-map-card>div button { min-height:44px; border:1px solid rgba(145,196,237,.2); border-radius:10px; background:rgba(255,255,255,.06); color:#fff; font-weight:800; }
+.awp-map-card__open { width:100%; min-height:46px; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:10px; background:#398cff; color:#fff; font-weight:900; }
+
+.awp-watch-now>div { display:grid; gap:7px; margin-top:13px; }
+.awp-watch-now article { min-height:72px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; padding:10px 11px 10px 14px; border:1px solid rgba(145,196,237,.18); border-left:4px solid #398cff; border-radius:12px; background:rgba(9,31,49,.82); }
+.awp-watch-now article[data-state='live'] { border-left-color:#37ca86; }
+.awp-watch-now article[data-state='soon'] { border-left-color:#e0b049; }
+.awp-watch-now article>span { color:#8dcaff; font-size:11px; font-weight:850; }
+.awp-watch-now article>strong { grid-column:1; font-size:15px; }
+.awp-watch-now article>small { grid-column:1; color:#a9bdcb; }
+.awp-watch-now article>button { grid-column:2; grid-row:1/4; min-height:42px; padding:0 10px; display:flex; align-items:center; gap:3px; border:1px solid rgba(145,196,237,.22); border-radius:9px; background:rgba(255,255,255,.07); color:#fff; }
+
+.pl-event-slot { padding:7px 0; }
+.pl-event-slot__actions { grid-column:2/4; display:flex; flex-wrap:wrap; gap:6px; }
+.pl-event-slot__actions .pl-event-slot__venue,.pl-event-slot__want { min-height:36px; padding:0 9px; display:flex; align-items:center; gap:4px; border:1px solid rgba(145,196,237,.2); border-radius:8px; background:rgba(255,255,255,.06); color:#85c1f4; font-size:11px; font-weight:800; }
+.pl-event-slot__want { color:#ffd2de; }
+.pl-event-slot__want[data-active='true'] { border-color:rgba(255,71,117,.45); background:rgba(231,40,103,.16); color:#ff6f93; }
+
+.awp-special { background:radial-gradient(circle at 85% 15%,rgba(224,176,73,.16),transparent 45%); }
+.awp-special header>svg { color:#e0b049; }
+.awp-special>div { display:grid; margin-top:14px; }
+.awp-special article { min-height:58px; display:grid; grid-template-columns:92px minmax(0,1fr); align-items:center; border-top:1px solid rgba(224,176,73,.2); }
+.awp-special article time { grid-row:1/3; color:#e0b049; font-size:12px; font-weight:850; }
+.awp-special article strong { font-size:14px; }
+.awp-special article span { color:#9fb3c2; font-size:11px; }
+.awp-special>button { width:100%; min-height:46px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:10px; background:linear-gradient(180deg,#e2b84f,#a56d12); color:#130d02; font-weight:950; }
+.awp-special__closed { margin:10px 0 0; padding:11px; border:1px solid rgba(224,176,73,.22); border-radius:10px; color:#d2c19a; text-align:center; font-size:12px; font-weight:800; }
+.awp-roving header>span { color:#a9bdcb; font-size:12px; line-height:1.5; }
+
+.awp-map-modal { position:fixed; inset:0; z-index:100; padding:calc(62px + env(safe-area-inset-top,0px)) 10px calc(18px + env(safe-area-inset-bottom,0px)); display:grid; place-items:start center; overflow:auto; background:rgba(1,8,14,.94); backdrop-filter:blur(12px); }
+.awp-map-modal>div { width:min(100%,760px); overflow:hidden; border:1px solid rgba(145,196,237,.25); border-radius:16px; background:#071b2c; }
+.awp-map-modal header { padding:13px; display:flex; align-items:center; gap:9px; }
+.awp-map-modal header>svg { color:#72baff; }
+.awp-map-modal header span { display:grid; }
+.awp-map-modal header small { color:#9fb5c5; }
+.awp-map-modal img { display:block; width:100%; height:auto; object-fit:contain; background:#050505; }
+.awp-map-modal p { margin:0; padding:12px 13px; color:#b7cad8; font-size:12px; line-height:1.5; }
+.awp-map-modal__close { position:fixed; top:max(10px,env(safe-area-inset-top,0px)); right:10px; z-index:2; width:44px; height:44px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.25); border-radius:50%; background:#050505; color:#fff; }
+
+@media (min-width:700px) {
+  .awp-now>div,.awp-watch-now>div { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .awp-map-card>div { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+
 .pl-official-venue-map {
   margin:16px 0;
   overflow:hidden;

@@ -94,4 +94,14 @@ describe('P0 migration safety', () => {
     expect(fanNav).not.toMatch(/key: 'search', label: labels\.discover, icon: Search/)
     expect(app).toMatch(/onOpenSearch=\{\(\) => setScreen\('search'\)\}/)
   })
+
+  it('keeps the AWP event-day UX data-driven and device-local without schema writes', () => {
+    const screen = read('src/platform/screens/EventScreens.tsx')
+    expect(screen).toMatch(/listEventSlots\(nextEvent\.id\)/)
+    expect(screen).toMatch(/setInterval\(\(\) => setClock\(nowJst\(\)\), 30_000\)/)
+    expect(screen).toMatch(/haku:wanted-slots:/)
+    expect(screen).toMatch(/official-venue-map\.jpg/)
+    expect(screen).toMatch(/rule\?\.voting_open/)
+    expect(screen).not.toMatch(/navigator\.geolocation/)
+  })
 })
