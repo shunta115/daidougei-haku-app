@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { finalizePaidMerchOrder } from './_finalizeMerchOrder.js'
 import { getAdminSupabase, getStripe, requireAuthUser } from './_shared.js'
+import { settleCheckoutPayment } from './_settlement.js'
 
 function missingColumn(error: unknown) {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
@@ -96,6 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const result = await finalizePaidMerchOrder(sb, session, connectedAccountId)
+    await settleCheckoutPayment(sb, stripe, session, connectedAccountId)
     res.status(200).json({ ok: result.ok, orderId: result.orderId, amount: result.amount, already: result.already })
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'Confirm failed' })

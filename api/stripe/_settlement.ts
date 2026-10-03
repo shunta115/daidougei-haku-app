@@ -126,4 +126,27 @@ export async function settleSaleByCharge(
   }
 }
 
+/** Settlement fallback for the customer return path when webhook delivery is delayed. */
+export async function settleCheckoutPayment(
+  sb: SupabaseClient,
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+  connectedAccountId: string | null,
+) {
+  const paymentIntentId = stripeId(session.payment_intent)
+  if (!paymentIntentId) return
+  const paymentIntent = await stripe.paymentIntents.retrieve(
+    paymentIntentId,
+    connectedAccountId ? { stripeAccount: connectedAccountId } : undefined,
+  )
+  const chargeId = stripeId(paymentIntent.latest_charge)
+  if (!chargeId) return
+  await settleSaleByCharge(
+    sb,
+    stripe,
+    { id: chargeId, payment_intent: paymentIntentId } as Stripe.Charge,
+    connectedAccountId,
+  )
+}
+
 export { missingColumn, missingTable, stripeId, yenFromStripe }
