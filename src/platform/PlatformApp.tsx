@@ -783,7 +783,7 @@ function PlatformShell() {
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'map-schedule':
-        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
+        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} includePublicTest={previewOn && role === 'admin'} />
         break
       case 'event-list':
         body = <EventListScreen onOpen={openEvent} />

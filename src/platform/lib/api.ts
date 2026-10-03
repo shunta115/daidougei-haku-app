@@ -1037,12 +1037,12 @@ export async function listPerformerEventSlots(performerId: string): Promise<Perf
   return (data as PerformerEventSlot[]) ?? []
 }
 
-export async function listApprovedPerformers(): Promise<Performer[]> {
+export async function listApprovedPerformers(includePublicTest = false): Promise<Performer[]> {
   await reconcileLivePresence()
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
+  return ((data as Performer[]) ?? []).filter((p) => includePublicTest || !isPublicTestPerformer(p))
 }
 
 function resolveEventVenue(row: EventVenueRow): EventVenueRow {

@@ -22,6 +22,7 @@ type Props = {
   onOpenPerformer: (id: string) => void
   onWatchLive: (id: string) => void
   initialView?: View
+  includePublicTest?: boolean
 }
 
 type View = 'map' | 'schedule'
@@ -44,7 +45,7 @@ function scheduleDateCard(iso: string, lang: Lang, holiday: string) {
   return { month: monthLabel, day: String(day), weekday: sportsDay ? `${weekday}・${holiday}` : weekday }
 }
 
-export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map' }: Props) {
+export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map', includePublicTest = false }: Props) {
   const { t, lang } = useLang()
   const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
@@ -61,13 +62,13 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
   const refreshLiveMap = useCallback(async () => {
     const [acts, ranks] = await Promise.all([
-      listApprovedPerformers(),
+      listApprovedPerformers(includePublicTest),
       listLiveRanking().catch(() => []),
     ])
     setPerformers(acts)
     setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
     setLocationClock(Date.now())
-  }, [])
+  }, [includePublicTest])
 
   useEffect(() => {
     let cancelled = false
@@ -75,7 +76,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       try {
         const featured = await getFeaturedEvent()
         const [acts, ranks] = await Promise.all([
-          listApprovedPerformers(),
+          listApprovedPerformers(includePublicTest),
           listLiveRanking().catch(() => []),
         ])
         const [venueRows, slotRows] = featured
@@ -93,7 +94,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       }
     })()
     return () => { cancelled = true }
-  }, [t])
+  }, [t, includePublicTest])
 
   useEffect(() => {
     if (view !== 'map') return
@@ -106,6 +107,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     try {
       unsubscribe = subscribePerformerMapUpdates((row) => {
         if (!row.is_approved) return
+        if (!includePublicTest && /^test performer$/i.test(row.stage_name.trim())) return
         setPerformers((current) => {
           const exists = current.some((item) => item.id === row.id)
           return exists ? current.map((item) => item.id === row.id ? row : item) : [...current, row]
@@ -120,7 +122,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       window.clearInterval(clock)
       unsubscribe()
     }
-  }, [refreshLiveMap, view])
+  }, [refreshLiveMap, view, includePublicTest])
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])

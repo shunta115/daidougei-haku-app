@@ -338,6 +338,7 @@ export function HakuAdminApp() {
             <a className="pl-btn" href={`/?hakuPreview=fan`}>お客様として見る</a>
             <a className="pl-btn pl-btn--ghost" aria-disabled={!previewPerformerId} href={previewPerformerId ? `/?hakuPreview=performer&performerId=${encodeURIComponent(previewPerformerId)}` : undefined}>選択したパフォーマーとして見る</a>
             <a className="pl-btn pl-btn--ghost" aria-disabled={!previewPerformerId} href={previewPerformerId ? `/?hakuPreview=fan&watch=${encodeURIComponent(previewPerformerId)}` : undefined}>選択したLIVEを運営だけで視聴</a>
+            <a className="pl-btn pl-btn--ghost" aria-disabled={!previewPerformerId} href={previewPerformerId ? `/event?hakuPreview=fan&testPerformer=${encodeURIComponent(previewPerformerId)}` : undefined}>選択したLIVE位置を運営MAPで確認</a>
           </div>
         </section>
       ) : null}
