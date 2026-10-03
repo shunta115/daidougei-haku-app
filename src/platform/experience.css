@@ -239,6 +239,11 @@
   box-sizing: border-box;
 }
 
+.pl-map-filters { display:flex; gap:6px; margin:8px 0; overflow-x:auto; scrollbar-width:none; }
+.pl-map-filters::-webkit-scrollbar { display:none; }
+.pl-map-filters button { flex:0 0 auto; min-height:34px; padding:0 11px; border:1px solid rgba(134,185,230,.2); border-radius:999px; background:rgba(7,25,43,.78); color:rgba(235,244,255,.72); font-size:10px; font-weight:850; white-space:nowrap; }
+.pl-map-filters button[data-active='true'] { border-color:rgba(75,163,255,.72); background:rgba(57,140,255,.2); color:#fff; }
+
 .pl-map-schedule .pl-official-venue-map {
   margin:12px 0;
   overflow:hidden;
@@ -315,6 +320,8 @@
 .pl-google-map__permission span { font-size: 10px; line-height: 1.45; }
 .pl-google-map__permission button { min-height: 42px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 0; border-radius: 12px; background: #398cff; color: white; font-size: 10px; font-weight: 900; white-space: nowrap; }
 .pl-google-map__recenter { position: absolute; z-index: 5; right: 12px; bottom: 12px; display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.28); border-radius: 50%; background: rgba(6,21,36,.9); color: white; box-shadow: 0 8px 26px rgba(0,7,18,.3); }
+.pl-google-map__search-area { position:absolute; z-index:8; top:64px; left:50%; min-height:36px; padding:0 14px; transform:translateX(-50%); border:1px solid rgba(151,199,240,.35); border-radius:999px; background:rgba(6,21,36,.94); color:#fff; box-shadow:0 8px 22px rgba(0,7,18,.3); font-size:10px; font-weight:900; white-space:nowrap; }
+.pl-google-map__area-count { position:absolute; z-index:7; top:68px; left:12px; padding:6px 9px; border-radius:999px; background:rgba(6,21,36,.86); color:#a9d3ff; font-size:9px; font-weight:850; pointer-events:none; }
 .pl-google-map__fallback { position: absolute; z-index: 3; top: 11px; left: 11px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border-radius: 999px; background: rgba(6,21,36,.82); color: white; font-size: 9px; font-weight: 900; pointer-events: none; backdrop-filter: blur(12px); }
 .pl-google-map__current { position: absolute; z-index: 5; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%,-50%); border: 3px solid white; border-radius: 50%; background: #2388ff; box-shadow: 0 2px 10px rgba(0,0,0,.28); pointer-events: none; }
 .pl-google-map__current b { position: absolute; z-index: -1; inset: -28px; border: 1px solid rgba(35,136,255,.44); border-radius: 50%; background: rgba(35,136,255,.13); }
@@ -323,12 +330,15 @@
 .pl-google-marker--venue { width: 64px; }
 .pl-google-marker--venue img, .pl-google-marker--venue b { width: 34px; height: 34px; border-width: 2px; border-color: #4ba3ff; border-radius: 10px; }
 .pl-google-marker--live { width: 72px; }
+.pl-google-marker--performer img, .pl-google-marker--performer b { border-color:#9d7cff; border-radius:14px; }
+.pl-google-marker--performer span { background:rgba(35,22,67,.9); }
 .pl-google-marker--live img, .pl-google-marker--live b { width: 52px; height: 52px; border-color: #ff3b89; box-shadow: 0 0 0 5px rgba(255,59,137,.2), 0 6px 18px rgba(0,18,38,.32); }
 .pl-google-marker--live::before { content: ''; position: absolute; top: -4px; width: 60px; height: 60px; border: 1px solid rgba(255,59,137,.5); border-radius: 50%; animation: pl-live-marker-pulse 1.8s ease-out infinite; }
 .pl-google-marker i { z-index: 2; padding: 2px 6px; border: 2px solid #fff; border-radius: 999px; background: #ff3b89; color: #fff; font-size: 7px; font-style: normal; font-weight: 950; }
 .pl-google-marker--live i { position: static; margin-top: -2px; }
 .pl-google-marker--venue i { display: none; }
 @keyframes pl-live-marker-pulse { to { opacity: 0; transform: scale(1.35); } }
+@media (prefers-reduced-motion: reduce) { .pl-google-marker--live::before { animation:none; } }
 .pl-google-marker--active img, .pl-google-marker--active b { transform: scale(1.13); }
 .pl-google-marker span { max-width: 74px; overflow: hidden; padding: 3px 6px; border-radius: 7px; background: rgba(5,18,31,.86); color: white; font-size: 8px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
 .pl-spatial-map { position: relative; min-height: 430px; overflow: hidden; border: 1px solid var(--xp-line); border-radius: var(--xp-radius-lg); background: #18201e; box-shadow: var(--xp-shadow); }

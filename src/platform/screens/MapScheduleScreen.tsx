@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
@@ -13,8 +13,7 @@ import {
   type EventVenueRow,
   type FeaturedEvent,
 } from '../lib/api'
-import { distanceKm, formatMapDistance, isFreshLiveLocation, walkingMinutes } from '../lib/mapLocation'
-import { eventMapMarkerLabel, eventVenueCardTitle } from '../lib/venueDisplay'
+import { distanceKm, formatMapDistance, isFreshLiveLocation, isFreshSharedLocation, walkingMinutes } from '../lib/mapLocation'
 import { useLang } from '../../i18n/LangProvider'
 import type { Lang } from '../../i18n'
 import type { Performer } from '../lib/types'
@@ -27,6 +26,7 @@ type Props = {
 }
 
 type View = 'map' | 'schedule'
+type DiscoveryFilter = 'all' | 'live' | 'event' | 'performer' | 'nearby'
 
 function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
@@ -60,6 +60,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [locationClock, setLocationClock] = useState(Date.now())
+  const [filter, setFilter] = useState<DiscoveryFilter>('all')
 
   const refreshLiveMap = useCallback(async () => {
     const [acts, ranks] = await Promise.all([
@@ -137,9 +138,32 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     () => performers.filter((performer) => isFreshLiveLocation(performer, locationClock)),
     [locationClock, performers],
   )
+  const sharedMapPerformers = useMemo(
+    () => performers.filter((performer) => !performer.is_live && isFreshSharedLocation(performer, locationClock)),
+    [locationClock, performers],
+  )
+  const eventMapVenue = useMemo(() => {
+    if (!event) return []
+    const venue = [...venues].sort((a, b) => a.sort_order - b.sort_order).find((item) => item.lat != null && item.lng != null)
+    if (!venue) return []
+    return [{ ...venue, name_ja: event.name_ja, name_en: event.name_en, blurb_ja: `${event.date_label} · ${event.place_label}`, blurb_en: `${event.date_label} · ${event.place_label}` }]
+  }, [event, venues])
+  const filteredLive = useMemo(() => {
+    if (filter === 'event' || filter === 'performer') return []
+    return liveMapPerformers
+  }, [filter, liveMapPerformers])
+  const filteredShared = useMemo(() => {
+    if (filter === 'event' || filter === 'live') return []
+    return sharedMapPerformers
+  }, [filter, sharedMapPerformers])
+  const filteredEvents = filter === 'live' || filter === 'performer' || filter === 'nearby' ? [] : eventMapVenue
   const selectedLivePerformer = useMemo(
     () => liveMapPerformers.find((performer) => performer.id === selectedPerformer) ?? null,
     [liveMapPerformers, selectedPerformer],
+  )
+  const selectedSharedPerformer = useMemo(
+    () => sharedMapPerformers.find((performer) => performer.id === selectedPerformer) ?? null,
+    [selectedPerformer, sharedMapPerformers],
   )
   const [venueFocusNonce, setVenueFocusNonce] = useState(0)
 
@@ -167,8 +191,8 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     <main className="pl-experience pl-map-schedule">
       <header className="pl-page-intro">
         <p>FIND THE STAGE</p>
-        <h1>{t('mapHeadline')}</h1>
-        <span>{event ? `${event.date_label} · ${event.place_label}` : t('mapFallback')}</span>
+        <h1>{t('mapGlobalHeadline')}</h1>
+        <span>{t('mapGlobalLead')}</span>
       </header>
 
       <GlobalMessageBar />
@@ -182,21 +206,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
       {view === 'map' ? (
         <>
-          <figure className="pl-official-venue-map">
-            <img src="/events/award-winning-performers-2026/official-venue-map.webp" alt="AWP 2026 公式会場内マップ" />
-            <figcaption>公式会場図（ステージ位置・Statue Carnival／回遊エリア）</figcaption>
-          </figure>
+          <div className="pl-map-filters" role="group" aria-label={t('mapFilterLabel')}>
+            {(['all', 'live', 'event', 'performer', 'nearby'] as DiscoveryFilter[]).map((item) => <button type="button" key={item} data-active={filter === item} onClick={() => setFilter(item)}>{item === 'live' ? '🔴 ' : item === 'event' ? '🎪 ' : item === 'performer' ? '🎭 ' : item === 'nearby' ? '📍 ' : ''}{t(`mapFilter${item[0].toUpperCase()}${item.slice(1)}` as 'mapFilterAll')}</button>)}
+          </div>
           <div className="pl-map-stage">
             <GoogleVenueMap
-              venues={venues}
-              livePerformers={liveMapPerformers}
+              venues={filteredEvents}
+              livePerformers={filteredLive}
+              sharedPerformers={filteredShared}
               selectedPerformerId={selectedPerformer}
               selectedVenueId={selectedVenue}
               onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
               onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
               onLocationChange={setUserLocation}
               venueFocusNonce={venueFocusNonce}
-              venueMarkerLabel={eventMapMarkerLabel(event)}
+              venueMarkerLabel="EVENT"
             />
 
           {selectedLivePerformer ? (() => {
@@ -227,46 +251,45 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 </div>
               </section>
             )
+          })() : selectedSharedPerformer ? (() => {
+            const performer = selectedSharedPerformer
+            return (
+              <section className="pl-venue-sheet pl-map-stage__sheet" aria-label={performer.stage_name}>
+                <div className="pl-venue-sheet__top">
+                  <div><p>🎭 PERFORMER</p><h2>{performer.stage_name}</h2><span>{[performer.genre, performer.city].filter(Boolean).join(' · ')}</span></div>
+                  {performer.photo_url ? <img src={performer.photo_url} alt="" /> : null}
+                </div>
+                <div className="pl-venue-sheet__actions">
+                  <button type="button" className="pl-action pl-action--primary" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> {t('eventProfile')}</button>
+                </div>
+              </section>
+            )
           })() : selectedVenue ? (() => {
             const venue = venueById.get(selectedVenue)
             if (!venue) return null
-            const first = selectedSlots[0]
-            const act = first?.performer_id ? performerById.get(first.performer_id) : null
-            const venuePosition = venue.lat != null && venue.lng != null ? { lat: venue.lat, lng: venue.lng } : null
-            const km = userLocation && venuePosition ? distanceKm(userLocation, venuePosition) : null
-            const walkMinutes = km == null ? null : walkingMinutes(km)
-            const directions = venuePosition ? `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${venuePosition.lat},${venuePosition.lng}&travelmode=walking` : null
             return (
-              <section className="pl-venue-sheet pl-map-stage__sheet">
+              <section className="pl-venue-sheet pl-map-stage__sheet" aria-label={event?.name_ja || venue.name_ja}>
                 <div className="pl-venue-sheet__top">
-                  <div><p>STAGE{walkMinutes ? ` · ${t('mapWalk', { n: walkMinutes })}` : ''}</p><h2>{venue.name_ja}</h2><span>{venue.blurb_ja || t('mapNextCheck')}</span></div>
-                  {act?.photo_url ? <img src={act.photo_url} alt="" /> : null}
+                  <div><p>🎪 EVENT</p><h2>{event?.name_ja || venue.name_ja}</h2><span>{event ? `${event.date_label} · ${event.place_label}` : venue.blurb_ja}</span></div>
                 </div>
-                {first && act ? (
-                  <button type="button" className="pl-venue-sheet__act" onClick={() => onOpenPerformer(act.id)}>
-                    <span><small>{act.is_live ? 'LIVE NOW' : `${timeLabel(first.start_time)}–${timeLabel(first.end_time)}`}</small><strong>{act.stage_name}</strong><em>{act.genre || first.stage_ja} · {venue.name_ja}</em></span>
-                    <ChevronRight size={20} />
-                  </button>
-                ) : null}
                 <div className="pl-venue-sheet__actions">
-                  {directions ? <a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> {t('mapGo')}</a> : null}
-                  {act ? <button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(act.id)}><UserRound size={17} /> {t('eventProfile')}</button> : null}
-                  {act?.is_live ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(act.id)}><Radio size={17} /> {t('eventWatchLive')}</button> : null}
+                  {event ? <a className="pl-action pl-action--primary" href={`/events/${encodeURIComponent(event.slug)}`}>{t('mapOpenEvent')}</a> : null}
+                  {event ? <a className="pl-action pl-action--glass" href={`/events/${encodeURIComponent(event.slug)}#event-schedule`}>{t('mapOpenSchedule')}</a> : null}
                 </div>
               </section>
             )
           })() : null}
           </div>
 
-          <section className="pl-map-directory" aria-label={t('mapVenues')}>
-            <header><div><p>{t('mapVenues')}</p><h2>{eventVenueCardTitle(event, lang)}</h2></div></header>
+          <section className="pl-map-directory" aria-label={t('mapEvents')}>
+            <header><div><p>EVENT</p><h2>{t('mapEvents')}</h2></div></header>
             <div>
-              {venues.map((venue) => (
+              {eventMapVenue.map((venue) => (
                 <button type="button" key={venue.id} data-active={selectedVenue === venue.id} onClick={() => handleVenueSelect(venue)}>
-                  <MapIcon size={17} /><span><strong>📍 {venue.name_ja}</strong><small>{venue.blurb_ja || (venue.venue_type === 'food' ? t('mapFood') : t('mapCheckActs'))}</small></span><em>{t('mapSeeOnMap')} <ChevronRight size={17} /></em>
+                  <TentTree size={17} /><span><strong>🎪 {event?.name_ja || venue.name_ja}</strong><small>{event ? `${event.date_label} · ${event.place_label}` : venue.blurb_ja}</small></span><em>{t('mapSeeOnMap')} <ChevronRight size={17} /></em>
                 </button>
               ))}
-              {venues.length === 0 ? <p>{t('mapVenuesPreparing')}</p> : null}
+              {eventMapVenue.length === 0 ? <p>{t('mapEventsEmpty')}</p> : null}
             </div>
           </section>
 
@@ -282,7 +305,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                   </button>
                 ))}
               </div>
-            ) : <p className="pl-near-live__empty">{t('mapNoShared')}</p>}
+            ) : <p className="pl-near-live__empty">{t('mapNoSharedExplore')}</p>}
           </section>
         </>
       ) : (
@@ -315,7 +338,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
           <header><div><p>PERFORMERS</p><h2>{t('eventLineup')}</h2></div><span>{t('mapGroupCount', { n: performers.length })}</span></header>
           <div className="pl-event-lineup__rail">
             {performers.slice(0, 12).map((performer) => (
-              <button type="button" key={performer.id} onClick={() => performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id)}>
+              <button type="button" key={performer.id} onClick={() => { if (isFreshSharedLocation(performer, locationClock)) { setSelectedPerformer(performer.id); setSelectedVenue(null); return } performer.is_live ? onWatchLive(performer.id) : onOpenPerformer(performer.id) }}>
                 <span>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}</span>
                 <strong>{performer.stage_name}</strong>
                 <small>{performer.is_live ? t('liveNow') : performer.genre || 'Performance'}</small>

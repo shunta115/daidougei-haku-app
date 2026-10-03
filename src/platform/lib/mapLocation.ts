@@ -3,6 +3,7 @@ import type { Performer } from './types'
 export type MapCoordinates = { lat: number; lng: number; accuracy?: number }
 
 export const MAP_LOCATION_STALE_MS = 90_000
+export const MAP_SHARED_LOCATION_STALE_MS = 15 * 60_000
 
 export function isFreshLiveLocation(
   performer: Performer,
@@ -10,6 +11,18 @@ export function isFreshLiveLocation(
   staleAfterMs = MAP_LOCATION_STALE_MS,
 ) {
   if (!performer.is_live || !performer.share_location) return false
+  if (!Number.isFinite(performer.lat) || !Number.isFinite(performer.lng)) return false
+  if (!performer.location_updated_at) return false
+  const updatedAt = new Date(performer.location_updated_at).getTime()
+  return Number.isFinite(updatedAt) && now - updatedAt <= staleAfterMs
+}
+
+export function isFreshSharedLocation(
+  performer: Performer,
+  now = Date.now(),
+  staleAfterMs = MAP_SHARED_LOCATION_STALE_MS,
+) {
+  if (!performer.share_location) return false
   if (!Number.isFinite(performer.lat) || !Number.isFinite(performer.lng)) return false
   if (!performer.location_updated_at) return false
   const updatedAt = new Date(performer.location_updated_at).getTime()

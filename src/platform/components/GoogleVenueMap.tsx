@@ -3,13 +3,14 @@ import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucid
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
-import { AWP_ENTRANCE_ZONE, venueMapLabel } from '../lib/venueDisplay'
+import { venueMapLabel } from '../lib/venueDisplay'
 import { mapsLocale, type Lang } from '../../i18n'
 import { useLang } from '../../i18n/LangProvider'
 
 type Props = {
   venues: EventVenueRow[]
   livePerformers: Performer[]
+  sharedPerformers?: Performer[]
   selectedPerformerId: string | null
   selectedVenueId: string | null
   onSelectPerformer: (id: string) => void
@@ -30,7 +31,7 @@ declare global {
   }
 }
 
-const EVENT_CENTER = { lat: AWP_ENTRANCE_ZONE.lat, lng: AWP_ENTRANCE_ZONE.lng }
+const WORLD_CENTER = { lat: 20, lng: 0 }
 const MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#d7e3ea' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#263b48' }] },
@@ -73,6 +74,7 @@ function loadGoogleMaps(apiKey: string, lang: Lang) {
 export function GoogleVenueMap({
   venues,
   livePerformers,
+  sharedPerformers = [],
   selectedPerformerId,
   selectedVenueId,
   onSelectPerformer,
@@ -93,10 +95,17 @@ export function GoogleVenueMap({
   const [displayMode, setDisplayMode] = useState<MapDisplayMode>('roadmap')
   const [locationState, setLocationState] = useState<LocationState>('requesting')
   const [location, setLocation] = useState<MapCoordinates | null>(null)
+  const [areaDirty, setAreaDirty] = useState(false)
+  const [areaCount, setAreaCount] = useState<number | null>(null)
+  const hasVenueSeed = venues.some((venue) => venue.lat != null && venue.lng != null)
   const centerSeed = useMemo(
-    () => venues.find((venue) => venue.lat != null && venue.lng != null) ?? EVENT_CENTER,
+    () => venues.find((venue) => venue.lat != null && venue.lng != null) ?? WORLD_CENTER,
     [venues],
   )
+  const centerSeedRef = useRef(centerSeed)
+  const hasVenueSeedRef = useRef(hasVenueSeed)
+  centerSeedRef.current = centerSeed
+  hasVenueSeedRef.current = hasVenueSeed
 
   const acceptPosition = useCallback((position: GeolocationPosition) => {
     const next = {
@@ -157,8 +166,8 @@ export function GoogleVenueMap({
         if (!active || !containerRef.current) return
         window.clearTimeout(slowTimer)
         const nextMap = new api.maps.Map(containerRef.current, {
-          center: centerSeed,
-          zoom: 15,
+          center: centerSeedRef.current,
+          zoom: hasVenueSeedRef.current ? 13 : 2,
           mapTypeId: 'roadmap',
           clickableIcons: false,
           fullscreenControl: false,
@@ -169,13 +178,15 @@ export function GoogleVenueMap({
           styles: MAP_STYLE,
         })
         nextMap.addListener('dragstart', () => { userMovedMapRef.current = true })
+        nextMap.addListener('dragend', () => setAreaDirty(true))
+        nextMap.addListener('zoom_changed', () => { if (userMovedMapRef.current) setAreaDirty(true) })
         setGoogleApi(api)
         setMap(nextMap)
         setMapState('ready')
       })
       .catch(() => { window.clearTimeout(slowTimer); if (active) setMapState('error') })
     return () => { active = false; window.clearTimeout(slowTimer) }
-  }, [apiKey, centerSeed, lang])
+  }, [apiKey, lang])
 
   useEffect(() => {
     if (!map || !containerRef.current) return
@@ -237,6 +248,7 @@ export function GoogleVenueMap({
       badge?: string
       image?: string | null
       live?: boolean
+      performer?: boolean
       active?: boolean
       onClick: () => void
     }) => {
@@ -245,7 +257,7 @@ export function GoogleVenueMap({
       overlay.onAdd = () => {
         element = document.createElement('button')
         element.type = 'button'
-        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : ' pl-google-marker--venue'}${input.active ? ' pl-google-marker--active' : ''}`
+        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : input.performer ? ' pl-google-marker--performer' : ' pl-google-marker--venue'}${input.active ? ' pl-google-marker--active' : ''}`
         element.setAttribute('aria-label', input.live ? t('mapsShowLive', { name: input.label }) : t('mapsShowPlace', { name: input.label }))
         const portrait = input.image ? document.createElement('img') : document.createElement('b')
         if (portrait instanceof HTMLImageElement) {
@@ -301,8 +313,19 @@ export function GoogleVenueMap({
         onClick: () => onSelectPerformer(performer.id),
       })
     })
+    sharedPerformers.forEach((performer) => {
+      if (performer.lat == null || performer.lng == null) return
+      addOverlay({
+        position: { lat: performer.lat, lng: performer.lng },
+        label: performer.stage_name,
+        image: performer.photo_url,
+        performer: true,
+        active: selectedPerformerId === performer.id,
+        onClick: () => onSelectPerformer(performer.id),
+      })
+    })
     return () => overlays.forEach((overlay) => overlay.setMap(null))
-  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, t, venueMarkerLabel, venues])
+  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, sharedPerformers, t, venueMarkerLabel, venues])
 
   useEffect(() => {
     if (!map || !selectedVenueId) return
@@ -323,6 +346,19 @@ export function GoogleVenueMap({
     userMovedMapRef.current = false
     map.panTo(location)
     map.setZoom(16)
+    setAreaDirty(false)
+  }
+  const searchVisibleArea = () => {
+    if (!map || !googleApi) return
+    const bounds = map.getBounds?.()
+    if (!bounds) return
+    const points = [
+      ...venues.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
+      ...livePerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
+      ...sharedPerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
+    ]
+    setAreaCount(points.filter((point) => bounds.contains(new googleApi.maps.LatLng(point.lat, point.lng))).length)
+    setAreaDirty(false)
   }
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${centerSeed.lat},${centerSeed.lng}`
 
@@ -349,6 +385,8 @@ export function GoogleVenueMap({
           </button>
         </div>
       ) : null}
+      {mapState === 'ready' && areaDirty ? <button type="button" className="pl-google-map__search-area" onClick={searchVisibleArea}>{t('mapSearchArea')}</button> : null}
+      {mapState === 'ready' && areaCount !== null && !areaDirty ? <span className="pl-google-map__area-count" role="status">{t('mapAreaCount', { n: areaCount })}</span> : null}
       {mapState === 'loading' ? <div className="pl-google-map__loading" aria-label={t('mapsLoading')}><span /><span /><span /></div> : null}
       {mapState === 'missing-key' || mapState === 'error' ? (
         <div className="pl-google-map__error" role="status">
