@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
-import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
   follow,
   getPerformer,
@@ -275,8 +274,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           </div>
         </header>
       </div>
-
-      <GlobalMessageBar />
 
       <div className="hp-sheet">
         <section className="hp-idrow" aria-labelledby="hp-name">
