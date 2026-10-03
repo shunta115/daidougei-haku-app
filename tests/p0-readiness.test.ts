@@ -100,7 +100,7 @@ describe('P0 migration safety', () => {
     expect(screen).toMatch(/listEventSlots\(nextEvent\.id\)/)
     expect(screen).toMatch(/setInterval\(\(\) => setClock\(nowJst\(\)\), 30_000\)/)
     expect(screen).toMatch(/haku:wanted-slots:/)
-    expect(screen).toMatch(/official-venue-map\.jpg/)
+    expect(screen).toMatch(/official-venue-map\.webp/)
     expect(screen).toMatch(/rule\?\.voting_open/)
     expect(screen).not.toMatch(/navigator\.geolocation/)
   })

@@ -180,7 +180,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       {view === 'map' ? (
         <>
           <figure className="pl-official-venue-map">
-            <img src="/events/award-winning-performers-2026/official-venue-map.jpg" alt="AWP 2026 公式会場内マップ" />
+            <img src="/events/award-winning-performers-2026/official-venue-map.webp" alt="AWP 2026 公式会場内マップ" />
             <figcaption>公式会場図（ステージ位置・Statue Carnival／回遊エリア）</figcaption>
           </figure>
           <div className="pl-map-stage">
