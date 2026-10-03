@@ -125,7 +125,7 @@ function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'prese
 }
 
 const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer-2026.webp'
-const AWP_HERO_SRC = AWP_FLYER_SRC
+const AWP_HERO_SRC = '/events/award-winning-performers-2026/hero-performer.jpg'
 
 type EventPhase = 'before' | 'during' | 'after'
 

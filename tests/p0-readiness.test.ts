@@ -101,6 +101,8 @@ describe('P0 migration safety', () => {
     expect(screen).toMatch(/setInterval\(\(\) => setClock\(nowJst\(\)\), 30_000\)/)
     expect(screen).toMatch(/haku:wanted-slots:/)
     expect(screen).toMatch(/official-venue-map\.webp/)
+    expect(screen).toMatch(/AWP_HERO_SRC = '\/events\/award-winning-performers-2026\/hero-performer\.jpg'/)
+    expect(screen).toMatch(/AWP_FLYER_SRC = '\/events\/award-winning-performers-2026\/official-flyer-2026\.webp'/)
     expect(screen).toMatch(/rule\?\.voting_open/)
     expect(screen).not.toMatch(/navigator\.geolocation/)
   })
