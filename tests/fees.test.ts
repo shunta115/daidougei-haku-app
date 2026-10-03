@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   MERCH_SYSTEM_FEE_BPS,
   TIP_SYSTEM_FEE_BPS,
@@ -41,5 +42,14 @@ describe('HAKU system-use fees', () => {
     expect(settleSale(100, 100, TIP_SYSTEM_FEE_BPS)).toMatchObject({ netYen: 0, hakuFeeYen: 0, performerShareYen: 0 })
     expect(applicationFeeOverageYen(150, 144)).toBe(6)
     expect(applicationFeeOverageYen(144, 144)).toBe(0)
+  })
+
+  it('keeps new checkout pricing server-authoritative', () => {
+    const tipSource = readFileSync(new URL('../api/stripe/tip.ts', import.meta.url), 'utf8')
+    const merchSource = readFileSync(new URL('../api/stripe/merch.ts', import.meta.url), 'utf8')
+    expect(tipSource).toContain('const feeBps = PLATFORM_FEE_BPS')
+    expect(merchSource).toContain('const feeBps = MERCH_SYSTEM_FEE_BPS_DEFAULT')
+    expect(tipSource).not.toContain("getBpsSetting(sb, 'tip_fee_bps'")
+    expect(merchSource).not.toContain("getBpsSetting(sb, 'merch_fee_bps'")
   })
 })

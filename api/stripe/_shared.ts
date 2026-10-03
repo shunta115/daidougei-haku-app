@@ -3,7 +3,6 @@ import { createClient, type User } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   MERCH_SYSTEM_FEE_BPS,
-  MAX_SYSTEM_FEE_BPS,
   TIP_SYSTEM_FEE_BPS,
   systemFeeYen,
 } from '../../shared/fees.js'
@@ -12,7 +11,6 @@ export const TIP_SYSTEM_FEE_BPS_DEFAULT = TIP_SYSTEM_FEE_BPS
 export const MERCH_SYSTEM_FEE_BPS_DEFAULT = MERCH_SYSTEM_FEE_BPS
 export const PLATFORM_FEE_BPS = TIP_SYSTEM_FEE_BPS
 export const MIN_TIP_AMOUNT_YEN = 100
-export const MAX_PLATFORM_FEE_BPS = MAX_SYSTEM_FEE_BPS
 
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
@@ -54,21 +52,6 @@ export function getAppUrl(req: VercelRequest) {
 
 export function calcPlatformFee(amountYen: number, feeBps = PLATFORM_FEE_BPS) {
   return systemFeeYen(amountYen, feeBps)
-}
-
-export async function getBpsSetting(
-  sb: ReturnType<typeof getAdminSupabase>,
-  key: string,
-  fallback = PLATFORM_FEE_BPS,
-) {
-  try {
-    const { data } = await sb.from('platform_settings').select('value').eq('key', key).maybeSingle()
-    const n = Number(data?.value)
-    if (Number.isFinite(n) && n >= 0 && n <= MAX_PLATFORM_FEE_BPS) return Math.floor(n)
-  } catch {
-    /* table may not exist in older environments */
-  }
-  return fallback
 }
 
 export async function getIntSetting(

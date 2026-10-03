@@ -20,7 +20,6 @@ import {
   saveFeaturedEventPatch,
   saveEventVoteRule,
   setEventLineupVotingEligibility,
-  setTipFeeBps,
   upsertEventSlot,
   upsertEventVenue,
   type EventSlotRow,
@@ -186,15 +185,6 @@ export function AdminEventScreen() {
     } catch (e) { setError(e instanceof Error ? e.message : '上位3組を設定できませんでした') }
   }
 
-  const saveFee = async () => {
-    try {
-      await setTipFeeBps(feeBps)
-      setMsg(`手数料を ${(feeBps / 100).toFixed(1)}% に更新しました`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '手数料の保存に失敗しました')
-    }
-  }
-
   const saveVenue = async () => {
     if (!event || !venueDraft.id.trim() || !venueDraft.name_ja.trim()) return
     try {
@@ -336,20 +326,8 @@ export function AdminEventScreen() {
               </button>
             </div>
             <div className="pl-card" style={{ marginTop: 16 }}>
-              <label>
-                <span className="pl-label">投げ銭のシステム利用料（bps、1500 = 15%）</span>
-                <input
-                  className="pl-input"
-                  type="number"
-                  min={0}
-                  max={5000}
-                  value={feeBps}
-                  onChange={(e) => setFeeBps(Number(e.target.value) || 0)}
-                />
-              </label>
-              <button type="button" className="pl-btn pl-btn--block" onClick={() => void saveFee()}>
-                手数料を保存
-              </button>
+              <span className="pl-label">HAKUシステム利用料（サーバー固定）</span>
+              <p className="pl-muted">投げ銭 {(feeBps / 100).toFixed(0)}%・グッズ 8%。Stripe実決済手数料を先に控除した残額へ適用します。</p>
             </div>
             <button
               type="button"

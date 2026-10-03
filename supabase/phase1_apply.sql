@@ -29,7 +29,9 @@ create table if not exists public.platform_settings (
 );
 
 insert into public.platform_settings (key, value)
-values ('tip_fee_bps', '1000'::jsonb)
+values
+  ('tip_fee_bps', '1500'::jsonb),
+  ('merch_fee_bps', '800'::jsonb)
 on conflict (key) do nothing;
 
 alter table public.platform_settings enable row level security;

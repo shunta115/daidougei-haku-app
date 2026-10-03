@@ -61,7 +61,7 @@ export function PerformerHistoryScreen({ onBack }: { onBack: () => void }) {
         <div key={t.id} className="pl-card">
           <div style={{ fontWeight: 700 }}>{formatYen(t.amount_cents)}</div>
           <div className="pl-muted">
-            {new Date(t.created_at).toLocaleString()} · {t.status} · fee {formatYen(t.platform_fee_cents)}
+            {new Date(t.created_at).toLocaleString()} · {t.status} · Stripe {t.settlement_status === 'settled' ? formatYen(t.stripe_fee_yen ?? 0) : '未確定'} · HAKU {t.settlement_status === 'settled' ? formatYen(t.haku_fee_yen ?? 0) : '未算定（旧データ）'}
           </div>
         </div>
       ))}

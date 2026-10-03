@@ -5,7 +5,6 @@ import {
   calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
-  getBpsSetting,
   getIntSetting,
   getOptionalAuthUser,
   getStripe,
@@ -90,7 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${origin}/live?tip=cancel&return=live&${performerParam}`
       : `${origin}/live?tip=cancel&${performerParam}`
 
-    const feeBps = await getBpsSetting(sb, 'tip_fee_bps', PLATFORM_FEE_BPS)
+    // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
+    const feeBps = PLATFORM_FEE_BPS
     const fee = calcPlatformFee(amountYen, feeBps)
     const { data: tip, error: tipErr } = await sb
       .from('tips')

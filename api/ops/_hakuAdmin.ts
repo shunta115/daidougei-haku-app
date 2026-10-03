@@ -65,8 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sb.from('profiles').select('id,role,status', { count: 'exact', head: false }).limit(4000),
         sb.from('performers').select('id,is_approved,review_status,is_live,stripe_onboarding_complete,stage_name,genre,city,bio,photo_url').limit(4000),
         sb.from('live_sessions').select('id,ended_at,heartbeat_at').is('ended_at', null),
-        sb.from('tips').select('id,status,gross_amount_yen,amount_cents,platform_fee_yen,platform_fee_cents,refunded_amount_yen').limit(4000),
-        sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,platform_fee_yen,refunded_amount_yen').limit(4000),
+        sb.from('tips').select('id,status,gross_amount_yen,amount_cents,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen').limit(4000),
+        sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen').limit(4000),
         sb.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         sb.from('event_ballots').select('id', { count: 'exact', head: true }),
         sb.from('event_slots').select('id', { count: 'exact', head: true }).gte('date', '2026-10-10').lte('date', '2026-10-12'),
@@ -75,8 +75,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const merchPaid = (orders.data ?? []).filter((row) => row.status === 'succeeded')
       const tipGmv = yenSum(tipPaid, ['gross_amount_yen', 'amount_cents'])
       const merchGmv = yenSum(merchPaid, ['gross_amount_yen', 'amount_yen'])
-      const tipFee = yenSum(tipPaid, ['platform_fee_yen', 'platform_fee_cents'])
-      const merchFee = yenSum(merchPaid, ['platform_fee_yen'])
+      const tipSettled = tipPaid.filter((row) => row.settlement_status === 'settled')
+      const merchSettled = merchPaid.filter((row) => row.settlement_status === 'settled')
+      const tipFee = yenSum(tipSettled, ['haku_fee_yen'])
+      const merchFee = yenSum(merchSettled, ['haku_fee_yen'])
+      const stripeFee = yenSum(tipSettled, ['stripe_fee_yen']) + yenSum(merchSettled, ['stripe_fee_yen'])
+      const performerShare = yenSum(tipSettled, ['performer_share_yen']) + yenSum(merchSettled, ['performer_share_yen'])
       const now = Date.now()
       const staleLives = (lives.data ?? []).filter((row) => !row.heartbeat_at || now - new Date(String(row.heartbeat_at)).getTime() > 90_000).length
       const performerRows = performers.data ?? []
@@ -103,10 +107,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           merch_gmv_yen: merchGmv,
           gmv_yen: tipGmv + merchGmv,
           haku_system_fee_yen: tipFee + merchFee,
-          performer_after_system_fee_yen: tipGmv + merchGmv - (tipFee + merchFee),
+          performer_after_system_fee_yen: performerShare,
           tip_refunded_yen: yenSum(tips.data ?? [], ['refunded_amount_yen']),
           merch_refunded_yen: yenSum(orders.data ?? [], ['refunded_amount_yen']),
-          stripe_processing_fee: { available: false, reason: 'Stripe決済手数料はDBに保存していません' },
+          stripe_processing_fee: { available: true, amount_yen: stripeFee, source: 'Stripe BalanceTransaction（精算済みのみ）' },
           payouts: { available: false, reason: '銀行支払済/未払いはStripe Connect側の記録です' },
         },
       })
@@ -453,8 +457,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (resource === 'settings' && action === 'get') {
-      const { data } = await sb.from('platform_settings').select('key,value').in('key', ['tip_fee_bps', 'merch_fee_bps', 'tip_min_amount_yen'])
-      res.status(200).json({ ok: true, rows: data ?? [] })
+      const { data } = await sb.from('platform_settings').select('key,value').eq('key', 'tip_min_amount_yen')
+      res.status(200).json({
+        ok: true,
+        rows: [
+          { key: 'tip_fee_bps', value: TIP_SYSTEM_FEE_BPS, source: 'server' },
+          { key: 'merch_fee_bps', value: MERCH_SYSTEM_FEE_BPS, source: 'server' },
+          ...(data ?? []),
+        ],
+      })
       return
     }
 

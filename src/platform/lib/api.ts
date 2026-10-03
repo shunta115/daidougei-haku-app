@@ -15,6 +15,7 @@ import type {
 import { supabaseAuthHeaders } from './supabase'
 import { AWP_ENTRANCE_ZONE } from './venueDisplay'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../../../shared/fees'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -461,7 +462,7 @@ export async function tipSummaryForPerformer(performerId: string): Promise<TipSu
   return {
     count: tips.length,
     amount_total: tips.reduce((sum, t) => sum + (t.amount_cents || 0), 0),
-    fee_total: tips.reduce((sum, t) => sum + (t.platform_fee_cents || 0), 0),
+    fee_total: tips.reduce((sum, t) => sum + (t.settlement_status === 'settled' ? (t.haku_fee_yen || 0) : 0), 0),
   }
 }
 
@@ -801,21 +802,11 @@ export async function saveEventVoteRule(eventId: string, patch: Partial<EventVot
 }
 
 export async function getTipFeeBps(): Promise<number> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'tip_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 1500
-  const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1500
-  return Math.floor(n)
+  return TIP_SYSTEM_FEE_BPS
 }
 
 export async function getMerchFeeBps(): Promise<number> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'merch_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 800
-  const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 800
-  return Math.floor(n)
+  return MERCH_SYSTEM_FEE_BPS
 }
 
 export type PerformerPayoutView = {
@@ -851,13 +842,6 @@ export async function fetchPerformerPayoutView(performerId: string): Promise<Per
 
 export async function requestPerformerPayout(performerId: string) {
   return connectAction(performerId, 'payout')
-}
-
-export async function setTipFeeBps(bps: number) {
-  const sb = requireSupabase()
-  const value = Math.max(0, Math.min(5000, Math.floor(bps)))
-  const { error } = await sb.from('platform_settings').upsert({ key: 'tip_fee_bps', value, updated_at: new Date().toISOString() })
-  if (error) throw error
 }
 
 export async function voteForPerformer(eventId: string, performerId: string, _fanId: string) {

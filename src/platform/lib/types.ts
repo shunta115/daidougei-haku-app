@@ -94,8 +94,11 @@ export type TipRow = {
   currency: string
   platform_fee_cents: number
   platform_fee_yen?: number | null
+  haku_fee_bps?: number | null
+  haku_fee_yen?: number | null
   performer_share_yen?: number | null
   stripe_fee_yen?: number | null
+  settlement_status?: string | null
   status: TipStatus
   stripe_session_id: string | null
   stripe_payment_intent: string | null
@@ -171,8 +174,11 @@ export type MerchOrder = {
   gross_amount_yen?: number | null
   currency: string
   platform_fee_yen: number
+  haku_fee_bps?: number | null
+  haku_fee_yen?: number | null
   performer_share_yen?: number | null
   stripe_fee_yen?: number | null
+  settlement_status?: string | null
   status: MerchOrderStatus
   stripe_session_id: string | null
   stripe_payment_intent: string | null

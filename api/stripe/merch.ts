@@ -4,7 +4,6 @@ import {
   calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
-  getBpsSetting,
   getStripe,
   requireAuthUser,
   requireConnectedAccountChargeReady,
@@ -89,7 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const amount = product.price_yen * qty
-    const feeBps = await getBpsSetting(sb, 'merch_fee_bps', MERCH_SYSTEM_FEE_BPS_DEFAULT)
+    // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
+    const feeBps = MERCH_SYSTEM_FEE_BPS_DEFAULT
     const fee = calcPlatformFee(amount, feeBps)
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')

@@ -3,8 +3,6 @@ import { ArrowLeft, CalendarDays, Radio } from 'lucide-react'
 import { formatYen } from '../lib/money'
 import {
   fetchPerformerPayoutView,
-  getMerchFeeBps,
-  getTipFeeBps,
   listPerformerEventSlots,
   listPerformerTipTransactions,
   listSellerMerchOrders,
@@ -16,6 +14,7 @@ import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { MerchOrder, TipRow } from '../lib/types'
 import { SystemFeeExplain } from '../components/SystemFeeExplain'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, bpsToPercentLabel } from '../../../shared/fees'
 
 export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void; onLive: () => void }) {
   const { t, lang } = useLang()
@@ -49,8 +48,8 @@ export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void
 
 function transactionRows(tips: TipRow[], orders: MerchOrder[]) {
   return [
-    ...tips.map((row) => ({ id: `tip-${row.id}`, date: row.created_at, kind: 'tip' as const, gross: row.gross_amount_yen ?? row.amount_cents, fee: row.platform_fee_yen ?? row.platform_fee_cents, refunded: row.refunded_amount_yen ?? 0, status: row.status })),
-    ...orders.map((row) => ({ id: `merch-${row.id}`, date: row.created_at, kind: 'merch' as const, gross: row.gross_amount_yen ?? row.amount_yen, fee: row.platform_fee_yen, refunded: row.refunded_amount_yen ?? 0, status: row.status })),
+    ...tips.map((row) => ({ id: `tip-${row.id}`, date: row.created_at, kind: 'tip' as const, gross: row.gross_amount_yen ?? row.amount_cents, fee: row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status })),
+    ...orders.map((row) => ({ id: `merch-${row.id}`, date: row.created_at, kind: 'merch' as const, gross: row.gross_amount_yen ?? row.amount_yen, fee: row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
 }
 
@@ -70,7 +69,6 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const [tips, setTips] = useState<TipRow[]>([])
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [payout, setPayout] = useState<PerformerPayoutView | null>(null)
-  const [fees, setFees] = useState({ tip: 1500, merch: 800 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -81,14 +79,11 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
     Promise.all([
       listPerformerTipTransactions(performer.id),
       listSellerMerchOrders(performer.id),
-      getTipFeeBps(),
-      getMerchFeeBps(),
       fetchPerformerPayoutView(performer.id).catch(() => null),
     ])
-      .then(([tipRows, orderRows, tip, merch, view]) => {
+      .then(([tipRows, orderRows, view]) => {
         setTips(tipRows)
         setOrders(orderRows)
-        setFees({ tip, merch })
         setPayout(view)
       })
       .catch(() => setError(t('earnLoadError')))
@@ -97,8 +92,8 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const rows = useMemo(() => transactionRows(tips, orders), [tips, orders])
   const paid = rows.filter((row) => row.status === 'succeeded' || row.status === 'refunded')
   const gross = paid.reduce((sum, row) => sum + row.gross, 0)
-  const tipPercent = (fees.tip / 100).toFixed(1)
-  const merchPercent = (fees.merch / 100).toFixed(1)
+  const tipPercent = bpsToPercentLabel(TIP_SYSTEM_FEE_BPS)
+  const merchPercent = bpsToPercentLabel(MERCH_SYSTEM_FEE_BPS)
   const locale = lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP'
   const available = payout?.availableYen ?? 0
   const canPayout = Boolean(payout?.canPayout)
@@ -149,6 +144,6 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesFlowTitle')}</h2><p className="pl-muted">{t('salesFlow', { tip: tipPercent, merch: merchPercent })}</p><p className="pl-muted">{t('salesBankNote')}</p></section>
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesExample')}</h2><div className="pl-registration__money-flow"><span>{t('salesFanPays')}<strong>{formatYen(1000)}</strong></span><span>{t('feeStripeAfter')}<strong>—</strong></span><span>{t('salesFeeLine', { tip: tipPercent })}<strong>{t('salesNotFinal')}</strong></span></div></section>
     <SystemFeeExplain />
-    <section className="pl-registration__section"><h2 className="pl-h2">{t('salesHistory')}</h2>{rows.length === 0 ? <p className="pl-muted">{t('salesEmpty')}</p> : rows.map((row) => <div className="pl-registration__sale" key={row.id}><div><strong>{row.kind === 'tip' ? t('kindTip') : t('kindMerch')}・{formatYen(row.gross)}</strong><span>{new Date(row.date).toLocaleDateString(locale)}・{transactionStatus(row.status, row.refunded, t)}</span></div><span>{t('salesFeeItem', { amount: formatYen(row.fee) })}</span></div>)}</section>
+    <section className="pl-registration__section"><h2 className="pl-h2">{t('salesHistory')}</h2>{rows.length === 0 ? <p className="pl-muted">{t('salesEmpty')}</p> : rows.map((row) => <div className="pl-registration__sale" key={row.id}><div><strong>{row.kind === 'tip' ? t('kindTip') : t('kindMerch')}・{formatYen(row.gross)}</strong><span>{new Date(row.date).toLocaleDateString(locale)}・{transactionStatus(row.status, row.refunded, t)}</span>{row.settled ? <span>{t('feeStripeAfter')} {formatYen(row.stripeFee ?? 0)}</span> : <span>{t('salesNotFinal')}</span>}</div><span>{row.settled && row.fee != null ? t('salesFeeItem', { amount: formatYen(row.fee) }) : 'HAKUシステム利用料 未算定'}</span></div>)}</section>
   </div>
 }

@@ -9,11 +9,10 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('../api/stripe/_shared.js', () => ({
   MIN_TIP_AMOUNT_YEN: 100,
-  PLATFORM_FEE_BPS: 1000,
-  calcPlatformFee: (amount: number) => Math.floor(amount * 0.1),
+  PLATFORM_FEE_BPS: 1500,
+  calcPlatformFee: (amount: number) => Math.floor(amount * 0.15),
   getOptionalAuthUser: vi.fn(async () => null),
   getAppUrl: () => 'https://app.example.test',
-  getBpsSetting: vi.fn(async () => 1000),
   getIntSetting: vi.fn(async () => 100),
   requireConnectedAccountChargeReady: vi.fn(async () => ({ id: 'acct_fixture' })),
   getStripe: () => ({ checkout: { sessions: { create: fake.checkout } } }),
