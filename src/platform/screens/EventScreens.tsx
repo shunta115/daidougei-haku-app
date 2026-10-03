@@ -22,6 +22,7 @@ import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import { AwpHeroVoteLaunch, EventVoteDesk } from './EventVoteDesk'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import './event.css'
 
 type DetailProps = {
@@ -151,6 +152,7 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
   }, [t])
   return <main className="pl-event-index">
     <header className="pl-event-index__head"><p>HAKU EVENTS</p><h1>{t('eventListTitle')}</h1><span>{t('eventListLead')}</span></header>
+    <GlobalMessageBar />
     {loading ? <p role="status">{t('eventLoading')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {!loading && !error && events.length === 0 ? <section className="pl-event-empty"><CalendarDays size={30} /><h2>{t('eventEmptyTitle')}</h2><p>{t('eventEmptyBody')}</p></section> : null}
@@ -315,6 +317,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const moreLabel = phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')
   return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
     <button className="pl-event-back" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+    <GlobalMessageBar />
     {isAwp ? (
       <section className="awp-fv">
         <div className="awp-fv__hero">

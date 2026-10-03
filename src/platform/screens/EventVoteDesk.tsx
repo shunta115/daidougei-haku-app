@@ -10,6 +10,7 @@ import {
 } from '../lib/api'
 import { canCastAnonVote } from '../lib/anonVoter'
 import { useLang } from '../../i18n/LangProvider'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import type { Performer } from '../lib/types'
 import './event.css'
 
@@ -255,6 +256,7 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
   return (
     <main className="pl-event-detail pl-event-vote-page">
       <button className="pl-event-back" type="button" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+      <GlobalMessageBar />
       <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={onOpenSchedule} onOpenMap={onOpenMap} />
     </main>
   )

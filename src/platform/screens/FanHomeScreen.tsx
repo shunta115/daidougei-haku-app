@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import { AWP_EVENT_SLUG } from '../../app/routes'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
@@ -120,6 +121,8 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label={t('notifications')}><Bell size={19} /></button>
         </div>
       </header>
+
+      <GlobalMessageBar />
 
       <nav className="pl-home-v7__channels" aria-label={t('homeChannels')}>
         <button type="button" data-active="true" onClick={onOpenLiveList}>{t('navLive')}</button>

@@ -8,6 +8,7 @@ import { registrationError } from '../lib/onboarding'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
 import { Bell, Camera, ChevronRight, Clapperboard, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 
 type Props = {
   onOpenPerformer?: (id: string) => void
@@ -97,6 +98,7 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         </div>
         <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>{t('profileFollows')}</span><span><strong>0</strong>{t('profileFollowers')}</span><span><strong>0</strong>{t('profileCheers')}</span></div>
       </section>
+      <GlobalMessageBar className="pl-my-global-message" />
       {error ? <p className="pl-error">{error}</p> : null}
 
       <section className="pl-card" aria-labelledby="pl-my-follows">

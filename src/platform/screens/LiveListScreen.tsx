@@ -3,6 +3,7 @@ import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
 import { listLivePerformers, listLiveRanking, getFeaturedEvent, listEventSlots, listEventLiveSessions, listApprovedPerformers, type LiveRankRow, type EventSlotRow } from '../lib/api'
 import { useLang } from '../../i18n/LangProvider'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import type { LiveSession, Performer } from '../lib/types'
 
 type Props = {
@@ -81,6 +82,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
   return (
     <main className="pl-experience pl-live-hub">
       <header className="pl-page-intro"><p>LIVE STAGE</p><h1>{t('liveTitle')}</h1><span>{t('liveLead')}</span></header>
+      <GlobalMessageBar />
 
       {error ? <p className="pl-error">{error}</p> : null}
       {loading ? <p className="pl-muted">{t('processing')}</p> : null}

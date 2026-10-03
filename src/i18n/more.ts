@@ -1,5 +1,7 @@
 export const more = {
   ja: {
+    globalLabel: 'GLOBAL',
+    globalMessage: '《全機能 世界🌍対応》 HAKUさえあれば…、世界のどこにいても、どこからでも、すべてがステージ‼︎',
     seeAll: 'すべて見る',
     watchPerson: '{name}を見る',
     watchFree: '無料で視聴',
@@ -160,6 +162,8 @@ export const more = {
     tipFollowOnProfile: 'プロフィールでフォロー',
   },
   en: {
+    globalLabel: 'GLOBAL',
+    globalMessage: '《Every feature, worldwide 🌍》 With HAKU, anywhere in the world can become your stage.',
     seeAll: 'See all',
     watchPerson: 'View {name}',
     watchFree: 'Watch free',
@@ -320,6 +324,8 @@ export const more = {
     tipFollowOnProfile: 'Follow on their profile',
   },
   zh: {
+    globalLabel: 'GLOBAL',
+    globalMessage: '《所有功能・全球🌍支援》 只要有 HAKU，無論身在世界何處，任何地方都能成為舞台！',
     seeAll: '查看全部',
     watchPerson: '查看 {name}',
     watchFree: '免費觀看',

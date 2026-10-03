@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Crown, Radio, Search, SlidersHorizontal, Sparkles, TrendingUp } from 'lucide-react'
 import { getFeaturedEvent, listVoteRankingNamed, searchPerformers } from '../lib/api'
 import type { Performer } from '../lib/types'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 
 type SearchProps = { onOpenPerformer: (id: string) => void; onWatchLive?: (id: string) => void }
 type DiscoverMode = 'all' | 'popular' | 'new' | 'genre' | 'ranking'
@@ -57,6 +58,7 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
         <div><p>{mode === 'ranking' ? 'CHEER RANKING' : 'DISCOVER'}</p><h1>{mode === 'ranking' ? 'ランキング' : '見つける'}</h1><span>{mode === 'ranking' ? 'みんなの応援が、次のステージをつくる。' : '次の好きな人と、偶然出会う。'}</span></div>
         <div className="pl-page-intro__actions"><button type="button" onClick={() => { setMode('all'); setSearchOpen((open) => !open) }} aria-label="検索"><Search size={20} /></button><button type="button" data-active={mode === 'ranking'} onClick={() => setMode('ranking')} aria-label="ランキング"><Crown size={20} /></button></div>
       </header>
+      <GlobalMessageBar />
       {mode !== 'ranking' && searchOpen ? <div className="pl-search-v7">
         <Search size={20} />
         <input aria-label="パフォーマーを検索" placeholder="名前・ジャンル・地域" value={q} onChange={(event) => setQ(event.target.value)} />

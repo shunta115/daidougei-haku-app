@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
   getFeaturedEvent,
   listApprovedPerformers,
@@ -169,6 +170,8 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         <h1>{t('mapHeadline')}</h1>
         <span>{event ? `${event.date_label} · ${event.place_label}` : t('mapFallback')}</span>
       </header>
+
+      <GlobalMessageBar />
 
       <div className="pl-segment" role="tablist" aria-label={t('mapAndSchedule')}>
         <button type="button" role="tab" aria-selected={view === 'map'} data-active={view === 'map'} onClick={() => setView('map')}><MapIcon size={17} /> {t('mapTab')}</button>
