@@ -11,14 +11,38 @@ async function expireStaleSessions() {
   const cutoff = new Date(Date.now() - STALE_SECONDS * 1000).toISOString()
   const { data: stale, error } = await sb
     .from('live_sessions')
-    .select('id, performer_id')
+    .select('id, performer_id, started_at, heartbeat_at')
     .is('ended_at', null)
-    .lt('heartbeat_at', cutoff)
+    .or(`heartbeat_at.lt.${cutoff},and(heartbeat_at.is.null,started_at.lt.${cutoff})`)
   if (error) throw error
   if (!stale?.length) return 0
 
-  const ids = stale.map((row) => row.id)
-  const performerIds = [...new Set(stale.map((row) => row.performer_id))]
+  let roomService: RoomServiceClient | null = null
+  try {
+    const { url, apiKey, apiSecret } = getLiveKitConfig()
+    roomService = new RoomServiceClient(url, apiKey, apiSecret)
+  } catch {
+    // If configuration is unavailable, heartbeat age remains authoritative.
+  }
+
+  const trulyStale: typeof stale = []
+  for (const row of stale) {
+    try {
+      const participants = roomService ? await roomService.listParticipants(roomNameForPerformer(row.performer_id)) : []
+      const hostConnected = participants.some((participant) => participant.identity === row.performer_id)
+      if (hostConnected) {
+        await sb.from('live_sessions').update({ heartbeat_at: new Date().toISOString() }).eq('id', row.id).is('ended_at', null)
+        continue
+      }
+    } catch {
+      // A missing room means the host is gone. Provider outages fall back to the grace timeout.
+    }
+    trulyStale.push(row)
+  }
+  if (!trulyStale.length) return 0
+
+  const ids = trulyStale.map((row) => row.id)
+  const performerIds = [...new Set(trulyStale.map((row) => row.performer_id))]
   const endedAt = new Date().toISOString()
   const { error: endError } = await sb
     .from('live_sessions')
@@ -32,8 +56,7 @@ async function expireStaleSessions() {
     if (!count) {
       await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', performerId)
       try {
-        const { url, apiKey, apiSecret } = getLiveKitConfig()
-        await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(performerId))
+        if (roomService) await roomService.deleteRoom(roomNameForPerformer(performerId))
       } catch {
         // Stale database cleanup must still succeed if LiveKit is temporarily unavailable.
       }
@@ -99,6 +122,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sb = getAdminSupabase()
+    const [{ data: performer }, { data: profile }] = await Promise.all([
+      sb.from('performers').select('is_approved').eq('id', performerId).maybeSingle(),
+      sb.from('profiles').select('role,status').eq('id', performerId).maybeSingle(),
+    ])
+    if (!performer?.is_approved || profile?.role !== 'performer' || profile?.status !== 'active') {
+      res.status(403).json({ error: 'Approved active performer required' })
+      return
+    }
     const heartbeatAt = new Date().toISOString()
     const { data, error } = await sb
       .from('live_sessions')

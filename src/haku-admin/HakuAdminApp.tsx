@@ -38,6 +38,7 @@ export function HakuAdminApp() {
   const [eventId, setEventId] = useState('')
   const [serverAllowed, setServerAllowed] = useState<boolean | null>(null)
   const [previewPerformerId, setPreviewPerformerId] = useState('')
+  const [visibleEmailId, setVisibleEmailId] = useState<string | null>(null)
 
   const locallyEligible = profile?.role === 'admin' && profile.status === 'active'
 
@@ -136,14 +137,18 @@ export function HakuAdminApp() {
           <article><em>公開中出演者</em><strong>{String(dash.approved ?? '—')}</strong></article>
           <article><em>承認待ち</em><strong>{String(dash.pendingApproval ?? '—')}</strong></article>
           <article><em>LIVE中</em><strong>{String(dash.liveNow ?? '—')}</strong></article>
+          <article data-alert={Number(dash.staleLives) > 0}><em>LIVE異常候補</em><strong>{String(dash.staleLives ?? '—')}</strong></article>
           <article><em>未対応通報</em><strong>{String(dash.openReports ?? '—')}</strong></article>
+          <article data-alert={Number(dash.stripeNotReady) > 0}><em>Stripe未完了</em><strong>{String(dash.stripeNotReady ?? '—')}</strong></article>
+          <article data-alert={Number(dash.profileIncomplete) > 0}><em>プロフィール不備</em><strong>{String(dash.profileIncomplete ?? '—')}</strong></article>
+          <article data-alert={Number(dash.eventSlots1010to1012) === 0}><em>10/10〜12 出演枠</em><strong>{String(dash.eventSlots1010to1012 ?? '—')}</strong></article>
           {recorded ? (
             <>
               <article><em>総流通額（DB実績）</em><strong>{formatYen(Number(recorded.gmv_yen) || 0)}</strong></article>
               <article><em>HAKUシステム利用料（DB実績）</em><strong>{formatYen(Number(recorded.haku_system_fee_yen) || 0)}</strong></article>
             </>
           ) : null}
-          <p className="ha-note">投げ銭のシステム利用料は{TIP_SYSTEM_FEE_PERCENT}%、グッズは{MERCH_SYSTEM_FEE_PERCENT}%。決済手数料と支払状況はStripe未接続のため「未取得」です。</p>
+          <p className="ha-note">投げ銭のシステム利用料は{TIP_SYSTEM_FEE_PERCENT}%、グッズは{MERCH_SYSTEM_FEE_PERCENT}%。旧決済で精算値が保存されていない行は「未算定」と表示し、0円とは扱いません。</p>
         </section>
       ) : null}
 
@@ -152,8 +157,10 @@ export function HakuAdminApp() {
           {users.map((user) => (
             <article key={user.id} className="ha-card">
               <h2>{user.display_name}</h2>
-              <p>{user.role} · {user.status} · {user.email}</p>
+              <p>{user.role === 'fan' ? 'お客様' : user.role === 'performer' ? 'パフォーマー' : user.role === 'admin' ? '運営' : user.role} · {user.status === 'active' ? '有効' : user.status === 'suspended' ? '停止中' : user.status === 'deleted' ? '削除済み' : user.status}</p>
+              {visibleEmailId === user.id ? <p>メール: {user.email}</p> : null}
               <div className="ha-actions">
+                <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setVisibleEmailId((value) => value === user.id ? null : user.id)}>{visibleEmailId === user.id ? 'メールを隠す' : 'メールを確認'}</button>
                 <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
                   if (!confirmDanger(`${user.display_name} を停止します。セッションも無効化します。`)) return
                   void hakuAdmin('users', 'suspend', { id: user.id }).then(() => reload('users')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
@@ -200,8 +207,8 @@ export function HakuAdminApp() {
           {performers.map((row) => (
             <article key={String(row.id)} className="ha-card">
               <h2>{String(row.stage_name)}</h2>
-              <p>{String(row.genre || 'ジャンル未入力')} · {String(row.city || '地域未入力')}</p>
-              <p>審査: {String(row.review_status || (row.is_approved ? 'approved' : 'pending'))} · 公開: {row.is_approved ? '公開中' : '未公開'} · 口座: {row.stripe_onboarding_complete ? '受取設定完了' : '未完了'} · アカウント: {String(row.account_status)}</p>
+              <p>プロフィール: {row.stage_name && row.bio && row.photo_url ? '概ね完了' : '要確認'} · ジャンル: {String(row.genre || '未入力')} · 地域: {String(row.city || '未入力')}</p>
+              <p>審査: {row.review_status === 'approved' || row.is_approved ? '承認済み' : row.review_status === 'rejected' ? '却下' : '申請中'} · 公開: {row.is_approved ? '公開中' : '未公開'} · Stripe: {row.stripe_registration_state === 'ready' ? '受取可能' : row.stripe_registration_state === 'in_progress' ? '登録途中・要対応' : '未登録・受取不可'} · アカウント: {row.account_status === 'active' ? '有効' : String(row.account_status)} · LIVE: {row.is_approved && row.account_status === 'active' ? '利用可能' : '利用不可'}</p>
               <p className="ha-note">Stripe口座IDはADMIN APIの内部処理のみで、この画面には出しません。</p>
               <div className="ha-actions">
                 {!row.is_approved ? (
@@ -256,8 +263,8 @@ export function HakuAdminApp() {
             }}>投票を止める</button>
           </div>
           <ol>
-            {(((votes?.desk as { ranking?: Array<{ performer_id: string; votes: number }> } | undefined)?.ranking) ?? []).map((row) => (
-              <li key={row.performer_id}>{row.performer_id.slice(0, 8)}… · {row.votes}票</li>
+            {(((votes?.desk as { ranking?: Array<{ performer_id: string; stage_name?: string; votes: number }> } | undefined)?.ranking) ?? []).map((row, index) => (
+              <li key={row.performer_id}>{index + 1}位　{row.stage_name || '名称未登録'}　{row.votes}票</li>
             ))}
           </ol>
         </section>
@@ -268,7 +275,7 @@ export function HakuAdminApp() {
           <h2>配信中</h2>
           {(live?.open ?? []).length === 0 ? <p>現在LIVE中の配信はありません。</p> : live?.open.map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>{String(row.title || 'LIVE')} · peak {String(row.viewer_peak ?? 0)}</p>
+              <p>{String((row.performers as { stage_name?: string } | null)?.stage_name || '名称未登録')} · {String(row.title || 'LIVE')} · 視聴ピーク {String(row.viewer_peak ?? 0)} · 最終確認 {row.heartbeat_at ? new Date(String(row.heartbeat_at)).toLocaleTimeString('ja-JP') : 'なし'}</p>
               <button type="button" className="pl-btn pl-btn--danger" onClick={() => {
                 if (!confirmDanger('このLIVEを強制終了します。')) return
                 void import('../platform/lib/supabase').then(async ({ supabaseAuthHeaders }) => {
@@ -292,12 +299,12 @@ export function HakuAdminApp() {
           <p>投げ銭 {((money.tips as unknown[]) ?? []).length}件 · グッズ {((money.orders as unknown[]) ?? []).length}件</p>
           {((money.tips as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>投げ銭 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · {String(row.status)}</p>
+              <p>投げ銭 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
             </article>
           ))}
           {((money.orders as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>グッズ {String(row.product_name || '')} 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · {String(row.status)}</p>
+              <p>グッズ {String(row.product_name || '')} 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
             </article>
           ))}
           <h2>出金</h2>
@@ -310,7 +317,8 @@ export function HakuAdminApp() {
         <section>
           {reports.length === 0 ? <p>通報はありません。</p> : reports.map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>{String(row.target_type)} · {String(row.reason)} · {String(row.status)}</p>
+              <p>対象: {String(row.target_type)} {String(row.target_id || '')} · 内容: {String(row.reason)} · 日時: {row.created_at ? new Date(String(row.created_at)).toLocaleString('ja-JP') : '—'} · 状態: {row.status === 'open' ? '未対応' : row.status === 'in_progress' ? '対応中' : row.status === 'resolved' ? '解決済み' : String(row.status)}</p>
+              <div className="ha-actions">{([['open', '未対応'], ['in_progress', '対応中'], ['resolved', '解決済み']] as const).map(([status, label]) => <button key={status} type="button" className="pl-btn pl-btn--ghost" onClick={() => { if (!confirmDanger(`通報を「${label}」に変更します。`)) return; void hakuAdmin('reports', 'patch', { id: row.id, status }).then(() => reload('reports')).catch((e) => setError(e instanceof Error ? e.message : '失敗')) }}>{label}</button>)}</div>
             </article>
           ))}
         </section>

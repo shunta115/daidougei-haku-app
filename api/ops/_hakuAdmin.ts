@@ -61,14 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (resource === 'dashboard') {
-      const [profiles, performers, lives, tips, orders, reports, ballots] = await Promise.all([
+      const [profiles, performers, lives, tips, orders, reports, ballots, slots] = await Promise.all([
         sb.from('profiles').select('id,role,status', { count: 'exact', head: false }).limit(4000),
-        sb.from('performers').select('id,is_approved,review_status,is_live,stripe_onboarding_complete').limit(4000),
-        sb.from('live_sessions').select('id,ended_at').is('ended_at', null),
+        sb.from('performers').select('id,is_approved,review_status,is_live,stripe_onboarding_complete,stage_name,genre,city,bio,photo_url').limit(4000),
+        sb.from('live_sessions').select('id,ended_at,heartbeat_at').is('ended_at', null),
         sb.from('tips').select('id,status,gross_amount_yen,amount_cents,platform_fee_yen,platform_fee_cents,refunded_amount_yen').limit(4000),
         sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,platform_fee_yen,refunded_amount_yen').limit(4000),
         sb.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         sb.from('event_ballots').select('id', { count: 'exact', head: true }),
+        sb.from('event_slots').select('id', { count: 'exact', head: true }).gte('date', '2026-10-10').lte('date', '2026-10-12'),
       ])
       const tipPaid = (tips.data ?? []).filter((row) => row.status === 'succeeded')
       const merchPaid = (orders.data ?? []).filter((row) => row.status === 'succeeded')
@@ -76,6 +77,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const merchGmv = yenSum(merchPaid, ['gross_amount_yen', 'amount_yen'])
       const tipFee = yenSum(tipPaid, ['platform_fee_yen', 'platform_fee_cents'])
       const merchFee = yenSum(merchPaid, ['platform_fee_yen'])
+      const now = Date.now()
+      const staleLives = (lives.data ?? []).filter((row) => !row.heartbeat_at || now - new Date(String(row.heartbeat_at)).getTime() > 90_000).length
+      const performerRows = performers.data ?? []
+      const profileIncomplete = performerRows.filter((row) => !row.stage_name || !row.genre || !row.city || !row.bio || !row.photo_url).length
       res.status(200).json({
         ok: true,
         source: 'database',
@@ -86,6 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pendingApproval: (performers.data ?? []).filter((row) => row.review_status === 'pending' || (!row.review_status && !row.is_approved)).length,
         rejected: (performers.data ?? []).filter((row) => row.review_status === 'rejected').length,
         liveNow: (lives.data ?? []).length,
+        staleLives,
+        stripeNotReady: performerRows.filter((row) => row.is_approved && !row.stripe_onboarding_complete).length,
+        profileIncomplete,
+        eventSlots1010to1012: slots.count ?? 0,
         openReports: reports.count ?? 0,
         ballots: ballots.count ?? 0,
         money: {
@@ -153,9 +162,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ok: true,
           rows: (performers ?? []).map((row) => {
             const profile = byId.get(row.id)
+            const stripeRegistrationState = row.stripe_onboarding_complete ? 'ready' : row.stripe_account_id ? 'in_progress' : 'not_started'
             const { stripe_account_id: _hidden, ...safe } = row as Record<string, unknown>
             return {
               ...safe,
+              stripe_registration_state: stripeRegistrationState,
               email: profile?.email ?? null,
               account_status: profile?.status ?? 'unknown',
               display_name: profile?.display_name ?? null,
@@ -291,7 +302,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const desk = await sb.rpc('admin_event_vote_desk', { p_event_id: eventId })
       if (!desk.error && desk.data) {
-        res.status(200).json({ ok: true, desk: desk.data, source: 'rpc' })
+        const ranking = Array.isArray((desk.data as Json).ranking) ? (desk.data as { ranking: Array<Record<string, unknown>> }).ranking : []
+        const ids = ranking.map((row) => String(row.performer_id || '')).filter(Boolean)
+        const { data: names } = ids.length ? await sb.from('performers').select('id,stage_name').in('id', ids) : { data: [] }
+        const byId = new Map((names ?? []).map((row) => [row.id, row.stage_name]))
+        res.status(200).json({ ok: true, desk: { ...(desk.data as Json), ranking: ranking.map((row) => ({ ...row, stage_name: byId.get(String(row.performer_id)) ?? '名称未登録' })) }, source: 'rpc' })
         return
       }
       const [{ data: rule }, { data: ballots }] = await Promise.all([
@@ -300,6 +315,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ])
       const counts = new Map<string, number>()
       for (const row of ballots ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
+      const performerIds = [...counts.keys()]
+      const { data: performerNames } = performerIds.length ? await sb.from('performers').select('id,stage_name').in('id', performerIds) : { data: [] }
+      const nameById = new Map((performerNames ?? []).map((row) => [row.id, row.stage_name]))
       res.status(200).json({
         ok: true,
         source: 'event_ballots',
@@ -307,14 +325,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           voting_open: Boolean(rule?.voting_open),
           total_votes: (ballots ?? []).length,
           unique_voters: new Set((ballots ?? []).map((row) => row.fan_id)).size,
-          ranking: [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes),
+          ranking: [...counts].map(([performer_id, votes]) => ({ performer_id, stage_name: nameById.get(performer_id) ?? '名称未登録', votes })).sort((a, b) => b.votes - a.votes),
         },
       })
       return
     }
 
     if (resource === 'live') {
-      const { data: open } = await sb.from('live_sessions').select('*').is('ended_at', null).order('started_at', { ascending: false }).limit(50)
+      const { data: open } = await sb.from('live_sessions').select('*,performers(stage_name)').is('ended_at', null).order('started_at', { ascending: false }).limit(50)
       const { data: recent } = await sb.from('live_sessions').select('*').order('started_at', { ascending: false }).limit(50)
       res.status(200).json({ ok: true, open: open ?? [], recent: recent ?? [] })
       return
@@ -339,6 +357,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (resource === 'reports') {
+      if (action === 'patch') {
+        const id = String(payload.id || '')
+        const status = String(payload.status || '')
+        if (!id || !['open', 'in_progress', 'resolved'].includes(status)) {
+          res.status(400).json({ error: 'invalid report update' })
+          return
+        }
+        const { error } = await sb.from('reports').update({ status }).eq('id', id)
+        if (error) throw error
+        await audit(admin.id, 'report.patch', id, { status })
+        res.status(200).json({ ok: true })
+        return
+      }
       const { data, error } = await sb.from('reports').select('*').order('created_at', { ascending: false }).limit(100)
       if (error) throw error
       res.status(200).json({ ok: true, rows: data ?? [] })
