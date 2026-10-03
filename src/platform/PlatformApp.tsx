@@ -12,6 +12,7 @@ import { SearchScreen } from './screens/SearchScreen'
 import { MapScheduleScreen } from './screens/MapScheduleScreen'
 import { PerformerPublicScreen } from './screens/PerformerPublicScreen'
 import { PerformerHomeScreen } from './screens/PerformerHomeScreen'
+import { PerformerPreviewApp } from './screens/PerformerPreviewApp'
 import { PerformerEditScreen } from './screens/PerformerEditScreen'
 import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
@@ -445,6 +446,10 @@ function PlatformShell() {
       return s
     })
   }, [ready, configured, user, profile, passwordRecovery, registrationEntry, showSplash])
+
+  if (new URLSearchParams(window.location.search).get('hakuPreview') === 'performer') {
+    return <PerformerPreviewApp />
+  }
 
   if (showSplash && screen === 'fan-home') {
     return <div className="pl-app"><SplashScreen onStart={() => {
