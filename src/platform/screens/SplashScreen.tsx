@@ -15,6 +15,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
   const [loadSecond, setLoadSecond] = useState(false)
   const [firstFailed, setFirstFailed] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -44,7 +45,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       <div className="pl-splash__ambient" aria-hidden="true" />
       <div className="pl-splash__media" aria-hidden="true" />
       {showVideo ? (
-        <>
+        <div className={`pl-splash__stage${videoReady ? ' pl-splash__stage--on' : ''}`} aria-hidden="true">
           <video
             ref={firstRef}
             className={`pl-splash__video${active === 0 ? ' pl-splash__video--on' : ''}`}
@@ -52,9 +53,11 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
             muted
             playsInline
             preload="auto"
-            poster={HERO_POSTER}
             src={HERO_2024}
-            onPlaying={() => setLoadSecond(true)}
+            onPlaying={() => {
+              setVideoReady(true)
+              setLoadSecond(true)
+            }}
             onEnded={() => {
               if (secondRef.current) playIndex(1)
               else playIndex(0)
@@ -75,7 +78,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
               aria-hidden="true"
             />
           ) : null}
-        </>
+        </div>
       ) : null}
       <div className="pl-splash__shade" aria-hidden="true" />
       <section className="pl-splash__content">
