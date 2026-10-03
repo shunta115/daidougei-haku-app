@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, systemFeeYen } from '../shared/fees'
+import {
+  MERCH_SYSTEM_FEE_BPS,
+  TIP_SYSTEM_FEE_BPS,
+  applicationFeeOverageYen,
+  settleSale,
+  systemFeeYen,
+} from '../shared/fees'
 
 describe('HAKU system-use fees', () => {
   it('uses 15% for tips and 8% for goods in whole yen', () => {
@@ -18,5 +24,22 @@ describe('HAKU system-use fees', () => {
   it('does not treat a 10% fallback as the current tip rate', () => {
     expect(systemFeeYen(1000, 1000)).toBe(100)
     expect(systemFeeYen(1000, TIP_SYSTEM_FEE_BPS)).not.toBe(100)
+  })
+
+  it('takes the system-use fee from the amount after the real Stripe fee', () => {
+    const tip = settleSale(1000, 36, TIP_SYSTEM_FEE_BPS)
+    expect(tip.netYen).toBe(964)
+    expect(tip.hakuFeeYen).toBe(144)
+    expect(tip.performerShareYen).toBe(820)
+    expect(tip.hakuFeeYen).not.toBe(150)
+
+    const merch = settleSale(1000, 36, MERCH_SYSTEM_FEE_BPS)
+    expect(merch.hakuFeeYen).toBe(77)
+    expect(merch.performerShareYen).toBe(887)
+    expect(merch.hakuFeeYen).not.toBe(80)
+
+    expect(settleSale(100, 100, TIP_SYSTEM_FEE_BPS)).toMatchObject({ netYen: 0, hakuFeeYen: 0, performerShareYen: 0 })
+    expect(applicationFeeOverageYen(150, 144)).toBe(6)
+    expect(applicationFeeOverageYen(144, 144)).toBe(0)
   })
 })

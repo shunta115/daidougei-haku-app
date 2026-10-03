@@ -84,7 +84,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <SystemFeeExplain compact />
     {status?.underReview && !status.needsInformation && !status.complete ? <p className="pl-muted">{t('payoutReviewNote')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
-    {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <a className="pl-btn pl-btn--ghost pl-btn--block" href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer"><ExternalLink size={18} />{t('salesOpenStripe')}</a>}
+    {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <p className="pl-muted">{t('salesBankNote')}</p>}
     <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} />{busy ? t('payoutRefreshing') : t('payoutRefresh')}</button>
   </section>
 }

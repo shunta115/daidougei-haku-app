@@ -227,6 +227,10 @@ function PlatformShell() {
       setScreen('profile')
       window.history.replaceState({}, '', performerPath(publicProfile))
     }
+    if (url.searchParams.get('hakuPreview') === 'performer' && pid) {
+      setPerformerId(pid)
+      setScreen('profile')
+    }
     if (tipTo) {
       setPerformerId(tipTo)
       window.sessionStorage.setItem('pl-tip-to', tipTo)
@@ -447,10 +451,6 @@ function PlatformShell() {
     })
   }, [ready, configured, user, profile, passwordRecovery, registrationEntry, showSplash])
 
-  if (new URLSearchParams(window.location.search).get('hakuPreview') === 'performer') {
-    return <PerformerPreviewApp />
-  }
-
   if (showSplash) {
     return <div className="pl-app"><SplashScreen onStart={() => {
       try { window.localStorage.setItem('pl-master-splash-seen-v3', '1') } catch { /* continue without persistence */ }
@@ -509,6 +509,7 @@ function PlatformShell() {
   const role = profile?.role ?? 'fan'
   const preview = role === 'admin' ? new URLSearchParams(window.location.search).get('hakuPreview') : null
   const previewOn = preview === 'fan' || preview === 'performer'
+  if (preview === 'performer') return <PerformerPreviewApp />
   const navRole = previewOn ? (preview === 'performer' ? 'performer' : 'fan') : role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
@@ -907,6 +908,13 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
+      {previewOn ? (
+        <aside className="pl-preview-bar" role="status">
+          <strong>READ ONLY</strong>
+          <span>{preview === 'fan' ? 'お客様表示' : 'パフォーマー表示'}を確認中</span>
+          <a href="/haku-admin">管理画面へ戻る</a>
+        </aside>
+      ) : null}
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
         {showNav && screen !== 'fan-home' && navRole !== 'fan' && navRole !== 'performer' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' || role === 'performer' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
@@ -926,9 +934,14 @@ function PlatformShell() {
             ) : null}
           </div>
         ) : null}
-        {body}
+        <div
+          className={previewOn ? 'pl-preview-readonly' : undefined}
+          aria-disabled={previewOn || undefined}
+          onClickCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
+          onSubmitCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
+        >{body}</div>
       </div>
-      {showNav ? (
+      {showNav && !previewOn ? (
         <BottomNav
           role={navRole}
           active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}

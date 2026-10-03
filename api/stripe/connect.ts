@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountChargeReady, requireAuthUser } from './_shared.js'
+import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -12,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return
 
     const { performerId, action } = (req.body ?? {}) as { performerId?: string; action?: string }
-    if (action && action !== 'status') {
+    if (action && !['status', 'earnings', 'payout'].includes(action)) {
       res.status(400).json({ error: 'Unknown action' })
       return
     }
@@ -40,6 +41,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let accountId = performer.stripe_account_id as string | null
     res.setHeader('Cache-Control', 'no-store')
+    if (action === 'earnings' || action === 'payout') {
+      const stripe = getStripe()
+      if (action === 'earnings') {
+        res.status(200).json(await getPerformerPayoutView(sb, stripe, { performerId, stripeAccountId: accountId }))
+        return
+      }
+      if (!accountId) {
+        res.status(400).json({ error: '受取設定が完了していません。' })
+        return
+      }
+      const result = await requestPerformerPayout(sb, stripe, { performerId, stripeAccountId: accountId })
+      res.status(result.status).json(result.body)
+      return
+    }
     if (action === 'status' && !accountId) {
       res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false })
       return

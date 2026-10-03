@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'dashboard') {
       const [profiles, performers, lives, tips, orders, reports, ballots] = await Promise.all([
         sb.from('profiles').select('id,role,status', { count: 'exact', head: false }).limit(4000),
-        sb.from('performers').select('id,is_approved,is_live,stripe_onboarding_complete').limit(4000),
+        sb.from('performers').select('id,is_approved,review_status,is_live,stripe_onboarding_complete').limit(4000),
         sb.from('live_sessions').select('id,ended_at').is('ended_at', null),
         sb.from('tips').select('id,status,gross_amount_yen,amount_cents,platform_fee_yen,platform_fee_cents,refunded_amount_yen').limit(4000),
         sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,platform_fee_yen,refunded_amount_yen').limit(4000),
@@ -83,7 +83,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fans: (profiles.data ?? []).filter((row) => row.role === 'fan').length,
         performers: (performers.data ?? []).length,
         approved: (performers.data ?? []).filter((row) => row.is_approved).length,
-        pendingApproval: (performers.data ?? []).filter((row) => !row.is_approved).length,
+        pendingApproval: (performers.data ?? []).filter((row) => row.review_status === 'pending' || (!row.review_status && !row.is_approved)).length,
+        rejected: (performers.data ?? []).filter((row) => row.review_status === 'rejected').length,
         liveNow: (lives.data ?? []).length,
         openReports: reports.count ?? 0,
         ballots: ballots.count ?? 0,
@@ -169,7 +170,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (action === 'approve') {
-        const { data, error } = await sb.from('performers').update({ is_approved: true }).eq('id', id).select('id')
+        const reviewedAt = new Date().toISOString()
+        const { data, error } = await sb.from('performers').update({
+          is_approved: true,
+          review_status: 'approved',
+          reviewed_at: reviewedAt,
+          reviewed_by: admin.id,
+          rejection_reason: null,
+        }).eq('id', id).select('id')
         if (error) throw error
         if (!data?.length) throw new Error('approve failed')
         const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
@@ -178,6 +186,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw perr
         }
         await audit(admin.id, 'performer.approve', id)
+        res.status(200).json({ ok: true })
+        return
+      }
+      if (action === 'reject') {
+        const reason = String(payload.reason || '').trim()
+        if (!reason) {
+          res.status(400).json({ error: 'rejection reason required' })
+          return
+        }
+        const { data, error } = await sb.from('performers').update({
+          is_approved: false,
+          is_live: false,
+          share_location: false,
+          review_status: 'rejected',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: admin.id,
+          rejection_reason: reason.slice(0, 1000),
+        }).eq('id', id).select('id')
+        if (error) throw error
+        if (!data?.length) throw new Error('reject failed')
+        await sb.from('live_sessions').update({ ended_at: new Date().toISOString(), ended_reason: 'admin_rejected' }).eq('performer_id', id).is('ended_at', null)
+        await audit(admin.id, 'performer.reject', id, { reason: reason.slice(0, 1000) })
         res.status(200).json({ ok: true })
         return
       }
@@ -292,17 +322,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (resource === 'money' || resource === 'tips' || resource === 'merch') {
       const [{ data: tips }, { data: orders }] = await Promise.all([
-        sb.from('tips').select('id,performer_id,fan_id,status,gross_amount_yen,amount_cents,platform_fee_yen,platform_fee_cents,refunded_amount_yen,dispute_status,created_at').order('created_at', { ascending: false }).limit(200),
-        sb.from('merch_orders').select('id,seller_id,buyer_id,status,gross_amount_yen,amount_yen,platform_fee_yen,refunded_amount_yen,dispute_status,product_name,created_at').order('created_at', { ascending: false }).limit(200),
+        sb.from('tips').select('id,performer_id,fan_id,status,gross_amount_yen,amount_cents,stripe_fee_yen,net_after_stripe_yen,haku_fee_bps,haku_fee_yen,performer_share_yen,platform_fee_yen,platform_fee_cents,refunded_amount_yen,dispute_status,settlement_status,created_at').order('created_at', { ascending: false }).limit(200),
+        sb.from('merch_orders').select('id,seller_id,buyer_id,status,gross_amount_yen,amount_yen,stripe_fee_yen,net_after_stripe_yen,haku_fee_bps,haku_fee_yen,performer_share_yen,platform_fee_yen,refunded_amount_yen,dispute_status,settlement_status,product_name,created_at').order('created_at', { ascending: false }).limit(200),
       ])
+      const { data: payouts, error: payoutError } = await sb.from('performer_payouts').select('id,performer_id,amount_yen,status,stripe_payout_id,created_at,updated_at').order('created_at', { ascending: false }).limit(200)
       res.status(200).json({
         ok: true,
         kind: 'recorded',
         rates: { tip_system_fee_bps: TIP_SYSTEM_FEE_BPS, merch_system_fee_bps: MERCH_SYSTEM_FEE_BPS },
         tips: tips ?? [],
         orders: orders ?? [],
-        stripe_processing_fee: { available: false, reason: '決済手数料の実績はStripeにあり、固定値では表示しません' },
-        payouts: { available: false, reason: '支払済/未払いはStripeの入金記録が必要です' },
+        stripe_processing_fee: { available: true, source: 'Stripe BalanceTransaction' },
+        payouts: payoutError ? [] : payouts ?? [],
       })
       return
     }

@@ -1522,6 +1522,29 @@ code {
 
 html, body, #root { max-width: 100%; overflow-x: clip; }
 
+.pl-preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-height: 48px;
+  padding: 8px 12px;
+  background: #ffd84a;
+  color: #08131d;
+  font-size: 13px;
+}
+.pl-preview-bar a { color: #08131d; font-weight: 900; text-decoration: underline; }
+.pl-preview-readonly { min-height: inherit; }
+.pl-preview-readonly button,
+.pl-preview-readonly input,
+.pl-preview-readonly select,
+.pl-preview-readonly textarea,
+.pl-preview-readonly a { pointer-events: none; }
+
 @media (min-width: 768px) {
   .pl-shell { max-width: min(900px, 100%); padding-inline: 24px; }
   .pl-nav { left: 50%; right: auto; bottom: 16px; width: min(620px, calc(100% - 48px)); transform: translateX(-50%); border: 1px solid var(--line); border-radius: 22px; padding: 8px 12px; }

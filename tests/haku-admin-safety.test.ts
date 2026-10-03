@@ -14,11 +14,31 @@ describe('HAKU admin and public performer safety', () => {
 
   it('serves HAKU ADMIN through requireAdmin and does not expose service role to the client', () => {
     const admin = read('api/ops/_hakuAdmin.ts')
+    const guard = read('api/ops/_guard.ts')
     const supabase = read('src/platform/lib/supabase.ts')
     expect(admin).toMatch(/requireAdmin/)
     expect(admin).toMatch(/admin_audit/)
+    expect(guard).toMatch(/HAKU_ADMIN_IDENTIFIERS/)
+    expect(guard).toMatch(/admin allowlist is not configured/)
     expect(supabase).toMatch(/ANON_KEY/)
     expect(supabase).not.toMatch(/SERVICE_ROLE/)
+  })
+
+  it('adds review workflow without destructive schema changes and protects review fields', () => {
+    const sql = read('supabase/migrations/20261003_admin_review_workflow.sql')
+    expect(sql).toMatch(/add column if not exists review_status/i)
+    expect(sql).toMatch(/new\.review_status is distinct from old\.review_status/i)
+    expect(sql).toMatch(/admin_audit_admin_only/i)
+    expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
+  })
+
+  it('keeps admin preview read-only and approval decisions server-side', () => {
+    const app = read('src/platform/PlatformApp.tsx')
+    const admin = read('api/ops/_hakuAdmin.ts')
+    expect(app).toMatch(/pl-preview-readonly/)
+    expect(app).toMatch(/onClickCapture/)
+    expect(admin).toMatch(/action === 'reject'/)
+    expect(admin).toMatch(/review_status: 'approved'/)
   })
 
   it('sets 15% tip and 8% goods system-use fees without rewriting payment rows', () => {

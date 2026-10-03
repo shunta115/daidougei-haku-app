@@ -816,6 +816,41 @@ export async function getMerchFeeBps(): Promise<number> {
   return Math.floor(n)
 }
 
+export type PerformerPayoutView = {
+  minPayoutYen: number
+  confirmedSalesYen: number
+  hakuAvailableYen: number
+  stripeAvailableYen: number
+  availableYen: number
+  pendingYen: number
+  paidOutYen: number
+  remainingYen: number
+  canPayout: boolean
+  ledgerReady: boolean
+  openPayout: { id: string; amount_yen: number; status: string } | null
+}
+
+async function connectAction(performerId: string, action: 'earnings' | 'payout') {
+  const response = await fetch('/api/stripe/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ performerId, action }),
+  })
+  const body = await response.json().catch(() => ({})) as Record<string, unknown>
+  if (!response.ok) {
+    throw new Error(typeof body.error === 'string' ? body.error : 'Connect unavailable')
+  }
+  return body
+}
+
+export async function fetchPerformerPayoutView(performerId: string): Promise<PerformerPayoutView> {
+  return connectAction(performerId, 'earnings') as Promise<PerformerPayoutView>
+}
+
+export async function requestPerformerPayout(performerId: string) {
+  return connectAction(performerId, 'payout')
+}
+
 export async function setTipFeeBps(bps: number) {
   const sb = requireSupabase()
   const value = Math.max(0, Math.min(5000, Math.floor(bps)))

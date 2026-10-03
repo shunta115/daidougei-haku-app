@@ -7,6 +7,7 @@ import { hakuAdmin } from './api'
 
 type Tab =
   | 'home'
+  | 'applications'
   | 'users'
   | 'performers'
   | 'events'
@@ -35,8 +36,10 @@ export function HakuAdminApp() {
   const [money, setMoney] = useState<Record<string, unknown> | null>(null)
   const [reports, setReports] = useState<Array<Record<string, unknown>>>([])
   const [eventId, setEventId] = useState('')
+  const [serverAllowed, setServerAllowed] = useState<boolean | null>(null)
+  const [previewPerformerId, setPreviewPerformerId] = useState('')
 
-  const allowed = profile?.role === 'admin' && profile.status === 'active'
+  const locallyEligible = profile?.role === 'admin' && profile.status === 'active'
 
   const reload = async (next: Tab = tab) => {
     setBusy(true)
@@ -44,7 +47,7 @@ export function HakuAdminApp() {
     try {
       if (next === 'home') setDash(await hakuAdmin('dashboard'))
       if (next === 'users') setUsers(((await hakuAdmin('users')).rows as Array<Record<string, string>>) ?? [])
-      if (next === 'performers') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
+      if (next === 'performers' || next === 'applications') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
       if (next === 'events') {
         const data = await hakuAdmin('events')
         const rows = (data.rows as Array<Record<string, unknown>>) ?? []
@@ -64,6 +67,7 @@ export function HakuAdminApp() {
       if (next === 'live') setLive(await hakuAdmin('live') as typeof live)
       if (next === 'money') setMoney(await hakuAdmin('money'))
       if (next === 'reports') setReports(((await hakuAdmin('reports')).rows as Array<Record<string, unknown>>) ?? [])
+      if (next === 'preview') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
     } catch (e) {
       setError(e instanceof Error ? e.message : '読み込みに失敗しました')
     } finally {
@@ -72,14 +76,19 @@ export function HakuAdminApp() {
   }
 
   useEffect(() => {
-    if (allowed) void reload('home')
-  }, [allowed])
+    if (!locallyEligible) { setServerAllowed(false); return }
+    void hakuAdmin('me').then(() => {
+      setServerAllowed(true)
+      void reload('home')
+    }).catch(() => setServerAllowed(false))
+  }, [locallyEligible])
 
   const moneyBlock = (dash?.money ?? money) as Record<string, unknown> | undefined
   const recorded = moneyBlock && moneyBlock.kind === 'recorded' ? moneyBlock : null
 
   const tabs: Array<{ id: Tab; label: string }> = useMemo(() => [
     { id: 'home', label: '状況' },
+    { id: 'applications', label: '申請' },
     { id: 'users', label: '利用者' },
     { id: 'performers', label: '出演者' },
     { id: 'events', label: 'イベント' },
@@ -87,12 +96,13 @@ export function HakuAdminApp() {
     { id: 'live', label: 'LIVE' },
     { id: 'money', label: '売上' },
     { id: 'reports', label: '通報' },
-    { id: 'preview', label: 'プレビュー' },
+    { id: 'preview', label: '表示確認' },
   ], [])
 
   if (!ready) return <main className="ha-app"><p>確認しています…</p></main>
-  if (!profile) return <div className="ha-app ha-app--auth"><AuthScreen /></div>
-  if (!allowed) {
+  if (!profile) return <div className="ha-app ha-app--auth"><AuthScreen onDone={() => undefined} /></div>
+  if (locallyEligible && serverAllowed === null) return <main className="ha-app"><p>運営権限をサーバーで確認しています…</p></main>
+  if (!locallyEligible || serverAllowed !== true) {
     return (
       <main className="ha-app">
         <h1>HAKU ADMIN</h1>
@@ -158,13 +168,40 @@ export function HakuAdminApp() {
         </section>
       ) : null}
 
+      {tab === 'applications' ? (
+        <section>
+          <h2>パフォーマー申請</h2>
+          {performers.filter((row) => row.review_status === 'pending' || (!row.review_status && !row.is_approved)).length === 0 ? <p>承認待ちの申請はありません。</p> : null}
+          {performers.filter((row) => row.review_status === 'pending' || (!row.review_status && !row.is_approved)).map((row) => (
+            <article key={String(row.id)} className="ha-card">
+              <h2>{String(row.stage_name || row.display_name || '名称未入力')}</h2>
+              <p>{String(row.email || '')}</p>
+              <p>{String(row.genre || 'ジャンル未入力')} · {String(row.city || '地域未入力')}</p>
+              <p>{String(row.bio || '自己紹介未入力')}</p>
+              <p>申請日時: {row.created_at ? new Date(String(row.created_at)).toLocaleString('ja-JP') : '—'} · 受取設定: {row.stripe_onboarding_complete ? '完了' : '未完了'}</p>
+              <div className="ha-actions">
+                <button type="button" className="pl-btn" onClick={() => {
+                  if (!confirmDanger(`${String(row.stage_name)} を承認します。`)) return
+                  void hakuAdmin('performers', 'approve', { id: row.id }).then(() => reload('applications')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>承認</button>
+                <button type="button" className="pl-btn pl-btn--danger" onClick={() => {
+                  const reason = window.prompt('却下理由を入力してください。パフォーマーへの連絡に使える具体的な理由にしてください。')?.trim()
+                  if (!reason || !confirmDanger(`${String(row.stage_name)} の申請を却下します。`)) return
+                  void hakuAdmin('performers', 'reject', { id: row.id, reason }).then(() => reload('applications')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>却下</button>
+              </div>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
       {tab === 'performers' ? (
         <section>
           {performers.map((row) => (
             <article key={String(row.id)} className="ha-card">
               <h2>{String(row.stage_name)}</h2>
               <p>{String(row.genre || 'ジャンル未入力')} · {String(row.city || '地域未入力')}</p>
-              <p>承認: {row.is_approved ? '公開中' : '未承認'} · 口座: {row.stripe_onboarding_complete ? '受取設定完了' : '未完了'} · アカウント: {String(row.account_status)}</p>
+              <p>審査: {String(row.review_status || (row.is_approved ? 'approved' : 'pending'))} · 公開: {row.is_approved ? '公開中' : '未公開'} · 口座: {row.stripe_onboarding_complete ? '受取設定完了' : '未完了'} · アカウント: {String(row.account_status)}</p>
               <p className="ha-note">Stripe口座IDはADMIN APIの内部処理のみで、この画面には出しません。</p>
               <div className="ha-actions">
                 {!row.is_approved ? (
@@ -251,18 +288,21 @@ export function HakuAdminApp() {
 
       {tab === 'money' && money ? (
         <section>
-          <p className="ha-note">以下はDBに記録された実績です。決済手数料と銀行入金は未取得のため表示しません。</p>
+          <p className="ha-note">Stripe実手数料控除後に、投げ銭15%・グッズ8%を計算した確定台帳です。</p>
           <p>投げ銭 {((money.tips as unknown[]) ?? []).length}件 · グッズ {((money.orders as unknown[]) ?? []).length}件</p>
           {((money.tips as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>投げ銭 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · システム利用料 {formatYen(Number(row.platform_fee_yen ?? row.platform_fee_cents) || 0)} · {String(row.status)}</p>
+              <p>投げ銭 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · {String(row.status)}</p>
             </article>
           ))}
           {((money.orders as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>グッズ {String(row.product_name || '')} {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · システム利用料 {formatYen(Number(row.platform_fee_yen) || 0)} · {String(row.status)}</p>
+              <p>グッズ {String(row.product_name || '')} 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · {String(row.status)}</p>
             </article>
           ))}
+          <h2>出金</h2>
+          {((money.payouts as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>出金記録はありません。</p> : null}
+          {((money.payouts as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card"><p>{formatYen(Number(row.amount_yen) || 0)} · {String(row.status)} · {String(row.performer_id).slice(0, 8)}…</p></article>)}
         </section>
       ) : null}
 
@@ -279,10 +319,16 @@ export function HakuAdminApp() {
       {tab === 'preview' ? (
         <section className="ha-card">
           <h2>読み取り専用プレビュー</h2>
-          <p>ADMINのログインはそのままです。投げ銭・購入・LIVE開始はプレビューでは開きません。</p>
+          <p>ADMINのログインはそのままです。プレビュー内の操作要素は無効化され、DBを書き換えません。</p>
+          <label>対象パフォーマー
+            <select value={previewPerformerId} onChange={(event) => setPreviewPerformerId(event.target.value)}>
+              <option value="">選択してください</option>
+              {performers.map((row) => <option key={String(row.id)} value={String(row.id)}>{String(row.stage_name || row.display_name || row.id)}</option>)}
+            </select>
+          </label>
           <div className="ha-actions">
             <a className="pl-btn" href={`/?hakuPreview=fan`}>お客様として見る</a>
-            <a className="pl-btn pl-btn--ghost" href={`/live?hakuPreview=performer`}>パフォーマー画面を見る</a>
+            <a className="pl-btn pl-btn--ghost" aria-disabled={!previewPerformerId} href={previewPerformerId ? `/?hakuPreview=performer&performerId=${encodeURIComponent(previewPerformerId)}` : undefined}>選択したパフォーマーとして見る</a>
           </div>
         </section>
       ) : null}

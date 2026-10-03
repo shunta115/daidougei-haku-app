@@ -10,6 +10,8 @@ const fake = vi.hoisted(() => ({
   listPerformerTipTransactions: vi.fn(),
   getTipFeeBps: vi.fn(),
   getMerchFeeBps: vi.fn(),
+  fetchPerformerPayoutView: vi.fn(),
+  requestPerformerPayout: vi.fn(),
 }))
 
 vi.mock('../src/platform/lib/auth', () => ({
@@ -28,20 +30,47 @@ vi.mock('../src/platform/lib/api', () => ({
   listPerformerTipTransactions: fake.listPerformerTipTransactions,
   getTipFeeBps: fake.getTipFeeBps,
   getMerchFeeBps: fake.getMerchFeeBps,
+  fetchPerformerPayoutView: fake.fetchPerformerPayoutView,
+  requestPerformerPayout: fake.requestPerformerPayout,
 }))
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn(), useTrackView: vi.fn() }))
+vi.mock('../src/i18n/LangProvider', async () => {
+  const { t } = await vi.importActual<typeof import('../src/i18n/index')>('../src/i18n/index')
+  return {
+    useLang: () => ({
+      lang: 'ja' as const,
+      setLang: vi.fn(),
+      t: (key: string, vars?: Record<string, string | number>) => t(key as 'earnTitle', 'ja', vars),
+    }),
+  }
+})
 
 import { PerformerMerchScreen } from '../src/platform/screens/MerchScreens'
 import { PerformerEarningsScreen, PerformerScheduleScreen } from '../src/platform/screens/PerformerBusinessScreens'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  try { localStorage.setItem('daidougei-lang', 'ja') } catch { /* jsdom */ }
   fake.listSellerMerchProducts.mockResolvedValue([])
   fake.listSellerMerchOrders.mockResolvedValue([])
   fake.listPerformerEventSlots.mockResolvedValue([])
   fake.listPerformerTipTransactions.mockResolvedValue([])
   fake.getTipFeeBps.mockResolvedValue(1500)
   fake.getMerchFeeBps.mockResolvedValue(800)
+  fake.fetchPerformerPayoutView.mockResolvedValue({
+    minPayoutYen: 10000,
+    confirmedSalesYen: 0,
+    hakuAvailableYen: 0,
+    stripeAvailableYen: 0,
+    availableYen: 0,
+    pendingYen: 0,
+    paidOutYen: 0,
+    remainingYen: 10000,
+    canPayout: false,
+    ledgerReady: true,
+    openPayout: null,
+  })
+  fake.requestPerformerPayout.mockResolvedValue({ ok: true })
   fake.uploadMerchImage.mockResolvedValue('https://cdn.example.test/product.webp')
 })
 
@@ -79,11 +108,23 @@ describe('performer operations', () => {
       platform_fee_yen: 200, status: 'succeeded', stripe_session_id: 'cs_merch', stripe_payment_intent: 'pi_merch',
       created_at: '2026-09-25T01:00:00Z', updated_at: '2026-09-25T01:00:00Z',
     }])
+    fake.fetchPerformerPayoutView.mockResolvedValue({
+      minPayoutYen: 10000,
+      confirmedSalesYen: 2460,
+      hakuAvailableYen: 2460,
+      stripeAvailableYen: 2000,
+      availableYen: 2000,
+      pendingYen: 0,
+      paidOutYen: 0,
+      remainingYen: 8000,
+      canPayout: false,
+      ledgerReady: true,
+      openPayout: null,
+    })
     render(<PerformerEarningsScreen onBack={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('¥3,000')).toBeTruthy())
-    expect(screen.getByText('¥300')).toBeTruthy()
-    expect(screen.getByText(/最終的な銀行入金額とは異なる場合があります/)).toBeTruthy()
-    expect(screen.getByText(/この金額は受取予定額ではありません/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Stripeで入金を確認/ }).getAttribute('href')).toBe('https://dashboard.stripe.com/')
+    await waitFor(() => expect((screen.getByRole('button', { name: '出金を申請' }) as HTMLButtonElement).disabled).toBe(true))
+    expect(screen.getByText(/あと¥8,000で出金できます/)).toBeTruthy()
+    expect(screen.getAllByText(/Stripe実手数料/).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('link', { name: /Stripeで入金を確認/ })).toBeNull()
   })
 })

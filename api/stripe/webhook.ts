@@ -16,6 +16,8 @@ import {
   markMerchOrderDispute,
   markMerchOrderRefunded,
 } from './_finalizeMerchOrder.js'
+import { markPerformerPayout } from './_payouts.js'
+import { settleSaleByCharge } from './_settlement.js'
 import { getAdminSupabase, getStripe } from './_shared.js'
 
 export const config = {
@@ -168,6 +170,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else if (paymentIntent.metadata?.kind === 'tip' || paymentIntent.metadata?.tip_id) {
           await finalizePaidTipFromPaymentIntent(sb, paymentIntent, connectedAccountId)
         }
+        const chargeId = typeof paymentIntent.latest_charge === 'string' ? paymentIntent.latest_charge : paymentIntent.latest_charge?.id
+        if (chargeId) {
+          await settleSaleByCharge(sb, stripe, { id: chargeId, payment_intent: paymentIntent.id } as Stripe.Charge, connectedAccountId)
+        }
       }
 
       if (event.type === 'payment_intent.payment_failed') {
@@ -183,12 +189,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const charge = event.data.object as Stripe.Charge
         await markTipRefunded(sb, charge, connectedAccountId)
         await markMerchOrderRefunded(sb, charge, connectedAccountId)
+        await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
       }
 
       if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.closed') {
         const dispute = event.data.object as Stripe.Dispute
         await markTipDispute(sb, dispute, connectedAccountId)
         await markMerchOrderDispute(sb, dispute, connectedAccountId)
+      }
+
+      if (event.type === 'payout.paid' || event.type === 'payout.failed' || event.type === 'payout.canceled') {
+        const payout = event.data.object as Stripe.Payout
+        const payoutStatus = event.type === 'payout.paid' ? 'paid' : event.type === 'payout.canceled' ? 'canceled' : 'failed'
+        await markPerformerPayout(sb, payout, connectedAccountId, payoutStatus)
       }
 
       if (event.type === 'account.updated') {

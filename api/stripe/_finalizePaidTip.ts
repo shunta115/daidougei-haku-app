@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+import { refundSaleStatus } from '../../shared/payoutMath.js'
 import { publishLiveTipEvent } from './_tipEvents.js'
 
 function stripeId(value: string | { id?: string } | null | undefined): string | null {
@@ -214,15 +215,16 @@ export async function markTipRefunded(sb: SupabaseClient, charge: Stripe.Charge,
   const paymentIntentId = stripeId(charge.payment_intent)
   const refundedAmount = charge.amount_refunded ?? 0
   if (!paymentIntentId && !charge.id) return
+  const status = refundSaleStatus(charge.amount ?? 0, refundedAmount)
 
   const patch = {
-    status: 'refunded',
+    status,
     stripe_charge_id: chargeId(charge),
     stripe_application_fee_id: applicationFeeId(charge),
     connected_account_id: connectedAccountId ?? null,
     refunded_amount_yen: refundedAmount,
   }
-  const oldPatch = { status: 'refunded' }
+  const oldPatch = { status }
   const byCharge = await sb
     .from('tips')
     .update(patch)

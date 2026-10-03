@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+import { refundSaleStatus } from '../../shared/payoutMath.js'
 
 function stripeId(value: string | { id?: string } | null | undefined): string | null {
   return typeof value === 'string' ? value : value?.id ?? null
@@ -183,14 +184,15 @@ export async function failMerchOrderReservation(sb: SupabaseClient, paymentInten
 export async function markMerchOrderRefunded(sb: SupabaseClient, charge: Stripe.Charge, connectedAccountId?: string | null) {
   const paymentIntentId = stripeId(charge.payment_intent)
   const refundedAmount = charge.amount_refunded ?? 0
+  const status = refundSaleStatus(charge.amount ?? 0, refundedAmount)
   const patch = {
-    status: 'refunded',
+    status,
     stripe_charge_id: charge.id,
     stripe_application_fee_id: applicationFeeId(charge),
     connected_account_id: connectedAccountId ?? null,
     refunded_amount_yen: refundedAmount,
   }
-  const oldPatch = { status: 'refunded' }
+  const oldPatch = { status }
   const byCharge = await sb
     .from('merch_orders')
     .update(patch)

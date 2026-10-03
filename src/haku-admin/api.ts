@@ -1,6 +1,6 @@
 import { supabaseAuthHeaders } from '../platform/lib/supabase'
 
-export async function hakuAdmin(resource: string, action = 'list', payload: Record<string, unknown> = {}) {
+export async function hakuAdmin(resource: string, action = 'list', payload: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const response = await fetch('/api/ops/inbox', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
@@ -8,5 +8,5 @@ export async function hakuAdmin(resource: string, action = 'list', payload: Reco
   })
   const body = await response.json().catch(() => ({})) as { error?: string }
   if (!response.ok) throw new Error(body.error || `admin ${response.status}`)
-  return body
+  return body as Record<string, unknown>
 }
