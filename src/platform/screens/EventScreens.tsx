@@ -108,8 +108,8 @@ function eventChrome(event: FeaturedEvent, translate: (key: 'eventName' | 'prese
   }
 }
 
-const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer.jpg'
-const AWP_HERO_SRC = '/events/award-winning-performers-2026/hero-performer.jpg'
+const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer-2026.webp'
+const AWP_HERO_SRC = AWP_FLYER_SRC
 
 type EventPhase = 'before' | 'during' | 'after'
 
@@ -179,6 +179,18 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     meta?.setAttribute('content', '#050505')
     return () => { if (previous) meta?.setAttribute('content', previous) }
   }, [])
+
+  useEffect(() => {
+    if (slug !== AWP_SLUG) return
+    const imageUrl = new URL(AWP_FLYER_SRC, window.location.origin).toString()
+    const metas = [
+      document.querySelector<HTMLMetaElement>('meta[property="og:image"]'),
+      document.querySelector<HTMLMetaElement>('meta[name="twitter:image"]'),
+    ].filter((meta): meta is HTMLMetaElement => Boolean(meta))
+    const previous = metas.map((meta) => meta.content)
+    metas.forEach((meta) => { meta.content = imageUrl })
+    return () => metas.forEach((meta, index) => { meta.content = previous[index] })
+  }, [slug])
 
   useEffect(() => {
     let active = true

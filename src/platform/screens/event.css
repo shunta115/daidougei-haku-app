@@ -73,7 +73,7 @@
   display:block;
   width:100%;
   height:auto;
-  aspect-ratio:1272 / 1800;
+  aspect-ratio:1800 / 2546;
   object-fit:contain;
   object-position:center;
 }
@@ -400,7 +400,7 @@ html:has(.pl-event-detail) .pl-bg__grain {
   right:-18px;
   width:60%;
   height:228px;
-  overflow:hidden;
+  overflow:visible;
   pointer-events:none;
 }
 .awp-fv__halo {
@@ -417,14 +417,19 @@ html:has(.pl-event-detail) .pl-bg__grain {
 .awp-fv__figure {
   position:absolute;
   z-index:1;
-  inset:0;
+  inset:8px 10px 8px 20%;
+  display:flex;
+  justify-content:flex-end;
 }
 .awp-fv__figure img {
   display:block;
-  width:100%;
+  width:auto;
+  max-width:100%;
   height:100%;
-  object-fit:cover;
-  object-position:60% 16%;
+  object-fit:contain;
+  object-position:right center;
+  border-radius:4px;
+  box-shadow:0 12px 30px rgba(0,0,0,.46);
 }
 
 .awp-vote {
@@ -627,9 +632,9 @@ html:has(.pl-event-detail) .pl-bg__grain {
   height:100%;
   object-fit:cover;
 }
-.awp-fv__thumb--sched img { object-position:62% 28%; }
+.awp-fv__thumb--sched img { object-position:center; }
 .awp-fv__thumb--flyer { background:#0a0a0a; }
-.awp-fv__thumb--flyer img { object-position:86% 4%; transform:scale(1.35); transform-origin:70% 8%; }
+.awp-fv__thumb--flyer img { object-fit:contain; object-position:center; }
 .awp-fv__cards button > span:not(.awp-fv__thumb) {
   flex:1;
   min-width:0;
