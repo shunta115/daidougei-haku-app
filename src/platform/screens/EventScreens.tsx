@@ -5,6 +5,7 @@ import {
   getEventVoteRule,
   getMyVotes,
   listEventLineupPerformers,
+  listEventGuestAppearances,
   listVotingEligibleEventLineupPerformers,
   listEventSlots,
   listEventVenues,
@@ -12,6 +13,7 @@ import {
   listVoteRankingNamed,
   voteForPerformer,
   type EventSlotRow,
+  type EventGuestAppearanceRow,
   type EventVenueRow,
   type EventVoteRule,
   type FeaturedEvent,
@@ -158,6 +160,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
   const [performers, setPerformers] = useState<Performer[]>([])
+  const [guestAppearances, setGuestAppearances] = useState<EventGuestAppearanceRow[]>([])
   const [votingPerformers, setVotingPerformers] = useState<Performer[]>([])
   const [rule, setRule] = useState<EventVoteRule | null>(null)
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
@@ -183,13 +186,14 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       try {
         const nextEvent = await getEventBySlug(slug)
         if (!nextEvent) throw new Error('not-found')
-        const [venueRows, slotRows, lineup, eligibleLineup, voteRule, results] = await Promise.all([
+        const [venueRows, slotRows, lineup, eligibleLineup, guestRows, voteRule, results] = await Promise.all([
           listEventVenues(nextEvent.id), listEventSlots(nextEvent.id), listEventLineupPerformers(nextEvent.id),
           listVotingEligibleEventLineupPerformers(nextEvent.id),
+          listEventGuestAppearances(nextEvent.id).catch(() => []),
           getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => []),
         ])
         if (!active) return
-        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setVotingPerformers(eligibleLineup); setRule(voteRule); setRanking(results)
+        setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setVotingPerformers(eligibleLineup); setGuestAppearances(guestRows); setRule(voteRule); setRanking(results)
         const dates = [...new Set(slotRows.map((slot) => dateKey(slot.date)))]
         const fallbackDate = dateKey(nextEvent.starts_on) || dates[0] || clock.date
         setSelectedDate(dates.includes(clock.date) ? clock.date : fallbackDate)
@@ -248,7 +252,8 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     if (!slot) return null
     const performer = slot.performer_id ? performerById.get(slot.performer_id) : null
     const venue = venueById.get(slot.venue_id)
-    return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</h3><span>{venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={onOpenMap}><MapPin size={16} />{t('eventSeeOnMap')}</button></div></article>
+    const displayName = performer?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja || t('eventAdjusting'))
+    return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{displayName}</h3><span>{venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={onOpenMap}><MapPin size={16} />{t('eventSeeOnMap')}</button></div></article>
   }
 
   const isAwp = slug === AWP_SLUG
@@ -322,7 +327,9 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:00</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:00+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
 
-    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const state = slotState(slot, clock); const soon = /^あと(\d+)分$/.exec(state); const stateLabel = state === '終了' ? t('slotEnded') : state === '開催中' ? t('slotLive') : state === '予定' ? t('slotPlanned') : soon ? t('slotSoon', { n: soon[1] }) : state; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{performer?.stage_name || slot.stage_ja || t('eventAdjusting')}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{stateLabel}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
+    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header><div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div>{dateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : dateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const displayName = performer?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja || t('eventAdjusting')); const state = slotState(slot, clock); const soon = /^あと(\d+)分$/.exec(state); const stateLabel = state === '終了' ? t('slotEnded') : state === '開催中' ? t('slotLive') : state === '予定' ? t('slotPlanned') : soon ? t('slotSoon', { n: soon[1] }) : state; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{displayName}</strong><em>{performer?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</em></button><button className="pl-event-slot__venue" onClick={onOpenMap}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><i>{stateLabel}</i>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
+
+    {isAwp ? <section className="pl-event-lineup-full"><header><p>STATUE / ROVING</p><h2>スタチュー・回遊出演</h2><span>投票対象とは別のAWP公式出演情報です。</span></header><div>{guestAppearances.filter((row) => dateKey(row.appearance_date) === selectedDate).map((row) => { const linked = row.linked_performer_id ? performerById.get(row.linked_performer_id) : null; return <article key={row.id} onClick={() => linked && onOpenPerformer(linked.id)}><span>{linked?.photo_url ? <img src={linked.photo_url} alt="" /> : row.official_name_ja.slice(0, 2)}</span><h3>{linked?.stage_name || row.official_name_ja}</h3><p>Statue Carnival / 回遊</p>{linked ? <button>{t('eventSeeProfile')}</button> : <small>公式出演者（プロフィール準備中）</small>}</article> })}</div></section> : null}
 
     {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={votingPerformers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{votingPerformers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
 
@@ -330,7 +337,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{t('eventSeeProfile')}</button></article>)}</div></section>
 
-    <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section>
+    <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span>{isAwp ? <figure className="pl-official-venue-map"><img src="/events/award-winning-performers-2026/official-venue-map.jpg" alt="AWP 2026 公式会場内マップ" /><figcaption>公式会場図。未確定の緯度経度は使用していません。</figcaption></figure> : null}<div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section>
 
     <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
 

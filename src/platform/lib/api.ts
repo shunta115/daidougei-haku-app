@@ -1006,6 +1006,9 @@ export type EventSlotRow = {
   event_id: string
   venue_id: string
   performer_id: string | null
+  performer_name_ja?: string | null
+  source_key?: string | null
+  source_label?: string | null
   date: string
   start_time: string
   end_time: string
@@ -1018,6 +1021,18 @@ export type EventSlotRow = {
   performance_type?: 'regular' | 'special_final'
   round_no?: number | null
   ranking_position?: number | null
+}
+
+export type EventGuestAppearanceRow = {
+  id: string
+  event_id: string
+  official_name_ja: string
+  appearance_type: 'stage' | 'statue' | 'roving' | 'statue_roving'
+  appearance_date: string
+  linked_performer_id: string | null
+  source_key: string
+  source_label: string
+  sort_order: number
 }
 
 export type PerformerEventSlot = EventSlotRow & {
@@ -1086,6 +1101,18 @@ export async function listEventSlots(eventId: string): Promise<EventSlotRow[]> {
     .order('start_time')
   if (error) throw error
   return (data as EventSlotRow[]) ?? []
+}
+
+export async function listEventGuestAppearances(eventId: string): Promise<EventGuestAppearanceRow[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('event_guest_appearances')
+    .select('id,event_id,official_name_ja,appearance_type,appearance_date,linked_performer_id,source_key,source_label,sort_order')
+    .eq('event_id', eventId)
+    .order('appearance_date')
+    .order('sort_order')
+  if (error) throw error
+  return (data as EventGuestAppearanceRow[]) ?? []
 }
 
 export async function upsertEventSlot(row: Omit<EventSlotRow, 'id'> & { id?: string }) {

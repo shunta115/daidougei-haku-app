@@ -1455,6 +1455,28 @@ html:has(.pl-event-detail) .pl-bg__grain {
   display:block;
 }
 
+.pl-official-venue-map {
+  margin:16px 0;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:16px;
+  background:#050505;
+}
+
+.pl-official-venue-map img {
+  display:block;
+  width:100%;
+  height:auto;
+  object-fit:contain;
+}
+
+.pl-official-venue-map figcaption {
+  padding:10px 12px;
+  color:#b9c7d1;
+  font-size:12px;
+  line-height:1.5;
+}
+
 .pl-event-onboarding>div>span {
   color:#d5e4ee;
   font-size:13px;
@@ -1497,4 +1519,3 @@ html:has(.pl-event-detail) .pl-bg__grain {
     margin-inline:auto;
   }
 }
-

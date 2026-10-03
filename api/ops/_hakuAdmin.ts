@@ -279,7 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const id = String(payload.id || '')
         const [{ data: lineup }, { data: slots }, { data: venues }] = await Promise.all([
           sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
-          sb.from('event_slots').select('id,date,start_time,end_time,venue_id,performer_id,stage_ja,status').eq('event_id', id).order('date').order('start_time'),
+          sb.from('event_slots').select('id,date,start_time,end_time,venue_id,performer_id,performer_name_ja,stage_ja,status,performance_type,round_no,ranking_position,source_key,source_label').eq('event_id', id).order('date').order('start_time'),
           sb.from('event_venues').select('id,name_ja,lat,lng').eq('event_id', id).order('sort_order'),
         ])
         const performerIds = (lineup ?? []).map((row) => String(row.performer_id))

@@ -238,6 +238,17 @@
   margin-inline: auto;
   box-sizing: border-box;
 }
+
+.pl-map-schedule .pl-official-venue-map {
+  margin:12px 0;
+  overflow:hidden;
+  border:1px solid rgba(134,185,230,.2);
+  border-radius:14px;
+  background:#050505;
+}
+
+.pl-map-schedule .pl-official-venue-map img { display:block; width:100%; height:auto; }
+.pl-map-schedule .pl-official-venue-map figcaption { padding:9px 12px; color:var(--xp-muted); font-size:11px; }
 .pl-map-schedule .pl-google-map,
 .pl-map-schedule .pl-google-map__canvas {
   height: clamp(520px, 65dvh, 720px);
