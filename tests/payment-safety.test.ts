@@ -24,8 +24,11 @@ describe('payment safety boundaries', () => {
 
   it('uses customer-facing Japanese Checkout copy', () => {
     const tip = read('api/stripe/tip.ts')
+    const merch = read('api/stripe/merch.ts')
     expect(tip).toContain('`${performer.stage_name}への応援`')
     expect(tip).toContain("description: 'HAKU 投げ銭'")
+    expect(tip).toContain("branding_settings: { display_name: 'HAKU' }")
+    expect(merch).toContain("branding_settings: { display_name: 'HAKU' }")
     expect(tip).not.toContain('Tip for ${performer.stage_name}')
   })
 

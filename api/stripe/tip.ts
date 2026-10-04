@@ -174,6 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         ],
         payment_intent_data: { metadata: paymentIntentMetadata },
+        branding_settings: { display_name: 'HAKU' },
         locale: 'ja',
         custom_text: {
           submit: { message: 'HAKUを通じてパフォーマーの活動を応援します。' },
