@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
   search: vi.fn(),
@@ -23,7 +24,6 @@ vi.mock('../src/platform/lib/api', () => ({
 }))
 vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('../src/platform/lib/track', () => ({ useTrackView: vi.fn() }))
-vi.mock('../src/i18n/LangProvider', () => ({ useLang: () => ({ lang: 'ja' }) }))
 
 import { FanHomeScreen } from '../src/platform/screens/FanHomeScreen'
 import { SearchScreen } from '../src/platform/screens/SearchScreen'
@@ -37,6 +37,9 @@ const performer = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  const storage = new JSDOM('', { url: 'http://localhost' }).window.localStorage
+  vi.stubGlobal('localStorage', storage)
+  storage.setItem('daidougei-lang', 'ja')
   fake.live.mockResolvedValue([])
   fake.event.mockResolvedValue(null)
   fake.lineup.mockResolvedValue([])
@@ -44,7 +47,7 @@ beforeEach(() => {
   fake.oshi.mockResolvedValue([])
   fake.ranking.mockResolvedValue([])
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('performer discovery loading states', () => {
   it('does not show the HOME empty state before the performer request completes', async () => {

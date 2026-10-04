@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { JSDOM } from 'jsdom'
 import { GoogleVenueMap } from '../src/platform/components/GoogleVenueMap'
 
 const baseProps = {
@@ -12,12 +13,19 @@ const baseProps = {
   onSelectVenue: vi.fn(),
 }
 
+beforeEach(() => {
+  const storage = new JSDOM('', { url: 'http://localhost' }).window.localStorage
+  vi.stubGlobal('localStorage', storage)
+  storage.setItem('daidougei-lang', 'ja')
+})
+
 afterEach(() => {
   cleanup()
   delete window.google
   delete window.__daidougeiGoogleMaps
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 it('keeps the map usable after location permission is denied', async () => {

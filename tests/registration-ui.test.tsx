@@ -38,8 +38,8 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('smartphone performer registration', () => {
   it('does not offer office privileges during public signup', () => {
     render(<AuthScreen onDone={vi.fn()} />)
-    expect(screen.getByRole('radio', { name: 'ファン' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'パフォーマー' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'アカウント作成' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'パフォーマー登録はこちら' })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: '主催者' })).toBeNull()
   })
 

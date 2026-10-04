@@ -14,7 +14,7 @@ function prepare({ standalone = false }: { standalone?: boolean } = {}) {
   })
   Object.defineProperty(window, 'localStorage', {
     configurable: true,
-    value: { getItem: vi.fn(() => null), setItem: vi.fn() },
+    value: { getItem: vi.fn((key: string) => key === 'daidougei-lang' ? 'ja' : null), setItem: vi.fn() },
   })
 }
 

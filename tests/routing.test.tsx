@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn())
   Object.defineProperty(window, 'sessionStorage', { configurable: true, value: storage.sessionStorage })
   window.localStorage.setItem('pl-master-splash-seen-v3', '1')
+  window.localStorage.setItem('daidougei-lang', 'ja')
   fake.auth = { ready: true, configured: true, user: null, profile: null, profileError: null, refreshProfile: vi.fn(), signOut: vi.fn() }
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -142,12 +143,13 @@ it('opens the dedicated registration entry as performer', async () => {
   await screen.findByText('register:performer')
 })
 
-it('resumes the performer dashboard after relogin rather than fan home', async () => {
+it('resumes the shared home after performer relogin', async () => {
   window.history.replaceState({}, '', '/live')
   fake.auth.user = { id: 'fixture' }
   fake.auth.profile = { role: 'performer', status: 'pending' }
+  fake.auth.performer = { id: 'fixture', stage_name: 'fixture' }
   render(<PlatformApp />)
-  await screen.findByText('performer-dashboard')
+  await screen.findByText('fan-home')
 })
 
 it('prioritizes registration over an old live viewing intent', async () => {
@@ -155,8 +157,9 @@ it('prioritizes registration over an old live viewing intent', async () => {
   window.sessionStorage.setItem('pl-watch', 'old-viewing-intent')
   fake.auth.user = { id: 'fixture' }
   fake.auth.profile = { role: 'performer', status: 'pending' }
+  fake.auth.performer = { id: 'fixture', stage_name: 'fixture' }
   render(<PlatformApp />)
-  await screen.findByText('performer-dashboard')
+  await screen.findByText('fan-home')
   expect(screen.queryByText('live-watch')).toBeNull()
 })
 
