@@ -66,7 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [performer, setPerformer] = useState<Performer | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [passwordRecovery, setPasswordRecovery] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return /(?:^|[?#&])type=invite(?:&|$)/.test(`${window.location.search}${window.location.hash}`)
+  })
   const [authRevision, setAuthRevision] = useState(0)
   const currentUserId = useRef<string | null>(null)
 

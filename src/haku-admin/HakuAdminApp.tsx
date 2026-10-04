@@ -14,6 +14,7 @@ type Tab =
   | 'votes'
   | 'live'
   | 'money'
+  | 'admins'
   | 'reports'
   | 'preview'
 
@@ -22,7 +23,7 @@ function confirmDanger(message: string) {
 }
 
 export function HakuAdminApp() {
-  const { ready, profile, signOut } = useAuth()
+  const { ready, profile, passwordRecovery, signOut } = useAuth()
   const [tab, setTab] = useState<Tab>('home')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -41,6 +42,12 @@ export function HakuAdminApp() {
   const [live, setLive] = useState<{ open: Array<Record<string, unknown>>; recent: Array<Record<string, unknown>> } | null>(null)
   const [money, setMoney] = useState<Record<string, unknown> | null>(null)
   const [reports, setReports] = useState<Array<Record<string, unknown>>>([])
+  const [admins, setAdmins] = useState<Array<Record<string, unknown>>>([])
+  const [canManageAdmins, setCanManageAdmins] = useState(false)
+  const [adminName, setAdminName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPermission, setAdminPermission] = useState<'admin' | 'super_admin'>('admin')
+  const [showAdminForm, setShowAdminForm] = useState(false)
   const [eventId, setEventId] = useState('')
   const [serverAllowed, setServerAllowed] = useState<boolean | null>(null)
   const [previewPerformerId, setPreviewPerformerId] = useState('')
@@ -85,6 +92,11 @@ export function HakuAdminApp() {
       }
       if (next === 'live') setLive(await hakuAdmin('live') as typeof live)
       if (next === 'money') setMoney(await hakuAdmin('money'))
+      if (next === 'admins') {
+        const data = await hakuAdmin('admins')
+        setAdmins((data.rows as Array<Record<string, unknown>>) ?? [])
+        setCanManageAdmins(Boolean(data.can_manage))
+      }
       if (next === 'reports') setReports(((await hakuAdmin('reports')).rows as Array<Record<string, unknown>>) ?? [])
       if (next === 'preview') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
     } catch (e) {
@@ -96,7 +108,8 @@ export function HakuAdminApp() {
 
   useEffect(() => {
     if (!locallyEligible) { setServerAllowed(false); return }
-    void hakuAdmin('me').then(() => {
+    void hakuAdmin('me').then((me) => {
+      setCanManageAdmins(me.admin_permission === 'super_admin')
       setServerAllowed(true)
       void reload('home')
     }).catch(() => setServerAllowed(false))
@@ -210,11 +223,13 @@ export function HakuAdminApp() {
     { id: 'votes', label: '投票' },
     { id: 'live', label: 'LIVE' },
     { id: 'money', label: '決済・Stripe' },
+    { id: 'admins', label: '管理者' },
     { id: 'reports', label: '通報' },
     { id: 'preview', label: '表示確認' },
   ], [])
 
   if (!ready) return <main className="ha-app"><p>確認しています…</p></main>
+  if (passwordRecovery) return <div className="ha-app ha-app--auth"><AuthScreen onDone={() => undefined} /></div>
   if (!profile) return <div className="ha-app ha-app--auth"><AuthScreen onDone={() => undefined} /></div>
   if (locallyEligible && serverAllowed === null) return <main className="ha-app"><p>運営権限をサーバーで確認しています…</p></main>
   if (!locallyEligible || serverAllowed !== true) {
@@ -517,6 +532,63 @@ export function HakuAdminApp() {
           <h2>出金</h2>
           {((money.payouts as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>出金記録はありません。</p> : null}
           {((money.payouts as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card"><p>{formatYen(Number(row.amount_yen) || 0)} · {String(row.status)} · {String(row.performer_id).slice(0, 8)}…</p></article>)}
+        </section>
+      ) : null}
+
+      {tab === 'admins' ? (
+        <section>
+          <div className="ha-section-heading">
+            <div>
+              <h2>管理者</h2>
+              <p className="ha-note">管理者権限はサーバーとDBで検証されます。パスワードは保存しません。</p>
+            </div>
+            {canManageAdmins ? <button type="button" className="pl-btn" onClick={() => setShowAdminForm((value) => !value)}>＋ 管理者を追加</button> : null}
+          </div>
+
+          {showAdminForm && canManageAdmins ? (
+            <article className="ha-card">
+              <h2>管理者を招待</h2>
+              <label><span className="pl-label">名前</span><input className="pl-input" value={adminName} maxLength={120} onChange={(e) => setAdminName(e.target.value)} autoComplete="name" /></label>
+              <label><span className="pl-label">メールアドレス</span><input className="pl-input" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} autoComplete="email" /></label>
+              <label><span className="pl-label">権限</span><select className="pl-input" value={adminPermission} onChange={(e) => setAdminPermission(e.target.value as 'admin' | 'super_admin')}><option value="admin">admin（通常運営）</option><option value="super_admin">super_admin（全権限）</option></select></label>
+              <p className="ha-note">新規メールにはSupabase Authの招待メールが送信されます。既存の一般・パフォーマーアカウントは管理者へ自動変換しません。</p>
+              <div className="ha-actions">
+                <button type="button" className="pl-btn" disabled={busy || !adminName.trim() || !adminEmail.trim()} onClick={() => {
+                  if (!confirmDanger(`${adminEmail.trim()} を ${adminPermission} として招待します。`)) return
+                  setBusy(true)
+                  void hakuAdmin('admins', 'invite', { name: adminName.trim(), email: adminEmail.trim(), permission: adminPermission }).then(() => {
+                    setAdminName(''); setAdminEmail(''); setAdminPermission('admin'); setShowAdminForm(false)
+                    return reload('admins')
+                  }).catch((e) => setError(e instanceof Error ? e.message : '招待に失敗しました')).finally(() => setBusy(false))
+                }}>招待メールを送る</button>
+                <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setShowAdminForm(false)}>キャンセル</button>
+              </div>
+            </article>
+          ) : null}
+
+          {admins.map((row) => {
+            const userId = String(row.user_id)
+            const active = row.status === 'active'
+            const self = userId === profile.id
+            return <article key={userId} className="ha-card">
+              <h3>{String(row.name || '名前未設定')} {self ? <small>（あなた）</small> : null}</h3>
+              <p>{String(row.email || '')}</p>
+              <p>権限: <strong>{String(row.permission)}</strong> · ステータス: <strong>{active ? '有効' : '無効'}</strong></p>
+              <p className="ha-note">追加: {row.created_at ? new Date(String(row.created_at)).toLocaleString('ja-JP') : '—'} · 最終ログイン: {row.last_login_at ? new Date(String(row.last_login_at)).toLocaleString('ja-JP') : '未確認'}</p>
+              {canManageAdmins && !self ? <div className="ha-actions">
+                <select aria-label={`${String(row.name)}の権限`} value={String(row.permission)} onChange={(e) => {
+                  const permission = e.target.value
+                  if (!confirmDanger(`${String(row.name)} の権限を ${permission} に変更します。`)) return
+                  void hakuAdmin('admins', 'permission', { userId, permission }).then(() => reload('admins')).catch((e) => setError(e instanceof Error ? e.message : '権限変更に失敗しました'))
+                }}><option value="admin">admin</option><option value="super_admin">super_admin</option></select>
+                <button type="button" className={active ? 'pl-btn pl-btn--danger' : 'pl-btn'} onClick={() => {
+                  const status = active ? 'disabled' : 'active'
+                  if (!confirmDanger(`${String(row.name)} を${active ? '停止' : '再有効化'}します。`)) return
+                  void hakuAdmin('admins', 'status', { userId, status }).then(() => reload('admins')).catch((e) => setError(e instanceof Error ? e.message : 'ステータス変更に失敗しました'))
+                }}>{active ? '管理者を停止' : '再有効化'}</button>
+              </div> : null}
+            </article>
+          })}
         </section>
       ) : null}
 

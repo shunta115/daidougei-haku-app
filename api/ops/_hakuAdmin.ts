@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, getStripe, isConnectedAccountChargeReady } from '../stripe/_shared.js'
 import { getPerformerPayoutView } from '../stripe/_payouts.js'
-import { requireAdmin } from './_guard.js'
+import { requireAdmin, requireSuperAdmin } from './_guard.js'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, settleSaleAfterRefund } from '../../shared/fees.js'
 
 type Json = Record<string, unknown>
@@ -64,8 +64,126 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (resource === 'me' || (req.method === 'GET' && !resource)) {
       const { data: profile } = await sb.from('profiles').select('id,display_name,email,role,status').eq('id', admin.id).maybeSingle()
-      res.status(200).json({ ok: true, profile })
+      res.status(200).json({ ok: true, profile, admin_permission: admin.adminPermission })
       return
+    }
+
+    if (resource === 'admins') {
+      if (action === 'list' || req.method === 'GET') {
+        const { data: rows, error } = await sb.from('admin_members').select('user_id,name,email,permission,status,created_at,updated_at,disabled_at').order('created_at')
+        if (error) throw error
+        const adminAuth = sb.auth.admin
+        const withLogin = await Promise.all((rows ?? []).map(async (row) => {
+          const { data } = await adminAuth.getUserById(row.user_id)
+          return { ...row, last_login_at: data.user?.last_sign_in_at ?? null }
+        }))
+        res.status(200).json({ ok: true, rows: withLogin, can_manage: admin.adminPermission === 'super_admin' })
+        return
+      }
+
+      if (!requireSuperAdmin(admin, res)) return
+
+      if (action === 'invite') {
+        const name = String(payload.name || '').trim().slice(0, 120)
+        const email = String(payload.email || '').trim().toLowerCase()
+        const permission = payload.permission === 'super_admin' ? 'super_admin' : 'admin'
+        if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          res.status(400).json({ error: 'valid name and email required' })
+          return
+        }
+        const { data: usersPage, error: usersError } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 })
+        if (usersError) throw usersError
+        let target = usersPage.users.find((candidate) => candidate.email?.trim().toLowerCase() === email) ?? null
+        let invited = false
+        if (target) {
+          const { data: existingProfile, error: existingProfileError } = await sb.from('profiles').select('role').eq('id', target.id).maybeSingle()
+          if (existingProfileError) throw existingProfileError
+          if (existingProfile?.role !== 'admin') {
+            res.status(409).json({ error: 'email already belongs to a non-admin account' })
+            return
+          }
+        }
+        if (!target) {
+          const siteOrigin = process.env.PUBLIC_SITE_URL
+            || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'https://daidougei-haku-app.vercel.app')
+          const result = await sb.auth.admin.inviteUserByEmail(email, {
+            data: { display_name: name, role: 'fan' },
+            redirectTo: `${siteOrigin.replace(/\/$/, '')}/haku-admin`,
+          })
+          if (result.error) throw result.error
+          target = result.data.user
+          invited = true
+        }
+        if (!target) throw new Error('administrator account was not created')
+        const { error: memberError } = await sb.from('admin_members').upsert({
+          user_id: target.id,
+          name,
+          email,
+          permission,
+          status: 'active',
+          invited_by: admin.id,
+          disabled_at: null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+        if (memberError) throw memberError
+        const { error: profileError } = await sb.from('profiles').update({ email, display_name: name, role: 'admin', status: 'active' }).eq('id', target.id)
+        if (profileError) throw profileError
+        await audit(admin.id, 'admin.invite', target.id, { permission, invited })
+        res.status(200).json({ ok: true, invited })
+        return
+      }
+
+      const targetId = String(payload.userId || '')
+      if (!targetId) {
+        res.status(400).json({ error: 'userId required' })
+        return
+      }
+      if (targetId === admin.id) {
+        res.status(400).json({ error: 'cannot change your own administrator access' })
+        return
+      }
+
+      if (action === 'permission') {
+        const permission = payload.permission === 'super_admin' ? 'super_admin' : 'admin'
+        const { data: target } = await sb.from('admin_members').select('permission,status').eq('user_id', targetId).maybeSingle()
+        if (target?.permission === 'super_admin' && permission !== 'super_admin' && target.status === 'active') {
+          const { count } = await sb.from('admin_members').select('user_id', { count: 'exact', head: true }).eq('permission', 'super_admin').eq('status', 'active')
+          if ((count ?? 0) <= 1) {
+            res.status(409).json({ error: 'at least one active super admin is required' })
+            return
+          }
+        }
+        const { error } = await sb.from('admin_members').update({ permission, updated_at: new Date().toISOString() }).eq('user_id', targetId)
+        if (error) throw error
+        await audit(admin.id, 'admin.permission', targetId, { permission })
+        res.status(200).json({ ok: true })
+        return
+      }
+
+      if (action === 'status') {
+        const status = payload.status === 'active' ? 'active' : 'disabled'
+        const { data: target } = await sb.from('admin_members').select('permission,status').eq('user_id', targetId).maybeSingle()
+        if (!target) {
+          res.status(404).json({ error: 'administrator not found' })
+          return
+        }
+        if (target.permission === 'super_admin' && target.status === 'active' && status === 'disabled') {
+          const { count } = await sb.from('admin_members').select('user_id', { count: 'exact', head: true }).eq('permission', 'super_admin').eq('status', 'active')
+          if ((count ?? 0) <= 1) {
+            res.status(409).json({ error: 'at least one active super admin is required' })
+            return
+          }
+        }
+        const now = new Date().toISOString()
+        const { error: memberError } = await sb.from('admin_members').update({ status, disabled_at: status === 'disabled' ? now : null, updated_at: now }).eq('user_id', targetId)
+        if (memberError) throw memberError
+        const { error: profileError } = await sb.from('profiles').update({ status: status === 'active' ? 'active' : 'suspended' }).eq('id', targetId).eq('role', 'admin')
+        if (profileError) throw profileError
+        if (status === 'disabled') await revokeSessions(targetId)
+        await audit(admin.id, `admin.${status}`, targetId)
+        res.status(200).json({ ok: true })
+        return
+      }
     }
 
     if (resource === 'dashboard') {
