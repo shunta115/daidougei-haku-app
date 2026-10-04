@@ -49,6 +49,14 @@ describe('payment safety boundaries', () => {
     expect(settlement).toContain('applicationFeeRefundDueYen')
     expect(settlement).toContain('applicationFees.retrieve')
     expect(settlement).toMatch(/haku-app-fee-adj:\$\{args\.chargeId\}:\$\{args\.refundedYen\}/)
+    expect(settlement).toContain('settleSaleAfterRefund(grossYen, stripeFeeYen, refundedYen, args.feeBps)')
+  })
+
+  it('restores merch stock once after a full refund', () => {
+    const merch = read('api/stripe/_finalizeMerchOrder.ts')
+    expect(merch).toContain(".neq('status', status === 'refunded' ? 'refunded' : '__never__')")
+    expect(merch).toContain("if (status !== 'refunded' || !claimed?.product_id) return")
+    expect(merch).toContain(".update({ stock, status: product.status === 'sold_out' && stock > 0 ? 'active' : product.status })")
   })
 
   it('holds new sales on the platform and transfers only after payout eligibility', () => {

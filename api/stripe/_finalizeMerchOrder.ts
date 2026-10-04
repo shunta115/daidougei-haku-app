@@ -223,7 +223,7 @@ export async function markMerchOrderRefunded(sb: SupabaseClient, charge: Stripe.
     status,
     stripe_charge_id: charge.id,
     stripe_application_fee_id: applicationFeeId(charge),
-    connected_account_id: connectedAccountId ?? null,
+    ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
     refunded_amount_yen: refundedAmount,
   }
   const oldPatch = { status }
@@ -231,17 +231,53 @@ export async function markMerchOrderRefunded(sb: SupabaseClient, charge: Stripe.
     .from('merch_orders')
     .update(patch)
     .eq('stripe_charge_id', charge.id)
-    .select('id')
+    .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+    .select('id, product_id, quantity')
     .maybeSingle()
   if (byCharge.error && !missingColumn(byCharge.error)) throw byCharge.error
-  if (byCharge.data?.id || !paymentIntentId) return
+  let claimed = byCharge.data
 
-  const { error } = await sb
-    .from('merch_orders')
-    .update(patch)
-    .or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`)
-  if (error && missingColumn(error)) await sb.from('merch_orders').update(oldPatch).eq('stripe_payment_intent', paymentIntentId)
-  else if (error) throw error
+  if (!claimed?.id && paymentIntentId) {
+    const fallback = await sb
+      .from('merch_orders')
+      .update(patch)
+      .or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`)
+      .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+      .select('id, product_id, quantity')
+      .maybeSingle()
+    if (fallback.error && missingColumn(fallback.error)) {
+      const legacy = await sb
+        .from('merch_orders')
+        .update(oldPatch)
+        .eq('stripe_payment_intent', paymentIntentId)
+        .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+        .select('id, product_id, quantity')
+        .maybeSingle()
+      if (legacy.error) throw legacy.error
+      claimed = legacy.data
+    } else if (fallback.error) {
+      throw fallback.error
+    } else {
+      claimed = fallback.data
+    }
+  }
+
+  // Restore inventory once, only when the order first reaches a full-refund state.
+  // Duplicate charge.refunded deliveries cannot claim the already-refunded row.
+  if (status !== 'refunded' || !claimed?.product_id) return
+  const { data: product, error: productError } = await sb
+    .from('merch_products')
+    .select('stock, status')
+    .eq('id', claimed.product_id)
+    .maybeSingle()
+  if (productError) throw productError
+  if (!product) return
+  const stock = Math.max(0, (product.stock ?? 0) + (claimed.quantity ?? 0))
+  const { error: restoreError } = await sb
+    .from('merch_products')
+    .update({ stock, status: product.status === 'sold_out' && stock > 0 ? 'active' : product.status })
+    .eq('id', claimed.product_id)
+  if (restoreError) throw restoreError
 }
 
 export async function markMerchOrderDispute(

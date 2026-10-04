@@ -90,8 +90,8 @@ export async function settleCharge(
   const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
   const grossYen = yenFromStripe(charge.amount)
   const stripeFeeYen = yenFromStripe(bt?.fee)
-  const settled = settleSale(grossYen, stripeFeeYen, args.feeBps)
   const refundedYen = yenFromStripe(charge.amount_refunded)
+  const settled = settleSaleAfterRefund(grossYen, stripeFeeYen, refundedYen, args.feeBps)
   const status = refundSaleStatus(grossYen, refundedYen)
   const table = args.kind === 'tip' ? 'tips' : 'merch_orders'
   const patch = {
