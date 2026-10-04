@@ -202,6 +202,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
       }
 
+      // Stripe can emit a later charge.refund.updated event after the initial
+      // charge.refunded delivery. Processing it is safe and idempotent, and it
+      // lets a delayed endpoint subscription reconcile the authoritative
+      // charge without creating another refund.
+      if (event.type === 'charge.refund.updated') {
+        const refund = event.data.object as Stripe.Refund
+        const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge?.id
+        if (chargeId) {
+          const charge = await stripe.charges.retrieve(chargeId, connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+          await markTipRefunded(sb, charge, connectedAccountId)
+          await markMerchOrderRefunded(sb, charge, connectedAccountId)
+          await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+        }
+      }
+
       if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.closed') {
         const dispute = event.data.object as Stripe.Dispute
         await markTipDispute(sb, dispute, connectedAccountId)

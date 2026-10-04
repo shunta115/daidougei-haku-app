@@ -50,6 +50,8 @@ describe('payment safety boundaries', () => {
     expect(settlement).toContain('applicationFees.retrieve')
     expect(settlement).toMatch(/haku-app-fee-adj:\$\{args\.chargeId\}:\$\{args\.refundedYen\}/)
     expect(settlement).toContain('settleSaleAfterRefund(grossYen, stripeFeeYen, refundedYen, args.feeBps)')
+    expect(settlement).toContain("if (args.chargeType === 'direct' && !args.connectedAccountId) return")
+    expect(read('api/stripe/webhook.ts')).toContain("event.type === 'charge.refund.updated'")
   })
 
   it('restores merch stock once after a full refund', () => {

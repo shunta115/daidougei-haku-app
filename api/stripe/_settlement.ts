@@ -84,7 +84,11 @@ export async function settleCharge(
     collectedAppFeeYen: number
   },
 ) {
-  if (!args.chargeId || !args.connectedAccountId) return
+  if (!args.chargeId) return
+  // Platform-held separate charges live on the platform account, so they do
+  // not require a connected-account context to retrieve and settle. Direct
+  // charges still fail closed without the owning connected account.
+  if (args.chargeType === 'direct' && !args.connectedAccountId) return
   const stripeAccount = args.chargeType === 'direct' ? args.connectedAccountId : null
   const charge = await stripe.charges.retrieve(args.chargeId, stripeAccount ? { stripeAccount } : undefined)
   const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
