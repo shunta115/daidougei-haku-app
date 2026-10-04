@@ -202,6 +202,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
           ],
           payment_intent_data: { metadata: paymentIntentMetadata },
+          locale: 'ja',
+          custom_text: {
+            submit: { message: '大道芸博 HAKUの商品購入です。' },
+          },
           metadata: {
             ...paymentIntentMetadata,
           },

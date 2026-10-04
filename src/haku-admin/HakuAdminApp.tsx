@@ -499,7 +499,7 @@ export function HakuAdminApp() {
               <h3>{String(row.stage_name || '名称未登録')} <small>{label}</small></h3>
               <p>承認 {row.approved ? '済み' : '未承認'} · 投げ銭 {row.tip_available ? '受付可' : '受付不可'} · グッズ {row.merch_available ? '販売可' : '販売不可'}</p>
               <p>charges_enabled {String(Boolean(row.charges_enabled))} · payouts_enabled {String(Boolean(row.payouts_enabled))} · 登録情報 {row.details_submitted ? '提出済み' : '未完了'}</p>
-              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 出金可能 {formatYen(Number(row.available_yen) || 0)} · 保留 {formatYen(Number(row.held_yen) || 0)} · 処理中 {formatYen(Number(row.pending_payout_yen) || 0)} · 出金済み {formatYen(Number(row.paid_out_yen) || 0)}</p>
+              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 未Transfer残高 {formatYen(Number(row.available_yen) || 0)} · 保留 {formatYen(Number(row.held_yen) || 0)} · Transfer処理中 {formatYen(Number(row.pending_payout_yen) || 0)} · Transfer済み {formatYen(Number(row.paid_out_yen) || 0)}</p>
             </article>
           })}
           <p className="ha-note">Stripe実手数料控除後に、投げ銭15%・グッズ8%を計算した確定台帳です。</p>

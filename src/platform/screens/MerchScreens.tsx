@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   createMerchCheckout,
+  getPerformer,
   getMerchProduct,
   listActiveMerchProducts,
   listMyMerchOrders,
@@ -12,7 +13,7 @@ import {
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { formatYen } from '../lib/money'
-import type { MerchOrder, MerchProduct } from '../lib/types'
+import type { MerchOrder, MerchProduct, Performer } from '../lib/types'
 import { PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
 import { ShoppingBag, ShoppingCart, Ticket, UsersRound } from 'lucide-react'
@@ -164,6 +165,7 @@ export function MerchDetailScreen({
   const { user } = useAuth()
   const { lang } = useLang()
   const [product, setProduct] = useState<MerchProduct | null>(null)
+  const [seller, setSeller] = useState<Performer | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -177,6 +179,7 @@ export function MerchDetailScreen({
     getMerchProduct(productId)
       .then((item) => {
         setProduct(item)
+        if (item) void getPerformer(item.seller_id).then(setSeller).catch(() => setSeller(null))
         if (item) trackProductEvent('merch_view', { performerId: item.seller_id, props: { product_id: item.id } })
       })
       .catch((e) => setError(e instanceof Error ? e.message : '商品を読み込めませんでした'))
@@ -206,6 +209,7 @@ export function MerchDetailScreen({
   if (!product && !error) return <p className="pl-muted">Loading…</p>
   if (!product) return <p className="pl-error">{error}</p>
   const available = productAvailable(product)
+  const checkoutReady = Boolean(seller?.is_approved && seller?.stripe_onboarding_complete)
   const maxQty = Math.min(20, Math.max(1, product.stock))
 
   return (
@@ -231,8 +235,9 @@ export function MerchDetailScreen({
             onChange={(e) => setQuantity(Math.min(maxQty, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
           />
         </label>
-        <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available} onClick={() => void buy()}>
-          {busy ? '購入画面を準備中…' : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
+        {!checkoutReady && seller ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('seller_checkout_unavailable', lang)}</p> : null}
+        <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available || !checkoutReady} onClick={() => void buy()}>
+          {busy ? '購入画面を準備中…' : !checkoutReady && seller ? paymentErrorMessage('seller_checkout_unavailable', lang) : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
         </button>
         </div>
       </div>

@@ -167,12 +167,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               currency: 'jpy',
               unit_amount: amountYen,
               product_data: {
-                name: `Tip for ${performer.stage_name}`,
+                name: `${performer.stage_name}への応援`,
+                description: 'HAKU 投げ銭',
               },
             },
           },
         ],
         payment_intent_data: { metadata: paymentIntentMetadata },
+        locale: 'ja',
+        custom_text: {
+          submit: { message: 'HAKUを通じてパフォーマーの活動を応援します。' },
+        },
         metadata: {
           ...paymentIntentMetadata,
         },

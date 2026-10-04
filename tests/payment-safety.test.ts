@@ -13,6 +13,22 @@ describe('payment safety boundaries', () => {
     expect(read('api/stripe/merch.ts')).not.toContain("json({ error: 'Seller has not finished Stripe onboarding yet' })")
   })
 
+  it('blocks the support button before Stripe onboarding is ready', () => {
+    const tipUi = read('src/platform/screens/TipScreen.tsx')
+    const merchUi = read('src/platform/screens/MerchScreens.tsx')
+    expect(tipUi).toContain("paymentErrorMessage('performer_support_unavailable', lang)")
+    expect(tipUi).toContain('disabled={busy || amount < 100 || !supportReady}')
+    expect(merchUi).toContain("paymentErrorMessage('seller_checkout_unavailable', lang)")
+    expect(merchUi).toContain('disabled={busy || !available || !checkoutReady}')
+  })
+
+  it('uses customer-facing Japanese Checkout copy', () => {
+    const tip = read('api/stripe/tip.ts')
+    expect(tip).toContain('`${performer.stage_name}への応援`')
+    expect(tip).toContain("description: 'HAKU 投げ銭'")
+    expect(tip).not.toContain('Tip for ${performer.stage_name}')
+  })
+
   it('uses stable client request ids for retry-safe tip and merch checkout', () => {
     const tipUi = read('src/platform/screens/TipScreen.tsx')
     const merchUi = read('src/platform/screens/MerchScreens.tsx')

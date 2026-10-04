@@ -25,6 +25,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const checkoutRequestId = useRef('')
+  const supportReady = Boolean(p?.is_approved && p?.stripe_onboarding_complete)
 
   const setSafeAmount = (value: number) => {
     setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))
@@ -41,6 +42,10 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   }, [performerId])
 
   const pay = async () => {
+    if (!supportReady) {
+      setError(paymentErrorMessage('performer_support_unavailable', lang))
+      return
+    }
     setBusy(true)
     setError(null)
     trackProductEvent('tip_checkout_start', { performerId, props: { amount_yen: amount } })
@@ -120,8 +125,9 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
         />
       </label>
 
-      <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
-        {busy ? t('processing') : `❤️ ${t('tipSend', { amount: formatYen(amount) })}`}
+      {!supportReady && p ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('performer_support_unavailable', lang)}</p> : null}
+      <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100 || !supportReady} onClick={() => void pay()}>
+        {busy ? t('processing') : !supportReady && p ? paymentErrorMessage('performer_support_unavailable', lang) : `❤️ ${t('tipSend', { amount: formatYen(amount) })}`}
       </button>
       {!user ? <p className="pl-tip-guest-note">{t('tipGuest')}</p> : null}
       </section>
