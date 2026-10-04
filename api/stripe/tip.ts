@@ -2,7 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   MIN_TIP_AMOUNT_YEN,
   PLATFORM_FEE_BPS,
-  calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
   getIntSetting,
@@ -95,7 +94,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
     const feeBps = PLATFORM_FEE_BPS
-    const fee = calcPlatformFee(amountYen, feeBps)
     let { data: tip, error: tipErr } = await sb
       .from('tips')
       .insert({
@@ -104,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         performer_id: performerId,
         amount_cents: amountYen,
         currency: 'jpy',
-        platform_fee_cents: fee,
+        platform_fee_cents: 0,
         status: 'pending',
       })
       .select('id')
@@ -112,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (tipErr && tipErr.code === '23505') {
       const { data: existing, error: existingError } = await sb
         .from('tips')
-        .select('id,fan_id,performer_id,amount_cents,status,stripe_session_id,connected_account_id')
+        .select('id,fan_id,performer_id,amount_cents,status,stripe_session_id,connected_account_id,stripe_checkout_mode')
         .eq('id', checkoutId)
         .maybeSingle()
       if (existingError) throw existingError
@@ -121,7 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (existing.stripe_session_id) {
-        const existingSession = await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: performer.stripe_account_id })
+        const existingSession = existing.stripe_checkout_mode === 'platform_separate'
+          ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
+          : await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: performer.stripe_account_id })
         if (existingSession.url && existing.status === 'pending') {
           res.status(200).json({ url: existingSession.url })
           return
@@ -137,9 +137,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const connectedAccountId = performer.stripe_account_id as string
     const tipMetaPatch = {
       gross_amount_yen: amountYen,
-      platform_fee_yen: fee,
+      platform_fee_yen: 0,
       connected_account_id: connectedAccountId,
-      stripe_checkout_mode: 'direct',
+      stripe_checkout_mode: 'platform_separate',
     }
     const { error: tipMetaErr } = await sb.from('tips').update(tipMetaPatch).eq('id', tip.id)
     if (tipMetaErr && !missingColumn(tipMetaErr)) throw tipMetaErr
@@ -151,9 +151,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fan_id: payerId ?? 'guest',
       anonymous: anonymous ? '1' : '0',
       connected_account_id: connectedAccountId,
-      charge_type: 'direct',
+      charge_type: 'platform_separate',
       platform_fee_bps: String(feeBps),
-      platform_fee_yen: String(fee),
     }
 
     const session = await stripe.checkout.sessions.create(
@@ -173,15 +172,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             },
           },
         ],
-        payment_intent_data: {
-          ...(fee > 0 ? { application_fee_amount: fee } : {}),
-          metadata: paymentIntentMetadata,
-        },
+        payment_intent_data: { metadata: paymentIntentMetadata },
         metadata: {
           ...paymentIntentMetadata,
         },
       },
-      { idempotencyKey: `tip-checkout-${tip.id}`, stripeAccount: connectedAccountId },
+      { idempotencyKey: `tip-checkout-${tip.id}` },
     )
 
     await sb.from('tips').update({ stripe_session_id: session.id }).eq('id', tip.id)

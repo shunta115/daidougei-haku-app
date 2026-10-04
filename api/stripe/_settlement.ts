@@ -71,7 +71,7 @@ async function reconcileApplicationFee(
   )
 }
 
-export async function settleDirectCharge(
+export async function settleCharge(
   sb: SupabaseClient,
   stripe: Stripe,
   args: {
@@ -79,13 +79,15 @@ export async function settleDirectCharge(
     rowId: string
     chargeId: string | null
     connectedAccountId: string | null
+    chargeType: 'direct' | 'platform_separate'
     feeBps: number
     collectedAppFeeYen: number
   },
 ) {
   if (!args.chargeId || !args.connectedAccountId) return
-  const charge = await stripe.charges.retrieve(args.chargeId, { stripeAccount: args.connectedAccountId })
-  const bt = await loadBalanceTransaction(stripe, charge, args.connectedAccountId)
+  const stripeAccount = args.chargeType === 'direct' ? args.connectedAccountId : null
+  const charge = await stripe.charges.retrieve(args.chargeId, stripeAccount ? { stripeAccount } : undefined)
+  const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
   const grossYen = yenFromStripe(charge.amount)
   const stripeFeeYen = yenFromStripe(bt?.fee)
   const settled = settleSale(grossYen, stripeFeeYen, args.feeBps)
@@ -100,6 +102,7 @@ export async function settleDirectCharge(
     net_after_stripe_yen: settled.netYen,
     haku_fee_bps: args.feeBps,
     haku_fee_yen: settled.hakuFeeYen,
+    platform_fee_yen: settled.hakuFeeYen,
     performer_share_yen: settled.performerShareYen,
     refunded_amount_yen: refundedYen,
     settlement_status: 'settled',
@@ -109,7 +112,7 @@ export async function settleDirectCharge(
   if (error && !missingColumn(error)) throw error
 
   const applicationFeeId = stripeId(charge.application_fee)
-  if (applicationFeeId) {
+  if (args.chargeType === 'direct' && applicationFeeId) {
     try {
       await reconcileApplicationFee(stripe, {
         applicationFeeId,
@@ -138,32 +141,34 @@ export async function settleSaleByCharge(
   if (!chargeId && !paymentIntentId) return
 
   const tipQuery = chargeId
-    ? sb.from('tips').select('id, platform_fee_yen, platform_fee_cents').eq('stripe_charge_id', chargeId).maybeSingle()
-    : sb.from('tips').select('id, platform_fee_yen, platform_fee_cents').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
+    ? sb.from('tips').select('id, platform_fee_yen, platform_fee_cents, stripe_checkout_mode').eq('stripe_charge_id', chargeId).maybeSingle()
+    : sb.from('tips').select('id, platform_fee_yen, platform_fee_cents, stripe_checkout_mode').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
   const merchQuery = chargeId
-    ? sb.from('merch_orders').select('id, platform_fee_yen').eq('stripe_charge_id', chargeId).maybeSingle()
-    : sb.from('merch_orders').select('id, platform_fee_yen').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
+    ? sb.from('merch_orders').select('id, platform_fee_yen, stripe_checkout_mode').eq('stripe_charge_id', chargeId).maybeSingle()
+    : sb.from('merch_orders').select('id, platform_fee_yen, stripe_checkout_mode').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
 
   const [tip, merch] = await Promise.all([tipQuery, merchQuery])
   if (tip.error && !missingColumn(tip.error)) throw tip.error
   if (merch.error && !missingColumn(merch.error)) throw merch.error
 
   if (tip.data?.id) {
-    await settleDirectCharge(sb, stripe, {
+    await settleCharge(sb, stripe, {
       kind: 'tip',
       rowId: tip.data.id,
       chargeId,
       connectedAccountId,
+      chargeType: tip.data.stripe_checkout_mode === 'platform_separate' ? 'platform_separate' : 'direct',
       feeBps: TIP_SYSTEM_FEE_BPS,
       collectedAppFeeYen: yenFromStripe(tip.data.platform_fee_yen ?? tip.data.platform_fee_cents),
     })
   }
   if (merch.data?.id) {
-    await settleDirectCharge(sb, stripe, {
+    await settleCharge(sb, stripe, {
       kind: 'merch',
       rowId: merch.data.id,
       chargeId,
       connectedAccountId,
+      chargeType: merch.data.stripe_checkout_mode === 'platform_separate' ? 'platform_separate' : 'direct',
       feeBps: MERCH_SYSTEM_FEE_BPS,
       collectedAppFeeYen: yenFromStripe(merch.data.platform_fee_yen),
     })
@@ -179,10 +184,8 @@ export async function settleCheckoutPayment(
 ) {
   const paymentIntentId = stripeId(session.payment_intent)
   if (!paymentIntentId) return
-  const paymentIntent = await stripe.paymentIntents.retrieve(
-    paymentIntentId,
-    connectedAccountId ? { stripeAccount: connectedAccountId } : undefined,
-  )
+  const platformCharge = session.metadata?.charge_type === 'platform_separate'
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, !platformCharge && connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
   const chargeId = stripeId(paymentIntent.latest_charge)
   if (!chargeId) return
   await settleSaleByCharge(

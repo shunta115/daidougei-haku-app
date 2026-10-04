@@ -16,7 +16,7 @@ import {
   markMerchOrderDispute,
   markMerchOrderRefunded,
 } from './_finalizeMerchOrder.js'
-import { markPerformerPayout } from './_payouts.js'
+import { markPerformerPayout, markPerformerTransfer } from './_payouts.js'
 import { settleSaleByCharge } from './_settlement.js'
 import { getAdminSupabase, getStripe } from './_shared.js'
 
@@ -207,6 +207,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const payout = event.data.object as Stripe.Payout
         const payoutStatus = event.type === 'payout.paid' ? 'paid' : event.type === 'payout.canceled' ? 'canceled' : 'failed'
         await markPerformerPayout(sb, payout, connectedAccountId, payoutStatus)
+      }
+
+      if (event.type === 'transfer.created' || event.type === 'transfer.reversed') {
+        await markPerformerTransfer(sb, event.data.object as Stripe.Transfer)
       }
 
       if (event.type === 'account.updated') {

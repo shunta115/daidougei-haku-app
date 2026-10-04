@@ -22,6 +22,7 @@ type PayoutRow = {
   amount_yen: number
   status: string
   stripe_payout_id: string | null
+  stripe_transfer_id?: string | null
   created_at: string
 }
 
@@ -64,9 +65,8 @@ function adjustedConfirmedShare(row: SaleRow): number {
   })
 }
 
-async function jpyAvailable(stripe: Stripe, accountId: string | null): Promise<number> {
-  if (!accountId) return 0
-  const balance = await stripe.balance.retrieve({ stripeAccount: accountId })
+async function jpyAvailable(stripe: Stripe): Promise<number> {
+  const balance = await stripe.balance.retrieve()
   return yenFromStripe(balance.available.find((item) => item.currency === 'jpy')?.amount)
 }
 
@@ -91,7 +91,7 @@ export async function getPerformerPayoutView(
   let payouts: PayoutRow[] = []
   const { data: payoutRows, error: payoutError } = await sb
     .from('performer_payouts')
-    .select('id, amount_yen, status, stripe_payout_id, created_at')
+    .select('id, amount_yen, status, stripe_payout_id, stripe_transfer_id, created_at')
     .eq('performer_id', args.performerId)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -102,7 +102,9 @@ export async function getPerformerPayoutView(
   const paidOutYen = payouts.filter((row) => row.status === 'paid').reduce((sum, row) => sum + row.amount_yen, 0)
   const pendingYen = reservedYen
   const hakuNetAvailable = Math.max(0, hakuAvailableYen - reservedYen - paidOutYen)
-  const stripeAvailableYen = await jpyAvailable(stripe, args.stripeAccountId).catch(() => 0)
+  // New sales remain on the platform until the internal payable balance reaches
+  // the threshold, so the relevant Stripe constraint is the platform balance.
+  const stripeAvailableYen = await jpyAvailable(stripe).catch(() => 0)
   const availableYen = eligiblePayoutYen(hakuNetAvailable, stripeAvailableYen)
   const openPayout = payouts.find((row) => row.status === 'reserved') ?? null
 
@@ -127,7 +129,7 @@ export async function requestPerformerPayout(
   stripe: Stripe,
   args: { performerId: string; stripeAccountId: string },
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_')) {
+  if (process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') && process.env.ENABLE_LIVE_PERFORMER_TRANSFERS !== 'true') {
     return { status: 403, body: { error: '本番の銀行送金は無効です。' } }
   }
 
@@ -163,6 +165,7 @@ export async function requestPerformerPayout(
       haku_available_yen: view.hakuAvailableYen,
       stripe_available_yen: view.stripeAvailableYen,
       eligible_yen: amountYen,
+      funding_model: 'platform_separate',
     })
     .select('id, amount_yen, status')
     .maybeSingle()
@@ -177,11 +180,17 @@ export async function requestPerformerPayout(
   if (!insert.data?.id) return { status: 500, body: { error: '出金申請を保存できませんでした。' } }
 
   const stripeIdempotencyKey = `haku-payout:${insert.data.id}`
-  let payout: Stripe.Payout
+  let transfer: Stripe.Transfer
   try {
-    payout = await stripe.payouts.create(
-      { amount: amountYen, currency: 'jpy', metadata: { performer_id: args.performerId, payout_row: insert.data.id } },
-      { stripeAccount: args.stripeAccountId, idempotencyKey: stripeIdempotencyKey },
+    transfer = await stripe.transfers.create(
+      {
+        amount: amountYen,
+        currency: 'jpy',
+        destination: args.stripeAccountId,
+        transfer_group: `haku-payout:${insert.data.id}`,
+        metadata: { performer_id: args.performerId, payout_row: insert.data.id },
+      },
+      { idempotencyKey: stripeIdempotencyKey },
     )
   } catch (e) {
     const message = e instanceof Error ? e.message.slice(0, 500) : 'Payout failed'
@@ -196,16 +205,16 @@ export async function requestPerformerPayout(
   const { error: saveError } = await sb
     .from('performer_payouts')
     .update({
-      stripe_payout_id: payout.id,
-      status: payout.status === 'paid' ? 'paid' : 'reserved',
+      stripe_transfer_id: transfer.id,
+      status: 'paid',
       idempotency_key: stripeIdempotencyKey,
       updated_at: new Date().toISOString(),
     })
     .eq('id', insert.data.id)
   if (saveError && !missingColumn(saveError)) {
-    // Stripe already created the payout. Keep reserved so a retry cannot insert another row.
+    // Stripe already created the transfer. Keep reserved so a retry cannot insert another row.
   }
-  return { status: 200, body: { ok: true, amountYen, payoutId: insert.data.id, stripePayoutId: payout.id } }
+  return { status: 200, body: { ok: true, amountYen, payoutId: insert.data.id, stripeTransferId: transfer.id } }
 }
 
 export async function markPerformerPayout(
@@ -225,5 +234,20 @@ export async function markPerformerPayout(
   if (byStripe.error && !missingTable(byStripe.error) && !missingColumn(byStripe.error)) throw byStripe.error
   if (byStripe.data?.id || !payout.metadata?.payout_row) return
   const { error } = await sb.from('performer_payouts').update(patch).eq('id', payout.metadata.payout_row)
+  if (error && !missingTable(error) && !missingColumn(error)) throw error
+}
+
+export async function markPerformerTransfer(sb: SupabaseClient, transfer: Stripe.Transfer) {
+  const payoutRow = transfer.metadata?.payout_row
+  if (!payoutRow) return
+  const { error } = await sb
+    .from('performer_payouts')
+    .update({
+      stripe_transfer_id: transfer.id,
+      status: transfer.reversed ? 'canceled' : 'paid',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', payoutRow)
+    .eq('funding_model', 'platform_separate')
   if (error && !missingTable(error) && !missingColumn(error)) throw error
 }

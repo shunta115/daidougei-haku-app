@@ -7,7 +7,7 @@ const fake = vi.hoisted(() => ({
   insertError: null as { code?: string; message: string } | null,
   inserted: null as Record<string, unknown> | null,
   stripeAvailable: 20_000,
-  createPayout: vi.fn(),
+  createTransfer: vi.fn(),
 }))
 
 vi.mock('../api/stripe/_shared.js', () => ({}))
@@ -61,7 +61,7 @@ const sb = {
 
 const stripe = {
   balance: { retrieve: async () => ({ available: [{ currency: 'jpy', amount: fake.stripeAvailable }] }) },
-  payouts: { create: (...args: unknown[]) => fake.createPayout(...args) },
+  transfers: { create: (...args: unknown[]) => fake.createTransfer(...args) },
 }
 
 beforeEach(() => {
@@ -73,7 +73,7 @@ beforeEach(() => {
   fake.insertError = null
   fake.inserted = null
   fake.stripeAvailable = 20_000
-  fake.createPayout.mockResolvedValue({ id: 'po_test', status: 'pending' })
+  fake.createTransfer.mockResolvedValue({ id: 'tr_test' })
 })
 
 describe('requestPerformerPayout', () => {
@@ -81,55 +81,55 @@ describe('requestPerformerPayout', () => {
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 9999, refunded_amount_yen: 0 }]
     const blocked = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(blocked.status).toBe(400)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
 
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const ok = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(ok.status).toBe(200)
-    expect(fake.createPayout).toHaveBeenCalledTimes(1)
-    expect(fake.createPayout.mock.calls[0][0].amount).toBe(10000)
+    expect(fake.createTransfer).toHaveBeenCalledTimes(1)
+    expect(fake.createTransfer.mock.calls[0][0]).toMatchObject({ amount: 10000, destination: 'acct_1' })
   })
 
   it('does not create a second payout while one is reserved', async () => {
     fake.payouts = [{ id: 'open', amount_yen: 10000, status: 'reserved', stripe_payout_id: 'po_open', created_at: '2026-10-03T00:00:00Z' }]
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(409)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
   it('treats a unique-constraint collision as an in-flight payout', async () => {
     fake.insertError = { code: '23505', message: 'duplicate' }
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(409)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
   it('blocks live-mode bank payouts', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_live_fixture'
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(403)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
   it('uses the lower Stripe available balance', async () => {
     fake.stripeAvailable = 8000
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(400)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
   it('does not pay an unfinalized settlement even when a share value exists', async () => {
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'fee_adjust_failed', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(400)
-    expect(fake.createPayout).not.toHaveBeenCalled()
+    expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
   it('releases the reserved row when Stripe payout creation fails', async () => {
-    fake.createPayout.mockRejectedValue(new Error('insufficient_funds'))
+    fake.createTransfer.mockRejectedValue(new Error('insufficient_funds'))
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(409)
-    expect(fake.createPayout).toHaveBeenCalledTimes(1)
+    expect(fake.createTransfer).toHaveBeenCalledTimes(1)
   })
 
   it('does not create a second Stripe payout after the first create succeeds', async () => {
@@ -137,6 +137,6 @@ describe('requestPerformerPayout', () => {
     expect(first.status).toBe(200)
     const second = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(second.status).toBe(409)
-    expect(fake.createPayout).toHaveBeenCalledTimes(1)
+    expect(fake.createTransfer).toHaveBeenCalledTimes(1)
   })
 })

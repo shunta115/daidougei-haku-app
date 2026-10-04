@@ -138,7 +138,7 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
     <section className="pl-registration__section">
       <h2 className="pl-h2">{t('payoutMinLabel')}</h2>
       <p className="pl-muted">{canPayout ? t('payoutReady') : t('payoutNeedMoreYen', { amount: formatYen(payout?.remainingYen ?? 10000) })}</p>
-      <p className="pl-muted">{t('payoutHakuBalance')} {formatYen(payout?.hakuAvailableYen ?? 0)} / {t('payoutStripeBalance')} {formatYen(payout?.stripeAvailableYen ?? 0)}</p>
+      <p className="pl-muted">{t('payoutHakuBalance')} {formatYen(payout?.hakuAvailableYen ?? 0)}</p>
       {confirming ? (
         <div className="pl-registration__notice">
           <p>{t('payoutConfirmTitle')}</p>

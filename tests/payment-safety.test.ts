@@ -41,6 +41,18 @@ describe('payment safety boundaries', () => {
     expect(settlement).toMatch(/haku-app-fee-adj:\$\{args\.chargeId\}:\$\{args\.refundedYen\}/)
   })
 
+  it('holds new sales on the platform and transfers only after payout eligibility', () => {
+    const tip = read('api/stripe/tip.ts')
+    const merch = read('api/stripe/merch.ts')
+    const payout = read('api/stripe/_payouts.ts')
+    expect(tip).toContain("charge_type: 'platform_separate'")
+    expect(merch).toContain("charge_type: 'platform_separate'")
+    expect(tip).not.toContain('stripeAccount: connectedAccountId')
+    expect(merch).not.toContain('stripeAccount: connectedAccountId')
+    expect(payout).toContain('stripe.transfers.create')
+    expect(payout).not.toContain('stripe.payouts.create')
+  })
+
   it('normalizes guest fan metadata and verifies paid Stripe metadata against stored rows', () => {
     const tips = read('api/stripe/_finalizePaidTip.ts')
     const merch = read('api/stripe/_finalizeMerchOrder.ts')

@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   MERCH_SYSTEM_FEE_BPS_DEFAULT,
-  calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
   getStripe,
@@ -90,7 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const amount = product.price_yen * qty
     // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
     const feeBps = MERCH_SYSTEM_FEE_BPS_DEFAULT
-    const fee = calcPlatformFee(amount, feeBps)
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')
       .insert({
@@ -106,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         quantity: qty,
         amount_yen: amount,
         currency: 'jpy',
-        platform_fee_yen: fee,
+        platform_fee_yen: 0,
         status: 'pending',
       })
       .select('id')
@@ -114,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (orderErr?.code === '23505') {
       const { data: existing, error: existingErr } = await sb
         .from('merch_orders')
-        .select('id, buyer_id, seller_id, product_id, quantity, amount_yen, status, stripe_session_id')
+        .select('id, buyer_id, seller_id, product_id, quantity, amount_yen, status, stripe_session_id, stripe_checkout_mode')
         .eq('id', requestId)
         .maybeSingle()
       if (existingErr || !existing) throw existingErr || new Error('Order retry lookup failed')
@@ -129,9 +127,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (existing.status === 'pending' && existing.stripe_session_id) {
-        const session = await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {
-          stripeAccount: seller.stripe_account_id,
-        })
+        const session = existing.stripe_checkout_mode === 'platform_separate'
+          ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
+          : await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: seller.stripe_account_id })
         if (session.url) {
           res.status(200).json({ url: session.url })
           return
@@ -146,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const orderMetaPatch = {
       gross_amount_yen: amount,
       connected_account_id: connectedAccountId,
-      stripe_checkout_mode: 'direct',
+      stripe_checkout_mode: 'platform_separate',
       seller_responsibility: 'seller',
     }
     const { error: orderMetaErr } = await sb.from('merch_orders').update(orderMetaPatch).eq('id', order.id)
@@ -174,9 +172,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         seller_id: product.seller_id,
         buyer_id: user.id,
         connected_account_id: connectedAccountId,
-        charge_type: 'direct',
+        charge_type: 'platform_separate',
         platform_fee_bps: String(feeBps),
-        platform_fee_yen: String(fee),
         seller_responsibility: 'seller',
       }
       const origin = getAppUrl(req)
@@ -204,16 +201,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
             },
           ],
-          payment_intent_data: {
-            ...(fee > 0 ? { application_fee_amount: fee } : {}),
-            metadata: paymentIntentMetadata,
-          },
+          payment_intent_data: { metadata: paymentIntentMetadata },
           metadata: {
             ...paymentIntentMetadata,
           },
           expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         },
-        { idempotencyKey: `merch-checkout-${order.id}`, stripeAccount: connectedAccountId },
+        { idempotencyKey: `merch-checkout-${order.id}` },
       )
 
       if (!session.url) throw new Error('Checkout URL missing')
