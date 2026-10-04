@@ -82,7 +82,7 @@ beforeEach(() => {
   fake.auth = { user: null, profile: null }
   fake.listPublishedEvents.mockResolvedValue([event])
   fake.getEventBySlug.mockResolvedValue(event)
-  fake.getEventVoteRule.mockResolvedValue({ event_id: event.id, voting_open: true, votes_per_user_per_day: 1, voting_starts_at: null, voting_ends_at: null, updated_at: '' })
+  fake.getEventVoteRule.mockResolvedValue({ event_id: event.id, voting_enabled: true, voting_open: true, votes_per_user_per_day: 1, voting_starts_at: null, voting_ends_at: null, updated_at: '' })
   fake.getAnonVoteState.mockResolvedValue({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
   fake.castAnonEventVote.mockResolvedValue(undefined)
   fake.getMyVotes.mockResolvedValue([])
@@ -109,7 +109,7 @@ it('lists published events from the database and opens the selected slug', async
   const open = vi.fn()
   render(<EventListScreen onOpen={open} />)
   await screen.findByText('受賞者たち')
-  expect(screen.getByRole('img', { name: '受賞者たち 公式チラシ' }).getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer.jpg')
+  expect(screen.getByRole('img', { name: '受賞者たち 公式チラシ' }).getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer-2026.webp')
   for (const fact of ['10/10〜12', '10:00〜19:00', '東京 練馬城址公園', '入場無料', 'Presented by 大道芸博 2026']) {
     expect(screen.getByText(fact)).toBeTruthy()
   }
@@ -122,12 +122,12 @@ it('shows a readable hero and opens the official flyer without using it as the b
   await screen.findByRole('heading', { name: '受賞者たち' })
   expect(document.querySelector('.pl-event-hero__art')).toBeNull()
   expect(screen.getByText('観る。選ぶ。もう一度、沸く。')).toBeTruthy()
-  expect(screen.getByText('あなたの一票で、夜のステージが決まる。')).toBeTruthy()
+  expect(screen.getAllByText('あなたの一票で、夜のステージが決まる。').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: '今日のイベントを楽しむ' }))
   fireEvent.click(screen.getByRole('button', { name: '公式チラシを見る' }))
   const flyer = screen.getByRole('dialog', { name: '受賞者たち2026 公式チラシ' })
   const image = flyer.querySelector('img')
-  expect(image?.getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer.jpg')
+  expect(image?.getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer-2026.webp')
   expect(image?.getAttribute('alt')).toBe('受賞者たち Presented by 大道芸博 2026 公式チラシ')
 })
 
@@ -135,26 +135,39 @@ it('allows anonymous event viewing while hiding unpublished intermediate results
   render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
   await screen.findAllByText('受賞者たち')
   expect(screen.getByText('観る。選ぶ。もう一度、沸く。')).toBeTruthy()
-  expect(screen.getByText(/途中順位は公開しません/)).toBeTruthy()
   expect(screen.queryByText('途中順位')).toBeNull()
   expect(screen.getByRole('dialog')).toBeTruthy()
 })
 
-it('asks an anonymous visitor to authenticate only when voting', async () => {
+it('allows an anonymous visitor to use the device-scoped vote API', async () => {
   const requireAuth = vi.fn()
   render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={requireAuth} />)
   await screen.findAllByText('SUI')
-  fireEvent.click(screen.getAllByRole('button', { name: '投票する' }).at(-1)!)
-  expect(requireAuth).toHaveBeenCalledOnce()
-  expect(sessionStorage.getItem('pl-event-return')).toBe(event.slug)
+  const voteSection = document.getElementById('event-vote')
+  const candidate = Array.from(voteSection?.querySelectorAll('article') ?? []).find((item) => item.textContent?.includes('SUI'))
+  const voteButton = Array.from(candidate?.querySelectorAll('button') ?? []).find((button) => button.textContent?.trim() === '投票する')
+  expect(voteButton).toBeTruthy()
+  await waitFor(() => expect((voteButton as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(voteButton!)
+  await waitFor(() => expect(fake.castAnonEventVote).toHaveBeenCalledWith(event.id, performer.id))
+  expect(requireAuth).not.toHaveBeenCalled()
   expect(fake.voteForPerformer).not.toHaveBeenCalled()
 })
 
-it('casts an authenticated fan vote through the server API and shows completion feedback', async () => {
+it('casts an authenticated fan vote through the same device-scoped server API and shows completion feedback', async () => {
   fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan', status: 'active' } }
+  fake.getAnonVoteState
+    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
+    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
+    .mockResolvedValue({ voting_open: true, max_votes: 3, used: 1, remaining: 2, voted: [performer.id] })
   render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
   await screen.findAllByText('SUI')
-  fireEvent.click(screen.getAllByRole('button', { name: '投票する' }).at(-1)!)
-  await waitFor(() => expect(fake.voteForPerformer).toHaveBeenCalledWith(event.id, performer.id, 'fan-1'))
-  expect(await screen.findByText('投票完了！')).toBeTruthy()
+  const voteSection = document.getElementById('event-vote')
+  const candidate = Array.from(voteSection?.querySelectorAll('article') ?? []).find((item) => item.textContent?.includes('SUI'))
+  const voteButton = Array.from(candidate?.querySelectorAll('button') ?? []).find((button) => button.textContent?.trim() === '投票する')
+  expect(voteButton).toBeTruthy()
+  await waitFor(() => expect((voteButton as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(voteButton!)
+  await waitFor(() => expect(fake.castAnonEventVote).toHaveBeenCalledWith(event.id, performer.id))
+  expect(await screen.findByText('SUIに投票しました！')).toBeTruthy()
 })

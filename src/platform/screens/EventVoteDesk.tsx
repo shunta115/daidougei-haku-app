@@ -122,7 +122,10 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
       .catch(() => { if (active) setError(t('eventVoteFail')) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [event.id, t])
+  // The vote state is keyed only by the event. Depending on a translated
+  // callback here can refetch forever in standalone/test renderers where the
+  // fallback translator is recreated on each render.
+  }, [event.id])
 
   const used = maxVotes - remaining
   const lastPerformer = lastName
@@ -249,7 +252,7 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
       }
     })()
     return () => { active = false }
-  }, [slug, t])
+  }, [slug])
 
   if (error) return <main className="pl-event-detail"><AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} /><p className="pl-error">{error}</p></main>
   if (!event) return <p role="status">{t('eventPreparing')}</p>

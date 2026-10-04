@@ -188,7 +188,7 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     listPublishedEvents().then(setEvents).catch(() => setError(t('eventLoadError'))).finally(() => setLoading(false))
-  }, [t])
+  }, [])
   return <main className="pl-event-index">
     <header className="pl-event-index__head"><p>HAKU EVENTS</p><h1>{t('eventListTitle')}</h1><span>{t('eventListLead')}</span></header>
     <GlobalMessageBar />
@@ -293,7 +293,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       } finally { if (active) setLoading(false) }
     })()
     return () => { active = false }
-  }, [slug, t, user])
+  }, [slug, user?.id])
 
   const performerById = useMemo(() => new Map([...performers, ...slotPerformers].map((performer) => [performer.id, performer])), [performers, slotPerformers])
   const guestPerformerById = useMemo(() => {
