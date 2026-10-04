@@ -19,6 +19,8 @@ export function remainingShareYen(args: {
   performerShareYen: number
   grossYen: number
   refundedYen: number
+  stripeFeeYen?: number
+  feeBps?: number
   status?: string
   disputeStatus?: string | null
 }): number {
@@ -29,6 +31,9 @@ export function remainingShareYen(args: {
   const refunded = Number.isInteger(args.refundedYen) && args.refundedYen > 0 ? args.refundedYen : 0
   if (refunded <= 0) return args.performerShareYen
   if (refunded >= args.grossYen) return 0
+  if (Number.isInteger(args.stripeFeeYen) && Number.isInteger(args.feeBps)) {
+    return settleSaleAfterRefund(args.grossYen, args.stripeFeeYen ?? 0, refunded, args.feeBps ?? 0).performerShareYen
+  }
   return Math.floor((args.performerShareYen * (args.grossYen - refunded)) / args.grossYen)
 }
 
@@ -46,3 +51,4 @@ export function remainingToMinPayout(eligibleYen: number, minYen = MIN_PAYOUT_YE
   const current = Number.isInteger(eligibleYen) ? Math.max(0, eligibleYen) : 0
   return Math.max(0, minYen - current)
 }
+import { settleSaleAfterRefund } from './fees.js'

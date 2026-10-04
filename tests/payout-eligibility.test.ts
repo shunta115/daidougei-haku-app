@@ -32,6 +32,7 @@ describe('performer payout eligibility', () => {
     expect(refundSaleStatus(1000, 1000)).toBe('refunded')
     expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 0 })).toBe(820)
     expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 500 })).toBe(410)
+    expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 500, stripeFeeYen: 36, feeBps: 1500 })).toBe(395)
     expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 1000 })).toBe(0)
     expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 0, disputeStatus: 'needs_response' })).toBe(0)
     expect(remainingShareYen({ performerShareYen: 820, grossYen: 1000, refundedYen: 0, disputeStatus: 'won' })).toBe(820)

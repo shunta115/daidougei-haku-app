@@ -24,10 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireAuthUser(req, res)
     if (!user) return
 
-    const { productId, quantity } = req.body as { productId?: string; quantity?: number }
+    const { productId, quantity, requestId } = req.body as { productId?: string; quantity?: number; requestId?: string }
     const qty = Math.floor(Number(quantity) || 1)
-    if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20) {
-      res.status(400).json({ error: 'productId and quantity (1-20) required' })
+    if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20 || !requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+      res.status(400).json({ code: 'invalid_payment_request' })
       return
     }
 
@@ -38,11 +38,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', productId)
       .maybeSingle()
     if (productErr || !product) {
-      res.status(404).json({ error: 'Product not found' })
+      res.status(404).json({ code: 'product_unavailable' })
       return
     }
     if (product.status !== 'active' || product.stock < qty) {
-      res.status(409).json({ error: 'Product is not available' })
+      res.status(409).json({ code: 'product_unavailable' })
       return
     }
 
@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', user.id)
       .maybeSingle()
     if (buyer?.status === 'suspended' || buyer?.status === 'deleted') {
-      res.status(403).json({ error: 'Account unavailable' })
+      res.status(403).json({ code: 'invalid_payment_request' })
       return
     }
     const buyerDisplayName = String(buyer?.display_name || user.email?.split('@')[0] || 'User').trim().slice(0, 120)
@@ -64,15 +64,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', product.seller_id)
       .maybeSingle()
     if (sellerErr || !seller) {
-      res.status(404).json({ error: 'Seller not found' })
+      res.status(404).json({ code: 'seller_checkout_unavailable' })
       return
     }
     if (!seller.is_approved) {
-      res.status(403).json({ error: 'Seller is not approved yet' })
+      res.status(403).json({ code: 'seller_checkout_unavailable' })
       return
     }
     if (!seller.stripe_account_id) {
-      res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
+      res.status(400).json({ code: 'seller_checkout_unavailable' })
       return
     }
 
@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const account = await requireConnectedAccountChargeReady(stripe, seller.stripe_account_id)
     if (!account) {
       await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', seller.id)
-      res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
+      res.status(400).json({ code: 'seller_checkout_unavailable' })
       return
     }
     if (!seller.stripe_onboarding_complete) {
@@ -94,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')
       .insert({
+        id: requestId,
         buyer_id: user.id,
         seller_id: product.seller_id,
         product_id: product.id,
@@ -110,6 +111,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .select('id')
       .single()
+    if (orderErr?.code === '23505') {
+      const { data: existing, error: existingErr } = await sb
+        .from('merch_orders')
+        .select('id, buyer_id, seller_id, product_id, quantity, amount_yen, status, stripe_session_id')
+        .eq('id', requestId)
+        .maybeSingle()
+      if (existingErr || !existing) throw existingErr || new Error('Order retry lookup failed')
+      const sameRequest =
+        existing.buyer_id === user.id &&
+        existing.seller_id === product.seller_id &&
+        existing.product_id === product.id &&
+        Number(existing.quantity) === qty &&
+        Number(existing.amount_yen) === amount
+      if (!sameRequest) {
+        res.status(409).json({ code: 'invalid_payment_request' })
+        return
+      }
+      if (existing.status === 'pending' && existing.stripe_session_id) {
+        const session = await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {
+          stripeAccount: seller.stripe_account_id,
+        })
+        if (session.url) {
+          res.status(200).json({ url: session.url })
+          return
+        }
+      }
+      res.status(409).json({ code: 'checkout_failed' })
+      return
+    }
     if (orderErr || !order) throw orderErr || new Error('Order insert failed')
 
     const connectedAccountId = seller.stripe_account_id as string
@@ -132,7 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (reserveErr || !reserved?.id) {
       await sb.from('merch_orders').update({ status: 'failed' }).eq('id', order.id)
-      res.status(409).json({ error: 'Product stock changed. Please try again.' })
+      res.status(409).json({ code: 'product_unavailable' })
       return
     }
 
@@ -202,6 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw e
     }
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Merch checkout failed' })
+    console.error('merch checkout failed', e)
+    res.status(500).json({ code: 'checkout_failed' })
   }
 }

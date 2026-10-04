@@ -67,7 +67,7 @@ const stripe = {
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.STRIPE_SECRET_KEY = 'sk_test_fixture'
-  fake.tips = [{ id: 't1', status: 'succeeded', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0, dispute_status: null }]
+  fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0, dispute_status: null }]
   fake.orders = []
   fake.payouts = []
   fake.insertError = null
@@ -78,12 +78,12 @@ beforeEach(() => {
 
 describe('requestPerformerPayout', () => {
   it('rejects 9,999 and pays 10,000 once', async () => {
-    fake.tips = [{ id: 't1', status: 'succeeded', gross_amount_yen: 12000, performer_share_yen: 9999, refunded_amount_yen: 0 }]
+    fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 9999, refunded_amount_yen: 0 }]
     const blocked = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(blocked.status).toBe(400)
     expect(fake.createPayout).not.toHaveBeenCalled()
 
-    fake.tips = [{ id: 't1', status: 'succeeded', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
+    fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const ok = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(ok.status).toBe(200)
     expect(fake.createPayout).toHaveBeenCalledTimes(1)
@@ -113,6 +113,13 @@ describe('requestPerformerPayout', () => {
 
   it('uses the lower Stripe available balance', async () => {
     fake.stripeAvailable = 8000
+    const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(res.status).toBe(400)
+    expect(fake.createPayout).not.toHaveBeenCalled()
+  })
+
+  it('does not pay an unfinalized settlement even when a share value exists', async () => {
+    fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'fee_adjust_failed', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(400)
     expect(fake.createPayout).not.toHaveBeenCalled()

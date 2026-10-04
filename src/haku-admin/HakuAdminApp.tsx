@@ -209,7 +209,7 @@ export function HakuAdminApp() {
     { id: 'events', label: 'イベント' },
     { id: 'votes', label: '投票' },
     { id: 'live', label: 'LIVE' },
-    { id: 'money', label: '売上' },
+    { id: 'money', label: '決済・Stripe' },
     { id: 'reports', label: '通報' },
     { id: 'preview', label: '表示確認' },
   ], [])
@@ -490,16 +490,28 @@ export function HakuAdminApp() {
 
       {tab === 'money' && money ? (
         <section>
+          <h2>決済・Stripe</h2>
+          <p className="ha-note">Stripeの最新状態をサーバー側で確認しています。Account IDや秘密情報は表示しません。</p>
+          {((money.stripePerformers as Array<Record<string, unknown>>) ?? []).map((row) => {
+            const state = String(row.state || 'check_error')
+            const label = state === 'ready' ? '利用可能' : state === 'unregistered' ? '未設定' : state === 'needs_information' ? '要対応' : state === 'under_review' ? '確認中' : state === 'restricted' ? '制限中' : state === 'onboarding' ? '登録途中' : '確認エラー'
+            return <article key={String(row.performer_id)} className="ha-card" data-stripe-state={state}>
+              <h3>{String(row.stage_name || '名称未登録')} <small>{label}</small></h3>
+              <p>承認 {row.approved ? '済み' : '未承認'} · 投げ銭 {row.tip_available ? '受付可' : '受付不可'} · グッズ {row.merch_available ? '販売可' : '販売不可'}</p>
+              <p>charges_enabled {String(Boolean(row.charges_enabled))} · payouts_enabled {String(Boolean(row.payouts_enabled))} · 登録情報 {row.details_submitted ? '提出済み' : '未完了'}</p>
+              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 出金可能 {formatYen(Number(row.available_yen) || 0)} · 保留 {formatYen(Number(row.held_yen) || 0)} · 処理中 {formatYen(Number(row.pending_payout_yen) || 0)} · 出金済み {formatYen(Number(row.paid_out_yen) || 0)}</p>
+            </article>
+          })}
           <p className="ha-note">Stripe実手数料控除後に、投げ銭15%・グッズ8%を計算した確定台帳です。</p>
           <p>投げ銭 {((money.tips as unknown[]) ?? []).length}件 · グッズ {((money.orders as unknown[]) ?? []).length}件</p>
           {((money.tips as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>投げ銭 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
+              <p>投げ銭 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_cents) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number((row.current_settlement as Record<string, unknown> | undefined)?.hakuFeeYen ?? row.haku_fee_yen) || 0)} · 受取 {formatYen(Number((row.current_settlement as Record<string, unknown> | undefined)?.performerShareYen ?? row.performer_share_yen) || 0)} · 返金 {formatYen(Number(row.refunded_amount_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
             </article>
           ))}
           {((money.orders as Array<Record<string, unknown>>) ?? []).slice(0, 20).map((row) => (
             <article key={String(row.id)} className="ha-card">
-              <p>グッズ {String(row.product_name || '')} 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number(row.haku_fee_yen) || 0)} · 受取 {formatYen(Number(row.performer_share_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
+              <p>グッズ {String(row.product_name || '')} 総額 {formatYen(Number(row.gross_amount_yen ?? row.amount_yen) || 0)} · {row.settlement_status ? <>Stripe {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU {formatYen(Number((row.current_settlement as Record<string, unknown> | undefined)?.hakuFeeYen ?? row.haku_fee_yen) || 0)} · 受取 {formatYen(Number((row.current_settlement as Record<string, unknown> | undefined)?.performerShareYen ?? row.performer_share_yen) || 0)} · 返金 {formatYen(Number(row.refunded_amount_yen) || 0)} · 精算 {String(row.settlement_status)}</> : <>Stripe／HAKU／受取 未算定（旧データ）</>} · 決済 {String(row.status)}</p>
             </article>
           ))}
           <h2>出金</h2>

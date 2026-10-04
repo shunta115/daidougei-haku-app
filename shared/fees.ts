@@ -40,6 +40,28 @@ export function applicationFeeOverageYen(collectedAppFeeYen: number, desiredHaku
   return Math.max(0, collectedAppFeeYen - desiredHakuFeeYen)
 }
 
+/** Apply the same formal settlement equation to the remaining gross after refund. */
+export function settleSaleAfterRefund(
+  grossYen: number,
+  stripeFeeYen: number,
+  refundedYen: number,
+  feeBps: number,
+) {
+  if (!Number.isInteger(grossYen) || grossYen < 0) return settleSale(0, stripeFeeYen, feeBps)
+  const safeRefundedYen = Number.isInteger(refundedYen) && refundedYen > 0 ? Math.min(grossYen, refundedYen) : 0
+  return settleSale(Math.max(0, grossYen - safeRefundedYen), stripeFeeYen, feeBps)
+}
+
+export function applicationFeeRefundDueYen(
+  collectedAppFeeYen: number,
+  alreadyRefundedYen: number,
+  remainingHakuFeeYen: number,
+): number {
+  const desiredRefundedYen = applicationFeeOverageYen(collectedAppFeeYen, remainingHakuFeeYen)
+  if (!Number.isInteger(alreadyRefundedYen) || alreadyRefundedYen < 0) return 0
+  return Math.max(0, desiredRefundedYen - alreadyRefundedYen)
+}
+
 export function bpsToPercentLabel(bps: number): string {
   const n = bps / 100
   return Number.isInteger(n) ? String(n) : n.toFixed(1)

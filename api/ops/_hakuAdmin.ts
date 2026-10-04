@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase } from '../stripe/_shared.js'
+import { getAdminSupabase, getStripe, isConnectedAccountChargeReady } from '../stripe/_shared.js'
+import { getPerformerPayoutView } from '../stripe/_payouts.js'
 import { requireAdmin } from './_guard.js'
-import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../../shared/fees.js'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, settleSaleAfterRefund } from '../../shared/fees.js'
 
 type Json = Record<string, unknown>
 
@@ -41,6 +42,13 @@ function yenSum(rows: Array<Record<string, unknown>>, keys: string[]) {
   }, 0)
 }
 
+function currentSettlement(row: Record<string, unknown>, feeBps: number, grossKeys: string[]) {
+  const grossYen = grossKeys.map((key) => Number(row[key])).find(Number.isFinite) ?? 0
+  const refundedYen = Math.max(0, Number(row.refunded_amount_yen) || 0)
+  const stripeFeeYen = Math.max(0, Number(row.stripe_fee_yen) || 0)
+  return settleSaleAfterRefund(grossYen, stripeFeeYen, refundedYen, feeBps)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const admin = await requireAdmin(req, res)
   if (!admin) return
@@ -77,10 +85,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const merchGmv = yenSum(merchPaid, ['gross_amount_yen', 'amount_yen'])
       const tipSettled = tipPaid.filter((row) => row.settlement_status === 'settled')
       const merchSettled = merchPaid.filter((row) => row.settlement_status === 'settled')
-      const tipFee = yenSum(tipSettled, ['haku_fee_yen'])
-      const merchFee = yenSum(merchSettled, ['haku_fee_yen'])
+      const tipFee = tipSettled.reduce((sum, row) => sum + currentSettlement(row, TIP_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_cents']).hakuFeeYen, 0)
+      const merchFee = merchSettled.reduce((sum, row) => sum + currentSettlement(row, MERCH_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_yen']).hakuFeeYen, 0)
       const stripeFee = yenSum(tipSettled, ['stripe_fee_yen']) + yenSum(merchSettled, ['stripe_fee_yen'])
-      const performerShare = yenSum(tipSettled, ['performer_share_yen']) + yenSum(merchSettled, ['performer_share_yen'])
+      const performerShare =
+        tipSettled.reduce((sum, row) => sum + currentSettlement(row, TIP_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_cents']).performerShareYen, 0) +
+        merchSettled.reduce((sum, row) => sum + currentSettlement(row, MERCH_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_yen']).performerShareYen, 0)
       const now = Date.now()
       const staleLives = (lives.data ?? []).filter((row) => !row.heartbeat_at || now - new Date(String(row.heartbeat_at)).getTime() > 90_000).length
       const performerRows = performers.data ?? []
@@ -573,19 +583,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (resource === 'money' || resource === 'tips' || resource === 'merch') {
-      const [{ data: tips }, { data: orders }] = await Promise.all([
+      const [tipResult, orderResult, performerResult] = await Promise.all([
         sb.from('tips').select('id,performer_id,fan_id,status,gross_amount_yen,amount_cents,stripe_fee_yen,net_after_stripe_yen,haku_fee_bps,haku_fee_yen,performer_share_yen,platform_fee_yen,platform_fee_cents,refunded_amount_yen,dispute_status,settlement_status,created_at').order('created_at', { ascending: false }).limit(200),
         sb.from('merch_orders').select('id,seller_id,buyer_id,status,gross_amount_yen,amount_yen,stripe_fee_yen,net_after_stripe_yen,haku_fee_bps,haku_fee_yen,performer_share_yen,platform_fee_yen,refunded_amount_yen,dispute_status,settlement_status,product_name,created_at').order('created_at', { ascending: false }).limit(200),
+        sb.from('performers').select('id,stage_name,is_approved,stripe_account_id,stripe_onboarding_complete').order('stage_name'),
       ])
+      if (tipResult.error) throw tipResult.error
+      if (orderResult.error) throw orderResult.error
+      if (performerResult.error) throw performerResult.error
+      const tips = tipResult.data
+      const orders = orderResult.data
+      const performerRows = performerResult.data
       const { data: payouts, error: payoutError } = await sb.from('performer_payouts').select('id,performer_id,amount_yen,status,stripe_payout_id,created_at,updated_at').order('created_at', { ascending: false }).limit(200)
+      if (payoutError) throw payoutError
+      const stripe = getStripe()
+      const stripePerformers = await Promise.all((performerRows ?? []).map(async (performer) => {
+        const accountId = performer.stripe_account_id as string | null
+        if (!accountId) return {
+          performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
+          state: 'unregistered', charges_enabled: false, payouts_enabled: false, details_submitted: false,
+          needs_information: false, under_review: false, tip_available: false, merch_available: false,
+          confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
+          held_yen: 0,
+        }
+        try {
+          const [account, payoutView] = await Promise.all([
+            stripe.accounts.retrieve(accountId),
+            getPerformerPayoutView(sb, stripe, { performerId: performer.id, stripeAccountId: accountId }),
+          ])
+          const ready = isConnectedAccountChargeReady(account)
+          const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
+          const underReview = Boolean(account.requirements?.pending_verification?.length)
+          const state = ready ? 'ready' : account.requirements?.disabled_reason ? 'restricted' : needsInformation ? 'needs_information' : underReview ? 'under_review' : 'onboarding'
+          return {
+            performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
+            state, charges_enabled: Boolean(account.charges_enabled), payouts_enabled: Boolean(account.payouts_enabled), details_submitted: Boolean(account.details_submitted),
+            needs_information: needsInformation, under_review: underReview,
+            tip_available: Boolean(performer.is_approved && ready), merch_available: Boolean(performer.is_approved && ready),
+            confirmed_sales_yen: payoutView.confirmedSalesYen, available_yen: payoutView.availableYen,
+            paid_out_yen: payoutView.paidOutYen, pending_payout_yen: payoutView.pendingYen, held_yen: payoutView.heldYen,
+          }
+        } catch (error) {
+          console.error('admin Stripe status check failed', performer.id, error)
+          return {
+            performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
+            state: 'check_error', charges_enabled: false, payouts_enabled: false, details_submitted: Boolean(performer.stripe_onboarding_complete),
+            needs_information: false, under_review: false, tip_available: false, merch_available: false,
+            confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
+            held_yen: 0,
+          }
+        }
+      }))
       res.status(200).json({
         ok: true,
         kind: 'recorded',
         rates: { tip_system_fee_bps: TIP_SYSTEM_FEE_BPS, merch_system_fee_bps: MERCH_SYSTEM_FEE_BPS },
-        tips: tips ?? [],
-        orders: orders ?? [],
+        tips: (tips ?? []).map((row) => row.settlement_status === 'settled'
+          ? { ...row, current_settlement: currentSettlement(row, TIP_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_cents']) }
+          : row),
+        orders: (orders ?? []).map((row) => row.settlement_status === 'settled'
+          ? { ...row, current_settlement: currentSettlement(row, MERCH_SYSTEM_FEE_BPS, ['gross_amount_yen', 'amount_yen']) }
+          : row),
         stripe_processing_fee: { available: true, source: 'Stripe BalanceTransaction' },
-        payouts: payoutError ? [] : payouts ?? [],
+        payouts: payouts ?? [],
+        stripePerformers,
       })
       return
     }

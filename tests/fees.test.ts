@@ -4,6 +4,8 @@ import {
   MERCH_SYSTEM_FEE_BPS,
   TIP_SYSTEM_FEE_BPS,
   applicationFeeOverageYen,
+  applicationFeeRefundDueYen,
+  settleSaleAfterRefund,
   settleSale,
   systemFeeYen,
 } from '../shared/fees'
@@ -51,5 +53,13 @@ describe('HAKU system-use fees', () => {
     expect(merchSource).toContain('const feeBps = MERCH_SYSTEM_FEE_BPS_DEFAULT')
     expect(tipSource).not.toContain("getBpsSetting(sb, 'tip_fee_bps'")
     expect(merchSource).not.toContain("getBpsSetting(sb, 'merch_fee_bps'")
+  })
+
+  it('reconciles application fees idempotently after partial and full refunds', () => {
+    expect(settleSaleAfterRefund(1000, 36, 500, TIP_SYSTEM_FEE_BPS).hakuFeeYen).toBe(69)
+    expect(applicationFeeRefundDueYen(150, 6, 69)).toBe(75)
+    expect(applicationFeeRefundDueYen(150, 81, 69)).toBe(0)
+    expect(settleSaleAfterRefund(1000, 36, 1000, TIP_SYSTEM_FEE_BPS).hakuFeeYen).toBe(0)
+    expect(applicationFeeRefundDueYen(150, 6, 0)).toBe(144)
   })
 })

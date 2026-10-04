@@ -23,6 +23,25 @@ function missingColumn(error: unknown) {
   return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
 }
 
+async function validatePaidOrder(
+  sb: SupabaseClient,
+  args: { orderId: string; amount: number; sellerId?: string; buyerId?: string; productId?: string; sessionId?: string },
+) {
+  const { data, error } = await sb
+    .from('merch_orders')
+    .select('id,seller_id,buyer_id,product_id,amount_yen,gross_amount_yen,stripe_session_id')
+    .eq('id', args.orderId)
+    .maybeSingle()
+  if (error) throw error
+  const expectedAmount = Number(data?.gross_amount_yen ?? data?.amount_yen)
+  if (!data || expectedAmount !== args.amount || (args.sellerId && data.seller_id !== args.sellerId) || (args.buyerId && data.buyer_id !== args.buyerId) || (args.productId && data.product_id !== args.productId)) {
+    throw new Error('Merch checkout metadata mismatch')
+  }
+  if (data.stripe_session_id && args.sessionId && data.stripe_session_id !== args.sessionId) {
+    throw new Error('Merch checkout session mismatch')
+  }
+}
+
 async function updateOrderWithFallback(
   sb: SupabaseClient,
   orderId: string,
@@ -60,6 +79,14 @@ export async function finalizePaidMerchOrder(
   const orderId = session.metadata?.order_id ?? null
   const amount = session.amount_total ?? 0
   if (!orderId) return { ok: false, already: false, orderId: null, amount }
+  await validatePaidOrder(sb, {
+    orderId,
+    amount,
+    sellerId: session.metadata?.seller_id,
+    buyerId: session.metadata?.buyer_id,
+    productId: session.metadata?.product_id,
+    sessionId: session.id,
+  })
 
   const oldPatch = {
     status: 'succeeded',
@@ -93,6 +120,13 @@ export async function finalizePaidMerchOrderFromPaymentIntent(
   const orderId = paymentIntent.metadata?.order_id ?? null
   const amount = paymentIntent.amount_received || paymentIntent.amount || 0
   if (!orderId) return { ok: false, already: false, orderId: null, amount }
+  await validatePaidOrder(sb, {
+    orderId,
+    amount,
+    sellerId: paymentIntent.metadata?.seller_id,
+    buyerId: paymentIntent.metadata?.buyer_id,
+    productId: paymentIntent.metadata?.product_id,
+  })
   const oldPatch = {
     status: 'succeeded',
     stripe_payment_intent: paymentIntent.id,

@@ -45,6 +45,11 @@
 .ha-appearance-links__item > div { display: grid; gap: 3px; }
 .ha-appearance-links__item > div small, .ha-appearance-links__item > div span { opacity: .68; }
 .ha-appearance-links__item > div strong { font-size: 16px; }
+.ha-card[data-stripe-state="ready"] { border-color: rgba(43,255,221,.35); }
+.ha-card[data-stripe-state="ready"] h3 small { color: #72f7d8; }
+.ha-card[data-stripe-state="needs_information"], .ha-card[data-stripe-state="restricted"], .ha-card[data-stripe-state="check_error"] { border-color: rgba(255,112,112,.35); }
+.ha-card[data-stripe-state="needs_information"] h3 small, .ha-card[data-stripe-state="restricted"] h3 small, .ha-card[data-stripe-state="check_error"] h3 small { color: #ff9d9d; }
+.ha-card[data-stripe-state="unregistered"] h3 small, .ha-card[data-stripe-state="onboarding"] h3 small, .ha-card[data-stripe-state="under_review"] h3 small { color: #ffd27a; }
 .ha-app--auth { max-width: 480px; margin: 0 auto; }
 @media (min-width: 800px) {
   .ha-app { padding: 24px 32px 48px; }

@@ -51,6 +51,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: '受取設定が完了していません。' })
         return
       }
+      if (!performer.is_approved || profile.status !== 'active') {
+        res.status(403).json({ error: '運営承認後に出金できます。' })
+        return
+      }
+      const account = await stripe.accounts.retrieve(accountId)
+      if (!isConnectedAccountChargeReady(account)) {
+        res.status(409).json({ error: '受取設定に確認が必要です。Stripeの登録状況を確認してください。' })
+        return
+      }
       const result = await requestPerformerPayout(sb, stripe, { performerId, stripeAccountId: accountId })
       res.status(result.status).json(result.body)
       return

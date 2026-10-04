@@ -100,6 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await settleCheckoutPayment(sb, stripe, session, connectedAccountId)
     res.status(200).json({ ok: result.ok, orderId: result.orderId, amount: result.amount, already: result.already })
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Confirm failed' })
+    console.error('merch confirmation failed', e)
+    res.status(500).json({ code: 'checkout_failed' })
   }
 }

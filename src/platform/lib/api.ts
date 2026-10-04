@@ -815,6 +815,7 @@ export type PerformerPayoutView = {
   hakuAvailableYen: number
   stripeAvailableYen: number
   availableYen: number
+  heldYen: number
   pendingYen: number
   paidOutYen: number
   remainingYen: number
@@ -1308,13 +1309,13 @@ export async function listSellerMerchOrders(sellerId: string): Promise<MerchOrde
   return (data as MerchOrder[]) ?? []
 }
 
-export async function createMerchCheckout(productId: string, quantity: number): Promise<string> {
+export async function createMerchCheckout(productId: string, quantity: number, requestId: string): Promise<string> {
   const res = await fetch('/api/stripe/merch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
-    body: JSON.stringify({ productId, quantity }),
+    body: JSON.stringify({ productId, quantity, requestId }),
   })
-  const json = (await res.json()) as { url?: string; error?: string }
-  if (!res.ok || !json.url) throw new Error(json.error || 'Checkout failed')
+  const json = (await res.json()) as { url?: string; code?: string }
+  if (!res.ok || !json.url) throw new Error(json.code || 'checkout_failed')
   return json.url
 }

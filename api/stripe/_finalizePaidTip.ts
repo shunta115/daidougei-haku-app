@@ -72,6 +72,19 @@ async function claimPaidTip(
     connectedAccountId?: string | null
   },
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
+  const { data: expected, error: expectedError } = await sb
+    .from('tips')
+    .select('id,performer_id,fan_id,amount_cents,gross_amount_yen,stripe_session_id')
+    .eq('id', args.tipId)
+    .maybeSingle()
+  if (expectedError) throw expectedError
+  const expectedAmount = Number(expected?.gross_amount_yen ?? expected?.amount_cents)
+  if (!expected || expected.performer_id !== args.performerId || (expected.fan_id ?? null) !== args.fanId || expectedAmount !== args.amount) {
+    throw new Error('Tip checkout metadata mismatch')
+  }
+  if (expected.stripe_session_id && args.stripeSessionId && expected.stripe_session_id !== args.stripeSessionId) {
+    throw new Error('Tip checkout session mismatch')
+  }
   const oldPatch = {
     status: 'succeeded',
     ...(args.stripeSessionId ? { stripe_session_id: args.stripeSessionId } : {}),
@@ -141,7 +154,7 @@ export async function finalizePaidTip(
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
   const tipId = session.metadata?.tip_id ?? null
   const performerId = session.metadata?.performer_id
-  const fanId = session.metadata?.fan_id ?? null
+  const fanId = session.metadata?.fan_id && session.metadata.fan_id !== 'guest' ? session.metadata.fan_id : null
   const anonymous = session.metadata?.anonymous === '1'
   const amount = session.amount_total ?? 0
 
@@ -166,7 +179,7 @@ export async function finalizePaidTipFromPaymentIntent(
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
   const tipId = paymentIntent.metadata?.tip_id ?? null
   const performerId = paymentIntent.metadata?.performer_id
-  const fanId = paymentIntent.metadata?.fan_id ?? null
+  const fanId = paymentIntent.metadata?.fan_id && paymentIntent.metadata.fan_id !== 'guest' ? paymentIntent.metadata.fan_id : null
   const anonymous = paymentIntent.metadata?.anonymous === '1'
   const amount = paymentIntent.amount_received || paymentIntent.amount || 0
   if (!tipId) return { ok: false, already: false, tipId: null, amount }

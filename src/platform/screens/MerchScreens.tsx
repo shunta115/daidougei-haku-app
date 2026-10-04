@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createMerchCheckout,
   getMerchProduct,
@@ -17,6 +17,7 @@ import { PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
 import { ShoppingBag, ShoppingCart, Ticket, UsersRound } from 'lucide-react'
 import { AppBackButton } from '../components/AppBackButton'
+import { paymentErrorMessage } from '../lib/paymentErrors'
 
 type MerchListProps = {
   onOpenProduct: (id: string) => void
@@ -161,10 +162,16 @@ export function MerchDetailScreen({
   onRequireAuth?: () => void
 }) {
   const { user } = useAuth()
+  const { lang } = useLang()
   const [product, setProduct] = useState<MerchProduct | null>(null)
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const checkoutRequestId = useRef<string | null>(null)
+
+  useEffect(() => {
+    checkoutRequestId.current = null
+  }, [productId, quantity])
 
   useEffect(() => {
     getMerchProduct(productId)
@@ -187,10 +194,11 @@ export function MerchDetailScreen({
     setError(null)
     trackProductEvent('merch_checkout_start', { performerId: product.seller_id, props: { product_id: productId, quantity } })
     try {
-      const url = await createMerchCheckout(productId, quantity)
+      checkoutRequestId.current ||= crypto.randomUUID()
+      const url = await createMerchCheckout(productId, quantity, checkoutRequestId.current)
       window.location.href = url
     } catch (e) {
-      setError(e instanceof Error ? e.message : '購入手続きに失敗しました')
+      setError(paymentErrorMessage(e instanceof Error ? e.message : 'checkout_failed', lang))
       setBusy(false)
     }
   }

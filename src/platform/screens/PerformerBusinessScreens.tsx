@@ -14,7 +14,7 @@ import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import type { MerchOrder, TipRow } from '../lib/types'
 import { SystemFeeExplain } from '../components/SystemFeeExplain'
-import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, bpsToPercentLabel } from '../../../shared/fees'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, bpsToPercentLabel, settleSaleAfterRefund } from '../../../shared/fees'
 
 export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void; onLive: () => void }) {
   const { t, lang } = useLang()
@@ -48,8 +48,16 @@ export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void
 
 function transactionRows(tips: TipRow[], orders: MerchOrder[]) {
   return [
-    ...tips.map((row) => ({ id: `tip-${row.id}`, date: row.created_at, kind: 'tip' as const, gross: row.gross_amount_yen ?? row.amount_cents, fee: row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status })),
-    ...orders.map((row) => ({ id: `merch-${row.id}`, date: row.created_at, kind: 'merch' as const, gross: row.gross_amount_yen ?? row.amount_yen, fee: row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status })),
+    ...tips.map((row) => {
+      const gross = row.gross_amount_yen ?? row.amount_cents
+      const current = settleSaleAfterRefund(gross, row.stripe_fee_yen ?? 0, row.refunded_amount_yen ?? 0, TIP_SYSTEM_FEE_BPS)
+      return { id: `tip-${row.id}`, date: row.created_at, kind: 'tip' as const, gross, fee: row.settlement_status === 'settled' ? current.hakuFeeYen : row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status }
+    }),
+    ...orders.map((row) => {
+      const gross = row.gross_amount_yen ?? row.amount_yen
+      const current = settleSaleAfterRefund(gross, row.stripe_fee_yen ?? 0, row.refunded_amount_yen ?? 0, MERCH_SYSTEM_FEE_BPS)
+      return { id: `merch-${row.id}`, date: row.created_at, kind: 'merch' as const, gross, fee: row.settlement_status === 'settled' ? current.hakuFeeYen : row.haku_fee_yen, stripeFee: row.stripe_fee_yen, settled: row.settlement_status === 'settled', refunded: row.refunded_amount_yen ?? 0, status: row.status }
+    }),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
 }
 
@@ -124,6 +132,7 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
       <div><dt>{t('salesPaid')}</dt><dd>{formatYen(payout?.confirmedSalesYen ?? gross)}</dd></div>
       <div><dt>{t('payoutAvailable')}</dt><dd>{formatYen(available)}</dd></div>
       <div><dt>{t('payoutPending')}</dt><dd>{formatYen(payout?.pendingYen ?? 0)}</dd></div>
+      <div><dt>保留中</dt><dd>{formatYen(payout?.heldYen ?? 0)}</dd></div>
       <div><dt>{t('payoutPaidOut')}</dt><dd>{formatYen(payout?.paidOutYen ?? 0)}</dd></div>
     </dl>
     <section className="pl-registration__section">

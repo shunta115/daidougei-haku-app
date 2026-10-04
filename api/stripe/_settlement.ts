@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
-import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, applicationFeeOverageYen, settleSale } from '../../shared/fees.js'
+import {
+  MERCH_SYSTEM_FEE_BPS,
+  TIP_SYSTEM_FEE_BPS,
+  applicationFeeRefundDueYen,
+  settleSale,
+  settleSaleAfterRefund,
+} from '../../shared/fees.js'
 import { refundSaleStatus } from '../../shared/payoutMath.js'
 
 function missingColumn(error: unknown) {
@@ -32,6 +38,37 @@ async function loadBalanceTransaction(
     return charge.balance_transaction
   }
   return stripe.balanceTransactions.retrieve(btId, connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+}
+
+async function reconcileApplicationFee(
+  stripe: Stripe,
+  args: {
+    applicationFeeId: string
+    chargeId: string
+    grossYen: number
+    stripeFeeYen: number
+    refundedYen: number
+    feeBps: number
+    collectedAppFeeYen: number
+  },
+) {
+  const applicationFee = await stripe.applicationFees.retrieve(args.applicationFeeId)
+  const collectedYen = yenFromStripe(applicationFee.amount) || args.collectedAppFeeYen
+  // Reapply the formal equation to the remaining gross: N=max(0,(G-R)-S).
+  const remainingHakuFeeYen = settleSaleAfterRefund(
+    args.grossYen,
+    args.stripeFeeYen,
+    args.refundedYen,
+    args.feeBps,
+  ).hakuFeeYen
+  const alreadyRefundedYen = yenFromStripe(applicationFee.amount_refunded)
+  const refundNowYen = applicationFeeRefundDueYen(collectedYen, alreadyRefundedYen, remainingHakuFeeYen)
+  if (refundNowYen <= 0) return
+  await stripe.applicationFees.createRefund(
+    args.applicationFeeId,
+    { amount: refundNowYen },
+    { idempotencyKey: `haku-app-fee-adj:${args.chargeId}:${args.refundedYen}` },
+  )
 }
 
 export async function settleDirectCharge(
@@ -71,11 +108,18 @@ export async function settleDirectCharge(
   const { error } = await sb.from(table).update(patch).eq('id', args.rowId)
   if (error && !missingColumn(error)) throw error
 
-  const overage = applicationFeeOverageYen(args.collectedAppFeeYen, settled.hakuFeeYen)
   const applicationFeeId = stripeId(charge.application_fee)
-  if (overage > 0 && applicationFeeId) {
+  if (applicationFeeId) {
     try {
-      await stripe.applicationFees.createRefund(applicationFeeId, { amount: overage }, { idempotencyKey: `haku-app-fee-adj:${charge.id}` })
+      await reconcileApplicationFee(stripe, {
+        applicationFeeId,
+        chargeId: charge.id,
+        grossYen,
+        stripeFeeYen,
+        refundedYen,
+        feeBps: args.feeBps,
+        collectedAppFeeYen: args.collectedAppFeeYen,
+      })
     } catch {
       const { error: markError } = await sb.from(table).update({ settlement_status: 'fee_adjust_failed' }).eq('id', args.rowId)
       if (markError && !missingColumn(markError)) throw markError

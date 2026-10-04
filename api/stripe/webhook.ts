@@ -83,7 +83,8 @@ async function claimWebhookEvent(
   }
   const { data, error } = await sb.from('stripe_webhook_events').insert(row).select('event_id').maybeSingle()
   if (!error) return Boolean(data?.event_id)
-  if (missingTable(error)) return true
+  // Financial webhooks must fail closed when the idempotency ledger is absent.
+  if (missingTable(error)) throw new Error('Webhook idempotency ledger unavailable')
   if (!duplicateKey(error)) throw error
 
   const { data: existing } = await sb
@@ -92,11 +93,15 @@ async function claimWebhookEvent(
     .eq('event_id', event.id)
     .maybeSingle()
   if (existing?.status === 'failed') {
-    await sb
+    const { data: reclaimed, error: reclaimError } = await sb
       .from('stripe_webhook_events')
       .update({ status: 'processing', error: null })
       .eq('event_id', event.id)
-    return true
+      .eq('status', 'failed')
+      .select('event_id')
+      .maybeSingle()
+    if (reclaimError) throw reclaimError
+    return Boolean(reclaimed?.event_id)
   }
   return false
 }
@@ -226,6 +231,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({ received: true })
   } catch (e) {
-    res.status(400).json({ error: e instanceof Error ? e.message : 'Webhook error' })
+    console.error('stripe webhook failed', e)
+    res.status(400).json({ error: 'Webhook processing failed' })
   }
 }

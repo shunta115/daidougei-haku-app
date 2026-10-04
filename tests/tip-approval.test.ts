@@ -63,7 +63,7 @@ beforeEach(() => {
 it('rejects a new tip checkout for an unapproved performer', async () => {
   const response = await request()
   expect(response.code).toBe(403)
-  expect(response.body.error).toBe('Performer is not approved yet')
+  expect(response.body.code).toBe('performer_support_unavailable')
   expect(fake.checkout).not.toHaveBeenCalled()
 })
 
@@ -72,6 +72,6 @@ it('rejects a new tip checkout when the performer account is not active', async 
   fake.status = 'pending'
   const response = await request()
   expect(response.code).toBe(403)
-  expect(response.body.error).toBe('Performer is not approved yet')
+  expect(response.body.code).toBe('performer_support_unavailable')
   expect(fake.checkout).not.toHaveBeenCalled()
 })
