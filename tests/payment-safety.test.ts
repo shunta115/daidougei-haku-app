@@ -31,6 +31,12 @@ describe('payment safety boundaries', () => {
     expect(webhook).not.toMatch(/if \(missingTable\(error\)\) return true/)
   })
 
+  it('settles a platform-held sale from the paid checkout webhook', () => {
+    const webhook = read('api/stripe/webhook.ts')
+    expect(webhook).toContain("const saleConnectedAccountId = connectedAccountId ?? session.metadata?.connected_account_id ?? null")
+    expect(webhook).toContain('await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)')
+  })
+
   it('keeps financial ledgers server-write-only and reconciles refund fees', () => {
     const migration = read('supabase/migrations/20261004_payment_ledger_write_lockdown.sql')
     const settlement = read('api/stripe/_settlement.ts')

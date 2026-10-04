@@ -17,7 +17,7 @@ import {
   markMerchOrderRefunded,
 } from './_finalizeMerchOrder.js'
 import { markPerformerPayout, markPerformerTransfer } from './_payouts.js'
-import { settleSaleByCharge } from './_settlement.js'
+import { settleCheckoutPayment, settleSaleByCharge } from './_settlement.js'
 import { getAdminSupabase, getStripe } from './_shared.js'
 
 export const config = {
@@ -151,11 +151,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session
         if (session.payment_status === 'paid') {
+          const saleConnectedAccountId = connectedAccountId ?? session.metadata?.connected_account_id ?? null
           if (session.metadata?.kind === 'merch') {
-            await finalizePaidMerchOrder(sb, session, connectedAccountId)
+            await finalizePaidMerchOrder(sb, session, saleConnectedAccountId)
           } else {
-            await finalizePaidTip(sb, session, connectedAccountId)
+            await finalizePaidTip(sb, session, saleConnectedAccountId)
           }
+          // Platform-held Checkout sessions don't emit Connect-scoped
+          // payment_intent events. Settle from the paid Checkout event so the
+          // actual Stripe fee and server-authoritative split are always saved.
+          await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)
         }
       }
 
