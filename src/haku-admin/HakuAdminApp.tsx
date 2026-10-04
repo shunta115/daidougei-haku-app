@@ -34,6 +34,7 @@ export function HakuAdminApp() {
     lineup: Array<{ performer_id: string; is_voting_eligible: boolean; performer?: { stage_name?: string; genre?: string } | null }>
     slots: unknown[]
     venues: unknown[]
+    approvedPerformers: Array<{ id: string; stage_name: string; genre?: string }>
   } | null>(null)
   const [votes, setVotes] = useState<Record<string, unknown> | null>(null)
   const [live, setLive] = useState<{ open: Array<Record<string, unknown>>; recent: Array<Record<string, unknown>> } | null>(null)
@@ -43,6 +44,8 @@ export function HakuAdminApp() {
   const [serverAllowed, setServerAllowed] = useState<boolean | null>(null)
   const [previewPerformerId, setPreviewPerformerId] = useState('')
   const [visibleEmailId, setVisibleEmailId] = useState<string | null>(null)
+  const [lineupSearch, setLineupSearch] = useState('')
+  const [lineupSelection, setLineupSelection] = useState<string[]>([])
 
   const locallyEligible = profile?.role === 'admin' && profile.status === 'active'
 
@@ -59,7 +62,11 @@ export function HakuAdminApp() {
         setEvents(rows)
         const first = String(eventId || rows[0]?.id || '')
         setEventId(first)
-        if (first) setEventExtra(await hakuAdmin('events', 'lineup', { id: first }) as typeof eventExtra)
+        if (first) {
+          const extra = await hakuAdmin('events', 'lineup', { id: first }) as typeof eventExtra
+          setEventExtra(extra)
+          setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
+        }
       }
       if (next === 'votes') {
         const data = await hakuAdmin('events')
@@ -96,7 +103,10 @@ export function HakuAdminApp() {
     setBusy(true)
     setError(null)
     try {
-      setEventExtra(await hakuAdmin('events', 'lineup', { id }) as typeof eventExtra)
+      const extra = await hakuAdmin('events', 'lineup', { id }) as typeof eventExtra
+      setEventExtra(extra)
+      setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
+      setLineupSearch('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'イベント出演者を読み込めませんでした')
     } finally {
@@ -112,6 +122,25 @@ export function HakuAdminApp() {
       await loadEvent(eventId)
     } catch (e) {
       setError(e instanceof Error ? e.message : '投票資格を更新できませんでした')
+    }
+  }
+
+  const saveLineup = async () => {
+    if (!eventId || !eventExtra) return
+    const current = eventExtra.lineup.map((row) => row.performer_id)
+    const removed = current.filter((id) => !lineupSelection.includes(id))
+    const added = lineupSelection.filter((id) => !current.includes(id))
+    if (!added.length && !removed.length) return
+    if (!confirmDanger(`出演者を保存します。追加 ${added.length}人・解除 ${removed.length}人。パフォーマーの承認状態やプロフィールは変更しません。`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await hakuAdmin('events', 'lineup-set', { id: eventId, performerIds: lineupSelection })
+      await loadEvent(eventId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '出演者を保存できませんでした')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -289,6 +318,24 @@ export function HakuAdminApp() {
           {eventExtra ? (
             <>
               <p className="ha-note">出演 {eventExtra.lineup.length} · 投票対象 {eventExtra.lineup.filter((row) => row.is_voting_eligible).length} · 投票対象外 {eventExtra.lineup.filter((row) => !row.is_voting_eligible).length} · 枠 {eventExtra.slots.length} · 会場 {eventExtra.venues.length}</p>
+              <article className="ha-card ha-lineup-manager">
+                <h2>出演パフォーマー管理</h2>
+                <p className="ha-note">承認済みパフォーマーから、このイベントの出演者だけを選択します。チェックを外してもHAKU登録・承認・プロフィールは維持されます。</p>
+                <label>
+                  <span className="pl-label">パフォーマーを検索</span>
+                  <input className="pl-input" type="search" value={lineupSearch} onChange={(e) => setLineupSearch(e.target.value)} placeholder="名前・ジャンルで検索" />
+                </label>
+                <div className="ha-lineup-manager__list">
+                  {(eventExtra.approvedPerformers ?? []).filter((performer) => `${performer.stage_name} ${performer.genre || ''}`.toLocaleLowerCase().includes(lineupSearch.trim().toLocaleLowerCase())).map((performer) => (
+                    <label key={performer.id} className="ha-lineup-manager__item">
+                      <input type="checkbox" checked={lineupSelection.includes(performer.id)} onChange={(e) => setLineupSelection((current) => e.target.checked ? [...current, performer.id] : current.filter((id) => id !== performer.id))} />
+                      <span><strong>{performer.stage_name}</strong><small>{performer.genre || 'ジャンル未入力'}</small></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="ha-note">選択中 {lineupSelection.length}人</p>
+                <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void saveLineup()}>出演者を保存</button>
+              </article>
               <article className="ha-card">
                 <h2>出演者と投票資格</h2>
                 <p>出演と投票対象はイベントごとの別設定です。</p>

@@ -41,6 +41,22 @@ describe('HAKU admin and public performer safety', () => {
     expect(admin).toMatch(/review_status: 'approved'/)
   })
 
+  it('manages event performers through the existing event_lineup relation without changing approval', () => {
+    const admin = read('api/ops/_hakuAdmin.ts')
+    const app = read('src/haku-admin/HakuAdminApp.tsx')
+    const platformApi = read('src/platform/lib/api.ts')
+    expect(admin).toMatch(/action === 'lineup-set'/)
+    expect(admin).toMatch(/from\('event_lineup'\)/)
+    expect(admin).toMatch(/approved performers only/)
+    expect(admin).toMatch(/出演枠に登録済みのパフォーマーは外せません/)
+    expect(app).toMatch(/出演パフォーマー管理/)
+    expect(app).toMatch(/出演者を保存/)
+    expect(app).toMatch(/type="search"/)
+    expect(app).toMatch(/type="checkbox"/)
+    expect(admin).not.toMatch(/lineup-set[\s\S]{0,2400}is_approved:\s*false/)
+    expect(platformApi).toMatch(/listEventLineupPerformers[\s\S]*listEventLineup\(eventId\)[\s\S]*\.in\('id', ids\)/)
+  })
+
   it('sets 15% tip and 8% goods system-use fees without rewriting payment rows', () => {
     const sql = read('supabase/migrations/20261003_haku_security_fees_admin.sql')
     expect(sql).toMatch(/tip_fee_bps', '1500'/)

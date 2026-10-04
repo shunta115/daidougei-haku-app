@@ -281,10 +281,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (action === 'lineup') {
         const id = String(payload.id || '')
-        const [{ data: lineup }, { data: slots }, { data: venues }] = await Promise.all([
+        const [{ data: lineup }, { data: slots }, { data: venues }, { data: approvedPerformers }] = await Promise.all([
           sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
           sb.from('event_slots').select('id,date,start_time,end_time,venue_id,performer_id,performer_name_ja,stage_ja,status,performance_type,round_no,ranking_position,source_key,source_label').eq('event_id', id).order('date').order('start_time'),
           sb.from('event_venues').select('id,name_ja,lat,lng').eq('event_id', id).order('sort_order'),
+          sb.from('performers').select('id,stage_name,genre').eq('is_approved', true).order('stage_name'),
         ])
         const performerIds = (lineup ?? []).map((row) => String(row.performer_id))
         const { data: names } = performerIds.length ? await sb.from('performers').select('id,stage_name,genre').in('id', performerIds) : { data: [] }
@@ -294,7 +295,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           lineup: (lineup ?? []).map((row) => ({ ...row, performer: performerById.get(String(row.performer_id)) ?? null })),
           slots: slots ?? [],
           venues: venues ?? [],
+          approvedPerformers: approvedPerformers ?? [],
         })
+        return
+      }
+      if (action === 'lineup-set') {
+        const id = String(payload.id || '')
+        const requested = Array.isArray(payload.performerIds)
+          ? [...new Set(payload.performerIds.map((value) => String(value)).filter(Boolean))]
+          : []
+        if (!id || requested.length > 500) {
+          res.status(400).json({ error: 'valid id and performerIds required' })
+          return
+        }
+        const [approvedResult, currentResult, scheduledResult] = await Promise.all([
+          requested.length
+            ? sb.from('performers').select('id').in('id', requested).eq('is_approved', true)
+            : Promise.resolve({ data: [] as Array<{ id: string }> }),
+          sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
+          sb.from('event_slots').select('performer_id').eq('event_id', id).not('performer_id', 'is', null),
+        ])
+        if (approvedResult.error) throw approvedResult.error
+        if (currentResult.error) throw currentResult.error
+        if (scheduledResult.error) throw scheduledResult.error
+        const approved = approvedResult.data
+        const current = currentResult.data
+        const scheduled = scheduledResult.data
+        const approvedIds = new Set((approved ?? []).map((row) => String(row.id)))
+        const invalid = requested.filter((performerId) => !approvedIds.has(performerId))
+        if (invalid.length) {
+          res.status(400).json({ error: 'approved performers only' })
+          return
+        }
+        const requestedSet = new Set(requested)
+        const scheduledIds = [...new Set((scheduled ?? []).map((row) => String(row.performer_id)).filter(Boolean))]
+        const scheduledMissing = scheduledIds.filter((performerId) => !requestedSet.has(performerId))
+        if (scheduledMissing.length) {
+          res.status(409).json({ error: '出演枠に登録済みのパフォーマーは外せません。先に対象の出演枠を確認してください。' })
+          return
+        }
+        const currentRows = current ?? []
+        const currentIds = new Set(currentRows.map((row) => String(row.performer_id)))
+        const additions = requested.filter((performerId) => !currentIds.has(performerId))
+        const removals = currentRows.map((row) => String(row.performer_id)).filter((performerId) => !requestedSet.has(performerId))
+        if (additions.length) {
+          const nextSort = currentRows.reduce((max, row) => Math.max(max, Number(row.sort_order) || 0), -1) + 1
+          const { error } = await sb.from('event_lineup').insert(additions.map((performerId, index) => ({
+            event_id: id,
+            performer_id: performerId,
+            sort_order: nextSort + index,
+            is_voting_eligible: false,
+          })))
+          if (error) throw error
+        }
+        if (removals.length) {
+          const { error } = await sb.from('event_lineup').delete().eq('event_id', id).in('performer_id', removals)
+          if (error) {
+            if (additions.length) await sb.from('event_lineup').delete().eq('event_id', id).in('performer_id', additions)
+            throw error
+          }
+        }
+        await audit(admin.id, 'event.lineup_set', id, { added: additions, removed: removals, selected_count: requested.length })
+        res.status(200).json({ ok: true, added: additions.length, removed: removals.length })
         return
       }
       if (action === 'voting-feature') {
