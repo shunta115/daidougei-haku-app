@@ -35,6 +35,7 @@ export function HakuAdminApp() {
     slots: unknown[]
     venues: unknown[]
     approvedPerformers: Array<{ id: string; stage_name: string; genre?: string }>
+    guestAppearances: Array<{ id: string; official_name_ja: string; appearance_type: string; appearance_date: string; linked_performer_id: string | null; sort_order: number }>
   } | null>(null)
   const [votes, setVotes] = useState<Record<string, unknown> | null>(null)
   const [live, setLive] = useState<{ open: Array<Record<string, unknown>>; recent: Array<Record<string, unknown>> } | null>(null)
@@ -46,6 +47,8 @@ export function HakuAdminApp() {
   const [visibleEmailId, setVisibleEmailId] = useState<string | null>(null)
   const [lineupSearch, setLineupSearch] = useState('')
   const [lineupSelection, setLineupSelection] = useState<string[]>([])
+  const [appearanceLinks, setAppearanceLinks] = useState<Record<string, string>>({})
+  const [appearanceQueries, setAppearanceQueries] = useState<Record<string, string>>({})
 
   const locallyEligible = profile?.role === 'admin' && profile.status === 'active'
 
@@ -66,6 +69,7 @@ export function HakuAdminApp() {
           const extra = await hakuAdmin('events', 'lineup', { id: first }) as typeof eventExtra
           setEventExtra(extra)
           setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
+          setAppearanceLinks(Object.fromEntries((extra?.guestAppearances ?? []).map((row) => [row.official_name_ja, row.linked_performer_id ?? ''])))
         }
       }
       if (next === 'votes') {
@@ -106,6 +110,8 @@ export function HakuAdminApp() {
       const extra = await hakuAdmin('events', 'lineup', { id }) as typeof eventExtra
       setEventExtra(extra)
       setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
+      setAppearanceLinks(Object.fromEntries((extra?.guestAppearances ?? []).map((row) => [row.official_name_ja, row.linked_performer_id ?? ''])))
+      setAppearanceQueries({})
       setLineupSearch('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'イベント出演者を読み込めませんでした')
@@ -139,6 +145,24 @@ export function HakuAdminApp() {
       await loadEvent(eventId)
     } catch (e) {
       setError(e instanceof Error ? e.message : '出演者を保存できませんでした')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveAppearanceLink = async (officialName: string) => {
+    if (!eventId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await hakuAdmin('events', 'guest-appearance-link', {
+        id: eventId,
+        officialName,
+        performerId: appearanceLinks[officialName] || null,
+      })
+      await loadEvent(eventId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'プロフィールの紐付けを保存できませんでした')
     } finally {
       setBusy(false)
     }
@@ -336,6 +360,37 @@ export function HakuAdminApp() {
                 <p className="ha-note">選択中 {lineupSelection.length}人</p>
                 <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void saveLineup()}>出演者を保存</button>
               </article>
+              {eventExtra.guestAppearances?.length ? (
+                <article className="ha-card ha-appearance-links">
+                  <h2>出演名とHAKUプロフィールの紐付け</h2>
+                  <p className="ha-note">イベントの正式な出演名は変更せず、写真・プロフィール・SNS・応援・LIVE・動画・グッズ・フォローの参照先だけを選択します。完全一致しない名前は自動確定しません。</p>
+                  {[...new Map(eventExtra.guestAppearances.map((row) => [row.official_name_ja, row])).values()].map((appearance) => {
+                    const query = appearanceQueries[appearance.official_name_ja] ?? ''
+                    const selectedId = appearanceLinks[appearance.official_name_ja] ?? ''
+                    const candidates = (eventExtra.approvedPerformers ?? []).filter((performer) => !query.trim() || `${performer.stage_name} ${performer.genre || ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+                    const selected = (eventExtra.approvedPerformers ?? []).find((performer) => performer.id === selectedId)
+                    const options = selected && !candidates.some((performer) => performer.id === selected.id) ? [selected, ...candidates] : candidates
+                    const dates = eventExtra.guestAppearances.filter((row) => row.official_name_ja === appearance.official_name_ja).map((row) => row.appearance_date.slice(5).replace('-', '/')).join('・')
+                    return (
+                      <section key={appearance.official_name_ja} className="ha-appearance-links__item">
+                        <div><small>イベント表示名</small><strong>{appearance.official_name_ja}</strong><span>{dates} · {appearance.appearance_type}</span></div>
+                        <label>
+                          <span className="pl-label">HAKUパフォーマーを検索</span>
+                          <input className="pl-input" type="search" value={query} onChange={(e) => setAppearanceQueries((current) => ({ ...current, [appearance.official_name_ja]: e.target.value }))} placeholder="登録名・ジャンルを部分一致検索" />
+                        </label>
+                        <label>
+                          <span className="pl-label">紐付けるHAKUパフォーマー</span>
+                          <select className="pl-input" value={selectedId} onChange={(e) => setAppearanceLinks((current) => ({ ...current, [appearance.official_name_ja]: e.target.value }))}>
+                            <option value="">未紐付け</option>
+                            {options.map((performer) => <option key={performer.id} value={performer.id}>{performer.stage_name}{performer.genre ? ` — ${performer.genre}` : ''}</option>)}
+                          </select>
+                        </label>
+                        <button type="button" className="pl-btn pl-btn--block" disabled={busy || selectedId === (appearance.linked_performer_id ?? '')} onClick={() => void saveAppearanceLink(appearance.official_name_ja)}>この紐付けを保存</button>
+                      </section>
+                    )
+                  })}
+                </article>
+              ) : null}
               <article className="ha-card">
                 <h2>出演者と投票資格</h2>
                 <p>出演と投票対象はイベントごとの別設定です。</p>

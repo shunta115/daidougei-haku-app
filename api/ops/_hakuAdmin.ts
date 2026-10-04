@@ -281,11 +281,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (action === 'lineup') {
         const id = String(payload.id || '')
-        const [{ data: lineup }, { data: slots }, { data: venues }, { data: approvedPerformers }] = await Promise.all([
+        const [{ data: lineup }, { data: slots }, { data: venues }, { data: approvedPerformers }, { data: guestAppearances }] = await Promise.all([
           sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
           sb.from('event_slots').select('id,date,start_time,end_time,venue_id,performer_id,performer_name_ja,stage_ja,status,performance_type,round_no,ranking_position,source_key,source_label').eq('event_id', id).order('date').order('start_time'),
           sb.from('event_venues').select('id,name_ja,lat,lng').eq('event_id', id).order('sort_order'),
           sb.from('performers').select('id,stage_name,genre').eq('is_approved', true).order('stage_name'),
+          sb.from('event_guest_appearances').select('id,official_name_ja,appearance_type,appearance_date,linked_performer_id,sort_order').eq('event_id', id).order('appearance_date').order('sort_order'),
         ])
         const performerIds = (lineup ?? []).map((row) => String(row.performer_id))
         const { data: names } = performerIds.length ? await sb.from('performers').select('id,stage_name,genre').in('id', performerIds) : { data: [] }
@@ -296,7 +297,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           slots: slots ?? [],
           venues: venues ?? [],
           approvedPerformers: approvedPerformers ?? [],
+          guestAppearances: guestAppearances ?? [],
         })
+        return
+      }
+      if (action === 'guest-appearance-link') {
+        const id = String(payload.id || '')
+        const officialName = String(payload.officialName || '').trim()
+        const performerId = payload.performerId ? String(payload.performerId) : null
+        if (!id || !officialName) {
+          res.status(400).json({ error: 'id and officialName required' })
+          return
+        }
+        if (performerId) {
+          const { data: performer, error: performerError } = await sb
+            .from('performers')
+            .select('id,stage_name')
+            .eq('id', performerId)
+            .eq('is_approved', true)
+            .maybeSingle()
+          if (performerError) throw performerError
+          if (!performer) {
+            res.status(400).json({ error: 'approved performer required' })
+            return
+          }
+        }
+        const { data: appearances, error: appearanceError } = await sb
+          .from('event_guest_appearances')
+          .select('id')
+          .eq('event_id', id)
+          .eq('official_name_ja', officialName)
+        if (appearanceError) throw appearanceError
+        if (!appearances?.length) {
+          res.status(404).json({ error: 'official appearance not found' })
+          return
+        }
+        const { error } = await sb
+          .from('event_guest_appearances')
+          .update({ linked_performer_id: performerId, updated_at: new Date().toISOString() })
+          .eq('event_id', id)
+          .eq('official_name_ja', officialName)
+        if (error) throw error
+        await audit(admin.id, 'event.guest_appearance_link', id, {
+          official_name_ja: officialName,
+          linked_performer_id: performerId,
+          appearance_count: appearances.length,
+        })
+        res.status(200).json({ ok: true, updated: appearances.length })
         return
       }
       if (action === 'lineup-set') {

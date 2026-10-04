@@ -40,6 +40,11 @@
 .ha-lineup-manager__item span { display: grid; gap: 2px; min-width: 0; }
 .ha-lineup-manager__item strong { overflow: hidden; text-overflow: ellipsis; }
 .ha-lineup-manager__item small { opacity: .68; }
+.ha-appearance-links { display: grid; gap: 12px; }
+.ha-appearance-links__item { display: grid; gap: 10px; padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(255,255,255,.035); }
+.ha-appearance-links__item > div { display: grid; gap: 3px; }
+.ha-appearance-links__item > div small, .ha-appearance-links__item > div span { opacity: .68; }
+.ha-appearance-links__item > div strong { font-size: 16px; }
 .ha-app--auth { max-width: 480px; margin: 0 auto; }
 @media (min-width: 800px) {
   .ha-app { padding: 24px 32px 48px; }

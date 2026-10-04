@@ -57,6 +57,21 @@ describe('HAKU admin and public performer safety', () => {
     expect(platformApi).toMatch(/listEventLineupPerformers[\s\S]*listEventLineup\(eventId\)[\s\S]*\.in\('id', ids\)/)
   })
 
+  it('links official event names to approved HAKU performers by id without renaming either record', () => {
+    const admin = read('api/ops/_hakuAdmin.ts')
+    const app = read('src/haku-admin/HakuAdminApp.tsx')
+    const eventScreen = read('src/platform/screens/EventScreens.tsx')
+    expect(admin).toMatch(/action === 'guest-appearance-link'/)
+    expect(admin).toMatch(/linked_performer_id: performerId/)
+    expect(admin).toMatch(/\.eq\('official_name_ja', officialName\)/)
+    expect(admin).toMatch(/\.eq\('is_approved', true\)/)
+    expect(app).toMatch(/出演名とHAKUプロフィールの紐付け/)
+    expect(app).toMatch(/登録名・ジャンルを部分一致検索/)
+    expect(eventScreen).toMatch(/name=\{row\.official_name_ja\}/)
+    expect(eventScreen).toMatch(/onOpen=\{linked \? \(\) => onOpenPerformer\(linked\.id\)/)
+    expect(admin).not.toMatch(/guest-appearance-link[\s\S]{0,2200}official_name_ja:\s*performer/)
+  })
+
   it('sets 15% tip and 8% goods system-use fees without rewriting payment rows', () => {
     const sql = read('supabase/migrations/20261003_haku_security_fees_admin.sql')
     expect(sql).toMatch(/tip_fee_bps', '1500'/)
