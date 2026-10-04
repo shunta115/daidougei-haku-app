@@ -140,12 +140,23 @@ export async function settleSaleByCharge(
   const chargeId = charge.id
   if (!chargeId && !paymentIntentId) return
 
-  const tipQuery = chargeId
-    ? sb.from('tips').select('id, platform_fee_yen, platform_fee_cents, stripe_checkout_mode').eq('stripe_charge_id', chargeId).maybeSingle()
-    : sb.from('tips').select('id, platform_fee_yen, platform_fee_cents, stripe_checkout_mode').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
-  const merchQuery = chargeId
-    ? sb.from('merch_orders').select('id, platform_fee_yen, stripe_checkout_mode').eq('stripe_charge_id', chargeId).maybeSingle()
-    : sb.from('merch_orders').select('id, platform_fee_yen, stripe_checkout_mode').or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`).maybeSingle()
+  // checkout.session.completed stores the PaymentIntent before the Charge ID.
+  // Match either identifier so settlement does not depend on event ordering.
+  const saleIdentity = [
+    chargeId ? `stripe_charge_id.eq.${chargeId}` : null,
+    paymentIntentId ? `stripe_payment_intent_id.eq.${paymentIntentId}` : null,
+    paymentIntentId ? `stripe_payment_intent.eq.${paymentIntentId}` : null,
+  ].filter(Boolean).join(',')
+  const tipQuery = sb
+    .from('tips')
+    .select('id, platform_fee_yen, platform_fee_cents, stripe_checkout_mode')
+    .or(saleIdentity)
+    .maybeSingle()
+  const merchQuery = sb
+    .from('merch_orders')
+    .select('id, platform_fee_yen, stripe_checkout_mode')
+    .or(saleIdentity)
+    .maybeSingle()
 
   const [tip, merch] = await Promise.all([tipQuery, merchQuery])
   if (tip.error && !missingColumn(tip.error)) throw tip.error

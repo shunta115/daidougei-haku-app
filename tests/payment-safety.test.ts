@@ -33,8 +33,12 @@ describe('payment safety boundaries', () => {
 
   it('settles a platform-held sale from the paid checkout webhook', () => {
     const webhook = read('api/stripe/webhook.ts')
+    const settlement = read('api/stripe/_settlement.ts')
     expect(webhook).toContain("const saleConnectedAccountId = connectedAccountId ?? session.metadata?.connected_account_id ?? null")
     expect(webhook).toContain('await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)')
+    expect(settlement).toContain('stripe_charge_id.eq.${chargeId}')
+    expect(settlement).toContain('stripe_payment_intent_id.eq.${paymentIntentId}')
+    expect(settlement).toContain('.or(saleIdentity)')
   })
 
   it('keeps financial ledgers server-write-only and reconciles refund fees', () => {
