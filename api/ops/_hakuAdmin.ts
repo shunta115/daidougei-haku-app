@@ -346,6 +346,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(200).json({ ok: true, updated: appearances.length })
         return
       }
+      if (action === 'slot-performer-link') {
+        const id = String(payload.id || '')
+        const officialName = String(payload.officialName || '').trim()
+        const performerId = payload.performerId ? String(payload.performerId) : null
+        if (!id || !officialName) {
+          res.status(400).json({ error: 'id and officialName required' })
+          return
+        }
+        if (performerId) {
+          const { data: performer, error: performerError } = await sb
+            .from('performers')
+            .select('id')
+            .eq('id', performerId)
+            .eq('is_approved', true)
+            .maybeSingle()
+          if (performerError) throw performerError
+          if (!performer) {
+            res.status(400).json({ error: 'approved performer required' })
+            return
+          }
+        }
+        const { data: slots, error: slotError } = await sb
+          .from('event_slots')
+          .select('id')
+          .eq('event_id', id)
+          .eq('performer_name_ja', officialName)
+        if (slotError) throw slotError
+        if (!slots?.length) {
+          res.status(404).json({ error: 'official slot performer not found' })
+          return
+        }
+        const { error } = await sb
+          .from('event_slots')
+          .update({ performer_id: performerId })
+          .eq('event_id', id)
+          .eq('performer_name_ja', officialName)
+        if (error) throw error
+        await audit(admin.id, 'event.slot_performer_link', id, {
+          official_name_ja: officialName,
+          linked_performer_id: performerId,
+          slot_count: slots.length,
+        })
+        res.status(200).json({ ok: true, updated: slots.length })
+        return
+      }
       if (action === 'lineup-set') {
         const id = String(payload.id || '')
         const requested = Array.isArray(payload.performerIds)

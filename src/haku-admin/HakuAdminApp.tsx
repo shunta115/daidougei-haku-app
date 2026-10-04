@@ -32,7 +32,7 @@ export function HakuAdminApp() {
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([])
   const [eventExtra, setEventExtra] = useState<{
     lineup: Array<{ performer_id: string; is_voting_eligible: boolean; performer?: { stage_name?: string; genre?: string } | null }>
-    slots: unknown[]
+    slots: Array<{ id: string; date: string; performer_id: string | null; performer_name_ja: string | null; performance_type?: string | null; stage_ja?: string | null }>
     venues: unknown[]
     approvedPerformers: Array<{ id: string; stage_name: string; genre?: string }>
     guestAppearances: Array<{ id: string; official_name_ja: string; appearance_type: string; appearance_date: string; linked_performer_id: string | null; sort_order: number }>
@@ -69,7 +69,10 @@ export function HakuAdminApp() {
           const extra = await hakuAdmin('events', 'lineup', { id: first }) as typeof eventExtra
           setEventExtra(extra)
           setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
-          setAppearanceLinks(Object.fromEntries((extra?.guestAppearances ?? []).map((row) => [row.official_name_ja, row.linked_performer_id ?? ''])))
+          setAppearanceLinks(Object.fromEntries([
+            ...(extra?.slots ?? []).filter((row) => row.performer_name_ja).map((row) => [`slot:${row.performer_name_ja}`, row.performer_id ?? '']),
+            ...(extra?.guestAppearances ?? []).map((row) => [`guest:${row.official_name_ja}`, row.linked_performer_id ?? '']),
+          ]))
         }
       }
       if (next === 'votes') {
@@ -110,7 +113,10 @@ export function HakuAdminApp() {
       const extra = await hakuAdmin('events', 'lineup', { id }) as typeof eventExtra
       setEventExtra(extra)
       setLineupSelection(extra?.lineup.map((row) => row.performer_id) ?? [])
-      setAppearanceLinks(Object.fromEntries((extra?.guestAppearances ?? []).map((row) => [row.official_name_ja, row.linked_performer_id ?? ''])))
+      setAppearanceLinks(Object.fromEntries([
+        ...(extra?.slots ?? []).filter((row) => row.performer_name_ja).map((row) => [`slot:${row.performer_name_ja}`, row.performer_id ?? '']),
+        ...(extra?.guestAppearances ?? []).map((row) => [`guest:${row.official_name_ja}`, row.linked_performer_id ?? '']),
+      ]))
       setAppearanceQueries({})
       setLineupSearch('')
     } catch (e) {
@@ -150,15 +156,16 @@ export function HakuAdminApp() {
     }
   }
 
-  const saveAppearanceLink = async (officialName: string) => {
+  const saveAppearanceLink = async (source: 'slot' | 'guest', officialName: string) => {
     if (!eventId) return
+    const key = `${source}:${officialName}`
     setBusy(true)
     setError(null)
     try {
-      await hakuAdmin('events', 'guest-appearance-link', {
+      await hakuAdmin('events', source === 'slot' ? 'slot-performer-link' : 'guest-appearance-link', {
         id: eventId,
         officialName,
-        performerId: appearanceLinks[officialName] || null,
+        performerId: appearanceLinks[key] || null,
       })
       await loadEvent(eventId)
     } catch (e) {
@@ -167,6 +174,32 @@ export function HakuAdminApp() {
       setBusy(false)
     }
   }
+
+  const renderProfileLinks = (source: 'slot' | 'guest', rows: Array<{ officialName: string; linkedPerformerId: string | null; dates: string; category: string }>) => rows.map((appearance) => {
+    const key = `${source}:${appearance.officialName}`
+    const query = appearanceQueries[key] ?? ''
+    const selectedId = appearanceLinks[key] ?? ''
+    const candidates = (eventExtra?.approvedPerformers ?? []).filter((performer) => !query.trim() || `${performer.stage_name} ${performer.genre || ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+    const selected = (eventExtra?.approvedPerformers ?? []).find((performer) => performer.id === selectedId)
+    const options = selected && !candidates.some((performer) => performer.id === selected.id) ? [selected, ...candidates] : candidates
+    return (
+      <section key={key} className="ha-appearance-links__item">
+        <div><small>イベント表示名</small><strong>{appearance.officialName}</strong><span>{appearance.dates} · {appearance.category}</span></div>
+        <label>
+          <span className="pl-label">HAKUパフォーマーを検索</span>
+          <input className="pl-input" type="search" value={query} onChange={(e) => setAppearanceQueries((current) => ({ ...current, [key]: e.target.value }))} placeholder="登録名・ジャンルを部分一致検索" />
+        </label>
+        <label>
+          <span className="pl-label">紐付けるHAKUパフォーマー</span>
+          <select className="pl-input" value={selectedId} onChange={(e) => setAppearanceLinks((current) => ({ ...current, [key]: e.target.value }))}>
+            <option value="">未紐付け</option>
+            {options.map((performer) => <option key={performer.id} value={performer.id}>{performer.stage_name}{performer.genre ? ` — ${performer.genre}` : ''}</option>)}
+          </select>
+        </label>
+        <button type="button" className="pl-btn pl-btn--block" disabled={busy || selectedId === (appearance.linkedPerformerId ?? '')} onClick={() => void saveAppearanceLink(source, appearance.officialName)}>この紐付けを保存</button>
+      </section>
+    )
+  })
 
   const tabs: Array<{ id: Tab; label: string }> = useMemo(() => [
     { id: 'home', label: '状況' },
@@ -360,35 +393,30 @@ export function HakuAdminApp() {
                 <p className="ha-note">選択中 {lineupSelection.length}人</p>
                 <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void saveLineup()}>出演者を保存</button>
               </article>
-              {eventExtra.guestAppearances?.length ? (
+              {eventExtra.slots.some((row) => row.performer_name_ja) || eventExtra.guestAppearances?.length ? (
                 <article className="ha-card ha-appearance-links">
                   <h2>出演名とHAKUプロフィールの紐付け</h2>
                   <p className="ha-note">イベントの正式な出演名は変更せず、写真・プロフィール・SNS・応援・LIVE・動画・グッズ・フォローの参照先だけを選択します。完全一致しない名前は自動確定しません。</p>
-                  {[...new Map(eventExtra.guestAppearances.map((row) => [row.official_name_ja, row])).values()].map((appearance) => {
-                    const query = appearanceQueries[appearance.official_name_ja] ?? ''
-                    const selectedId = appearanceLinks[appearance.official_name_ja] ?? ''
-                    const candidates = (eventExtra.approvedPerformers ?? []).filter((performer) => !query.trim() || `${performer.stage_name} ${performer.genre || ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-                    const selected = (eventExtra.approvedPerformers ?? []).find((performer) => performer.id === selectedId)
-                    const options = selected && !candidates.some((performer) => performer.id === selected.id) ? [selected, ...candidates] : candidates
-                    const dates = eventExtra.guestAppearances.filter((row) => row.official_name_ja === appearance.official_name_ja).map((row) => row.appearance_date.slice(5).replace('-', '/')).join('・')
-                    return (
-                      <section key={appearance.official_name_ja} className="ha-appearance-links__item">
-                        <div><small>イベント表示名</small><strong>{appearance.official_name_ja}</strong><span>{dates} · {appearance.appearance_type}</span></div>
-                        <label>
-                          <span className="pl-label">HAKUパフォーマーを検索</span>
-                          <input className="pl-input" type="search" value={query} onChange={(e) => setAppearanceQueries((current) => ({ ...current, [appearance.official_name_ja]: e.target.value }))} placeholder="登録名・ジャンルを部分一致検索" />
-                        </label>
-                        <label>
-                          <span className="pl-label">紐付けるHAKUパフォーマー</span>
-                          <select className="pl-input" value={selectedId} onChange={(e) => setAppearanceLinks((current) => ({ ...current, [appearance.official_name_ja]: e.target.value }))}>
-                            <option value="">未紐付け</option>
-                            {options.map((performer) => <option key={performer.id} value={performer.id}>{performer.stage_name}{performer.genre ? ` — ${performer.genre}` : ''}</option>)}
-                          </select>
-                        </label>
-                        <button type="button" className="pl-btn pl-btn--block" disabled={busy || selectedId === (appearance.linked_performer_id ?? '')} onClick={() => void saveAppearanceLink(appearance.official_name_ja)}>この紐付けを保存</button>
-                      </section>
-                    )
-                  })}
+                  <h3>定点パフォーマー</h3>
+                  {renderProfileLinks('slot', [...new Set(eventExtra.slots.map((row) => row.performer_name_ja).filter((name): name is string => Boolean(name)))].map((officialName) => {
+                    const matching = eventExtra.slots.filter((row) => row.performer_name_ja === officialName)
+                    return {
+                      officialName,
+                      linkedPerformerId: matching.find((row) => row.performer_id)?.performer_id ?? null,
+                      dates: [...new Set(matching.map((row) => row.date.slice(5).replace('-', '/')))].join('・'),
+                      category: [...new Set(matching.map((row) => row.stage_ja || '定点'))].join('・'),
+                    }
+                  }))}
+                  <h3>スタチュー・回遊</h3>
+                  {renderProfileLinks('guest', [...new Set(eventExtra.guestAppearances.map((row) => row.official_name_ja))].map((officialName) => {
+                    const matching = eventExtra.guestAppearances.filter((row) => row.official_name_ja === officialName)
+                    return {
+                      officialName,
+                      linkedPerformerId: matching.find((row) => row.linked_performer_id)?.linked_performer_id ?? null,
+                      dates: [...new Set(matching.map((row) => row.appearance_date.slice(5).replace('-', '/')))].join('・'),
+                      category: [...new Set(matching.map((row) => row.appearance_type))].join('・'),
+                    }
+                  }))}
                 </article>
               ) : null}
               <article className="ha-card">
