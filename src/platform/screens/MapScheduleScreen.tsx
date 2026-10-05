@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
+import { displayStageName } from '../lib/stageLabel'
 import {
   getFeaturedEvent,
   listApprovedPerformers,
@@ -325,7 +326,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               <button key={slot.id} type="button" className="pl-schedule-row" disabled={!act} onClick={() => act && (act.is_live ? onWatchLive(act.id) : onOpenPerformer(act.id))}>
                 <span className="pl-schedule-row__time"><Clock3 size={15} />{timeLabel(slot.start_time)}</span>
                 <span className="pl-schedule-row__media">{act?.photo_url ? <img src={act.photo_url} alt="" /> : <span />}</span>
-                <span className="pl-schedule-row__body"><strong>{act?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja)}</strong><small>{venue?.name_ja || slot.stage_ja} · {act?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</small>{act?.is_live ? <em><Radio size={11} /> LIVE</em> : null}</span>
+                <span className="pl-schedule-row__body"><strong>{act?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja)}</strong><small>{displayStageName(venue?.name_ja || slot.stage_ja)} · {act?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</small>{act?.is_live ? <em><Radio size={11} /> LIVE</em> : null}</span>
                 <ChevronRight size={18} />
               </button>
             )

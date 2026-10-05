@@ -285,6 +285,12 @@ a { color: var(--neon); }
   padding-top: calc(62px + var(--safe-t));
 }
 
+.pl-shell:has(.pl-home-v7) {
+  padding-top: calc(14px + var(--safe-t));
+}
+
+.pl-home-v7__masthead { padding-right:72px; }
+
 .pl-bg__mesh {
   background:
     linear-gradient(180deg, rgba(16, 15, 14, 0.88), rgba(5, 5, 6, 0.98)),

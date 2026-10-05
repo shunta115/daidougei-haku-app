@@ -15,6 +15,7 @@ import { useLang } from '../../i18n/LangProvider'
 import type { MerchOrder, TipRow } from '../lib/types'
 import { SystemFeeExplain } from '../components/SystemFeeExplain'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, bpsToPercentLabel, settleSaleAfterRefund } from '../../../shared/fees'
+import { displayStageName } from '../lib/stageLabel'
 
 export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void; onLive: () => void }) {
   const { t, lang } = useLang()
@@ -39,7 +40,7 @@ export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void
       <p className="pl-brand">{new Date(`${slot.date}T00:00:00`).toLocaleDateString(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
       <h2 className="pl-h2">{slot.events?.name_ja ?? t('appName')}</h2>
       <strong>{slot.start_time}〜{slot.end_time}</strong>
-      <p className="pl-muted">{slot.event_venues?.name_ja ?? t('scheduleVenuePending')}{slot.stage_ja ? `・${slot.stage_ja}` : ''}</p>
+      <p className="pl-muted">{displayStageName(slot.event_venues?.name_ja) || t('scheduleVenuePending')}{slot.stage_ja ? `・${displayStageName(slot.stage_ja)}` : ''}</p>
       {slot.is_stream ? <span className="pl-registration__status"><Radio size={16} />{t('liveScheduled')}</span> : null}
     </article>)}
     {rows.some((slot) => slot.is_stream) ? <button className="pl-btn pl-btn--block pl-btn--live" onClick={onLive}>{t('schedulePrepareLive')}</button> : null}

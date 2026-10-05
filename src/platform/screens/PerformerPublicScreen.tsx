@@ -24,6 +24,7 @@ import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
 import { officialAwpAwards } from '../lib/awpAwards'
+import { displayStageName } from '../lib/stageLabel'
 import './performer-home.css'
 
 type Props = {
@@ -386,7 +387,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                     <div>
                       <strong>{dateTimeRange(slot)}</strong>
                       <p>{slot.events?.name_ja}</p>
-                      <p>{venue?.name_ja}{slot.stage_ja ? ` · ${slot.stage_ja}` : ''}</p>
+                      <p>{displayStageName(venue?.name_ja)}{slot.stage_ja ? ` · ${displayStageName(slot.stage_ja)}` : ''}</p>
                     </div>
                     {slot.events?.slug ? (
                       <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button>

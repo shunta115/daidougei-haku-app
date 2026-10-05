@@ -31,6 +31,7 @@ type FanHomeProps = {
   onPerformerLive?: () => void
   onPerformerSchedule?: () => void
   onPerformerDesk?: () => void
+  onOpenTitle?: () => void
 }
 
 function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }: {
@@ -65,7 +66,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onPerformerLive, onPerformerSchedule, onPerformerDesk }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
@@ -115,7 +116,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   return (
     <main className="pl-experience pl-home-v7">
       <header className="pl-home-v7__masthead">
-        <div className="pl-home-v7__identity"><BrandLogo size={42} variant="official" /></div>
+        <button type="button" className="pl-home-v7__identity" onClick={onOpenTitle} aria-label={t('openTitleScreen')}><BrandLogo size={42} variant="official" /></button>
         <div className="pl-home-v7__tools">
           <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label={t('searchAria')}><Search size={19} /></button>
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label={t('notifications')}><Bell size={19} /></button>

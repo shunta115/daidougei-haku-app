@@ -812,6 +812,7 @@ function PlatformShell() {
             onOpenMap={() => setScreen('map-schedule')}
             onOpenEvent={openEvent}
             onOpenNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
             onPerformerLive={role === 'performer' ? () => setScreen('performer-live') : undefined}
             onPerformerSchedule={role === 'performer' ? () => setScreen('performer-schedule') : undefined}
             onPerformerDesk={role === 'performer' ? () => setScreen('profile') : undefined}
