@@ -750,33 +750,88 @@
 .pl-install-card > div { min-width: 0; display: grid; gap: 2px; }
 .pl-install-card strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .pl-install-card small { color: var(--xp-muted); font-size: 10px; }
-.pl-install-card > button:not(.pl-install-card__dismiss) { min-height: 40px; padding: 0 13px; border: 0; border-radius: 12px; background: #edf6ff; color: #071322; font-size: 11px; font-weight: 900; }
+.pl-install-card > button:not(.pl-install-card__dismiss) { min-height: 40px; max-width: 7.4rem; padding: 6px 10px; border: 0; border-radius: 12px; background: #edf6ff; color: #071322; font-size: 11px; font-weight: 900; line-height: 1.25; white-space: normal; }
 .pl-install-card__dismiss { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: rgba(255,255,255,.55); }
-.pl-install-sheet { position: fixed; z-index: 120; inset: 0; display: grid; align-items: end; }
-.pl-install-sheet__backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(1,8,17,.7); backdrop-filter: blur(7px); }
-.pl-install-sheet__panel { position: relative; display: grid; gap: 18px; padding: 10px 18px calc(20px + env(safe-area-inset-bottom)); border: 1px solid rgba(144,195,240,.22); border-bottom: 0; border-radius: 28px 28px 0 0; background: rgba(7,24,41,.97); box-shadow: 0 -24px 70px rgba(0,0,0,.46); }
+
+.pl-install-sheet { position: fixed; z-index: 130; inset: 0; display: grid; align-items: end; }
+.pl-install-sheet__backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(1,8,17,.78); backdrop-filter: blur(8px); }
+.pl-install-sheet__panel { position: relative; display: grid; gap: 14px; max-height: min(92dvh, 860px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); border: 1px solid rgba(144,195,240,.22); border-bottom: 0; border-radius: 28px 28px 0 0; background: linear-gradient(180deg, rgba(10,28,48,.98), rgba(6,18,32,.98)); box-shadow: 0 -24px 70px rgba(0,0,0,.46); }
 .pl-install-sheet__handle { justify-self: center; width: 42px; height: 4px; border-radius: 99px; background: rgba(255,255,255,.28); }
 .pl-install-sheet header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
-.pl-install-sheet header p, .pl-install-sheet header h2 { margin: 0; }
-.pl-install-sheet header p { color: #8bc3ff; font-size: 9px; font-weight: 900; }
-.pl-install-sheet header h2 { margin-top: 4px; font-size: 22px; }
-.pl-install-sheet header button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--xp-line); border-radius: 50%; background: rgba(255,255,255,.06); color: white; }
-.pl-install-sheet ol { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
-.pl-install-sheet li { min-height: 64px; display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--xp-line); border-radius: 17px; background: rgba(255,255,255,.05); }
-.pl-install-sheet li > span, .pl-install-sheet li > b { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: rgba(75,163,255,.16); color: #9ccaff; }
-.pl-install-sheet li > div { display: grid; gap: 3px; }
-.pl-install-sheet li strong { font-size: 13px; }
-.pl-install-sheet li small { display: flex; align-items: center; gap: 3px; color: var(--xp-muted); font-size: 10px; }
+.pl-install-sheet__logo { display: block; border-radius: 16px; object-fit: cover; box-shadow: 0 10px 28px rgba(0,8,20,.36); }
+.pl-install-sheet header button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; border: 1px solid var(--xp-line); border-radius: 50%; background: rgba(255,255,255,.06); color: white; }
+.pl-install-sheet__intro { display: grid; gap: 6px; }
+.pl-install-sheet__intro h2,
+.pl-install-sheet__intro p { margin: 0; }
+.pl-install-sheet__intro h2 { display: grid; font-size: clamp(1.35rem, 6.4vw, 1.7rem); font-weight: 900; line-height: 1.18; letter-spacing: -0.03em; }
+.pl-install-sheet__intro h2 em { font-style: normal; background: linear-gradient(90deg, #ff3b89, #8a5cff 48%, #3ba7ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pl-install-sheet__intro p { color: rgba(248,247,243,.72); font-size: 13px; font-weight: 700; }
+
+.pl-install-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.pl-install-steps > li { display: grid; gap: 6px; min-width: 0; padding: 12px 12px 10px; border: 1px solid rgba(144,195,240,.16); border-radius: 18px; background: rgba(255,255,255,.045); }
+.pl-install-steps > li > span { width: fit-content; padding: 2px 8px; border-radius: 999px; background: rgba(75,163,255,.16); color: #9ccaff; font-size: 9px; font-weight: 900; letter-spacing: 0.04em; }
+.pl-install-steps strong { font-size: 15px; line-height: 1.3; }
+.pl-install-steps small { color: var(--xp-muted); font-size: 11px; }
+
+.pl-install-figure { position: relative; display: grid; place-items: center; min-height: 78px; padding: 8px 6px 4px; border-radius: 14px; background: linear-gradient(180deg, rgba(8,22,38,.9), rgba(6,16,28,.78)); }
+.pl-install-figure__bar { display: grid; grid-template-columns: repeat(5, 1fr); align-items: end; width: min(100%, 220px); gap: 8px; padding: 8px 10px 7px; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: rgba(255,255,255,.04); }
+.pl-install-figure__bar > span { justify-self: center; width: 18px; height: 4px; border-radius: 99px; background: rgba(255,255,255,.22); }
+.pl-install-figure__share { position: relative; justify-self: center; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #d8ecff; background: rgba(75,163,255,.18); }
+.pl-install-figure__glow { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(91,176,255,.86); box-shadow: 0 0 18px rgba(75,163,255,.55); animation: pl-install-pulse 1.6s ease-in-out infinite; }
+.pl-install-figure__pointer { position: absolute; top: 2px; color: #7ec4ff; font-size: 16px; font-style: normal; font-weight: 900; animation: pl-install-bounce 1.2s ease-in-out infinite; }
+.pl-install-menu { display: grid; gap: 6px; width: min(100%, 220px); }
+.pl-install-menu p { display: grid; grid-template-columns: 16px minmax(0,1fr) 28px; align-items: center; gap: 8px; margin: 0; min-height: 22px; padding: 0 8px; }
+.pl-install-menu p > i,
+.pl-install-menu p > span,
+.pl-install-menu p > b { display: block; border-radius: 99px; background: rgba(255,255,255,.16); font-style: normal; }
+.pl-install-menu p > i { width: 16px; height: 16px; }
+.pl-install-menu p > span { height: 6px; }
+.pl-install-menu p > b { height: 6px; }
+.pl-install-menu .is-target { min-height: 34px; border: 1px solid rgba(255,59,137,.55); border-radius: 10px; background: rgba(255,59,137,.12); box-shadow: 0 0 16px rgba(138,92,255,.28); }
+.pl-install-menu .is-target i { display: grid; place-items: center; border-radius: 6px; background: linear-gradient(135deg, #ff3b89, #3ba7ff); color: white; font-size: 12px; font-weight: 900; line-height: 1; }
+.pl-install-menu .is-target strong { overflow: hidden; color: white; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.pl-install-confirm { display: flex; align-items: center; justify-content: space-between; width: min(100%, 220px); min-height: 40px; padding: 0 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.04); }
+.pl-install-confirm span { color: rgba(255,255,255,.38); font-size: 12px; font-weight: 800; }
+.pl-install-confirm b { min-width: 52px; padding: 6px 10px; border-radius: 10px; background: linear-gradient(135deg, #ff3b89, #8a5cff 55%, #3ba7ff); color: white; font-size: 13px; text-align: center; box-shadow: 0 0 16px rgba(75,163,255,.28); }
+
+.pl-install-benefits { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pl-install-benefits li { display: grid; gap: 4px; min-width: 0; padding: 8px 8px 9px; border: 1px solid rgba(144,195,240,.12); border-radius: 14px; background: rgba(255,255,255,.04); }
+.pl-install-benefits b { font-size: 14px; }
+.pl-install-benefits strong { display: block; font-size: 11px; line-height: 1.25; }
+.pl-install-benefits small { display: block; color: var(--xp-muted); font-size: 10px; line-height: 1.3; }
+
 .pl-install-sheet__done { min-height: 52px; border: 0; border-radius: 16px; background: #398cff; color: white; font-weight: 900; }
-.pl-install-sheet__time { margin:-8px 0 -8px; color:#9ccaff; font-size:12px; font-weight:800; text-align:center; }
+.pl-install-sheet__cue { display: grid; justify-items: center; margin: 0; color: #9ccaff; font-size: 13px; font-weight: 900; animation: pl-install-bounce 1.2s ease-in-out infinite; }
+
+body.pl-install-guide-open { overflow: hidden; }
+body.pl-install-guide-open .pl-nav,
+body.pl-install-guide-open .pl-nav--fan {
+  pointer-events: none;
+  opacity: 0.18;
+  filter: saturate(.35) brightness(.42);
+}
+
+@keyframes pl-install-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.12); opacity: .55; }
+}
+@keyframes pl-install-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
 
 @media (max-width: 430px) {
-  .pl-install-card { grid-template-columns:36px minmax(0,1fr); padding-right:42px; }
-  .pl-install-card > button:not(.pl-install-card__dismiss) { grid-column:1 / -1; width:100%; }
+  .pl-install-card { grid-template-columns: 36px minmax(0,1fr); padding-right: 42px; }
+  .pl-install-card > button:not(.pl-install-card__dismiss) { grid-column: 1 / -1; width: 100%; max-width: none; }
 }
+
 
 @keyframes master-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .pl-experience > *, .pl-profile-tabs, .pl-profile-panel, .pl-my-hero, .pl-my-menu { animation: master-rise .36s var(--xp-curve) both; }
+
+@media (max-width: 374px) {
+  .pl-install-benefits { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 440px) {
   .pl-cinema-hero { height: 252px; min-height: 252px; }
@@ -800,6 +855,9 @@ html[lang='en'] .pl-page-intro h1 {
 @media (prefers-reduced-motion: reduce) {
   .pl-experience > *, .pl-profile-tabs, .pl-profile-panel, .pl-my-hero, .pl-my-menu { animation: none; }
   .pl-splash__video { display: none; }
+  .pl-install-figure__glow,
+  .pl-install-figure__pointer,
+  .pl-install-sheet__cue { animation: none; }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
