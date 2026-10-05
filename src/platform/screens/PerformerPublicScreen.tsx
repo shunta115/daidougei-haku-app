@@ -76,6 +76,14 @@ function dateTimeRange(slot: PerformerEventSlot) {
   return `${Number(m)}/${Number(d)}（${wk}） ${start}–${end}`
 }
 
+function venueAndStageLabel(venueName?: string | null, stageName?: string | null) {
+  const venue = displayStageName(venueName)
+  const stage = displayStageName(stageName)
+  if (!venue) return stage
+  if (!stage || venue === stage) return venue
+  return `${venue} · ${stage}`
+}
+
 function compactCount(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}K`
   return String(n)
@@ -336,8 +344,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
               <div>
                 <time>{dateTimeRange(next)}</time>
                 <strong>{next.events?.name_ja || t('hpEvent')}</strong>
-                <p>{nextVenue?.name_ja || next.stage_ja}</p>
-                {next.stage_ja ? <p>{next.stage_ja}</p> : null}
+                <p>{venueAndStageLabel(nextVenue?.name_ja, next.stage_ja)}</p>
               </div>
               <MapPin size={16} />
             </div>
@@ -387,7 +394,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                     <div>
                       <strong>{dateTimeRange(slot)}</strong>
                       <p>{slot.events?.name_ja}</p>
-                      <p>{displayStageName(venue?.name_ja)}{slot.stage_ja ? ` · ${displayStageName(slot.stage_ja)}` : ''}</p>
+                      <p>{venueAndStageLabel(venue?.name_ja, slot.stage_ja)}</p>
                     </div>
                     {slot.events?.slug ? (
                       <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button>

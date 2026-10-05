@@ -64,7 +64,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('cover')
+  // Keep the full broadcast visible by default on narrow phones. Viewers can
+  // still opt into the existing crop-to-fill control when they prefer it.
+  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('contain')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
     () =>

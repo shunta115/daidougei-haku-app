@@ -74,6 +74,12 @@ describe('P0 migration safety', () => {
     expect(presence).toMatch(/admin_forced/)
   })
 
+  it('shows the complete LIVE frame by default on narrow phones', () => {
+    const viewer = read('src/platform/screens/LiveWatchScreen.tsx')
+    expect(viewer).toMatch(/useState<'contain' \| 'cover'>\('contain'\)/)
+    expect(viewer).toMatch(/setObjectFit\(\(f\) => \(f === 'contain' \? 'cover' : 'contain'\)\)/)
+  })
+
   it('keeps guest tips server-priced and preserves Direct Charges', () => {
     const tip = read('api/stripe/tip.ts')
     const screen = read('src/platform/screens/TipScreen.tsx')
