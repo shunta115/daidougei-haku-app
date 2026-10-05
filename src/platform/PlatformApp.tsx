@@ -611,9 +611,10 @@ function PlatformShell() {
           onWatchLive={openWatch}
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
-            onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('auth')}
+          onOpenMap={() => setScreen('map-schedule')}
+          onOpenEvent={openEvent}
+          onOpenNotifications={() => setScreen('auth')}
+          onOpenTitle={() => setShowSplash(true)}
           onTip={(id) => {
             trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
             setPerformerId(id)
@@ -943,6 +944,7 @@ function PlatformShell() {
             onOpenMap={() => setScreen('map-schedule')}
             onOpenEvent={openEvent}
             onOpenNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)

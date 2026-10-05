@@ -9,7 +9,7 @@ vi.mock('../src/platform/lib/supabase', () => ({ supabase: null, requireSupabase
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn(), useTrackView: vi.fn() }))
 vi.mock('../src/platform/screens/AuthScreen', () => ({ AuthScreen: ({ initialRole }: { initialRole: string }) => <p>register:{initialRole}</p> }))
 vi.mock('../src/platform/screens/PerformerHomeScreen', () => ({ PerformerHomeScreen: () => <p>performer-dashboard</p> }))
-vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>fan-home</p><button onClick={() => onOpenPerformer('performer-1')}>home-performer</button></> }))
+vi.mock('../src/platform/screens/FanHomeScreen', () => ({ FanHomeScreen: ({ onOpenPerformer, onOpenTitle }: { onOpenPerformer: (id: string) => void; onOpenTitle?: () => void }) => <><p>fan-home</p><button onClick={() => onOpenPerformer('performer-1')}>home-performer</button><button onClick={onOpenTitle}>home-title</button></> }))
 vi.mock('../src/platform/screens/MapScheduleScreen', () => ({ MapScheduleScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>master-event</p><button onClick={() => onOpenPerformer('performer-1')}>map-performer</button></> }))
 vi.mock('../src/platform/screens/EventScreens', () => ({
   EventListScreen: ({ onOpen }: { onOpen: (slug: string) => void }) => <button onClick={() => onOpen('award-winning-performers-2026')}>event-list</button>,
@@ -90,6 +90,13 @@ it('returns from a performer profile to HOME', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'home-performer' }))
   fireEvent.click(await screen.findByRole('button', { name: 'profile-back' }))
   await screen.findByText('fan-home')
+})
+
+it('returns a signed-out visitor from HOME to the title screen', async () => {
+  window.history.replaceState({}, '', '/')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'home-title' }))
+  expect(await screen.findByRole('button', { name: '音声をオンにする' })).toBeTruthy()
 })
 
 it('returns from a performer profile to map and live list contexts', async () => {
