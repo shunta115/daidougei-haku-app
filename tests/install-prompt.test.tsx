@@ -31,11 +31,12 @@ describe('iPhone home screen install guidance', () => {
   it('shows the short CTA and the three Safari steps on iPhone', () => {
     prepare()
     render(<InstallPrompt />)
-    fireEvent.click(screen.getByRole('button', { name: '追加' }))
-    expect(screen.getByRole('dialog', { name: '大道芸博をアプリにする' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'ホーム画面に追加する' }))
+    expect(screen.getByRole('dialog', { name: 'HAKUをホーム画面に追加' })).toBeTruthy()
     expect(screen.getByText('Safariの共有を押す')).toBeTruthy()
     expect(screen.getByText('「ホーム画面に追加」')).toBeTruthy()
     expect(screen.getByText('右上の「追加」')).toBeTruthy()
+    expect(screen.getByText('約10秒で完了')).toBeTruthy()
   })
 
   it('does not show the guidance when already running standalone', () => {

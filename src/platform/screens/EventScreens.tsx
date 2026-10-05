@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
 import {
   getEventBySlug,
   getEventVoteRule,
@@ -26,6 +26,7 @@ import { officialAppearanceCategory, performerPlace, resolveLinkedGuestPerformer
 import { AwpHeroVoteLaunch, EventVoteDesk } from './EventVoteDesk'
 import { AppBackButton } from '../components/AppBackButton'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
+import { officialAwpAwards } from '../lib/awpAwards'
 import './event.css'
 
 type DetailProps = {
@@ -165,7 +166,23 @@ function OfficialAppearanceCard({
 }
 
 const AWP_FLYER_SRC = '/events/award-winning-performers-2026/official-flyer-2026.webp'
+const AWP_FLYER_BACK_SRC = '/events/award-winning-performers-2026/official-venue-map.webp'
 const AWP_HERO_SRC = '/events/award-winning-performers-2026/hero-performer.jpg'
+
+function AwpFlyerCarousel({ compact = false }: { compact?: boolean }) {
+  const { t } = useLang()
+  const [page, setPage] = useState(0)
+  return <div className={`awp-flyer-carousel${compact ? ' awp-flyer-carousel--compact' : ''}`}>
+    <div className="awp-flyer-carousel__track" onScroll={(event) => {
+      const node = event.currentTarget
+      if (node.clientWidth) setPage(Math.round(node.scrollLeft / node.clientWidth))
+    }}>
+      <img src={AWP_FLYER_SRC} alt={t('eventFlyerImage')} />
+      <img src={AWP_FLYER_BACK_SRC} alt="AWP 2026 公式会場MAP・チラシ裏面" />
+    </div>
+    <div className="awp-flyer-carousel__dots" aria-label={`${page + 1} / 2`}><i data-active={page === 0} /><i data-active={page === 1} /><span>{page + 1} / 2</span></div>
+  </div>
+}
 
 type EventPhase = 'before' | 'during' | 'after'
 
@@ -200,7 +217,7 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
         const chrome = eventChrome(event, t)
         return <article className="pl-event-card" key={event.id} data-archived={event.status === 'archived'}>
         <div className="pl-event-card__visual" data-flyer={event.slug === 'award-winning-performers-2026' ? 'true' : undefined}>
-          {event.slug === 'award-winning-performers-2026' ? <img src={AWP_FLYER_SRC} alt={t('eventFlyerAlt', { name: chrome.name })} /> : <strong>AWP</strong>}
+          {event.slug === 'award-winning-performers-2026' ? <AwpFlyerCarousel compact /> : <strong>AWP</strong>}
           <span>{event.status === 'archived' ? 'ARCHIVE' : '2026 EVENT'}</span>
         </div>
         <div className="pl-event-card__body"><p>{chrome.presenter}</p><h2>{chrome.name}</h2><ul className="pl-event-facts">{eventFactLines(event, chrome.place, chrome.admission).map((line) => <li key={line}>{line}</li>)}</ul><button type="button" onClick={() => onOpen(event.slug)}>{t('eventEnjoy')}<ChevronRight size={18} /></button></div>
@@ -361,7 +378,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     const performer = slot.performer_id ? performerById.get(slot.performer_id) : null
     const venue = venueById.get(slot.venue_id)
     const displayName = slot.performer_name_ja || performer?.stage_name || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja || t('eventAdjusting'))
-    return <article className="pl-event-now__item"><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{displayName}</h3><span>{liveTimingLabel(slot)} · {venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={() => openVenueMap(slot.venue_id)}><MapPin size={16} />場所を見る</button>{performer ? <button onClick={() => onOpenPerformer(performer.id)}>プロフィール</button> : null}</div></article>
+    return <article className="pl-event-now__item" data-stage={venue?.name_ja || slot.stage_ja}><p>{label}</p><strong>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</strong><h3>{displayName}</h3><span>{liveTimingLabel(slot)} · {venue?.name_ja || slot.stage_ja}</span><div>{performer?.is_live ? <button onClick={() => onWatchLive(performer.id)}><Radio size={16} />{t('eventWatchLive')}</button> : null}<button onClick={() => openVenueMap(slot.venue_id)}><MapPin size={16} />場所を見る</button>{performer ? <button onClick={() => onOpenPerformer(performer.id)}>プロフィール</button> : null}</div></article>
   }
 
   const isAwp = slug === AWP_SLUG
@@ -444,7 +461,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:00</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:00+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
 
-    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header>{!isAwp ? <div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div> : null}{regularDateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : regularDateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const displayName = slot.performer_name_ja || performer?.stage_name || slot.stage_ja || t('eventAdjusting'); const state = slotState(slot, clock); const stateLabel = selectedDate === clock.date ? liveTimingLabel(slot) : state === '終了' ? t('slotEnded') : t('slotPlanned'); const wanted = wantedSlots.includes(slot.id); return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{displayName}</strong><em>{performer?.genre || 'Performance'}</em></button><i>{stateLabel}</i><div className="pl-event-slot__actions"><button className="pl-event-slot__venue" onClick={() => openVenueMap(slot.venue_id)}><MapPin size={14} />{venue?.name_ja || slot.stage_ja}</button><button className="pl-event-slot__want" data-active={wanted} aria-pressed={wanted} onClick={() => toggleWanted(slot.id)}><Heart size={14} fill={wanted ? 'currentColor' : 'none'} />{wanted ? '観たい済み' : '観たい'}</button></div>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
+    <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header>{!isAwp ? <div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div> : null}{regularDateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : regularDateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const displayName = slot.performer_name_ja || performer?.stage_name || slot.stage_ja || t('eventAdjusting'); const state = slotState(slot, clock); const stateLabel = selectedDate === clock.date ? liveTimingLabel(slot) : state === '終了' ? t('slotEnded') : t('slotPlanned'); const wanted = wantedSlots.includes(slot.id); const stageName = venue?.name_ja || slot.stage_ja; return <article className="pl-event-slot" key={slot.id} data-live={state === '開催中'} data-stage={stageName}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={!performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{displayName}</strong><em>{performer?.genre || 'Performance'}</em></button><i>{stateLabel}</i><div className="pl-event-slot__actions"><button className="pl-event-slot__venue" onClick={() => openVenueMap(slot.venue_id)}><MapPin size={14} />{stageName}</button><button className="pl-event-slot__want" data-active={wanted} aria-pressed={wanted} onClick={() => toggleWanted(slot.id)}><Heart size={14} fill={wanted ? 'currentColor' : 'none'} />{wanted ? '観たい済み' : '観たい'}</button></div>{performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
 
     {isAwp ? <section className="awp-special"><header><Trophy size={25} /><div><p>SPECIAL NIGHT</p><h2>あなたの一票で、夜のステージが決まる。</h2></div></header><div>{dateSlots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => timeKey(a.start_time).localeCompare(timeKey(b.start_time))).map((slot) => <article key={slot.id}><time>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</time><strong>{slot.ranking_position === 3 ? '🥉' : slot.ranking_position === 2 ? '🥈' : '🥇'} 投票結果{slot.ranking_position}位</strong><span>{venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}</span></article>)}</div>{votingOpen ? <button onClick={() => onOpenVote ? onOpenVote() : jump('event-vote')}><Vote size={17} />投票する</button> : <p className="awp-special__closed">投票受付前</p>}</section> : null}
 
@@ -454,14 +471,14 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {!isAwp ? <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? t('eventNightSet') : t('eventNightOpen')}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{t('eventRank', { n: index + 1 })}</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${venueById.get(slot.venue_id)?.name_ja || slot.stage_ja}` : t('eventTimePending')}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>{t('eventProfile')}</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>{t('navLive')}</button> : null}</article> }) : <p>{t('eventNoRank')}</p>}</section> : null}
 
-    <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{t('eventSeeProfile')}</button></article>)}</div></section>
+    <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => { const awards = isAwp ? officialAwpAwards(performer.stage_name) : []; return <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{awards.length ? <div className="awp-awards" onClick={(event) => event.stopPropagation()}><ul>{awards.slice(0, 2).map((award) => <li key={award}>🏆 {award}</li>)}</ul>{awards.length > 2 ? <details><summary>受賞歴をすべて見る</summary><ul>{awards.slice(2).map((award) => <li key={award}>{award}</li>)}</ul></details> : null}</div> : null}{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{awards.length ? 'プロフィール・受賞歴を見る' : t('eventSeeProfile')}</button></article> })}</div></section>
 
     {!isAwp ? <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section> : null}
 
     <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
 
     {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>{t('eventWelcomeKicker')}</p><h2 id="event-onboarding-title">{t('eventWelcomeTitle')}</h2><span>{event.sub_copy_ja || t('eventSub')}</span><ul><li>{t('eventGuide1')}</li><li>{t('eventGuide2')}</li><li>{t('eventGuide3')}</li><li>{t('eventGuide4')}</li></ul><button onClick={closeGuide}>{t('eventWelcomeCta')}</button></div></div> : null}
-    {mapOpen ? <div className="awp-map-modal" role="dialog" aria-modal="true" aria-label="AWP 2026 公式会場MAP"><button className="awp-map-modal__close" type="button" onClick={() => setMapOpen(false)} aria-label="イベントへ戻る"><ArrowLeft size={20} /><span>イベントへ戻る</span></button><div><header><MapPin size={20} /><span><b>{focusedVenue ? venueById.get(focusedVenue)?.name_ja || '会場MAP' : 'AWP 2026 公式会場MAP'}</b><small>公式会場図で場所を確認してください</small></span></header><img src="/events/award-winning-performers-2026/official-venue-map.webp" alt="AWP 2026 公式会場内マップ" /><p>{focusedVenue ? `選択中：${venueById.get(focusedVenue)?.name_ja || ''}` : 'ステージ1〜4の位置を公式会場図で確認できます。'} 未確定の緯度経度は使用していません。</p></div></div> : null}
-    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label={t('eventFlyerDialog')}><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label={t('eventClose')}><X size={22} /></button><div className="pl-event-flyer__stage"><img src={AWP_FLYER_SRC} alt={t('eventFlyerImage')} /></div></div> : null}
+    {mapOpen ? <div className="awp-map-modal" role="dialog" aria-modal="true" aria-label="AWP 2026 公式会場MAP"><button className="awp-map-modal__close" type="button" onClick={() => setMapOpen(false)} aria-label="イベントへ戻る"><ArrowLeft size={20} /><span>イベントへ戻る</span></button><div><header><MapPin size={20} /><span><b>{focusedVenue ? venueById.get(focusedVenue)?.name_ja || '会場MAP' : 'AWP 2026 公式会場MAP'}</b><small>公式会場図で場所を確認してください</small></span></header><img src={AWP_FLYER_BACK_SRC} alt="AWP 2026 公式会場内マップ" /></div></div> : null}
+    {flyerOpen ? <div className="pl-event-flyer" role="dialog" aria-modal="true" aria-label={t('eventFlyerDialog')}><header className="pl-event-flyer__bar"><button className="pl-event-flyer__close" type="button" onClick={() => setFlyerOpen(false)} aria-label={t('eventClose')}><ArrowLeft size={20} /><span>イベントへ戻る</span></button></header><div className="pl-event-flyer__stage"><AwpFlyerCarousel /></div></div> : null}
   </main>
 }

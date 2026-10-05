@@ -23,6 +23,7 @@ import type { MerchProduct, Performer } from '../lib/types'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
+import { officialAwpAwards } from '../lib/awpAwards'
 import './performer-home.css'
 
 type Props = {
@@ -300,6 +301,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           {p.genre ? <li>◉ {p.genre}</li> : null}
           {p.appearances ? <li>✓ {p.appearances}</li> : p.awards ? <li>✓ {p.awards}</li> : null}
         </ul>
+
+        {officialAwpAwards(p.stage_name).length ? <details className="hp-awards"><summary>主な受賞歴</summary><ul>{officialAwpAwards(p.stage_name).map((award) => <li key={award}>{award}</li>)}</ul></details> : null}
 
         <dl className="hp-metrics">
           <div><dd>{compactCount(0)}</dd><dt>{t('hpAudience')}</dt></div>

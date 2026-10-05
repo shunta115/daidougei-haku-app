@@ -82,6 +82,7 @@ export function InstallPrompt() {
               <li><span><PlusSquare size={20} /></span><div><strong>{t('installHome')}</strong><small>{t('installHomeHint')}</small></div></li>
               <li><b>3</b><div><strong>{t('installConfirm')}</strong><small>{t('installConfirmHint')}</small></div></li>
             </ol>
+            <p className="pl-install-sheet__time">約10秒で完了</p>
             <button type="button" className="pl-install-sheet__done" onClick={dismiss}>{t('installDone')}</button>
           </section>
         </div>

@@ -227,6 +227,10 @@ body:has(.hp-page) { overflow-x: hidden; }
   white-space: nowrap;
 }
 
+.hp-awards { margin-top:12px; padding:0 12px; border:1px solid var(--hp-line); border-radius:14px; background:rgba(10,22,36,.62); }
+.hp-awards summary { min-height:44px; display:flex; align-items:center; color:#8fd2ff; font-size:12px; font-weight:850; cursor:pointer; }
+.hp-awards ul { margin:0; padding:0 0 12px 18px; color:var(--hp-sec); font-size:12px; line-height:1.55; }
+
 .hp-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -280,6 +280,11 @@ a { color: var(--neon); }
 
 .pl-shell--flush { padding-bottom: calc(20px + var(--safe-b)); }
 
+/* Reserve the safe top row for the fixed language control on public pages. */
+.pl-shell:has(.pl-global-message) {
+  padding-top: calc(62px + var(--safe-t));
+}
+
 .pl-bg__mesh {
   background:
     linear-gradient(180deg, rgba(16, 15, 14, 0.88), rgba(5, 5, 6, 0.98)),

@@ -94,7 +94,7 @@
 .pl-cinema-section__head { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
 .pl-cinema-section__head p, .pl-cinema-section__head h2 { margin: 0; }
 .pl-cinema-section__head p { color: #75baff; font-size: 9px; font-weight: 900; }
-.pl-cinema-section__head h2 { margin-top: 2px; font-family: var(--font-display); font-size: 20px; }
+.pl-cinema-section__head h2 { margin-top: 2px; padding-block:2px; overflow:visible; font-family: var(--font-display); font-size: 20px; line-height:1.25; }
 .pl-cinema-section__head > button { min-height: 40px; display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: var(--xp-muted); font-size: 11px; font-weight: 800; }
 .pl-cinema-rail { display: grid; grid-auto-flow: column; grid-auto-columns: 148px; gap: 11px; overflow-x: auto; padding: 0 1px 5px; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .pl-cinema-rail::-webkit-scrollbar { display: none; }
@@ -767,6 +767,12 @@
 .pl-install-sheet li strong { font-size: 13px; }
 .pl-install-sheet li small { display: flex; align-items: center; gap: 3px; color: var(--xp-muted); font-size: 10px; }
 .pl-install-sheet__done { min-height: 52px; border: 0; border-radius: 16px; background: #398cff; color: white; font-weight: 900; }
+.pl-install-sheet__time { margin:-8px 0 -8px; color:#9ccaff; font-size:12px; font-weight:800; text-align:center; }
+
+@media (max-width: 430px) {
+  .pl-install-card { grid-template-columns:36px minmax(0,1fr); padding-right:42px; }
+  .pl-install-card > button:not(.pl-install-card__dismiss) { grid-column:1 / -1; width:100%; }
+}
 
 @keyframes master-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .pl-experience > *, .pl-profile-tabs, .pl-profile-panel, .pl-my-hero, .pl-my-menu { animation: master-rise .36s var(--xp-curve) both; }

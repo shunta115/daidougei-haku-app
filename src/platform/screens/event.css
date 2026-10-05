@@ -93,6 +93,33 @@
   background:rgba(0,0,0,.62);
 }
 
+.pl-event-card__visual[data-flyer='true'] > span { pointer-events:none; }
+
+.awp-flyer-carousel { width:100%; min-width:0; }
+.awp-flyer-carousel__track {
+  display:flex;
+  width:100%;
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:none;
+  touch-action:pan-x pan-y;
+}
+.awp-flyer-carousel__track::-webkit-scrollbar { display:none; }
+.awp-flyer-carousel__track img {
+  flex:0 0 100%;
+  width:100%;
+  height:auto;
+  aspect-ratio:auto;
+  object-fit:contain;
+  scroll-snap-align:start;
+}
+.awp-flyer-carousel__dots { min-height:30px; display:flex; align-items:center; justify-content:center; gap:6px; color:#b9c9d5; font-size:11px; }
+.pl-event-card__visual[data-flyer='true'] .awp-flyer-carousel__dots { position:relative; inset:auto; padding:0; background:#07111a; }
+.pl-event-card__visual[data-flyer='true'] .awp-flyer-carousel__dots span { position:static; padding:0; background:transparent; }
+.awp-flyer-carousel__dots i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.28); }
+.awp-flyer-carousel__dots i[data-active='true'] { width:16px; border-radius:99px; background:#e72836; }
+
 .pl-event-card__visual strong {
   font-size:38px;
 }
@@ -1429,16 +1456,22 @@ html:has(.pl-event-detail) .pl-bg__grain {
   position:fixed;
   z-index:2;
   top:max(12px,env(safe-area-inset-top,0px));
-  right:12px;
-  width:48px;
+  left:max(12px,env(safe-area-inset-left,0px));
+  min-width:44px;
   height:48px;
-  display:grid;
-  place-items:center;
+  padding:0 13px;
+  display:flex;
+  align-items:center;
+  gap:7px;
   border:1px solid rgba(255,255,255,.25);
-  border-radius:50%;
+  border-radius:999px;
   background:rgba(0,0,0,.72);
   color:#fff;
 }
+
+.pl-event-flyer__bar { min-height:0; }
+.pl-event-flyer__stage .awp-flyer-carousel { width:min(100%,720px); }
+.pl-event-flyer__stage .awp-flyer-carousel__track { align-items:flex-start; }
 
 .pl-event-flyer__stage {
   width:min(100%,720px);
@@ -1454,6 +1487,11 @@ html:has(.pl-event-detail) .pl-bg__grain {
   object-fit:contain;
   display:block;
 }
+
+.awp-awards { width:100%; margin:4px 0 8px; color:#dbe9f4; font-size:11px; text-align:left; }
+.awp-awards summary { min-height:34px; display:flex; align-items:center; color:#82c8ff; font-weight:850; cursor:pointer; }
+.awp-awards ul { margin:0; padding:0; color:#b9c9d5; line-height:1.5; list-style:none; }
+.awp-awards details ul { padding-left:14px; list-style:disc; }
 
 .awp-day-tabs {
   margin:10px 0 0;
@@ -1514,6 +1552,11 @@ html:has(.pl-event-detail) .pl-bg__grain {
 .pl-event-slot { padding:7px 0; }
 .pl-event-slot__actions { grid-column:2/4; display:flex; flex-wrap:wrap; gap:6px; }
 .pl-event-slot__actions .pl-event-slot__venue,.pl-event-slot__want { min-height:36px; padding:0 9px; display:flex; align-items:center; gap:4px; border:1px solid rgba(145,196,237,.2); border-radius:8px; background:rgba(255,255,255,.06); color:#85c1f4; font-size:11px; font-weight:800; }
+.pl-event-slot__venue { font-size:12px!important; font-weight:850!important; line-height:1.2; }
+.pl-event-slot[data-stage*='ステージ'] .pl-event-slot__venue { border-color:rgba(231,40,54,.48); background:rgba(231,40,54,.11); color:#ff7f89; }
+.pl-event-slot[data-stage*='Statue'] .pl-event-slot__venue,
+.pl-event-slot[data-stage*='スタチュー'] .pl-event-slot__venue,
+.pl-event-slot[data-stage*='回遊'] .pl-event-slot__venue { border-color:rgba(65,216,235,.42); background:rgba(65,216,235,.1); color:#79e8f4; }
 .pl-event-slot__want { color:#ffd2de; }
 .pl-event-slot__want[data-active='true'] { border-color:rgba(255,71,117,.45); background:rgba(231,40,103,.16); color:#ff6f93; }
 
