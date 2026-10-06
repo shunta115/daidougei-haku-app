@@ -151,7 +151,7 @@ values
   ('2026-10-11', 'CLOWN BELLA', 'statue_roving', 'awp-2026-2026-10-11-appearance-7', 7),
   ('2026-10-11', 'ドレミふぁ共和国', 'statue_roving', 'awp-2026-2026-10-11-appearance-8', 8),
   ('2026-10-11', 'アンドロイドールYuE', 'statue_roving', 'awp-2026-2026-10-11-appearance-9', 9),
-  ('2026-10-11', 'ピエトロニカ', 'statue_roving', 'awp-2026-2026-10-11-appearance-10', 10),
+  ('2026-10-12', 'ピエトロニカ', 'statue_roving', 'awp-2026-2026-10-11-appearance-10', 10),
   ('2026-10-12', 'Piro', 'statue_roving', 'awp-2026-2026-10-12-appearance-11', 11),
   ('2026-10-12', 'ドレミふぁ共和国', 'statue_roving', 'awp-2026-2026-10-12-appearance-12', 12)
 )
