@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
@@ -101,6 +101,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -171,4 +172,49 @@ it('casts an authenticated fan vote through the same device-scoped server API an
   fireEvent.click(voteButton!)
   await waitFor(() => expect(fake.castAnonEventVote).toHaveBeenCalledWith(event.id, performer.id))
   expect(await screen.findByText('SUIに投票しました！')).toBeTruthy()
+})
+
+
+it.each(['09:00', '10:10'])('removes cancelled slots from recommendations and saved wants, retaining disabled timetable rows through same-day changes at %s', async (time) => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(`2026-10-10T${time}:00+09:00`))
+  const slot = { id: 'slot-1', event_id: event.id, performer_id: performer.id, performer_name_ja: '予定枠テスト', venue_id: 'v1', date: '2026-10-10', start_time: '10:00:00', end_time: '10:30:00', status: 'scheduled', note_ja: '', note_en: '', stage_ja: 'ステージ1', stage_en: '', is_stream: true }
+  fake.listEventSlots.mockResolvedValue([slot])
+  fake.listEventLineupPerformers.mockResolvedValue([{ ...performer, is_live: true }])
+  localStorage.setItem(`haku:wanted-slots:${event.id}`, JSON.stringify([slot.id]))
+  const open = vi.fn(), live = vi.fn()
+  render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={open} onWatchLive={live} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  await screen.findAllByText('予定枠テスト')
+  const row = () => document.querySelector('.pl-event-slot')!
+  expect(document.querySelector('.awp-watch-now')?.textContent).toContain('予定枠テスト')
+  expect(document.querySelector('.awp-wanted')?.textContent).toContain('予定枠テスト')
+  const { refreshVisibleData } = await import('../src/platform/lib/pullToRefresh')
+  fake.listEventSlots.mockResolvedValue([{ ...slot, status: 'cancelled', note_ja: '<b>雨天のため</b>' }])
+  await act(async () => { await refreshVisibleData() })
+  expect(document.querySelector('.awp-watch-now')?.textContent).not.toContain('予定枠テスト')
+  expect(document.querySelector('.pl-event-now')?.textContent).not.toContain('予定枠テスト')
+  expect(row().textContent).toContain('中止：<b>雨天のため</b>')
+  expect(row().querySelector('.pl-slot-cancellation b')).toBeNull()
+  for (const button of row().querySelectorAll('button')) { expect(button.disabled).toBe(true); fireEvent.click(button) }
+  expect(open).not.toHaveBeenCalled()
+  expect(live).not.toHaveBeenCalled()
+  // Preserve saved IDs so a reinstated slot returns, using its updated time.
+  fake.listEventSlots.mockResolvedValue([{ ...slot, start_time: '11:00:00', end_time: '11:30:00' }])
+  await act(async () => { await refreshVisibleData() })
+  expect(row().textContent).not.toContain('中止')
+  expect(row().textContent).toContain('11:00')
+  expect(document.querySelector('.awp-wanted')?.textContent).toContain('11:00')
+  expect(row().querySelector<HTMLButtonElement>('.pl-event-slot__want')?.disabled).toBe(false)
+  vi.useRealTimers()
+})
+
+
+it('marks a cancelled special-final timetable entry even without a reason', async () => {
+  fake.listEventSlots.mockResolvedValue([{ id: 'final', date: '2026-10-10', start_time: '18:00', end_time: '18:30', performance_type: 'special_final', ranking_position: 1, status: 'cancelled', note_ja: '', note_en: '' }])
+  render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  await screen.findByRole('heading', { name: '受賞者たち' })
+  const final = document.querySelector('.awp-special article')!
+  expect(final.textContent).toContain('中止')
+  expect(final.textContent).toContain('18:00')
+  expect(final.querySelector('button')).toBeNull()
 })

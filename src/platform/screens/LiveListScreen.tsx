@@ -1,3 +1,4 @@
+import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
@@ -34,7 +35,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const suggestions = acts.slice(0, 4)
-  const refreshLive = async () => { const [liveRows, rankRows, featured, approved] = await Promise.all([listLivePerformers(), listLiveRanking(), getFeaturedEvent().catch(() => null), listApprovedPerformers().catch(() => [] as Performer[])]); setLive(liveRows); setRank(rankRows); setActs(approved); if (featured) { const [slots, sessions] = await Promise.all([listEventSlots(featured.id).catch(() => [] as EventSlotRow[]), listEventLiveSessions(featured.id).catch(() => [] as LiveSession[])]); const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }); setScheduled(slots.filter((s) => s.is_stream && String(s.date).slice(0, 10) >= today && s.status !== 'cancelled')); setEnded(sessions.filter((s) => Boolean(s.ended_at))) } setError(null); setLoading(false) }
+  const refreshLive = async () => { const [liveRows, rankRows, featured, approved] = await Promise.all([listLivePerformers(), listLiveRanking(), getFeaturedEvent().catch(() => null), listApprovedPerformers().catch(() => [] as Performer[])]); setLive(liveRows); setRank(rankRows); setActs(approved); if (featured) { const [slots, sessions] = await Promise.all([listEventSlots(featured.id).catch(() => [] as EventSlotRow[]), listEventLiveSessions(featured.id).catch(() => [] as LiveSession[])]); const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }); setScheduled(slots.filter((s) => s.is_stream && String(s.date).slice(0, 10) >= today && isActiveEventSlot(s))); setEnded(sessions.filter((s) => Boolean(s.ended_at))) } setError(null); setLoading(false) }
   useRefreshTask(refreshLive)
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
           setScheduled(
             slots.filter(
-              (s) => s.is_stream && String(s.date).slice(0, 10) >= today && s.status !== 'cancelled',
+              (s) => s.is_stream && String(s.date).slice(0, 10) >= today && isActiveEventSlot(s),
             ),
           )
           setEnded(sessions.filter((s) => Boolean(s.ended_at)))
