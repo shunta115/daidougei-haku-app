@@ -14,6 +14,7 @@ import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import { AppBackButton } from '../components/AppBackButton'
 import type { Performer } from '../lib/types'
 import './event.css'
+import { useRefreshTask } from '../lib/pullToRefresh'
 
 function AwpVoteTitle({ text }: { text: string }) {
   if (text.startsWith('投票')) return <><em>投票</em>{text.slice(2)}</>
@@ -115,6 +116,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
     setMaxVotes(state.max_votes)
     setOpen(state.voting_open && Boolean(rule?.voting_enabled))
   }
+  useRefreshTask(refresh)
 
   useEffect(() => {
     let active = true

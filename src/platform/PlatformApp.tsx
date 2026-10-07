@@ -6,6 +6,7 @@ import { useAuth } from './lib/auth'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
+import { PullToRefresh } from './components/PullToRefresh'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
 import { SearchScreen } from './screens/SearchScreen'
@@ -969,6 +970,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
+      <PullToRefresh disabled={['auth', 'tip', 'merch-detail', 'performer-edit', 'performer-home', 'performer-live', 'performer-merch', 'admin', 'admin-event', 'admin-users', 'admin-ops', 'admin-votes'].includes(screen)} />
       {previewOn ? (
         <aside className="pl-preview-bar" role="status">
           <strong>READ ONLY</strong>

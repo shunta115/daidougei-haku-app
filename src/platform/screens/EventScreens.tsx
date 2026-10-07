@@ -29,6 +29,7 @@ import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
 import './event.css'
+import { useRefreshTask } from '../lib/pullToRefresh'
 
 type DetailProps = {
   slug: string
@@ -204,6 +205,7 @@ export function EventListScreen({ onOpen }: { onOpen: (slug: string) => void }) 
   const [events, setEvents] = useState<FeaturedEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  useRefreshTask(async () => { try { setEvents(await listPublishedEvents()); setError(null) } catch { setError(t('eventLoadError')) } })
   useEffect(() => {
     listPublishedEvents().then(setEvents).catch(() => setError(t('eventLoadError'))).finally(() => setLoading(false))
   }, [])
@@ -252,6 +254,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [focusedVenue, setFocusedVenue] = useState<string | null>(null)
   const [wantedSlots, setWantedSlots] = useState<string[]>([])
   const [clock, setClock] = useState(nowJst)
+  useRefreshTask(async () => { const nextEvent = await getEventBySlug(slug); if (!nextEvent) return; const [venueRows, slotRows, lineup, voteRule, results] = await Promise.all([listEventVenues(nextEvent.id), listEventSlots(nextEvent.id), listEventLineupPerformers(nextEvent.id), getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => [])]); setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setRule(voteRule); setRanking(results); if (user) setMyVotes(await getMyVotes(nextEvent.id, user.id).catch(() => [])); setError(null) })
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(nowJst()), 30_000)

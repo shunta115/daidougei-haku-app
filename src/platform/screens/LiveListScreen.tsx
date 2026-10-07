@@ -5,6 +5,7 @@ import { listLivePerformers, listLiveRanking, getFeaturedEvent, listEventSlots, 
 import { useLang } from '../../i18n/LangProvider'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import type { LiveSession, Performer } from '../lib/types'
+import { useRefreshTask } from '../lib/pullToRefresh'
 
 type Props = {
   onWatchLive: (id: string) => void
@@ -33,6 +34,8 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const suggestions = acts.slice(0, 4)
+  const refreshLive = async () => { const [liveRows, rankRows, featured, approved] = await Promise.all([listLivePerformers(), listLiveRanking(), getFeaturedEvent().catch(() => null), listApprovedPerformers().catch(() => [] as Performer[])]); setLive(liveRows); setRank(rankRows); setActs(approved); if (featured) { const [slots, sessions] = await Promise.all([listEventSlots(featured.id).catch(() => [] as EventSlotRow[]), listEventLiveSessions(featured.id).catch(() => [] as LiveSession[])]); const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }); setScheduled(slots.filter((s) => s.is_stream && String(s.date).slice(0, 10) >= today && s.status !== 'cancelled')); setEnded(sessions.filter((s) => Boolean(s.ended_at))) } setError(null); setLoading(false) }
+  useRefreshTask(refreshLive)
 
   useEffect(() => {
     let cancelled = false

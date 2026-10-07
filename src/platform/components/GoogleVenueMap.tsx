@@ -363,7 +363,7 @@ export function GoogleVenueMap({
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${centerSeed.lat},${centerSeed.lng}`
 
   return (
-    <section id="haku-venue-map" className="pl-google-map" aria-label={t('mapsAria')}>
+    <section id="haku-venue-map" className="pl-google-map" data-pull-refresh-ignore aria-label={t('mapsAria')}>
       <div ref={containerRef} className="pl-google-map__canvas" />
       {mapState === 'ready' ? (
         <div className="pl-google-map__type" role="group" aria-label={t('mapsMode')}>

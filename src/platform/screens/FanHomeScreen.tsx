@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
@@ -17,6 +17,7 @@ import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
+import { useRefreshTask } from '../lib/pullToRefresh'
 import './fanHome.css'
 
 type FanHomeProps = {
@@ -76,31 +77,17 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel, slug: 'award-winning-performers-2026' })
+  const load = useCallback(async () => { const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()]); if (event) { setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug }); const lineup = await listEventLineup(event.id).catch((): string[] => []); setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows) } else setRoster(allRows); setLive(liveRows); if (user) { const favorites = await listOshiPerformers(user.id).catch(() => []); setFollowed(favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])) } else setFollowed([]); setError(null); setLoading(false) }, [user])
+  useRefreshTask(load)
 
   useEffect(() => {
     let cancelled = false
-    const load = async () => {
-      const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
-      if (cancelled) return
-      if (event) {
-        setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
-        const lineup = await listEventLineup(event.id).catch((): string[] => [])
-        if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
-      } else setRoster(allRows)
-      setLive(liveRows)
-      if (user) {
-        const favorites = await listOshiPerformers(user.id).catch(() => [])
-        const follows = favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])
-        if (!cancelled) setFollowed(follows)
-      } else setFollowed([])
-      setError(null)
-    }
     void load()
       .catch(() => setError(t('homeLoadError')))
       .finally(() => { if (!cancelled) setLoading(false) })
     const timer = window.setInterval(() => void load().catch(() => undefined), 12000)
     return () => { cancelled = true; window.clearInterval(timer) }
-  }, [t, user])
+  }, [load, t, user])
 
   const hero = live[0] ?? followed[0] ?? roster[0] ?? null
   const recommendations = useMemo(() => {
