@@ -1734,3 +1734,16 @@ html:has(.pl-event-detail) .pl-bg__grain {
     margin-inline:auto;
   }
 }
+
+.pl-event-support__choices {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:12px;
+}
+
+.pl-event-support__choices button {
+  min-height:44px;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}

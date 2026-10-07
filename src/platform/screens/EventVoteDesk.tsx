@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
@@ -80,6 +80,9 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
 }
 
 type DeskProps = {
+  // Share the authoritative device ballot with the event's SUPPORT section.
+  // null means unavailable, rather than an empty ballot.
+  onVotedChange?: (voted: string[] | null) => void
   event: FeaturedEvent
   performers: Performer[]
   onOpenPerformer: (id: string) => void
@@ -95,7 +98,7 @@ function voteErrorKey(message: string): 'eventVoteShut' | 'eventVoteDup' | 'even
   return 'eventVoteFail'
 }
 
-export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedule, onOpenMap }: DeskProps) {
+export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedule, onOpenMap, onVotedChange }: DeskProps) {
   const { t } = useLang()
   const [voted, setVoted] = useState<string[]>([])
   const [remaining, setRemaining] = useState(3)
@@ -106,15 +109,24 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
   const [lastName, setLastName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const refreshVersion = useRef(0)
   const refresh = async () => {
-    const [state, rule] = await Promise.all([
-      getAnonVoteState(event.id),
-      getEventVoteRule(event.id).catch(() => null),
-    ])
-    setVoted(state.voted)
-    setRemaining(state.remaining)
-    setMaxVotes(state.max_votes)
-    setOpen(state.voting_open && Boolean(rule?.voting_enabled))
+    const version = ++refreshVersion.current
+    try {
+      const [state, rule] = await Promise.all([
+        getAnonVoteState(event.id),
+        getEventVoteRule(event.id).catch(() => null),
+      ])
+      if (version !== refreshVersion.current) return
+      setVoted(state.voted)
+      setRemaining(state.remaining)
+      setMaxVotes(state.max_votes)
+      setOpen(state.voting_open && Boolean(rule?.voting_enabled))
+      onVotedChange?.(state.voted)
+    } catch (error) {
+      if (version === refreshVersion.current) onVotedChange?.(null)
+      throw error
+    }
   }
   useRefreshTask(refresh)
 
@@ -123,7 +135,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
     void refresh()
       .catch(() => { if (active) setError(t('eventVoteFail')) })
       .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    return () => { active = false; refreshVersion.current += 1 }
   // The vote state is keyed only by the event. Depending on a translated
   // callback here can refetch forever in standalone/test renderers where the
   // fallback translator is recreated on each render.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
 import {
   getEventBySlug,
@@ -245,6 +245,10 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
   const [selectedDate, setSelectedDate] = useState('')
   const [myVotes, setMyVotes] = useState<string[]>([])
+  const [deviceVotes, setDeviceVotes] = useState<{ eventId: string; voted: string[] | null } | null>(null)
+  const onDeviceVotesChange = useCallback((voted: string[] | null) => {
+    if (event) setDeviceVotes({ eventId: event.id, voted })
+  }, [event?.id])
   const [voteComplete, setVoteComplete] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -254,7 +258,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [focusedVenue, setFocusedVenue] = useState<string | null>(null)
   const [wantedSlots, setWantedSlots] = useState<string[]>([])
   const [clock, setClock] = useState(nowJst)
-  useRefreshTask(async () => { const nextEvent = await getEventBySlug(slug); if (!nextEvent) return; const [venueRows, slotRows, lineup, voteRule, results] = await Promise.all([listEventVenues(nextEvent.id), listEventSlots(nextEvent.id), listEventLineupPerformers(nextEvent.id), getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => [])]); setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setRule(voteRule); setRanking(results); if (user) setMyVotes(await getMyVotes(nextEvent.id, user.id).catch(() => [])); setError(null) })
+  useRefreshTask(async () => { const nextEvent = await getEventBySlug(slug); if (!nextEvent) return; const [venueRows, slotRows, lineup, voteRule, results] = await Promise.all([listEventVenues(nextEvent.id), listEventSlots(nextEvent.id), listEventLineupPerformers(nextEvent.id), getEventVoteRule(nextEvent.id).catch(() => null), listVoteRankingNamed(nextEvent.id).catch(() => [])]); setEvent(nextEvent); setVenues(venueRows); setSlots(slotRows); setPerformers(lineup); setRule(voteRule); setRanking(results); if (nextEvent.slug !== AWP_SLUG) setMyVotes(user ? await getMyVotes(nextEvent.id, user.id).catch(() => []) : []); setError(null) })
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(nowJst()), 30_000)
@@ -306,7 +310,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
           const saved = JSON.parse(localStorage.getItem(`haku:wanted-slots:${nextEvent.id}`) || '[]')
           setWantedSlots(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === 'string') : [])
         } catch { setWantedSlots([]) }
-        if (user) setMyVotes(await getMyVotes(nextEvent.id, user.id).catch(() => []))
+        if (nextEvent.slug !== AWP_SLUG) setMyVotes(user ? await getMyVotes(nextEvent.id, user.id).catch(() => []) : [])
         const key = `pl-event-guide:${slug}`
         setGuideOpen(Boolean(nextEvent.guide_enabled) && localStorage.getItem(key) !== '1')
       } catch {
@@ -387,6 +391,8 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   }
 
   const isAwp = slug === AWP_SLUG
+  const supportVotes = deviceVotes?.eventId === event.id ? deviceVotes.voted : undefined
+  const supportPerformers = votingPerformers.filter((performer) => supportVotes?.includes(performer.id))
   const moreLabel = phase === 'during' ? t('eventSeeNow') : phase === 'after' ? t('eventSeeResults') : t('eventSeeSchedule')
   return <main className={`pl-event-detail${isAwp ? ' pl-event-detail--awp' : ''}`}>
     <AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} />
@@ -472,7 +478,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {isAwp ? <section className="pl-event-lineup-full awp-roving"><header><p>STATUE / ROVING</p><h2>会場を歩いて出会おう</h2><span>どこで会えるかは当日のお楽しみ。投票対象とは別のAWP公式出演です。</span></header><div>{guestAppearances.filter((row) => dateKey(row.appearance_date) === selectedDate).map((row) => { const linked = resolveLinkedGuestPerformer(row, guestPerformerById); return <OfficialAppearanceCard key={row.id} name={row.official_name_ja} category={officialAppearanceCategory(row.appearance_type)} genre={linked?.genre} place={linked ? performerPlace(linked) : undefined} photoUrl={linked?.photo_url ?? null} linked={Boolean(linked)} pendingLabel="公式出演者（プロフィール準備中）" profileLabel={t('eventSeeProfile')} onOpen={linked ? () => onOpenPerformer(linked.id) : undefined} /> })}</div></section> : null}
 
-    {slug === AWP_SLUG ? <EventVoteDesk event={event} performers={votingPerformers} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{votingPerformers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
+    {slug === AWP_SLUG ? <EventVoteDesk key={event.id} event={event} performers={votingPerformers} onVotedChange={onDeviceVotesChange} onOpenPerformer={onOpenPerformer} onOpenSchedule={() => jump('event-schedule')} onOpenMap={onOpenMap} /> : <section className="pl-event-vote" id="event-vote"><header><Vote size={25} /><p>{t('eventVoteKicker')}</p><h2>{t('eventVoteTitle')}</h2><span>{t('eventVoteBody')}</span></header>{voteComplete ? <div className="pl-event-vote__complete"><CheckCircle2 size={32} /><h3>{t('eventVoteDone')}</h3><p>{t('eventVoteDoneBody')}</p><button onClick={() => jump('event-schedule')}>{t('eventNextShow')}</button></div> : null}{!votingOpen ? <p className="pl-event-inline-empty">{t('eventVoteClosed')}</p> : null}{votingOpen && myVotes.length >= (rule?.votes_per_user_per_day ?? 1) ? <p className="pl-event-inline-empty">{t('eventVoteUsed')}</p> : null}<div className="pl-event-vote__grid">{votingPerformers.map((performer) => <article key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span className="pl-event-vote__avatar">{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.awards || performer.genre || 'Performance'}</p><div><button onClick={() => onOpenPerformer(performer.id)}>{t('eventProfile')}</button><button disabled={!votingOpen || myVotes.includes(performer.id) || myVotes.length >= (rule?.votes_per_user_per_day ?? 1)} onClick={() => void castVote(performer)}>{myVotes.includes(performer.id) ? t('voted') : t('vote')}</button></div></article>)}</div></section>}
 
     {!isAwp ? <section className="pl-event-night"><Trophy size={28} /><p>SPECIAL NIGHT</p><h2>{resultsPublished ? t('eventNightSet') : t('eventNightOpen')}</h2>{resultsPublished && ranking.length ? ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{t('eventRank', { n: index + 1 })}</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}` : t('eventTimePending')}</small></span><button onClick={() => onOpenPerformer(row.performer.id)}>{t('eventProfile')}</button>{row.performer.is_live ? <button onClick={() => onWatchLive(row.performer.id)}>{t('navLive')}</button> : null}</article> }) : <p>{t('eventNoRank')}</p>}</section> : null}
 
@@ -480,7 +486,16 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {!isAwp ? <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section> : null}
 
-    <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
+    <section className="pl-event-support" aria-labelledby="event-support-title">
+      <Gift size={26} /><p>SUPPORT</p><h2 id="event-support-title">{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>
+      {isAwp ? <>
+        {supportVotes === undefined ? <p role="status">{t('processing')}</p> : supportVotes === null ? <p role="status">{t('eventSupportLoadError')}</p> : null}
+        {supportPerformers.length > 1 ? <p>{t('eventSupportChooseVoted')}</p> : null}
+        {supportPerformers.length > 0 ? <div className="pl-event-support__choices">
+          {supportPerformers.map((performer) => <button type="button" key={performer.id} onClick={() => onTip(performer.id)}>{t('eventSupportNamed', { name: performer.stage_name })}</button>)}
+        </div> : <button type="button" onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}
+      </> : myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}
+    </section>
 
     {guideOpen ? <div className="pl-event-onboarding" role="dialog" aria-modal="true" aria-labelledby="event-onboarding-title"><div><Sparkles size={28} /><p>{t('eventWelcomeKicker')}</p><h2 id="event-onboarding-title">{t('eventWelcomeTitle')}</h2><span>{event.sub_copy_ja || t('eventSub')}</span><ul><li>{t('eventGuide1')}</li><li>{t('eventGuide2')}</li><li>{t('eventGuide3')}</li><li>{t('eventGuide4')}</li></ul><button onClick={closeGuide}>{t('eventWelcomeCta')}</button></div></div> : null}
     {mapOpen ? <div className="awp-map-modal" role="dialog" aria-modal="true" aria-label="AWP 2026 公式会場MAP"><button className="awp-map-modal__close" type="button" onClick={() => setMapOpen(false)} aria-label="イベントへ戻る"><ArrowLeft size={20} /><span>イベントへ戻る</span></button><div><header><MapPin size={20} /><span><b>{focusedVenue ? displayStageName(venueById.get(focusedVenue)?.name_ja) || '会場MAP' : 'AWP 2026 公式会場MAP'}</b><small>公式会場図で場所を確認してください</small></span></header><img src={AWP_FLYER_BACK_SRC} alt="AWP 2026 公式会場内マップ" /></div></div> : null}
