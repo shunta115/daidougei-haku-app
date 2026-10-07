@@ -67,6 +67,14 @@ it('keeps the Supabase recovery token hash while routing to the password screen'
   expect(window.location.hash).toBe('#access_token=fixture&type=recovery')
 })
 
+it('keeps the password screen on the dedicated recovery route after Supabase cleans all callback parameters', async () => {
+  window.history.replaceState({}, '', '/auth/reset-password')
+  fake.auth = { ...fake.auth, passwordRecovery: true }
+  render(<PlatformApp />)
+  await screen.findByText('register:fan')
+  expect(window.location.pathname).toBe('/auth/reset-password')
+})
+
 it('opens a QR event URL directly without requiring authentication', async () => {
   window.history.replaceState({}, '', eventPath('award-winning-performers-2026'))
   render(<PlatformApp />)

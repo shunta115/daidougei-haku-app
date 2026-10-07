@@ -14,6 +14,7 @@ import type { Performer, Profile } from './types'
 import { registrationError } from './onboarding'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 import { hasPasswordRecoveryParams } from './authCallback'
+import { PASSWORD_RESET_PATH } from '../../app/routes'
 
 type AuthState = {
   ready: boolean
@@ -167,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/live?auth=recovery`,
+        redirectTo: `${window.location.origin}${PASSWORD_RESET_PATH}`,
       })
       return error ? registrationError(error) : null
     } catch (e) {

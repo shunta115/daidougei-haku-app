@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, PASSWORD_RESET_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
@@ -157,6 +157,7 @@ const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
 
 export function initialGuestScreen(): PlatformScreen {
   try {
+    if (window.location.pathname === PASSWORD_RESET_PATH) return 'auth'
     const saved = savedNavigationSnapshot()
     if (saved) return saved.screen
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'

@@ -10,11 +10,12 @@ export const PERFORMER_PATH = '/performer'
 
 /** 配信・投げ銭・ログイン（既存 Platform） */
 export const PLATFORM_PATH = '/live'
+export const PASSWORD_RESET_PATH = '/auth/reset-password'
 
 export function isPlatformPath(pathname: string): boolean {
   // All public routes render inside the MASTER experience. /live remains a
   // stable alias because registration and shared LIVE links already use it.
-  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === EVENTS_PATH || pathname.startsWith(`${EVENTS_PATH}/`) || pathname === PERFORMER_PATH || pathname.startsWith(`${PERFORMER_PATH}/`) || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`)
+  return pathname === '/' || pathname === FESTIVAL_PATH || pathname === EVENTS_PATH || pathname.startsWith(`${EVENTS_PATH}/`) || pathname === PERFORMER_PATH || pathname.startsWith(`${PERFORMER_PATH}/`) || pathname === PLATFORM_PATH || pathname.startsWith(`${PLATFORM_PATH}/`) || pathname === PASSWORD_RESET_PATH
 }
 
 export function eventPath(slug: string): string {

@@ -74,7 +74,7 @@ it('uses Supabase recovery APIs without exposing password reset details to the d
   render(<AuthProvider><PasswordProbe /></AuthProvider>)
   screen.getByText('reset').click()
   await waitFor(() => expect(fake.resetPasswordForEmail).toHaveBeenCalledWith('fan@example.com', {
-    redirectTo: `${window.location.origin}/live?auth=recovery`,
+    redirectTo: `${window.location.origin}/auth/reset-password`,
   }))
   screen.getByText('update').click()
   await waitFor(() => expect(fake.updateUser).toHaveBeenCalledWith({ password: 'new-password' }))
@@ -88,7 +88,7 @@ it('recognizes Supabase recovery callbacks before the auth event arrives', () =>
 })
 
 it('recognizes the dedicated recovery redirect even after Supabase removes its token hash', () => {
-  window.history.replaceState({}, '', '/live?auth=recovery')
+  window.history.replaceState({}, '', '/auth/reset-password')
   expect(hasPasswordRecoveryParams()).toBe(true)
 })
 
