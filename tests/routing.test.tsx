@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({ auth: {} as Record<string, unknown> }))
@@ -24,10 +24,12 @@ vi.mock('../src/platform/screens/MerchScreens', () => ({
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
+import { trackProductEvent } from '../src/platform/lib/track'
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath } from '../src/app/routes'
 
 beforeEach(() => {
+  vi.clearAllMocks()
   const storage = new JSDOM('', { url: 'http://localhost' }).window
   vi.stubGlobal('localStorage', storage.localStorage)
   vi.stubGlobal('sessionStorage', storage.sessionStorage)
@@ -184,4 +186,40 @@ it('returns from Stripe to the performer dashboard', async () => {
   fake.auth.profile = { role: 'performer', status: 'pending' }
   render(<PlatformApp />)
   await screen.findByText('performer-dashboard')
+})
+
+
+it('does not show tip success for a manually entered success URL', async () => {
+  window.history.replaceState({}, '', '/live?tip=success&performerId=forged')
+  const fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  render(<PlatformApp />)
+  await screen.findByText('支払い完了を確認できませんでした。再度支払う前に、決済履歴をご確認ください。')
+  expect(screen.queryByText('あなたの応援がパフォーマーに届きました。')).toBeNull()
+  expect(trackProductEvent).not.toHaveBeenCalledWith('tip_complete', expect.anything())
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('confirms tip before success for signed-in=%s', async (signedIn) => {
+  if (signedIn) fake.auth = { ...fake.auth, user: { id: 'fan-verified' }, profile: { role: 'fan', status: 'active' } }
+  window.history.replaceState({}, '', `/live?tip=success&session_id=cs_test_appintegration${signedIn ? 'loggedin' : 'guest'}123456&performerId=forged`)
+  let resolve!: (value: unknown) => void
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(r => { resolve = r })))
+  render(<PlatformApp />)
+  await screen.findByText('支払いを確認しています…')
+  expect(screen.queryByText('あなたの応援がパフォーマーに届きました。')).toBeNull()
+  expect(trackProductEvent).not.toHaveBeenCalledWith('tip_complete', expect.anything())
+  await act(async () => resolve({ ok: true, json: async () => ({ ok: true, status: 'paid', performerId: 'verified-performer' }) }))
+  await screen.findByText('あなたの応援がパフォーマーに届きました。')
+  expect(trackProductEvent).toHaveBeenCalledWith('tip_complete', { performerId: 'verified-performer' })
+  expect(window.location.search).not.toContain('session_id')
+})
+
+it('shows a safe confirmation retry after API failure', async () => {
+  window.history.replaceState({}, '', '/live?tip=success&session_id=cs_test_appintegrationfailed123456')
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  render(<PlatformApp />)
+  await waitFor(() => expect(screen.getByRole('button', { name: '支払い状況を再確認' })).toBeTruthy())
+  expect(screen.queryByText('あなたの応援がパフォーマーに届きました。')).toBeNull()
+  expect(trackProductEvent).not.toHaveBeenCalledWith('tip_complete', expect.anything())
 })

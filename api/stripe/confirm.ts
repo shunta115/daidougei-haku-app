@@ -1,106 +1,53 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { finalizePaidTip } from './_finalizePaidTip.js'
-import { getAdminSupabase, getStripe, requireAuthUser } from './_shared.js'
-import { settleCheckoutPayment } from './_settlement.js'
+import { getAdminSupabase } from './_shared.js'
 
-function missingColumn(error: unknown) {
-  const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
-  return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
-}
-
-async function findTipCheckout(sb: ReturnType<typeof getAdminSupabase>, sessionId: string) {
-  const withConnect = await sb
-    .from('tips')
-    .select('id, fan_id, performer_id, stripe_session_id, connected_account_id')
-    .eq('stripe_session_id', sessionId)
-    .maybeSingle()
-  if (!withConnect.error) return withConnect.data
-  if (!missingColumn(withConnect.error)) throw withConnect.error
-
-  const legacy = await sb
-    .from('tips')
-    .select('id, fan_id, performer_id, stripe_session_id')
-    .eq('stripe_session_id', sessionId)
-    .maybeSingle()
-  if (legacy.error) throw legacy.error
-  return legacy.data ? { ...legacy.data, connected_account_id: null } : null
-}
-
-async function retrieveCheckoutSession(
-  stripe: ReturnType<typeof getStripe>,
-  sessionId: string,
-  connectedAccountId: string | null,
-) {
-  if (connectedAccountId) {
-    try {
-      return await stripe.checkout.sessions.retrieve(sessionId, {}, { stripeAccount: connectedAccountId })
-    } catch {
-      return await stripe.checkout.sessions.retrieve(sessionId)
-    }
-  }
-  return stripe.checkout.sessions.retrieve(sessionId)
-}
-
+/** Read-only receipt lookup. The opaque Checkout session ID is a bearer capability.
+ * Return no payer, amount, account, or other private receipt data. Only signed
+ * Stripe webhooks may finalize the payment; this endpoint never writes a ledger.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
-
+  const origin = req.headers.origin
+  const host = req.headers.host
+  const site = req.headers['sec-fetch-site']
+  let sameOrigin = false
   try {
-    const user = await requireAuthUser(req, res)
-    if (!user) return
-
-    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : undefined
-    if (!sessionId) {
-      res.status(400).json({ error: 'sessionId required' })
+    const url = new URL(typeof origin === 'string' ? origin : '')
+    const protocol = typeof host === 'string' && /^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? 'http:' : 'https:'
+    sameOrigin = url.origin === `${protocol}//${host}`
+  } catch { /* Missing or malformed Origin is not a browser receipt request. */ }
+  if (!sameOrigin || (site && site !== 'same-origin') || !req.headers['content-type']?.startsWith('application/json')) {
+    res.status(403).json({ code: 'invalid_payment_request' })
+    return
+  }
+  const sessionId = req.body?.sessionId
+  if (typeof sessionId !== 'string' || !/^cs_(test|live)_[a-zA-Z0-9]{16,200}$/.test(sessionId)) {
+    res.status(400).json({ code: 'invalid_payment_request' })
+    return
+  }
+  try {
+    const { data, error } = await getAdminSupabase()
+      .from('tips')
+      .select('status,performer_id')
+      .eq('stripe_session_id', sessionId)
+      .maybeSingle()
+    if (error) throw error
+    // Unknown and not-yet-persisted sessions are indistinguishable. This also
+    // covers a return arriving before the Checkout creation write completes.
+    if (!data || data.status === 'pending') {
+      res.status(200).json({ ok: false, status: 'pending' })
       return
     }
-
-    const sb = getAdminSupabase()
-    const current = await findTipCheckout(sb, sessionId)
-    if (!current || current.fan_id !== user.id) {
-      res.status(403).json({ error: 'This tip does not belong to you' })
+    if (data.status !== 'succeeded') {
+      res.status(200).json({ ok: false, status: 'unconfirmed' })
       return
     }
-    if (current.stripe_session_id && current.stripe_session_id !== sessionId) {
-      res.status(403).json({ error: 'Checkout session mismatch' })
-      return
-    }
-
-    let connectedAccountId = current.connected_account_id as string | null
-    if (!connectedAccountId) {
-      const { data: performer } = await sb
-        .from('performers')
-        .select('stripe_account_id')
-        .eq('id', current.performer_id)
-        .maybeSingle()
-      connectedAccountId = performer?.stripe_account_id ?? null
-    }
-
-    const stripe = getStripe()
-    const session = await retrieveCheckoutSession(stripe, sessionId, connectedAccountId)
-    if (session.payment_status !== 'paid') {
-      res.status(200).json({ ok: false, status: session.payment_status })
-      return
-    }
-
-    const tipId = session.metadata?.tip_id
-    const fanId = session.metadata?.fan_id ?? null
-    if (!tipId) {
-      res.status(400).json({ error: 'tip metadata missing' })
-      return
-    }
-    if (fanId !== user.id) {
-      res.status(403).json({ error: 'This checkout session does not belong to you' })
-      return
-    }
-
-    const result = await finalizePaidTip(sb, session, connectedAccountId)
-    await settleCheckoutPayment(sb, stripe, session, connectedAccountId)
-    res.status(200).json({ ok: result.ok, tipId: result.tipId, amount: result.amount, already: result.already })
-  } catch (e) {
-    console.error('tip confirmation failed', e)
-    res.status(500).json({ code: 'checkout_failed' })
+    res.status(200).json({ ok: true, status: 'paid', performerId: data.performer_id })
+  } catch {
+    res.status(503).json({ code: 'confirmation_unavailable' })
   }
 }
