@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
@@ -38,6 +38,7 @@ vi.mock('../src/platform/lib/api', () => ({
   listVoteRankingNamed: fake.listVoteRankingNamed,
   voteForPerformer: fake.voteForPerformer,
 }))
+
 
 import { EventDetailScreen, EventListScreen } from '../src/platform/screens/EventScreens'
 
@@ -101,6 +102,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -171,4 +173,183 @@ it('casts an authenticated fan vote through the same device-scoped server API an
   fireEvent.click(voteButton!)
   await waitFor(() => expect(fake.castAnonEventVote).toHaveBeenCalledWith(event.id, performer.id))
   expect(await screen.findByText('SUIに投票しました！')).toBeTruthy()
+})
+
+
+const supportLineup = [performer, { ...performer, id: 'performer-2', stage_name: '紙磨呂' }, { ...performer, id: 'performer-3', stage_name: 'MUTSUKIN' }]
+
+function deviceBallot(voted: string[]) {
+  return { voting_open: true, max_votes: 3, used: voted.length, remaining: 3 - voted.length, voted }
+}
+
+function renderSupport(slug = event.slug) {
+  const onTip = vi.fn()
+  const view = render(<EventDetailScreen slug={slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={onTip} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  return { ...view, onTip }
+}
+
+async function supportSection() {
+  const section = within(await screen.findByRole('region', { name: '最高だった！をその場で届けよう' }))
+  await waitFor(() => expect(section.queryByText('処理中…')).toBeNull())
+  return section
+}
+
+it.each([0, 1, 2, 3])('offers exactly the %i device-voted performers for support without reading fan ballots', async (count) => {
+  fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan' } }
+  fake.getMyVotes.mockResolvedValue(['legacy-only'])
+  fake.listVotingEligibleEventLineupPerformers.mockResolvedValue(supportLineup)
+  fake.getAnonVoteState.mockResolvedValue(deviceBallot(supportLineup.slice(0, count).map((p) => p.id)))
+  const { onTip } = renderSupport()
+  const section = await supportSection()
+  expect(fake.getMyVotes).not.toHaveBeenCalled()
+  if (!count) {
+    fireEvent.click(section.getByRole('button', { name: '応援したい人を選ぶ' }))
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    expect(onTip).not.toHaveBeenCalled()
+  } else {
+    expect(section.getAllByRole('button')).toHaveLength(count)
+    for (const p of supportLineup.slice(0, count)) {
+      fireEvent.click(section.getByRole('button', { name: `${p.stage_name}を応援する` }))
+      expect(onTip).toHaveBeenLastCalledWith(p.id)
+    }
+  }
+})
+
+it('updates SUPPORT immediately after an anonymous vote and restores all choices after remount', async () => {
+  let voted: string[] = []
+  fake.listVotingEligibleEventLineupPerformers.mockResolvedValue(supportLineup)
+  fake.getAnonVoteState.mockImplementation(async () => deviceBallot(voted))
+  fake.castAnonEventVote.mockImplementation(async (_eventId, id) => { voted = [...voted, id] })
+  const first = renderSupport()
+  await supportSection()
+  for (const p of supportLineup) {
+    const article = Array.from(document.querySelectorAll('#event-vote article')).find((node) => node.textContent?.includes(p.stage_name))!
+    const vote = within(article as HTMLElement).getByRole('button', { name: '投票する' })
+    await waitFor(() => expect((vote as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(vote)
+    await waitFor(() => expect(document.querySelector('.pl-event-support')?.textContent).toContain(`${p.stage_name}を応援する`))
+  }
+  first.unmount()
+  const second = renderSupport()
+  const section = await supportSection()
+  expect(section.getAllByRole('button')).toHaveLength(3)
+  fireEvent.click(section.getByRole('button', { name: '紙磨呂を応援する' }))
+  expect(second.onTip).toHaveBeenCalledWith('performer-2')
+  expect(fake.getMyVotes).not.toHaveBeenCalled()
+})
+
+it('reloads device support choices on remount after the page refresh', async () => {
+  fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan' } }
+  renderSupport()
+  await supportSection()
+  fake.getAnonVoteState.mockResolvedValue(deviceBallot([performer.id]))
+  cleanup()
+  renderSupport()
+  await supportSection()
+  const section = await supportSection()
+  expect(section.getByRole('button', { name: 'SUIを応援する' })).toBeTruthy()
+  expect(fake.getMyVotes).not.toHaveBeenCalled()
+})
+
+it('does not select an unknown performer or fall back to legacy votes when device history is unavailable', async () => {
+  fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan' } }
+  fake.getMyVotes.mockResolvedValue([performer.id])
+  fake.getAnonVoteState.mockRejectedValue(new Error('network unavailable'))
+  const { onTip } = renderSupport()
+  let section = await supportSection()
+  expect(section.getByRole('status').textContent).toContain('投票履歴を読み込めませんでした')
+  expect(section.getAllByRole('button')).toHaveLength(1)
+  expect(onTip).not.toHaveBeenCalled()
+  fake.getAnonVoteState.mockResolvedValue(deviceBallot(['missing-performer']))
+  cleanup()
+  renderSupport()
+  section = await supportSection()
+  expect(section.queryByRole('status')).toBeNull()
+  expect(section.getByRole('button', { name: '応援したい人を選ぶ' })).toBeTruthy()
+  expect(fake.getMyVotes).not.toHaveBeenCalled()
+})
+
+it('preserves legacy support for non-AWP events', async () => {
+  fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan' } }
+  fake.getEventBySlug.mockResolvedValue({ ...event, slug: 'other-event' })
+  fake.getMyVotes.mockResolvedValue([performer.id])
+  const { onTip } = renderSupport('other-event')
+  const section = await supportSection()
+  fireEvent.click(await section.findByRole('button', { name: '投票したパフォーマーを応援する' }))
+  expect(onTip).toHaveBeenCalledWith(performer.id)
+  expect(fake.getAnonVoteState).not.toHaveBeenCalled()
+})
+
+it.each(['09:00', '10:10'])('removes cancelled slots from recommendations and saved wants, retaining disabled timetable rows through same-day changes at %s', async (time) => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(`2026-10-10T${time}:00+09:00`))
+  const slot = { id: 'slot-1', event_id: event.id, performer_id: performer.id, performer_name_ja: '予定枠テスト', venue_id: 'v1', date: '2026-10-10', start_time: '10:00:00', end_time: '10:30:00', status: 'scheduled', note_ja: '', note_en: '', stage_ja: 'ステージ1', stage_en: '', is_stream: true }
+  fake.listEventSlots.mockResolvedValue([slot])
+  fake.listEventLineupPerformers.mockResolvedValue([{ ...performer, is_live: true }])
+  localStorage.setItem(`haku:wanted-slots:${event.id}`, JSON.stringify([slot.id]))
+  const open = vi.fn(), live = vi.fn()
+  const mount = () => render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={open} onWatchLive={live} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  mount()
+  await screen.findAllByText('予定枠テスト')
+  const row = () => document.querySelector('.pl-event-slot')!
+  expect(document.querySelector('.awp-watch-now')?.textContent).toContain('予定枠テスト')
+  expect(document.querySelector('.awp-wanted')?.textContent).toContain('予定枠テスト')
+  fake.listEventSlots.mockResolvedValue([{ ...slot, status: 'cancelled', note_ja: '<b>雨天のため</b>' }])
+  cleanup()
+  mount()
+  await screen.findAllByText('予定枠テスト')
+  expect(document.querySelector('.awp-watch-now')?.textContent).not.toContain('予定枠テスト')
+  expect(document.querySelector('.pl-event-now')?.textContent).not.toContain('予定枠テスト')
+  expect(row().textContent).toContain('中止：<b>雨天のため</b>')
+  expect(row().querySelector('.pl-slot-cancellation b')).toBeNull()
+  for (const button of row().querySelectorAll('button')) { expect(button.disabled).toBe(true); fireEvent.click(button) }
+  expect(open).not.toHaveBeenCalled()
+  expect(live).not.toHaveBeenCalled()
+  // Preserve saved IDs so a reinstated slot returns, using its updated time.
+  fake.listEventSlots.mockResolvedValue([{ ...slot, start_time: '11:00:00', end_time: '11:30:00' }])
+  cleanup()
+  mount()
+  await screen.findAllByText('予定枠テスト')
+  expect(row().textContent).not.toContain('中止')
+  expect(row().textContent).toContain('11:00')
+  expect(document.querySelector('.awp-wanted')?.textContent).toContain('11:00')
+  expect(row().querySelector<HTMLButtonElement>('.pl-event-slot__want')?.disabled).toBe(false)
+  vi.useRealTimers()
+})
+
+
+it('marks a cancelled special-final timetable entry even without a reason', async () => {
+  fake.listEventSlots.mockResolvedValue([{ id: 'final', date: '2026-10-10', start_time: '18:00', end_time: '18:30', performance_type: 'special_final', ranking_position: 1, status: 'cancelled', note_ja: '', note_en: '' }])
+  render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  await screen.findByRole('heading', { name: '受賞者たち' })
+  const final = document.querySelector('.awp-special article')!
+  expect(final.textContent).toContain('中止')
+  expect(final.textContent).toContain('18:00')
+  expect(final.querySelector('button')).toBeNull()
+})
+
+it('keeps all three device-voted SUPPORT choices when a voted performer has a cancelled slot', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-10T10:10:00+09:00'))
+  fake.listVotingEligibleEventLineupPerformers.mockResolvedValue(supportLineup)
+  fake.listEventLineupPerformers.mockResolvedValue(supportLineup)
+  fake.getAnonVoteState.mockResolvedValue(deviceBallot(supportLineup.map((p) => p.id)))
+  const slot = { id: 'cancelled-voted-slot', performer_id: performer.id, performer_name_ja: '中止枠テスト', date: '2026-10-10', start_time: '10:00', end_time: '10:30', status: 'cancelled', note_ja: '雨天', note_en: '', venue_id: 'v1', is_stream: true }
+  fake.listEventSlots.mockResolvedValue([slot])
+  localStorage.setItem(`haku:wanted-slots:${event.id}`, JSON.stringify([slot.id]))
+  // Remount represents the current full-page refresh; saved device votes survive it.
+  for (let reload = 0; reload < 2; reload++) {
+    const { onTip, unmount } = renderSupport()
+    const support = await supportSection()
+    expect(support.getAllByRole('button')).toHaveLength(3)
+    fireEvent.click(support.getByRole('button', { name: 'SUIを応援する' }))
+    expect(onTip).toHaveBeenCalledWith(performer.id)
+    expect(document.querySelector('.pl-event-slot')?.textContent).toContain('中止：雨天')
+    for (const selector of ['.pl-event-now', '.awp-watch-now', '.awp-wanted']) {
+      expect(document.querySelector(selector)?.textContent).not.toContain('中止枠テスト')
+    }
+    expect(JSON.parse(localStorage.getItem(`haku:wanted-slots:${event.id}`)!)).toEqual([slot.id])
+    expect(fake.getMyVotes).not.toHaveBeenCalled()
+    unmount()
+  }
 })

@@ -1,3 +1,4 @@
+import { isActiveEventSlot, eventSlotCancellation } from '../lib/eventSlotStatus'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
@@ -228,7 +229,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const performer = selectedLivePerformer
             const point = { lat: performer.lat!, lng: performer.lng! }
             const km = userLocation ? distanceKm(userLocation, point) : null
-            const matchingSlot = dateSlots.find((slot) => slot.performer_id === performer.id)
+            const matchingSlot = dateSlots.find((slot) => isActiveEventSlot(slot) && slot.performer_id === performer.id)
             const venue = matchingSlot ? venueById.get(matchingSlot.venue_id) : null
             const place = venue?.name_ja || performer.city || ''
             const meta = [performer.genre, place].filter(Boolean).join(' · ')
@@ -323,10 +324,10 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const act = slot.performer_id ? performerById.get(slot.performer_id) : null
             const venue = venueById.get(slot.venue_id)
             return (
-              <button key={slot.id} type="button" className="pl-schedule-row" disabled={!act} onClick={() => act && (act.is_live ? onWatchLive(act.id) : onOpenPerformer(act.id))}>
+              <button key={slot.id} type="button" className="pl-schedule-row" data-cancelled={!isActiveEventSlot(slot)} disabled={!act || !isActiveEventSlot(slot)} onClick={() => act && (act.is_live ? onWatchLive(act.id) : onOpenPerformer(act.id))}>
                 <span className="pl-schedule-row__time"><Clock3 size={15} />{timeLabel(slot.start_time)}</span>
                 <span className="pl-schedule-row__media">{act?.photo_url ? <img src={act.photo_url} alt="" /> : <span />}</span>
-                <span className="pl-schedule-row__body"><strong>{act?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja)}</strong><small>{displayStageName(venue?.name_ja || slot.stage_ja)} · {act?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</small>{act?.is_live ? <em><Radio size={11} /> LIVE</em> : null}</span>
+                <span className="pl-schedule-row__body"><strong>{act?.stage_name || slot.performer_name_ja || (slot.performance_type === 'special_final' && slot.ranking_position ? `投票結果 ${slot.ranking_position}位` : slot.stage_ja)}</strong><small>{displayStageName(venue?.name_ja || slot.stage_ja)} · {act?.genre || (slot.performance_type === 'special_final' ? 'SPECIAL NIGHT' : 'Performance')}</small>{!isActiveEventSlot(slot) ? <span className="pl-slot-cancellation">{eventSlotCancellation(slot)}</span> : null}{isActiveEventSlot(slot) && act?.is_live ? <em><Radio size={11} /> LIVE</em> : null}</span>
                 <ChevronRight size={18} />
               </button>
             )
