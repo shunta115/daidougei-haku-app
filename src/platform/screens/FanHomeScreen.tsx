@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
+import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, RefreshCw, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
@@ -105,6 +105,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <header className="pl-home-v7__masthead">
         <button type="button" className="pl-home-v7__identity" onClick={onOpenTitle} aria-label={t('openTitleScreen')}><BrandLogo size={42} variant="official" /></button>
         <div className="pl-home-v7__tools">
+          <button type="button" className="pl-home-v7__refresh" onClick={() => window.location.reload()} aria-label="最新情報に更新"><RefreshCw size={15} /><span>更新</span></button>
           <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label={t('searchAria')}><Search size={19} /></button>
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label={t('notifications')}><Bell size={19} /></button>
         </div>
