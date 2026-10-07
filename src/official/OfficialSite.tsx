@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, ExternalLink, Mail, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Mail, Menu, X } from 'lucide-react'
 import './official-site.css'
 
 const CONTACT_EMAIL = 'itonorihisa.office@gmail.com'
@@ -41,6 +41,7 @@ function ImageButton({
 
 export function OfficialSite() {
   const [lightbox, setLightbox] = useState<LightboxImage>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     const previousTitle = document.title
@@ -50,7 +51,9 @@ export function OfficialSite() {
 
   useEffect(() => {
     if (!lightbox) return
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setLightbox(null) }
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLightbox(null)
+    }
     document.body.classList.add('dg-modal-open')
     window.addEventListener('keydown', close)
     return () => {
@@ -60,9 +63,12 @@ export function OfficialSite() {
   }, [lightbox])
 
   const goBack = () => {
-    const fromSameOrigin = document.referrer.startsWith(window.location.origin)
-    if (fromSameOrigin && window.history.length > 1) window.history.back()
-    else window.location.href = '/'
+    const sameOriginReferrer = document.referrer.startsWith(window.location.origin)
+    if (sameOriginReferrer && window.history.length > 1) {
+      window.history.back()
+      return
+    }
+    window.location.href = '/'
   }
 
   const submitContact = (event: FormEvent<HTMLFormElement>) => {
@@ -73,192 +79,213 @@ export function OfficialSite() {
     const category = String(data.get('category') ?? '').trim()
     const message = String(data.get('message') ?? '').trim()
     const subject = encodeURIComponent(`【大道芸博】${category}`)
-    const body = encodeURIComponent(`お名前：${name}\nメールアドレス：${email}\nお問い合わせ種別：${category}\n\n${message}`)
+    const body = encodeURIComponent(
+      `お名前：${name}\nメールアドレス：${email}\nお問い合わせ種別：${category}\n\n${message}`,
+    )
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`
   }
 
   return (
     <div className="dg-site">
-      <header className="dg-topbar">
-        <button type="button" className="dg-back" onClick={goBack}>
-          <ArrowLeft size={17} aria-hidden="true" />
-          HAKUに戻る
-        </button>
-        <a className="dg-topbar__brand" href="/official">
-          <small>大道芸博 officialサイト</small>
-          <strong>DAIDOGEIHAKU！</strong>
-        </a>
-      </header>
+      <section className="hero">
+        <div className="top">
+          <div className="title">
+            <small>大道芸博 officialサイト</small>
+            <h1 aria-label="DAIDOGEI HAKU！">DAIDOGEIHAKU！</h1>
+            <p>大道芸博の公式情報を、ここから。</p>
+          </div>
+          <button
+            type="button"
+            className="menu"
+            aria-label="メニューを開く"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X size={28} /> : <Menu size={30} />}
+          </button>
+        </div>
 
-      <main>
-        <section className="dg-hero">
-          <div className="dg-hero__grid">
-            <div className="dg-hero__copy">
-              <p className="dg-eyebrow">CURRENT EVENT</p>
-              <h1>AWP 2026<br />「受賞者たち」</h1>
-              <p className="dg-lead">
-                国内外で受賞歴のあるパフォーマーが集結する、特別な3日間。
-                出演者・プログラム・会場情報をご案内します。
-              </p>
-              <div className="dg-pills">
-                <span>2026.10.10 - 10.12</span>
-                <span>練馬城址公園</span>
-                <span>入場無料</span>
+        {menuOpen ? (
+          <nav className="siteMenu" aria-label="公式サイトメニュー">
+            <button type="button" onClick={goBack}><ArrowLeft size={16} />HAKUに戻る</button>
+            <a href="#event" onClick={() => setMenuOpen(false)}>今回のイベント</a>
+            <a href="#contact" onClick={() => setMenuOpen(false)}>お問い合わせ</a>
+            <a href="#history" onClick={() => setMenuOpen(false)}>過去の開催実績</a>
+            <a href="#media" onClick={() => setMenuOpen(false)}>メディア掲載</a>
+          </nav>
+        ) : null}
+
+        <div className="heroGrid">
+          <div className="heroCopy">
+            <div className="eyebrow">CURRENT EVENT</div>
+            <h2>AWP 2026<br />「受賞者たち」</h2>
+            <p>
+              国内外で受賞歴のあるパフォーマーが集結する、特別な3日間。
+              出演者・プログラム・会場情報をご案内します。
+            </p>
+            <div className="pills">
+              <div className="pill">2026.10.10 - 10.12</div>
+              <div className="pill">練馬城址公園</div>
+              <div className="pill">入場無料</div>
+            </div>
+          </div>
+
+          <div className="poster">
+            <ImageButton
+              src={AWP_FRONT}
+              alt="AWP 2026 受賞者たち 公式ビジュアル"
+              onOpen={setLightbox}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section id="event" className="section">
+        <div className="inner">
+          <div className="eyebrow">AWP 2026</div>
+          <h3>今回のイベント</h3>
+          <p className="lead materialsIntro">
+            2026年10月10日〜12日、東京・練馬城址公園で開催。
+            入場無料でお楽しみいただけます。
+          </p>
+
+          <div className="materials">
+            <div className="material">
+              <div className="flyerCard">
+                <ImageButton
+                  src={AWP_FRONT}
+                  alt="AWP 2026 受賞者たち 表面"
+                  onOpen={setLightbox}
+                />
               </div>
+              <div className="tag">AWP 2026 / 表面</div>
+              <div className="materialCaption">出演者とAWPの世界観をご覧いただけます。</div>
+              <div className="imageHint">タップで拡大</div>
             </div>
 
-            <div className="dg-hero__poster">
+            <div className="material">
+              <div className="flyerCard">
+                <ImageButton
+                  src={AWP_BACK}
+                  alt="AWP 2026 会場MAP・裏面"
+                  onOpen={setLightbox}
+                />
+              </div>
+              <div className="tag">AWP 2026 / 裏面</div>
+              <div className="materialCaption">会場MAP・アクセス・HAKUのご案内はこちら。</div>
+              <div className="imageHint">タップで拡大</div>
+            </div>
+          </div>
+
+          <a className="cta" href="/events/award-winning-performers-2026">
+            <div>
+              <small>タイムテーブル・出演者情報</small><br />
+              <strong>プログラムはこちら！</strong>
+            </div>
+            <ArrowRight size={30} aria-hidden="true" />
+          </a>
+          <div className="note">最新のタイムテーブル・出演者情報はHAKUでご確認いただけます。</div>
+        </div>
+      </section>
+
+      <section id="contact" className="section soft">
+        <div className="inner contact">
+          <div>
+            <div className="eyebrow">CONTACT</div>
+            <h3>お問い合わせ</h3>
+            <p className="lead">
+              イベントに関するご質問、出演希望、企業協賛、取材・メディアなど、
+              お気軽にお問い合わせください。
+            </p>
+          </div>
+
+          <form onSubmit={submitContact}>
+            <input name="name" placeholder="お名前" autoComplete="name" required />
+            <input name="email" type="email" placeholder="メールアドレス" autoComplete="email" required />
+            <select name="category" defaultValue="一般のお問い合わせ">
+              <option>一般のお問い合わせ</option>
+              <option>出演について</option>
+              <option>企業・協賛について</option>
+              <option>取材・メディア</option>
+              <option>その他</option>
+            </select>
+            <textarea name="message" placeholder="お問い合わせ内容" required />
+            <button className="submit" type="submit"><Mail size={18} />メールで問い合わせる</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="history" className="section">
+        <div className="inner">
+          <div className="eyebrow">HISTORY</div>
+          <h3>過去の開催実績</h3>
+          <p className="lead">これまでの大道芸博を、歴代の公式チラシで振り返ります。</p>
+          <div className="history">
+            {history.map((item) => (
+              <article className="card historyCard" key={`${item.date}-${item.place}`}>
+                <ImageButton
+                  src={item.src}
+                  alt={`${item.date} ${item.place} 大道芸博 公式チラシ`}
+                  onOpen={setLightbox}
+                />
+                <div className="cap">
+                  <b>{item.date} {item.place}</b>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="media" className="section soft">
+        <div className="inner">
+          <div className="eyebrow">MEDIA</div>
+          <h3>メディア掲載</h3>
+          <p className="lead">テレビ・新聞など、これまでに取り上げていただいた実績です。</p>
+          <div className="mediaGrid">
+            <article className="mediaCard">
               <ImageButton
-                src={AWP_FRONT}
-                alt="AWP 2026 受賞者たち 公式ビジュアル"
+                src="/official/media/media-stage-1.jpg"
+                alt="TBS Nスタ 掲載"
                 onOpen={setLightbox}
               />
-            </div>
+              <div className="cap"><b>📺 TBS「Nスタ」</b><br /><small>大道芸博を取材・放送</small></div>
+            </article>
+            <article className="mediaCard">
+              <ImageButton
+                src="/official/media/media-stage-2.jpg"
+                alt="東京新聞 掲載"
+                onOpen={setLightbox}
+              />
+              <div className="cap"><b>📰 東京新聞</b><br /><small>新聞掲載</small></div>
+            </article>
           </div>
-        </section>
-
-        <section id="event" className="dg-section">
-          <div className="dg-inner dg-center">
-            <p className="dg-eyebrow">AWP 2026</p>
-            <h2>今回のイベント</h2>
-            <p className="dg-lead dg-lead--center">
-              2026年10月10日〜12日、東京・練馬城址公園で開催。
-              入場無料でお楽しみいただけます。
-            </p>
-
-            <div className="dg-event-pair">
-              <article>
-                <div className="dg-flyer-card dg-flyer-card--front">
-                  <ImageButton
-                    src={AWP_FRONT}
-                    alt="AWP 2026 受賞者たち 表面"
-                    onOpen={setLightbox}
-                  />
-                </div>
-                <span className="dg-tag">AWP 2026 / 表面</span>
-                <p>出演者とAWPの世界観をご覧いただけます。</p>
-              </article>
-
-              <article>
-                <div className="dg-flyer-card dg-flyer-card--back">
-                  <ImageButton
-                    src={AWP_BACK}
-                    alt="AWP 2026 会場MAP・裏面"
-                    onOpen={setLightbox}
-                  />
-                </div>
-                <span className="dg-tag">AWP 2026 / 裏面</span>
-                <p>会場MAP・アクセス・HAKUのご案内はこちら。</p>
-              </article>
-            </div>
-
-            <a className="dg-program" href="/events/award-winning-performers-2026">
-              <span>
-                <small>タイムテーブル・出演者情報</small>
-                <b>プログラムはこちら！</b>
-              </span>
-              <ArrowRight size={30} aria-hidden="true" />
-            </a>
-          </div>
-        </section>
-
-        <section id="contact" className="dg-section dg-section--soft">
-          <div className="dg-inner dg-contact">
-            <div>
-              <p className="dg-eyebrow">CONTACT</p>
-              <h2>お問い合わせ</h2>
-              <p className="dg-lead">
-                イベントに関するご質問、出演希望、企業協賛、取材・メディアなど、
-                お気軽にお問い合わせください。
-              </p>
-            </div>
-
-            <form onSubmit={submitContact}>
-              <label>名前<input name="name" autoComplete="name" required /></label>
-              <label>メールアドレス<input name="email" type="email" autoComplete="email" required /></label>
-              <label>
-                お問い合わせ種別
-                <select name="category" required defaultValue="一般のお問い合わせ">
-                  <option>一般のお問い合わせ</option>
-                  <option>出演について</option>
-                  <option>企業・協賛について</option>
-                  <option>取材・メディア</option>
-                  <option>その他</option>
-                </select>
-              </label>
-              <label>お問い合わせ内容<textarea name="message" rows={7} required /></label>
-              <button type="submit"><Mail size={18} aria-hidden="true" />メールで問い合わせる</button>
-            </form>
-          </div>
-        </section>
-
-        <section id="history" className="dg-section">
-          <div className="dg-inner">
-            <p className="dg-eyebrow">HISTORY</p>
-            <h2>過去の開催実績</h2>
-            <p className="dg-lead">これまでの大道芸博を、歴代の公式チラシで振り返ります。</p>
-            <div className="dg-history">
-              {history.map((item) => (
-                <article className="dg-history__card" key={`${item.date}-${item.place}`}>
-                  <ImageButton
-                    src={item.src}
-                    alt={`${item.date} ${item.place} 大道芸博 公式チラシ`}
-                    onOpen={setLightbox}
-                  />
-                  <div>
-                    <b>{item.date} {item.place}</b>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="dg-section dg-section--soft">
-          <div className="dg-inner">
-            <p className="dg-eyebrow">MEDIA</p>
-            <h2>メディア掲載</h2>
-            <p className="dg-lead">テレビ・新聞など、これまでに取り上げていただいた実績です。</p>
-            <div className="dg-media">
-              <article>
-                <ImageButton src="/official/media/media-stage-1.jpg" alt="TBS Nスタ 掲載" onOpen={setLightbox} />
-                <div><b>📺 TBS「Nスタ」</b><small>大道芸博を取材・放送</small></div>
-              </article>
-              <article>
-                <ImageButton src="/official/media/media-stage-2.jpg" alt="東京新聞 掲載" onOpen={setLightbox} />
-                <div><b>📰 東京新聞</b><small>新聞掲載</small></div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="dg-haku">
-          <div>
-            <p>STREET PERFORMANCE, CLOSER.</p>
-            <h2>世界が舞台。<br />いま、あなたは最前列。</h2>
-          </div>
-          <a href="/">HAKUを開く <ExternalLink size={17} aria-hidden="true" /></a>
-        </section>
-      </main>
-
-      <footer>
-        <div>
-          <small>大道芸博 officialサイト</small>
-          <strong>DAIDOGEIHAKU！</strong>
         </div>
-        <span>© 2026 DAIDOGEIHAKU / HAKU</span>
+      </section>
+
+      <footer className="footer">
+        <div className="footerInner">
+          <div>
+            <b>大道芸博 officialサイト<br />DAIDOGEIHAKU！</b>
+            <div style={{ marginTop: 10 }}>AWP 2026「受賞者たち」</div>
+          </div>
+          <small>© 2026 DAIDOGEIHAKU / HAKU</small>
+        </div>
       </footer>
+
+      <a className="stickyHAKU" href="/">HAKUを開く ↗</a>
 
       {lightbox ? (
         <div
-          className="dg-lightbox"
+          className="lightbox open"
           role="dialog"
           aria-modal="true"
           aria-label={lightbox.alt}
           onClick={() => setLightbox(null)}
         >
-          <button type="button" onClick={() => setLightbox(null)} aria-label="閉じる"><X /></button>
-          <img src={lightbox.src} alt={lightbox.alt} onClick={(event) => event.stopPropagation()} />
+          <div className="lightboxInner" onClick={(event) => event.stopPropagation()}>
+            <button className="lightboxClose" type="button" onClick={() => setLightbox(null)} aria-label="閉じる">×</button>
+            <img src={lightbox.src} alt={lightbox.alt} />
+          </div>
         </div>
       ) : null}
     </div>
