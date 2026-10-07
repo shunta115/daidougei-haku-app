@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, RefreshCw, Search } from 'lucide-react'
+import { ArrowRight, Bell, ChevronRight, MapPin, Play, Radio, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
@@ -17,7 +17,6 @@ import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
-import { useRefreshTask } from '../lib/pullToRefresh'
 import './fanHome.css'
 
 type FanHomeProps = {
@@ -78,7 +77,6 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const [error, setError] = useState<string | null>(null)
   const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel, slug: 'award-winning-performers-2026' })
   const load = useCallback(async () => { const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()]); if (event) { setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug }); const lineup = await listEventLineup(event.id).catch((): string[] => []); setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows) } else setRoster(allRows); setLive(liveRows); if (user) { const favorites = await listOshiPerformers(user.id).catch(() => []); setFollowed(favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])) } else setFollowed([]); setError(null); setLoading(false) }, [user])
-  useRefreshTask(load)
 
   useEffect(() => {
     let cancelled = false
@@ -105,7 +103,6 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <header className="pl-home-v7__masthead">
         <button type="button" className="pl-home-v7__identity" onClick={onOpenTitle} aria-label={t('openTitleScreen')}><BrandLogo size={42} variant="official" /></button>
         <div className="pl-home-v7__tools">
-          <button type="button" className="pl-home-v7__refresh" onClick={() => window.location.reload()} aria-label="最新情報に更新"><RefreshCw size={15} /><span>更新</span></button>
           <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label={t('searchAria')}><Search size={19} /></button>
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label={t('notifications')}><Bell size={19} /></button>
         </div>

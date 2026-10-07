@@ -6,7 +6,7 @@ import { useAuth } from './lib/auth'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
-import { PullToRefresh } from './components/PullToRefresh'
+import { RefreshButton } from './components/RefreshButton'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
 import { SearchScreen } from './screens/SearchScreen'
@@ -50,6 +50,24 @@ type HakuHistoryState = {
   hakuSnapshot?: NavigationSnapshot
   hakuHasBack?: boolean
 }
+
+const REFRESHABLE_SCREENS = new Set<PlatformScreen>([
+  'fan-home',
+  'search',
+  'merch-list',
+  'live-list',
+  'map-schedule',
+  'event-list',
+  'event-detail',
+  'event-vote',
+  'profile',
+  'notifications',
+  'performer-home',
+  'performer-schedule',
+  'performer-earnings',
+  'performer-history',
+  'organizer-home',
+])
 
 function SetupScreen() {
   const { t } = useLang()
@@ -694,6 +712,7 @@ function PlatformShell() {
       const guestShowNav = !['tip', 'live-watch'].includes(screen)
       return (
         <div className="pl-app">
+          {REFRESHABLE_SCREENS.has(screen) ? <RefreshButton /> : null}
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
@@ -970,7 +989,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
-      <PullToRefresh disabled={['auth', 'tip', 'merch-detail', 'performer-edit', 'performer-home', 'performer-live', 'performer-merch', 'admin', 'admin-event', 'admin-users', 'admin-ops', 'admin-votes'].includes(screen)} />
+      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <RefreshButton /> : null}
       {previewOn ? (
         <aside className="pl-preview-bar" role="status">
           <strong>READ ONLY</strong>

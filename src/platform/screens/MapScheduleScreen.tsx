@@ -18,7 +18,6 @@ import { distanceKm, formatMapDistance, isFreshLiveLocation, isFreshSharedLocati
 import { useLang } from '../../i18n/LangProvider'
 import type { Lang } from '../../i18n'
 import type { Performer } from '../lib/types'
-import { useRefreshTask } from '../lib/pullToRefresh'
 
 type Props = {
   onOpenPerformer: (id: string) => void
@@ -178,7 +177,6 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       document.getElementById('haku-venue-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [])
-  useRefreshTask(refreshLiveMap)
 
   const nearbyLive = useMemo(() => liveMapPerformers
     .map((performer) => ({

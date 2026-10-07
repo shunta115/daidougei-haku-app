@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Crown, Radio, Search, SlidersHorizontal, Sparkles, TrendingUp } from 'lucide-react'
 import { getFeaturedEvent, listVoteRankingNamed, searchPerformers } from '../lib/api'
 import type { Performer } from '../lib/types'
-import { useRefreshTask } from '../lib/pullToRefresh'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 
 type SearchProps = { onOpenPerformer: (id: string) => void; onWatchLive?: (id: string) => void }
@@ -22,9 +21,6 @@ export function SearchScreen({ onOpenPerformer, onWatchLive }: SearchProps) {
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const refreshSearch = useCallback(async () => { const [result, event] = await Promise.all([searchPerformers(q, { genre, country: region }), getFeaturedEvent().catch(() => null)]); setRows(result); const ranked = event ? await listVoteRankingNamed(event.id).catch(() => []) : []; setRanking(ranked); setPopularIds(ranked.map((row) => row.performer.id)); setError(null); setLoading(false) }, [genre, q, region])
-  useRefreshTask(refreshSearch)
-
   useEffect(() => {
     let active = true
     setLoading(true)

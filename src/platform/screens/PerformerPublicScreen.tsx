@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
 import { AppBackButton } from '../components/AppBackButton'
@@ -26,7 +26,6 @@ import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
 import './performer-home.css'
-import { useRefreshTask } from '../lib/pullToRefresh'
 
 type Props = {
   performerId: string
@@ -109,9 +108,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
-  const refreshPublic = useCallback(async () => { const [performer, products, summary, views, schedule] = await Promise.all([getPerformer(performerId), listSellerMerchProducts(performerId), tipSummaryForPerformer(performerId), sumLiveViews(performerId), listPerformerEventSlots(performerId)]); setP(performer); setMerch(products.filter((item) => item.status === 'active' || item.status === 'sold_out')); setSupportCount(summary.count); setLiveViews(views); const visible = schedule.filter((row) => row.status !== 'cancelled'); setSlots(visible); const eventIds = [...new Set(visible.map((row) => row.event_id))]; setVenues((await Promise.all(eventIds.map((id) => listEventVenues(id).catch(() => [] as EventVenueRow[])))).flat()); setError(null) }, [performerId])
-  useRefreshTask(refreshPublic)
-
   const canonicalUrl = useMemo(() => {
     const path = performerPath(performerId)
     return typeof window === 'undefined' ? path : `${window.location.origin}${path}`
