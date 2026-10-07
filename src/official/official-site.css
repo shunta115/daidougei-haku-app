@@ -348,3 +348,157 @@ body.dg-modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .dg-flyer-card--front, .dg-flyer-card--back { transform: none; }
 }
+
+
+/* Approved AWP official-site layout overrides */
+.dg-backbar {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding:
+    calc(8px + env(safe-area-inset-top, 0px))
+    max(18px, env(safe-area-inset-right, 0px))
+    8px
+    max(18px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: rgba(7,7,7,.90);
+  backdrop-filter: blur(16px);
+}
+.dg-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  background: rgba(255,255,255,.055);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.dg-backbar__brand {
+  color: #a8a5a1 !important;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.dg-hero {
+  min-height: 0;
+  padding: 48px 0 72px;
+}
+.dg-hero h1 {
+  margin: 12px 0 30px;
+  font-size: clamp(44px, 7vw, 72px);
+  line-height: .88;
+  letter-spacing: -.065em;
+}
+.dg-hero__visual {
+  max-width: 350px;
+}
+.dg-hero__event h2 {
+  margin-bottom: 20px;
+  font-size: clamp(30px, 4.5vw, 46px);
+}
+
+.dg-event__pair {
+  max-width: 760px;
+  gap: 34px;
+  margin: 26px auto 54px;
+  padding: 18px;
+}
+.dg-event__front { transform: rotate(-7deg) translateY(8px); }
+.dg-event__back { transform: rotate(6deg) translateY(-5px); }
+
+.dg-history__card .dg-image-button {
+  background: #0d1015;
+}
+.dg-history__card img {
+  object-fit: contain;
+  background: #0d1015;
+}
+
+.dg-media article {
+  position: static;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 16px;
+  background: #11161d;
+}
+.dg-media .dg-image-button {
+  aspect-ratio: auto;
+  background: #fff;
+}
+.dg-media img {
+  width: 100%;
+  height: 390px;
+  object-fit: contain;
+  filter: none;
+  background: #fff;
+}
+.dg-media article > div {
+  position: static;
+  padding: 14px;
+  pointer-events: none;
+  text-shadow: none;
+}
+.dg-media small { color: #aeb6c0; }
+.dg-media h3 { font-size: 20px; }
+
+.dg-contact {
+  grid-template-columns: .9fr 1.5fr;
+  column-gap: 30px;
+}
+.dg-contact form {
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 20px;
+  background: #0f141b;
+}
+
+@media (max-width:700px) {
+  .dg-backbar__brand { font-size: 9px; }
+  .dg-hero {
+    padding: 40px 0 58px;
+  }
+  .dg-hero h1 {
+    margin: 12px 0 26px;
+    font-size: 46px;
+  }
+  .dg-hero__visual {
+    width: min(78vw, 300px);
+  }
+  .dg-section {
+    padding: 52px 0;
+  }
+  .dg-event__pair {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 10px 4px;
+  }
+  .dg-event__front { transform: rotate(-8deg) translateY(7px); }
+  .dg-event__back { transform: rotate(6deg) translateY(-3px); }
+  .dg-history {
+    grid-auto-columns: 62%;
+  }
+  .dg-media {
+    grid-template-columns: 1fr;
+  }
+  .dg-media img {
+    height: auto;
+    max-height: 620px;
+  }
+  .dg-contact {
+    display: block;
+  }
+  .dg-contact form {
+    margin-top: 26px;
+  }
+}
