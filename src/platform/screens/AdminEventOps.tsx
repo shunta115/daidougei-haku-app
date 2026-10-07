@@ -164,6 +164,17 @@ export function AdminEventScreen() {
     catch (e) { setError(e instanceof Error ? e.message : '投票設定を保存できませんでした') }
   }
 
+  const setVotingOpen = async (open: boolean) => {
+    if (!event || !voteRule) return
+    try {
+      // Reception controls must not save unrelated, unsaved form edits.
+      await saveEventVoteRule(event.id, { voting_open: open })
+      setVoteRule((current) => current ? { ...current, voting_open: open } : current)
+      setError(null)
+      setMsg(open ? '投票 OPEN' : '投票 STOP')
+    } catch (e) { setError(e instanceof Error ? e.message : '更新失敗') }
+  }
+
   const publishResults = async (published: boolean) => {
     if (!event) return
     try {
@@ -532,7 +543,44 @@ export function AdminEventScreen() {
 
       {tab === 'voting' ? (
         <>
-          {!voteRule ? <p className="pl-error">安全な投票migrationが未適用です。適用前は投票を開始できません。</p> : <div className="pl-card"><h2 className="pl-h2">投票受付</h2><p className="pl-muted">ポスター用URL: /events/award-winning-performers-2026/vote</p><div style={{ display: 'grid', gap: 8, marginBottom: 12 }}><button type="button" className="pl-btn pl-btn--block" onClick={() => { if (!voteRule) return; setVoteRule({ ...voteRule, voting_open: true }); void saveEventVoteRule(event!.id, { ...voteRule, voting_open: true }).then(() => { setMsg('投票 OPEN'); void reload(event?.id) }).catch((e) => setError(e instanceof Error ? e.message : '更新失敗')) }}>投票 OPEN</button><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => { if (!voteRule) return; setVoteRule({ ...voteRule, voting_open: false }); void saveEventVoteRule(event!.id, { ...voteRule, voting_open: false }).then(() => { setMsg('投票 STOP'); void reload(event?.id) }).catch((e) => setError(e instanceof Error ? e.message : '更新失敗')) }}>投票 STOP</button></div><label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={voteRule.voting_open} onChange={(e) => setVoteRule({ ...voteRule, voting_open: e.target.checked })} />投票受付中</label><label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={Boolean(voteRule.allow_anonymous)} onChange={(e) => setVoteRule({ ...voteRule, allow_anonymous: e.target.checked })} />匿名3票（登録不要）</label><label><span className="pl-label">1人あたりの票数</span><input className="pl-input" type="number" min={1} max={10} value={voteRule.votes_per_voter ?? 3} onChange={(e) => setVoteRule({ ...voteRule, votes_per_voter: Math.max(1, Math.min(10, Number(e.target.value) || 3)) })} /></label><label><span className="pl-label">1日あたりの投票上限（ログイン投票）</span><input className="pl-input" type="number" min={1} max={10} value={voteRule.votes_per_user_per_day} onChange={(e) => setVoteRule({ ...voteRule, votes_per_user_per_day: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} /></label><label><span className="pl-label">投票開始日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_starts_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_starts_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label><label><span className="pl-label">投票終了日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_ends_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_ends_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label><button className="pl-btn pl-btn--block" onClick={() => void saveVoting()}>投票設定を保存</button><a className="pl-registration__link" href="/live?adminVotes=1">投票デスクを開く</a></div>}
+          {!voteRule ? <p className="pl-error">安全な投票migrationが未適用です。適用前は投票を開始できません。</p> : (
+            <div className="pl-card">
+              <h2 className="pl-h2">投票受付</h2>
+              <p className="pl-muted">ポスター用URL: /events/award-winning-performers-2026/vote</p>
+              <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                <button type="button" className="pl-btn pl-btn--block" onClick={() => void setVotingOpen(true)}>投票 OPEN</button>
+                <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void setVotingOpen(false)}>投票 STOP</button>
+              </div>
+              <label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={voteRule.voting_open} onChange={(e) => setVoteRule({ ...voteRule, voting_open: e.target.checked })} />投票受付中</label>
+              <fieldset>
+                <legend>公式端末投票（AWP）</legend>
+                <p className="pl-muted">登録・ログイン不要。ログイン中も同じ端末の上限を使います。日ごとにはリセットされません。</p>
+                {voteRule.votes_per_device == null ? (
+                  <p className="pl-error">端末投票の設定を取得できません。端末投票migrationの適用状況を確認してください。</p>
+                ) : (
+                  <label>
+                    <span className="pl-label">1端末あたりの票数（イベント全期間）</span>
+                    <select className="pl-input" value={voteRule.votes_per_device} onChange={(e) => setVoteRule({ ...voteRule, votes_per_device: Number(e.target.value) })}>
+                      {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}票</option>)}
+                    </select>
+                  </label>
+                )}
+                <p className="pl-muted">公式投票の上限設定（votes_per_device）です。変更後は「投票設定を保存」を押してください。上限を下げても投票済みの票は削除されません。</p>
+                {voteRule.voting_enabled === false ? <p className="pl-error">このイベントの端末投票は無効です。OPENにしても端末投票は開始されません。</p> : null}
+              </fieldset>
+              <details>
+                <summary>旧方式の投票設定（公式端末投票には適用されません）</summary>
+                <p className="pl-muted">互換性のために残している旧匿名投票・ログイン投票の設定です。AWPの端末投票の可否・上限は変わりません。</p>
+                <label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={Boolean(voteRule.allow_anonymous)} onChange={(e) => setVoteRule({ ...voteRule, allow_anonymous: e.target.checked })} />旧匿名投票を許可</label>
+                <label><span className="pl-label">旧匿名投票：1投票者あたりの票数</span><input className="pl-input" type="number" min={1} max={10} value={voteRule.votes_per_voter ?? 3} onChange={(e) => setVoteRule({ ...voteRule, votes_per_voter: Math.max(1, Math.min(10, Number(e.target.value) || 3)) })} /></label>
+                <label><span className="pl-label">旧ログイン投票：1日あたりの投票上限</span><input className="pl-input" type="number" min={1} max={10} value={voteRule.votes_per_user_per_day} onChange={(e) => setVoteRule({ ...voteRule, votes_per_user_per_day: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} /></label>
+              </details>
+              <label><span className="pl-label">投票開始日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_starts_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_starts_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+              <label><span className="pl-label">投票終了日時</span><input className="pl-input" type="datetime-local" value={voteRule.voting_ends_at?.slice(0, 16) ?? ''} onChange={(e) => setVoteRule({ ...voteRule, voting_ends_at: e.target.value ? new Date(e.target.value).toISOString() : null })} /></label>
+              <button className="pl-btn pl-btn--block" onClick={() => void saveVoting()}>投票設定を保存</button>
+              <a className="pl-registration__link" href="/live?adminVotes=1">投票デスクを開く</a>
+            </div>
+          )}
           <div className="pl-card"><h2 className="pl-h2">途中集計（運営のみ）</h2>{voteRanking.length === 0 ? <p className="pl-muted">投票はまだありません。</p> : voteRanking.map((row, index) => <p key={row.performer_id}><strong>{index + 1}位 {approved.find((performer) => performer.id === row.performer_id)?.stage_name ?? row.performer_id}</strong>・{row.votes}票</p>)}<button className="pl-btn pl-btn--ghost pl-btn--block" disabled={voteRanking.length < 3} onClick={() => void assignFinalists()}>上位3組をSPECIAL NIGHTへ設定</button><button className="pl-btn pl-btn--block" onClick={() => void publishResults(!event?.results_published_at)}>{event?.results_published_at ? '結果を非公開に戻す' : '投票を終了して結果を公開'}</button><p className="pl-muted">結果公開までは一般ユーザーに途中順位を表示しません。</p></div>
         </>
       ) : null}
