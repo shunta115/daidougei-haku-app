@@ -50,6 +50,15 @@ it('keeps the public root, event and live routes inside the MASTER experience', 
   expect(isPlatformPath(eventPath('award-winning-performers-2026'))).toBe(true)
 })
 
+it('bypasses the title screen for a Supabase password recovery callback', async () => {
+  window.localStorage.removeItem('pl-master-splash-seen-v3')
+  window.history.replaceState({}, '', '/#access_token=fixture&type=recovery')
+  fake.auth = { ...fake.auth, passwordRecovery: true }
+  render(<PlatformApp />)
+  await screen.findByText('register:fan')
+  expect(screen.queryByRole('button', { name: '音声をオンにする' })).toBeNull()
+})
+
 it('opens a QR event URL directly without requiring authentication', async () => {
   window.history.replaceState({}, '', eventPath('award-winning-performers-2026'))
   render(<PlatformApp />)

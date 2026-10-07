@@ -13,6 +13,7 @@ import { isSupabaseConfigured, requireSupabase, supabase } from './supabase'
 import type { Performer, Profile } from './types'
 import { registrationError } from './onboarding'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
+import { hasPasswordRecoveryParams } from './authCallback'
 
 type AuthState = {
   ready: boolean
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [passwordRecovery, setPasswordRecovery] = useState(() => {
     if (typeof window === 'undefined') return false
-    return /(?:^|[?#&])type=invite(?:&|$)/.test(`${window.location.search}${window.location.hash}`)
+    return hasPasswordRecoveryParams()
   })
   const [authRevision, setAuthRevision] = useState(0)
   const currentUserId = useRef<string | null>(null)

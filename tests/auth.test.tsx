@@ -20,11 +20,12 @@ vi.mock('../src/platform/lib/supabase', () => {
   return { isSupabaseConfigured: true, supabase: client, requireSupabase: () => client }
 })
 import { AuthProvider, useAuth } from '../src/platform/lib/auth'
+import { hasPasswordRecoveryParams } from '../src/platform/lib/authCallback'
 
 function Probe() { const auth = useAuth(); return <div>{auth.ready ? `${auth.profile?.role ?? 'guest'}:${auth.performer?.stage_name ?? ''}:${auth.profileError ?? ''}` : 'loading'}</div> }
 function PasswordProbe() {
   const auth = useAuth()
-  return <><button onClick={() => void auth.sendPasswordReset('fan@example.com')}>reset</button><button onClick={() => void auth.updatePassword('new-password')}>update</button></>
+  return <><span>{auth.passwordRecovery ? 'recovery' : 'regular'}</span><button onClick={() => void auth.sendPasswordReset('fan@example.com')}>reset</button><button onClick={() => void auth.updatePassword('new-password')}>update</button></>
 }
 function SignupProbe() {
   const auth = useAuth()
@@ -38,6 +39,7 @@ function emit(session: unknown) {
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/')
   vi.clearAllMocks()
   fake.resetPasswordForEmail.mockResolvedValue({ error: null })
   fake.updateUser.mockResolvedValue({ error: null })
@@ -76,6 +78,13 @@ it('uses Supabase recovery APIs without exposing password reset details to the d
   }))
   screen.getByText('update').click()
   await waitFor(() => expect(fake.updateUser).toHaveBeenCalledWith({ password: 'new-password' }))
+})
+
+it('recognizes Supabase recovery callbacks before the auth event arrives', () => {
+  window.history.replaceState({}, '', '/#access_token=fixture&type=recovery')
+  expect(hasPasswordRecoveryParams()).toBe(true)
+  render(<AuthProvider><PasswordProbe /></AuthProvider>)
+  expect(screen.getByText('recovery')).toBeTruthy()
 })
 
 it('preserves the performer role and returns email confirmation to the performer app', async () => {

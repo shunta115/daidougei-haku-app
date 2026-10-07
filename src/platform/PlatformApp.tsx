@@ -3,6 +3,7 @@ import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, eventVotePath, pa
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
+import { hasPasswordRecoveryParams } from './lib/authCallback'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
@@ -213,6 +214,7 @@ function PlatformShell() {
   const [tipFollowId, setTipFollowId] = useState<string | null>(null)
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
   const [showSplash, setShowSplash] = useState(() => {
+    if (hasPasswordRecoveryParams()) return false
     if (window.location.pathname !== '/' || window.location.search) return false
     try { return window.localStorage.getItem('pl-master-splash-seen-v3') !== '1' } catch { return false }
   })
@@ -397,6 +399,11 @@ function PlatformShell() {
       if (!showSplash) setScreen('setup')
       return
     }
+    if (passwordRecovery) {
+      setShowSplash(false)
+      setScreen('auth')
+      return
+    }
     if (!user) {
       routedUser.current = null
       if (registrationEntry) { setPerformerId(null); setScreen('auth'); return }
@@ -420,10 +427,6 @@ function PlatformShell() {
       return
     }
     if (!profile) return
-    if (passwordRecovery) {
-      setScreen('auth')
-      return
-    }
     const firstVisit = routedUser.current !== user.id
     routedUser.current = user.id
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
