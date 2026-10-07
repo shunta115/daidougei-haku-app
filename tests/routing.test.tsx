@@ -121,7 +121,7 @@ it('returns a signed-out visitor from HOME to the title screen', async () => {
   window.history.replaceState({}, '', '/')
   render(<PlatformApp />)
   fireEvent.click(await screen.findByRole('button', { name: 'home-title' }))
-  expect(await screen.findByRole('button', { name: '音声をオンにする' })).toBeTruthy()
+  expect(await screen.findByText('世界が舞台。')).toBeTruthy()
 })
 
 it('returns from a performer profile to map and live list contexts', async () => {
