@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LangProvider } from '../src/i18n/LangProvider'
-import { resolveOfficialSiteUrl, SplashScreen } from '../src/platform/screens/SplashScreen'
+import { SplashScreen } from '../src/platform/screens/SplashScreen'
 
 afterEach(() => {
   cleanup()
@@ -55,13 +55,10 @@ describe('title screen video', () => {
     expect(screen.getByRole('button', { name: '音声をオフにする' })).toBeTruthy()
   })
 
-  it('hides an unset or unsafe official website URL', () => {
-    expect(resolveOfficialSiteUrl(undefined)).toBeNull()
-    expect(resolveOfficialSiteUrl('javascript:alert(1)')).toBeNull()
-    expect(resolveOfficialSiteUrl('https://example.com/haku')).toBe('https://example.com/haku')
+  it('shows the internal official website route with the ticker and new copy', () => {
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(new DOMException('NotAllowedError'))
     render(<LangProvider><SplashScreen onStart={vi.fn()} /></LangProvider>)
-    expect(screen.queryByRole('link', { name: /新公式ホームページ/ })).toBeNull()
+    expect(screen.getByRole('link', { name: /大道芸博公式サイトはこちら/ }).getAttribute('href')).toBe('/official')
     expect(screen.getAllByText(/全機能 世界/).length).toBeGreaterThan(0)
     expect(screen.getByText('世界が舞台。')).toBeTruthy()
     expect(screen.getByText('いま、あなたは最前列。')).toBeTruthy()

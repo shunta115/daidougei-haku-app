@@ -8,16 +8,6 @@ const HERO_POSTER = '/brand/haku-official.jpg'
 const HERO_2024 = '/videos/haku-2024.mp4'
 const HERO_2025 = '/videos/haku-2025.mp4'
 
-export function resolveOfficialSiteUrl(value: string | undefined): string | null {
-  if (!value?.trim()) return null
-  try {
-    const url = new URL(value.trim())
-    return url.protocol === 'https:' ? url.toString() : null
-  } catch {
-    return null
-  }
-}
-
 export function SplashScreen({ onStart }: { onStart: () => void }) {
   const { t } = useLang()
   const firstRef = useRef<HTMLVideoElement>(null)
@@ -27,7 +17,6 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
   const [firstFailed, setFirstFailed] = useState(false)
   const [reduceMotion, setReduceMotion] = useState(false)
   const [muted, setMuted] = useState(false)
-  const officialSiteUrl = resolveOfficialSiteUrl(import.meta.env.VITE_HAKU_OFFICIAL_SITE_URL)
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -134,12 +123,10 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       ) : null}
       <div className="pl-splash__top">
         <div className="pl-splash__top-actions">
-          {officialSiteUrl ? (
-            <a className="pl-splash__official" href={officialSiteUrl} target="_blank" rel="noreferrer">
-              <span><small>OFFICIAL WEBSITE</small>{t('splashOfficialSite')}</span>
+          <a className="pl-splash__official" href="/official">
+              <span><small>OFFICIAL WEBSITE</small>大道芸博公式サイトはこちら</span>
               <ExternalLink size={16} aria-hidden="true" />
-            </a>
-          ) : null}
+          </a>
           {showVideo ? <button type="button" className="pl-splash__sound" onClick={() => muted ? void enableSound() : disableSound()} aria-label={muted ? '音声をオンにする' : '音声をオフにする'}>{muted ? <Volume2 size={16} /> : <VolumeX size={16} />}{muted ? '音声ON' : '音声OFF'}</button> : null}
         </div>
         <GlobalMessageBar className="pl-splash__ticker" />
