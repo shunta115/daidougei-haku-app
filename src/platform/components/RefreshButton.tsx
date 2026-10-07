@@ -1,11 +1,15 @@
 import { RefreshCw } from 'lucide-react'
 
-export function RefreshButton() {
+export function RefreshButton({ onRefresh }: { onRefresh: () => void }) {
   return (
     <button
       type="button"
       className="pl-refresh-button"
-      onClick={() => window.location.reload()}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onRefresh()
+      }}
       aria-label="最新情報に更新"
       title="更新"
     >

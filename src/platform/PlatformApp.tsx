@@ -39,11 +39,22 @@ import './platform.css'
 import './screens/registration.css'
 import './experience.css'
 
-type NavigationSnapshot = {
+export type NavigationSnapshot = {
   screen: PlatformScreen
   performerId: string | null
   merchProductId: string | null
   eventSlug: string | null
+}
+
+export function savedNavigationSnapshot(): NavigationSnapshot | null {
+  const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
+  return saved && REFRESHABLE_SCREENS.has(saved.screen) ? saved : null
+}
+
+export function reloadPreservingNavigation(snapshot: NavigationSnapshot, reload = () => window.location.reload()) {
+  const state = (window.history.state as HakuHistoryState | null) ?? {}
+  window.history.replaceState({ ...state, hakuSnapshot: snapshot }, '', window.location.href)
+  reload()
 }
 
 type HakuHistoryState = {
@@ -143,8 +154,10 @@ const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
   'performer-history',
 ])
 
-function initialGuestScreen(): PlatformScreen {
+export function initialGuestScreen(): PlatformScreen {
   try {
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.screen
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
     if (parsePerformerPath(window.location.pathname)) return 'profile'
     if (window.location.pathname === EVENTS_PATH) return 'event-list'
@@ -179,6 +192,8 @@ function PlatformShell() {
   })
   const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(() => {
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.performerId
     const performerRoute = parsePerformerPath(window.location.pathname)
     if (performerRoute) return performerRoute.id
     try {
@@ -189,6 +204,8 @@ function PlatformShell() {
   })
   const [merchProductId, setMerchProductId] = useState<string | null>(null)
   const [eventSlug, setEventSlug] = useState<string | null>(() => {
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.eventSlug
     const eventRoute = parseEventsPath(window.location.pathname)
     return eventRoute && eventRoute.kind !== 'list' ? eventRoute.slug : null
   })
@@ -556,6 +573,7 @@ function PlatformShell() {
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
   const currentSnapshot = (): NavigationSnapshot => ({ screen, performerId, merchProductId, eventSlug })
+  const refreshCurrentScreen = () => reloadPreservingNavigation(currentSnapshot())
 
   const pushDetail = (next: NavigationSnapshot, url?: string) => {
     const currentState = (window.history.state as HakuHistoryState | null) ?? {}
@@ -712,7 +730,7 @@ function PlatformShell() {
       const guestShowNav = !['tip', 'live-watch'].includes(screen)
       return (
         <div className="pl-app">
-          {REFRESHABLE_SCREENS.has(screen) ? <RefreshButton /> : null}
+          {REFRESHABLE_SCREENS.has(screen) ? <RefreshButton onRefresh={refreshCurrentScreen} /> : null}
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
@@ -989,7 +1007,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
-      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <RefreshButton /> : null}
+      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <RefreshButton onRefresh={refreshCurrentScreen} /> : null}
       {previewOn ? (
         <aside className="pl-preview-bar" role="status">
           <strong>READ ONLY</strong>
