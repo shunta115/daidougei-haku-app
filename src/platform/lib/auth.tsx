@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/live?auth=1`,
+        redirectTo: `${window.location.origin}/live?auth=recovery`,
       })
       return error ? registrationError(error) : null
     } catch (e) {

@@ -1,3 +1,5 @@
 export function hasPasswordRecoveryParams(location: Pick<Location, 'search' | 'hash'> = window.location): boolean {
-  return /(?:^|[?#&])type=(?:recovery|invite)(?:&|$)/.test(`${location.search}${location.hash}`)
+  const params = `${location.search}${location.hash}`
+  return /(?:^|[?#&])type=(?:recovery|invite)(?:&|$)/.test(params)
+    || /(?:^|[?&])auth=recovery(?:&|$)/.test(location.search)
 }

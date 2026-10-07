@@ -59,6 +59,14 @@ it('bypasses the title screen for a Supabase password recovery callback', async 
   expect(screen.queryByRole('button', { name: '音声をオンにする' })).toBeNull()
 })
 
+it('keeps the Supabase recovery token hash while routing to the password screen', async () => {
+  window.history.replaceState({}, '', '/live?auth=recovery#access_token=fixture&type=recovery')
+  fake.auth = { ...fake.auth, passwordRecovery: true }
+  render(<PlatformApp />)
+  await screen.findByText('register:fan')
+  expect(window.location.hash).toBe('#access_token=fixture&type=recovery')
+})
+
 it('opens a QR event URL directly without requiring authentication', async () => {
   window.history.replaceState({}, '', eventPath('award-winning-performers-2026'))
   render(<PlatformApp />)

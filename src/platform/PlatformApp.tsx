@@ -310,7 +310,7 @@ function PlatformShell() {
     if (stripe === 'return' || stripe === 'refresh') {
       window.sessionStorage.setItem('pl-stripe-connect', stripe)
     }
-    if (auth === '1' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct || account === '1') {
+    if (auth === '1' || auth === 'recovery' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct || account === '1') {
       if (watch) setScreen('live-watch')
       else if (tipTo) {
         setTipReturn('welcome')
@@ -359,7 +359,9 @@ function PlatformShell() {
       url.searchParams.delete('account')
       url.searchParams.delete('productId')
       url.searchParams.delete('role')
-      window.history.replaceState({}, '', url.pathname + url.search)
+      // Supabase must consume recovery tokens before the app cleans the URL.
+      // Preserve the callback hash; the auth client removes it after session recovery.
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash)
     }
   }, [])
 

@@ -74,7 +74,7 @@ it('uses Supabase recovery APIs without exposing password reset details to the d
   render(<AuthProvider><PasswordProbe /></AuthProvider>)
   screen.getByText('reset').click()
   await waitFor(() => expect(fake.resetPasswordForEmail).toHaveBeenCalledWith('fan@example.com', {
-    redirectTo: `${window.location.origin}/live?auth=1`,
+    redirectTo: `${window.location.origin}/live?auth=recovery`,
   }))
   screen.getByText('update').click()
   await waitFor(() => expect(fake.updateUser).toHaveBeenCalledWith({ password: 'new-password' }))
@@ -85,6 +85,11 @@ it('recognizes Supabase recovery callbacks before the auth event arrives', () =>
   expect(hasPasswordRecoveryParams()).toBe(true)
   render(<AuthProvider><PasswordProbe /></AuthProvider>)
   expect(screen.getByText('recovery')).toBeTruthy()
+})
+
+it('recognizes the dedicated recovery redirect even after Supabase removes its token hash', () => {
+  window.history.replaceState({}, '', '/live?auth=recovery')
+  expect(hasPasswordRecoveryParams()).toBe(true)
 })
 
 it('preserves the performer role and returns email confirmation to the performer app', async () => {
