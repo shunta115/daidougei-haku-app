@@ -1,5 +1,10 @@
 export const more = {
   ja: {
+    tipConfirming: '支払いを確認しています…',
+    tipUnconfirmed: '支払い完了を確認できませんでした。再度支払う前に、決済履歴をご確認ください。',
+    tipConfirmationPending: '支払いの確認に時間がかかっています。再度支払わず、確認ボタンで状況をご確認ください。',
+    tipConfirmationError: '支払い状況を取得できませんでした。再度支払わず、通信を確認してもう一度ご確認ください。',
+    tipConfirmationRetry: '支払い状況を再確認',
     globalLabel: 'GLOBAL',
     globalMessage: '《全機能 世界🌍対応》 HAKUさえあれば…、世界のどこにいても、どこからでも、すべてがステージ‼︎',
     mapGlobalHeadline: '世界のどこにいても、ステージはすぐそこに。',
@@ -171,6 +176,11 @@ export const more = {
     tipFollowOnProfile: 'プロフィールでフォロー',
   },
   en: {
+    tipConfirming: 'Checking your payment…',
+    tipUnconfirmed: 'Payment completion could not be confirmed. Check your payment history before paying again.',
+    tipConfirmationPending: 'Payment confirmation is taking longer. Please check again instead of making another payment.',
+    tipConfirmationError: 'Unable to check your payment. Check your connection and try again before making another payment.',
+    tipConfirmationRetry: 'Check payment again',
     globalLabel: 'GLOBAL',
     globalMessage: '《Every feature, worldwide 🌍》 With HAKU, anywhere in the world can become your stage.',
     mapGlobalHeadline: 'Wherever you are, a stage is close by.',
@@ -342,6 +352,11 @@ export const more = {
     tipFollowOnProfile: 'Follow on their profile',
   },
   zh: {
+    tipConfirming: '正在確認付款…',
+    tipUnconfirmed: '尚未確認付款完成。再次付款前，請先查看付款紀錄。',
+    tipConfirmationPending: '付款確認需要較長時間。請勿重複付款，請再次確認狀態。',
+    tipConfirmationError: '無法取得付款狀態。請勿重複付款，請檢查網路後再試。',
+    tipConfirmationRetry: '再次確認付款',
     globalLabel: 'GLOBAL',
     globalMessage: '《所有功能・全球🌍支援》 只要有 HAKU，無論身在世界何處，任何地方都能成為舞台！',
     mapGlobalHeadline: '無論身在世界何處，舞台就在身邊。',
