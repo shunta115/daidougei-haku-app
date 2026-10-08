@@ -147,6 +147,17 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.update).not.toHaveBeenCalled()
   })
 
+  it('recognizes the exact Stripe testmode-account wording seen in production', async () => {
+    fake.retrieve.mockRejectedValueOnce({
+      type: 'StripeInvalidRequestError', statusCode: 400, requestId: 'req_productionfixture',
+      raw: { statusCode: 400, message: 'The account acct_testfixture was a test account created with a testmode key, and therefore can only be used with testmode keys.' },
+    })
+    const res = await request({ performerId: 'performer-fixture', action: 'status' })
+    expect(res.code).toBe(200)
+    expect(res.body).toMatchObject({ connected: false, state: 'not_started' })
+    expect(fake.update).not.toHaveBeenCalled()
+  })
+
   it('reuses the single exact live metadata match after an explicit onboarding click', async () => {
     fake.retrieve.mockRejectedValueOnce({
       type: 'StripeInvalidRequestError', statusCode: 400,

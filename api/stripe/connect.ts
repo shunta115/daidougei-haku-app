@@ -4,6 +4,7 @@ import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 
 type StripeErrorLike = {
   message?: unknown
+  requestId?: unknown
   statusCode?: unknown
   raw?: { message?: unknown; statusCode?: unknown }
 }
@@ -14,8 +15,10 @@ function isLiveKeyReadingTestAccount(error: unknown) {
   const message = String(candidate.raw?.message ?? candidate.message ?? '').toLowerCase()
   const status = Number(candidate.statusCode ?? candidate.raw?.statusCode ?? 0)
   return status === 400
-    && message.includes('similar object exists in test mode')
-    && message.includes('live mode key')
+    && (
+      (message.includes('similar object exists in test mode') && message.includes('live mode key'))
+      || (message.includes('was a test account created with a testmode key') && message.includes('only be used with testmode keys'))
+    )
 }
 
 function safeStripeFailureReason(error: unknown) {
@@ -213,8 +216,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const statusCode = error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number'
       ? error.statusCode
       : typeof raw?.statusCode === 'number' ? raw.statusCode : undefined
+    const requestId = error && typeof error === 'object' && 'requestId' in error && typeof error.requestId === 'string' && /^req_[A-Za-z0-9]+$/.test(error.requestId)
+      ? error.requestId
+      : 'unknown'
     const category = stripeType?.startsWith('Stripe') || stripeCode ? 'stripe' : 'internal'
-    console.error('stripe_connect_failed', { category, step: stripeStep, code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown', reason: category === 'stripe' ? safeStripeFailureReason(error) : 'internal' })
+    console.error('stripe_connect_failed', { category, step: stripeStep, type: stripeType ?? 'unknown', code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown', requestId, reason: category === 'stripe' ? safeStripeFailureReason(error) : 'internal' })
     res.status(500).json({ error: '受取設定を開始できませんでした。しばらくしてから再度お試しください。', code: category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error' })
   }
 }
