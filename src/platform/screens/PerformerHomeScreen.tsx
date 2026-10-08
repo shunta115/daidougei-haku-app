@@ -22,7 +22,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   onOpenTitle?: () => void
 }) {
   const { t, lang } = useLang()
-  const { performer, profile, refreshProfile, signOut } = useAuth()
+  const { performer, profile, refreshProfile, signOut, updatePassword } = useAuth()
   const [recent, setRecent] = useState<LiveSession[]>([])
   const [tips, setTips] = useState<TipRow[]>([])
   const [summary, setSummary] = useState<TipSummary>({ count: 0, amount_total: 0, fee_total: 0 })
@@ -30,6 +30,10 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordBusy, setPasswordBusy] = useState(false)
+  const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null)
   const performerId = performer?.id
 
   useEffect(() => {
@@ -140,6 +144,31 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
 
     <section className="pl-registration__section" aria-label={t('performerMyAccount')}>
       <h2 className="pl-h2">{t('performerMyAccount')}</h2>
+      <details className="pl-registration__details">
+        <summary>パスワードを変更する</summary>
+        <form onSubmit={(event) => {
+          event.preventDefault()
+          setPasswordFeedback(null)
+          if (newPassword.length < 8) { setPasswordFeedback('新しいパスワードは8文字以上で入力してください。'); return }
+          if (newPassword !== confirmPassword) { setPasswordFeedback('確認用パスワードが一致しません。'); return }
+          setPasswordBusy(true)
+          void updatePassword(newPassword).then((result) => {
+            if (result) { setPasswordFeedback(result); return }
+            setNewPassword('')
+            setConfirmPassword('')
+            setPasswordFeedback('パスワードを変更しました。次回から新しいパスワードでログインしてください。')
+          }).catch(() => setPasswordFeedback('変更できませんでした。時間をおいて再度お試しください。'))
+            .finally(() => setPasswordBusy(false))
+        }}>
+          <p className="pl-muted">ログイン中のアカウントのパスワードを変更できます。</p>
+          <label className="pl-label" htmlFor="performer-new-password">新しいパスワード</label>
+          <input id="performer-new-password" className="pl-input" type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={passwordBusy} />
+          <label className="pl-label" htmlFor="performer-confirm-password">新しいパスワード（確認）</label>
+          <input id="performer-confirm-password" className="pl-input" type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={passwordBusy} />
+          <button type="submit" className="pl-btn pl-btn--block" disabled={passwordBusy}>{passwordBusy ? '変更中…' : 'パスワードを変更'}</button>
+          {passwordFeedback ? <p role="status" className="pl-muted">{passwordFeedback}</p> : null}
+        </form>
+      </details>
       {onNotifications ? <button className="pl-btn pl-btn--ghost pl-btn--block" onClick={onNotifications}>{t('notifications')}</button> : null}
       <details className="pl-registration__details"><summary>{t('liveHistoryMenu')}</summary>
         {recent.map((session) => <p key={session.id} className="pl-muted">{new Date(session.started_at).toLocaleDateString(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP')}・{session.ended_at ? t('endedShort') : t('liveNow')}・{formatYen(session.tip_amount_total)}</p>)}
