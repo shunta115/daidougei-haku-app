@@ -8,6 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
+  let stripeStep: 'not_started' | 'account_create' | 'account_retrieve' | 'account_link' = 'not_started'
   try {
     const user = await requireAuthUser(req, res)
     if (!user) return
@@ -70,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const stripe = getStripe()
     if (!accountId) {
+      stripeStep = 'account_create'
       const account = await stripe.accounts.create({
         controller: {
           fees: { payer: 'account' },
@@ -87,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { error: saveError } = await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
       if (saveError) throw saveError
     } else {
+      stripeStep = 'account_retrieve'
       const account = await stripe.accounts.retrieve(accountId)
       const complete = isConnectedAccountTransferReady(account)
       const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
@@ -116,6 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const origin = getAppUrl(req)
+    stripeStep = 'account_link'
     const link = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${origin}/live?stripe=refresh`,
@@ -126,10 +130,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({ url: link.url })
   } catch (error) {
     // Do not log Stripe request payloads, identity documents, account details or credentials.
-    const stripeCode = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : undefined
+    const raw = error && typeof error === 'object' && 'raw' in error && error.raw && typeof error.raw === 'object'
+      ? error.raw as Record<string, unknown>
+      : null
+    const stripeCode = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : typeof raw?.code === 'string' ? raw.code : undefined
     const stripeType = error && typeof error === 'object' && 'type' in error && typeof error.type === 'string' ? error.type : undefined
-    const category = stripeType?.startsWith('Stripe') ? 'stripe' : 'internal'
-    console.error('stripe_connect_failed', { category, code: stripeCode ?? 'unknown' })
+    const statusCode = error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number'
+      ? error.statusCode
+      : typeof raw?.statusCode === 'number' ? raw.statusCode : undefined
+    const category = stripeType?.startsWith('Stripe') || stripeCode ? 'stripe' : 'internal'
+    console.error('stripe_connect_failed', { category, step: stripeStep, code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown' })
     res.status(500).json({ error: '受取設定を開始できませんでした。しばらくしてから再度お試しください。', code: category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error' })
   }
 }
