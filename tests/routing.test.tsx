@@ -27,6 +27,10 @@ vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () 
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath } from '../src/app/routes'
 
+it('recognizes the public MAP permalink', () => {
+  expect(isPlatformPath('/map')).toBe(true)
+})
+
 beforeEach(() => {
   const storage = new JSDOM('', { url: 'http://localhost' }).window
   vi.stubGlobal('localStorage', storage.localStorage)
