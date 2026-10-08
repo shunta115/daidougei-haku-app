@@ -32,6 +32,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   const [status, setStatus] = useState<ConnectStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null)
   const inFlight = useRef(false)
   const lastChecked = useRef(0)
   const refresh = useCallback(async () => {
@@ -66,6 +67,8 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
       const result = await connectRequest(performerId) as { url?: string }
       const url = new URL(result.url ?? '')
       if (url.protocol !== 'https:' || !(url.hostname === 'stripe.com' || url.hostname.endsWith('.stripe.com'))) throw new Error('Invalid response')
+      // Keep a visible, user-initiated link as a fallback for in-app browsers.
+      setOnboardingUrl(url.href)
       window.location.assign(url.href)
     } catch (e) {
       setError(registrationError(e, t('payoutOpenFail')))
@@ -84,6 +87,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <SystemFeeExplain compact />
     {status?.underReview && !status.needsInformation && !status.complete ? <p className="pl-muted">{t('payoutReviewNote')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
+    {onboardingUrl ? <p className="pl-muted">Stripe画面が開かない場合は、下のリンクを長押ししてSafariなどのブラウザで開いてください。<a href={onboardingUrl} target="_blank" rel="noopener noreferrer">Stripeの登録画面を開く</a></p> : null}
     {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <p className="pl-muted">{t('salesBankNote')}</p>}
     <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} />{busy ? t('payoutRefreshing') : t('payoutRefresh')}</button>
   </section>
