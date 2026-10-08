@@ -76,8 +76,8 @@ export async function getPerformerPayoutView(
   args: { performerId: string; stripeAccountId: string | null },
 ) {
   const [{ data: tips, error: tipError }, { data: orders, error: orderError }] = await Promise.all([
-    sb.from('tips').select('id, status, gross_amount_yen, amount_cents, performer_share_yen, refunded_amount_yen, dispute_status, settlement_status').eq('performer_id', args.performerId),
-    sb.from('merch_orders').select('id, status, gross_amount_yen, amount_yen, performer_share_yen, refunded_amount_yen, dispute_status, settlement_status').eq('seller_id', args.performerId),
+    sb.from('tips').select('id, status, gross_amount_yen, amount_cents, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('performer_id', args.performerId),
+    sb.from('merch_orders').select('id, status, gross_amount_yen, amount_yen, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('seller_id', args.performerId),
   ])
   const salesMissing = Boolean((tipError && missingColumn(tipError)) || (orderError && missingColumn(orderError)))
   if (tipError && !missingColumn(tipError)) throw tipError
