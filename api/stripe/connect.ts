@@ -18,6 +18,18 @@ function isLiveKeyReadingTestAccount(error: unknown) {
     && message.includes('live mode key')
 }
 
+function safeStripeFailureReason(error: unknown) {
+  if (!error || typeof error !== 'object') return 'unavailable'
+  const candidate = error as StripeErrorLike
+  const message = String(candidate.raw?.message ?? candidate.message ?? '')
+  if (!message) return 'unavailable'
+  return message
+    .replace(/sk_(?:live|test)_[A-Za-z0-9_]+/g, 'sk_[redacted]')
+    .replace(/acct_[A-Za-z0-9]+/g, 'acct_[redacted]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
+    .slice(0, 240)
+}
+
 function accountCreateParams(performerId: string, legacyTestAccountId?: string) {
   return {
     controller: {
@@ -202,7 +214,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? error.statusCode
       : typeof raw?.statusCode === 'number' ? raw.statusCode : undefined
     const category = stripeType?.startsWith('Stripe') || stripeCode ? 'stripe' : 'internal'
-    console.error('stripe_connect_failed', { category, step: stripeStep, code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown' })
+    console.error('stripe_connect_failed', { category, step: stripeStep, code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown', reason: category === 'stripe' ? safeStripeFailureReason(error) : 'internal' })
     res.status(500).json({ error: '受取設定を開始できませんでした。しばらくしてから再度お試しください。', code: category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error' })
   }
 }

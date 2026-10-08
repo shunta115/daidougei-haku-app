@@ -115,14 +115,22 @@ describe('Stripe onboarding without payment changes', () => {
   })
 
   it('returns a safe error when Stripe account retrieval fails', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     fake.retrieve.mockRejectedValueOnce({
       type: 'StripeInvalidRequestError',
-      raw: { code: 'resource_missing', statusCode: 404, message: 'private Stripe detail' },
+      raw: { code: 'resource_missing', statusCode: 404, message: "No such account acct_private123 for sk_live_private456; contact private@example.com" },
     })
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(500)
     expect(res.body).toMatchObject({ code: 'stripe_connect_error' })
-    expect(JSON.stringify(res.body)).not.toContain('private Stripe detail')
+    expect(JSON.stringify(res.body)).not.toContain('private@example.com')
+    const logged = JSON.stringify(log.mock.calls)
+    expect(logged).toContain('acct_[redacted]')
+    expect(logged).toContain('sk_[redacted]')
+    expect(logged).not.toContain('acct_private123')
+    expect(logged).not.toContain('sk_live_private456')
+    expect(logged).not.toContain('private@example.com')
+    log.mockRestore()
     expect(fake.link).not.toHaveBeenCalled()
   })
 
