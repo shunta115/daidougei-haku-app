@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, ExternalLink, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
 import {
   getEventBySlug,
   getEventVoteRule,
@@ -28,6 +28,7 @@ import { AppBackButton } from '../components/AppBackButton'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
+import { DAIDOGEI_HAKU_X_URL, HAKU_OFFICIAL_SITE_PATH } from '../../config/officialLinks'
 import './event.css'
 
 type DetailProps = {
@@ -476,6 +477,8 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     <section className="pl-event-lineup-full" id="event-lineup"><header><p>PERFORMERS</p><h2>{t('eventLineup')}</h2><span>{t('eventLineupLead')}</span></header><div>{performers.map((performer) => { const awards = isAwp ? officialAwpAwards(performer.stage_name) : []; return <article key={performer.id} onClick={() => onOpenPerformer(performer.id)}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}<h3>{performer.stage_name}</h3><p>{performer.genre || 'Performance'}</p>{awards.length ? <div className="awp-awards" onClick={(event) => event.stopPropagation()}><ul>{awards.slice(0, 2).map((award) => <li key={award}>🏆 {award}</li>)}</ul>{awards.length > 2 ? <details><summary>受賞歴をすべて見る</summary><ul>{awards.slice(2).map((award) => <li key={award}>{award}</li>)}</ul></details> : null}</div> : null}{performer.is_live ? <em>{t('navLive')}</em> : null}<button>{awards.length ? 'プロフィール・受賞歴を見る' : t('eventSeeProfile')}</button></article> })}</div></section>
 
     {!isAwp ? <section className="pl-event-map"><MapPin size={26} /><p>EXPLORE</p><h2>{t('eventWhere')}</h2><span>{t('eventWhereLead')}</span><div>{venues.map((venue) => <button key={venue.id} onClick={onOpenMap}><strong>{venue.name_ja}</strong><small>{venue.venue_type === 'food' ? t('eventFood') : venue.blurb_ja || t('eventSeeSchedule')}</small><ChevronRight size={18} /></button>)}</div><button className="pl-event-map__cta" onClick={onOpenMap}><MapPin size={17} />{t('eventOpenMap')}</button></section> : null}
+
+    {isAwp ? <aside className="awp-official-links" aria-label="大道芸博 公式案内"><div><p>OFFICIAL INFORMATION</p><h2>大道芸博の公式案内</h2><span>総合案内は公式サイト、開催変更や速報は公式Xでご確認ください。</span></div><div className="awp-official-links__actions"><a href={HAKU_OFFICIAL_SITE_PATH}>大道芸博公式サイトを見る<ChevronRight size={17} aria-hidden="true" /></a><a href={DAIDOGEI_HAKU_X_URL} target="_blank" rel="noopener noreferrer"><span className="awp-x-mark" aria-hidden="true">X</span><span>公式Xで最新情報を見る</span><ExternalLink size={16} aria-hidden="true" /></a></div></aside> : null}
 
     <section className="pl-event-support"><Gift size={26} /><p>SUPPORT</p><h2>{t('eventSupportTitle')}</h2><span>{t('eventSupportBody')}</span>{myVotes[0] ? <button onClick={() => onTip(myVotes[0])}>{t('eventSupportVoted')}</button> : <button onClick={() => jump('event-lineup')}>{t('eventSupportPick')}</button>}</section>
 

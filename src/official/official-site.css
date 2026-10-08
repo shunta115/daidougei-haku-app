@@ -24,9 +24,13 @@ body.dg-modal-open{overflow:hidden}
 .dg-site .title h1{margin:3px 0 0;font-size:clamp(38px,7vw,72px);line-height:.9;letter-spacing:-.05em}
 .dg-site .title p{margin:8px 0 0;color:#bfc3cb;font-size:13px}
 .dg-site .menu{display:grid;place-items:center;width:44px;height:44px;color:#fff;border:0;background:transparent;cursor:pointer}
+.dg-site .topActions{display:flex;align-items:center;gap:6px}
+.dg-site .officialX{min-height:44px;display:flex;align-items:center;gap:7px;padding:0 12px;border:1px solid rgba(255,255,255,.2);border-radius:999px;color:#fff;text-decoration:none;font-size:12px}
+.dg-site .officialX>span,.dg-site .footerLinks a>span{font-weight:950;font-size:14px}
 .dg-site .siteMenu{position:absolute;z-index:40;top:82px;right:18px;display:grid;min-width:210px;padding:10px;border:1px solid rgba(255,255,255,.15);border-radius:16px;background:rgba(10,14,20,.96);box-shadow:0 18px 50px rgba(0,0,0,.45);backdrop-filter:blur(16px)}
 .dg-site .siteMenu a,.dg-site .siteMenu button{display:flex;align-items:center;gap:8px;padding:12px;border:0;border-radius:10px;background:transparent;color:#fff;text-decoration:none;text-align:left;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
 .dg-site .siteMenu a:hover,.dg-site .siteMenu button:hover{background:rgba(255,255,255,.07)}
+.dg-site .menuX{display:grid;place-items:center;width:20px;height:20px;border:1px solid rgba(255,255,255,.3);border-radius:50%;font-weight:950}
 .dg-site .heroGrid{max-width:980px;margin:28px auto 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,430px);gap:34px;align-items:center}
 .dg-site .heroCopy h2{font-size:clamp(29px,5vw,50px);margin:0 0 12px;line-height:1.15}
 .dg-site .heroCopy p{color:#d9dbe0;line-height:1.75;font-size:15px;max-width:460px}
@@ -72,6 +76,8 @@ body.dg-modal-open{overflow:hidden}
 .dg-site .footerInner{max-width:980px;margin:auto;display:flex;justify-content:space-between;gap:20px;align-items:end}
 .dg-site .footer b{font-size:28px}
 .dg-site .footer small{color:#8e949d}
+.dg-site .footerLinks{display:grid;justify-items:end;gap:12px}
+.dg-site .footerLinks a{display:flex;align-items:center;gap:8px;color:#fff;text-decoration:none;font-size:13px;font-weight:800}
 .dg-site .stickyHAKU{position:fixed;right:18px;bottom:18px;z-index:90;background:#10151c;color:#fff;text-decoration:none;padding:13px 18px;border-radius:999px;border:1px solid #343a43;box-shadow:0 8px 25px rgba(0,0,0,.25);font-size:13px;font-weight:900}
 .dg-site .note{font-size:12px;color:#818892;margin-top:12px;text-align:center}
 .dg-site .dg-image-button{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}
@@ -100,9 +106,13 @@ body.dg-modal-open{overflow:hidden}
   .dg-site .mediaCard img{height:auto;max-height:620px}
   .dg-site .card img{height:330px}
   .dg-site .footerInner{display:block}
+  .dg-site .footerLinks{margin-top:24px;justify-items:start}
   .dg-site .stickyHAKU{left:14px;right:14px;text-align:center;bottom:12px}
   .dg-site{padding-bottom:58px}
   .dg-site .siteMenu{top:70px;right:14px}
+  .dg-site .officialX b{display:none}
+  .dg-site .officialX{width:44px;padding:0;justify-content:center}
+  .dg-site .officialX svg{display:none}
   .dg-site .lightbox{padding:14px}
   .dg-site .lightbox img{max-width:96vw;max-height:84vh}
   .dg-site .lightboxClose{top:-44px;right:2px}

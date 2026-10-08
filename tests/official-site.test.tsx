@@ -11,6 +11,13 @@ it('shows the official event, program and HAKU routes', () => {
   expect(screen.getByText('2026.10.10 - 10.12')).toBeTruthy()
   expect(screen.getByRole('link', { name: /プログラムはこちら/ }).getAttribute('href')).toBe('/events/award-winning-performers-2026')
   expect(screen.getByRole('link', { name: /HAKUを開く/ }).getAttribute('href')).toBe('/')
+  const xLinks = screen.getAllByRole('link', { name: /公式X|開催情報・最新のお知らせ/ })
+  expect(xLinks.length).toBeGreaterThanOrEqual(2)
+  xLinks.forEach((link) => {
+    expect(link.getAttribute('href')).toBe('https://x.com/daidogeihaku')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+  })
 })
 
 it('opens and closes flyer images in an accessible dialog', () => {

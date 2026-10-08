@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Mail, Menu, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Mail, Menu, X } from 'lucide-react'
+import { DAIDOGEI_HAKU_X_URL } from '../config/officialLinks'
 import './official-site.css'
 
 const CONTACT_EMAIL = 'itonorihisa.office@gmail.com'
@@ -94,14 +95,17 @@ export function OfficialSite() {
             <h1 aria-label="DAIDOGEI HAKU！">DAIDOGEIHAKU！</h1>
             <p>大道芸博の公式情報を、ここから。</p>
           </div>
-          <button
-            type="button"
-            className="menu"
-            aria-label="メニューを開く"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? <X size={28} /> : <Menu size={30} />}
-          </button>
+          <div className="topActions">
+            <a className="officialX" href={DAIDOGEI_HAKU_X_URL} target="_blank" rel="noopener noreferrer" aria-label="大道芸博公式Xを新しいタブで開く"><span aria-hidden="true">X</span><b>公式X</b><ExternalLink size={14} aria-hidden="true" /></a>
+            <button
+              type="button"
+              className="menu"
+              aria-label="メニューを開く"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? <X size={28} /> : <Menu size={30} />}
+            </button>
+          </div>
         </div>
 
         {menuOpen ? (
@@ -111,6 +115,7 @@ export function OfficialSite() {
             <a href="#contact" onClick={() => setMenuOpen(false)}>お問い合わせ</a>
             <a href="#history" onClick={() => setMenuOpen(false)}>過去の開催実績</a>
             <a href="#media" onClick={() => setMenuOpen(false)}>メディア掲載</a>
+            <a href={DAIDOGEI_HAKU_X_URL} target="_blank" rel="noopener noreferrer"><span className="menuX" aria-hidden="true">X</span>公式X・最新情報<ExternalLink size={14} aria-hidden="true" /></a>
           </nav>
         ) : null}
 
@@ -268,7 +273,7 @@ export function OfficialSite() {
             <b>大道芸博 officialサイト<br />DAIDOGEIHAKU！</b>
             <div style={{ marginTop: 10 }}>AWP 2026「受賞者たち」</div>
           </div>
-          <small>© 2026 DAIDOGEIHAKU / HAKU</small>
+          <div className="footerLinks"><a href={DAIDOGEI_HAKU_X_URL} target="_blank" rel="noopener noreferrer"><span aria-hidden="true">X</span>開催情報・最新のお知らせ</a><small>© 2026 DAIDOGEIHAKU / HAKU</small></div>
         </div>
       </footer>
 
