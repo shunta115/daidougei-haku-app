@@ -198,6 +198,9 @@ button.submit{
 .footerInner{max-width:980px;margin:auto;display:flex;justify-content:space-between;gap:20px;align-items:end}
 .footer b{font-size:28px}
 .footer small{color:#8e949d}
+.footerLinks{display:grid;justify-items:end;gap:12px}
+.officialX{display:flex;align-items:center;gap:8px;color:#fff;text-decoration:none;font-size:13px;font-weight:800}
+.officialXMark{display:grid;place-items:center;width:24px;height:24px;border:1px solid rgba(255,255,255,.3);border-radius:50%;font-size:12px;font-weight:950}
 .stickyHAKU{
   position:fixed;right:18px;bottom:18px;z-index:990;
   background:#10151c;color:#fff;text-decoration:none;
@@ -228,6 +231,7 @@ button.submit{
   .mediaCard img{height:auto;max-height:620px}
   .card img{height:330px}
   .footerInner{display:block}
+  .footerLinks{margin-top:24px;justify-items:start}
   .stickyHAKU{left:14px;right:14px;text-align:center;bottom:12px}
   body{padding-bottom:58px}
 }
@@ -437,7 +441,10 @@ img[data-popup="true"]:hover{
         <b>大道芸博 officialサイト<br>DAIDOGEIHAKU！</b>
         <div style="margin-top:10px">AWP 2026「受賞者たち」</div>
       </div>
-      <small>© 2026 DAIDOGEIHAKU / HAKU</small>
+      <div class="footerLinks">
+        <a class="officialX" href="https://x.com/daidogeihaku" target="_blank" rel="noopener noreferrer" aria-label="大道芸博公式Xを新しいタブで開く"><span class="officialXMark" aria-hidden="true">X</span>開催情報・最新のお知らせ ↗</a>
+        <small>© 2026 DAIDOGEIHAKU / HAKU</small>
+      </div>
     </div>
   </footer>
 </div>
