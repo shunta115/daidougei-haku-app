@@ -124,7 +124,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     res.status(200).json({ url: link.url })
-  } catch {
-    res.status(500).json({ error: '受取設定を確認できませんでした。時間をおいて再度お試しください。' })
+  } catch (error) {
+    // Do not log Stripe request payloads, identity documents, account details or credentials.
+    const stripeCode = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : undefined
+    const stripeType = error && typeof error === 'object' && 'type' in error && typeof error.type === 'string' ? error.type : undefined
+    const category = stripeType?.startsWith('Stripe') ? 'stripe' : 'internal'
+    console.error('stripe_connect_failed', { category, code: stripeCode ?? 'unknown' })
+    res.status(500).json({ error: '受取設定を開始できませんでした。しばらくしてから再度お試しください。', code: category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error' })
   }
 }
