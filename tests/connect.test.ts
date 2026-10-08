@@ -104,4 +104,16 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('private database detail')
   })
+
+  it('returns a safe error when Stripe account retrieval fails', async () => {
+    fake.retrieve.mockRejectedValueOnce({
+      type: 'StripeInvalidRequestError',
+      raw: { code: 'resource_missing', statusCode: 404, message: 'private Stripe detail' },
+    })
+    const res = await request({ performerId: 'performer-fixture' })
+    expect(res.code).toBe(500)
+    expect(res.body).toMatchObject({ code: 'stripe_connect_error' })
+    expect(JSON.stringify(res.body)).not.toContain('private Stripe detail')
+    expect(fake.link).not.toHaveBeenCalled()
+  })
 })
