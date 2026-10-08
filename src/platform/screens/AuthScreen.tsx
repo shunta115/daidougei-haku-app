@@ -17,7 +17,7 @@ type Props = {
 export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false }: Props) {
   const { t } = useLang()
   const { passwordRecovery, sendPasswordReset, signIn, signUp, updatePassword } = useAuth()
-  const [mode, setMode] = useState<'in' | 'up' | 'reset' | 'new-password'>(() => passwordRecovery ? 'new-password' : 'up')
+  const [mode, setMode] = useState<'in' | 'up' | 'reset' | 'new-password'>(() => passwordRecovery ? 'new-password' : 'in')
   const [role] = useState(initialRole)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -110,7 +110,7 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
           <input className="pl-input" name="email" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label> : null}
         {mode !== 'reset' ? <label><span className="pl-label">{mode === 'new-password' ? t('authPasswordNew') : t('password')}{mode === 'up' ? t('authPasswordHint') : ''}</span>
-          <input className="pl-input" name="password" type="password" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input className="pl-input" name="password" type="password" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} required minLength={mode === 'new-password' ? 8 : 6} value={password} onChange={(e) => setPassword(e.target.value)} />
         </label> : null}
         {info ? <p className="pl-registration__notice" role="status">{info}</p> : null}
         {error ? <p className="pl-error" role="alert">{error}</p> : null}
@@ -118,7 +118,8 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
           {busy ? t('processing') : mode === 'in' ? t('authSubmitLogin') : mode === 'reset' ? t('authSubmitReset') : mode === 'new-password' ? t('authSubmitUpdate') : role === 'performer' ? t('authSubmitPerformer') : t('authSubmitCreate')}
         </button>
       </form>
-      {mode !== 'new-password' ? <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => { setMode(mode === 'in' || mode === 'reset' ? 'up' : 'in'); setError(null); setInfo(null) }}>
+      {mode === 'new-password' ? <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => { setMode('in'); setError(null); setInfo(null); setPassword('') }}>{t('authToLogin')}</button> : null}
+      {mode !== 'new-password' ? <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => { setMode(mode === 'in' ? 'up' : 'in'); setError(null); setInfo(null) }}>
         {mode === 'in' || mode === 'reset' ? t('authToSignUp') : t('authToLogin')}
       </button> : null}
       {mode === 'in' ? <button type="button" className="pl-registration__text-button" disabled={busy} onClick={() => { setMode('reset'); setError(null); setInfo(null); setPassword('') }}>{t('authForgot')}</button> : null}
