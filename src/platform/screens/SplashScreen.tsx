@@ -3,6 +3,7 @@ import { ArrowRight, ExternalLink, Volume2, VolumeX } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { useLang } from '../../i18n/LangProvider'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
+import { HAKU_OFFICIAL_SITE_PATH } from '../../config/officialLinks'
 
 const HERO_POSTER = '/brand/haku-official.jpg'
 const HERO_2024 = '/videos/haku-2024.mp4'
@@ -123,7 +124,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       ) : null}
       <div className="pl-splash__top">
         <div className="pl-splash__top-actions">
-          <a className="pl-splash__official" href="/official">
+          <a className="pl-splash__official" href={HAKU_OFFICIAL_SITE_PATH}>
               <span><small>OFFICIAL WEBSITE</small>大道芸博公式サイトはこちら</span>
               <ExternalLink size={16} aria-hidden="true" />
           </a>

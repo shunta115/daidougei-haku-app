@@ -130,6 +130,10 @@ it('shows a readable hero and opens the official flyer without using it as the b
   const image = flyer.querySelector('img')
   expect(image?.getAttribute('src')).toBe('/events/award-winning-performers-2026/official-flyer-2026.webp')
   expect(image?.getAttribute('alt')).toBe('受賞者たち Presented by 大道芸博 2026 公式チラシ')
+  expect(screen.getByRole('link', { name: /大道芸博公式サイトを見る/ }).getAttribute('href')).toBe('/official')
+  const officialX = screen.getByRole('link', { name: /公式Xで最新情報を見る/ })
+  expect(officialX.getAttribute('href')).toBe('https://x.com/daidogeihaku')
+  expect(officialX.getAttribute('target')).toBe('_blank')
 })
 
 it('allows anonymous event viewing while hiding unpublished intermediate results', async () => {
