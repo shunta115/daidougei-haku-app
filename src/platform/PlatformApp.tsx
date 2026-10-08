@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EVENTS_PATH, FESTIVAL_PATH, PASSWORD_RESET_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, MAP_PATH, PASSWORD_RESET_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
@@ -167,7 +167,7 @@ export function initialGuestScreen(): PlatformScreen {
     const eventRoute = parseEventsPath(window.location.pathname)
     if (eventRoute?.kind === 'vote') return 'event-vote'
     if (eventRoute?.kind === 'detail') return 'event-detail'
-    if (window.location.pathname === FESTIVAL_PATH) return 'map-schedule'
+    if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
     if (q.get('profile')) return 'profile'
@@ -241,7 +241,7 @@ function PlatformShell() {
       }
       const eventRoute = parseEventsPath(window.location.pathname)
       if (!eventRoute) {
-        if (window.location.pathname === FESTIVAL_PATH) setScreen('map-schedule')
+        if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) setScreen('map-schedule')
         else if (window.location.pathname === EVENTS_PATH) setScreen('event-list')
         else if (window.location.pathname === '/' || window.location.pathname === PLATFORM_PATH) setScreen('fan-home')
         return
@@ -626,6 +626,11 @@ function PlatformShell() {
     setScreen('event-vote')
   }
 
+  const openMap = () => {
+    window.history.pushState({}, '', MAP_PATH)
+    setScreen('map-schedule')
+  }
+
   if (!user) {
     let guestBody: ReactNode = null
 
@@ -636,7 +641,7 @@ function PlatformShell() {
           onWatchLive={openWatch}
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
-          onOpenMap={() => setScreen('map-schedule')}
+          onOpenMap={openMap}
           onOpenEvent={openEvent}
           onOpenNotifications={() => setScreen('auth')}
           onOpenTitle={() => setShowSplash(true)}
@@ -705,9 +710,9 @@ function PlatformShell() {
     } else if (screen === 'event-list') {
       guestBody = <EventListScreen onOpen={openEvent} />
     } else if (screen === 'event-detail' && eventSlug) {
-      guestBody = <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
+      guestBody = <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={openMap} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
     } else if (screen === 'event-vote' && eventSlug) {
-      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} />
+      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={openMap} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
@@ -753,6 +758,7 @@ function PlatformShell() {
                   setScreen('auth')
                   return
                 }
+                if (key === 'map-schedule') { openMap(); return }
                 setScreen(key as PlatformScreen)
               }}
             />
@@ -837,7 +843,7 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
+            onOpenMap={openMap}
             onOpenEvent={openEvent}
             onOpenNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
@@ -874,10 +880,10 @@ function PlatformShell() {
         body = <EventListScreen onOpen={openEvent} />
         break
       case 'event-detail':
-        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={openMap} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'event-vote':
-        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={openMap} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'notifications':
         body = (
@@ -968,7 +974,7 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
+            onOpenMap={openMap}
             onOpenEvent={openEvent}
             onOpenNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
@@ -1040,6 +1046,7 @@ function PlatformShell() {
             setMerchProductId(null)
             leavePerformerUrl()
             if (key === 'event-list') { openEventList(); return }
+            if (key === 'map-schedule') { openMap(); return }
             setScreen(key as PlatformScreen)
           }}
         />
