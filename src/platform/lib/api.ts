@@ -41,7 +41,7 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
   if (filters.liveOnly) q = q.eq('is_live', true)
   const { data, error } = await q.order('is_live', { ascending: false }).limit(100)
   if (error) throw error
-  const rows = (data as Performer[]) ?? []
+  const rows = (data as unknown as Performer[]) ?? []
   const trimmed = query.trim().toLowerCase()
   const genre = filters.genre?.trim().toLowerCase()
   const country = filters.country?.trim().toLowerCase()
@@ -65,7 +65,7 @@ export async function getPerformer(id: string, includePublicTest = false): Promi
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', id).maybeSingle()
   if (error) throw error
-  const row = (data as Performer) ?? null
+  const row = (data as unknown as Performer) ?? null
   if (!row || !row.is_approved || (!includePublicTest && isPublicTestPerformer(row))) return null
   return row
 }
@@ -79,7 +79,7 @@ export async function listLivePerformers(): Promise<Performer[]> {
     .eq('is_live', true)
     .order('live_started_at', { ascending: false })
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
+  return ((data as unknown as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
 }
 
 export type LiveRankRow = {
@@ -509,7 +509,7 @@ export async function listFollowedPerformers(fanId: string): Promise<Performer[]
   if (ids.length === 0) return []
   const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
-  return (data as Performer[]) ?? []
+  return (data as unknown as Performer[]) ?? []
 }
 
 export async function unfollow(fanId: string, performerId: string) {
@@ -546,7 +546,7 @@ export async function listPendingPerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', false).order('created_at')
   if (error) throw error
-  return (data as Performer[]) ?? []
+  return (data as unknown as Performer[]) ?? []
 }
 
 export type PerformerRegistration = Performer & { account_status: string }
@@ -559,8 +559,10 @@ export async function listPerformerRegistrations(): Promise<PerformerRegistratio
   ])
   if (error) throw error
   if (profileError) throw profileError
-  const statuses = new Map((profiles ?? []).map((p) => [p.id, p.status]))
-  return (performers ?? []).map((p) => ({ ...p, account_status: statuses.get(p.id) ?? 'unknown' })) as PerformerRegistration[]
+  const profileRows = (profiles ?? []) as unknown as Array<{ id: string; status: string }>
+  const performerRows = (performers ?? []) as unknown as Performer[]
+  const statuses = new Map(profileRows.map((p) => [p.id, p.status]))
+  return performerRows.map((p) => ({ ...p, account_status: statuses.get(p.id) ?? 'unknown' })) as PerformerRegistration[]
 }
 
 export async function approvePerformer(id: string) {
@@ -701,7 +703,7 @@ export async function listOshiPerformers(fanId: string): Promise<Performer[]> {
   if (ids.length === 0) return []
   const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
-  return (data as Performer[]) ?? []
+  return (data as unknown as Performer[]) ?? []
 }
 
 export type FeaturedEvent = {
@@ -1042,7 +1044,7 @@ export async function listApprovedPerformers(includePublicTest = false): Promise
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((p) => includePublicTest || !isPublicTestPerformer(p))
+  return ((data as unknown as Performer[]) ?? []).filter((p) => includePublicTest || !isPublicTestPerformer(p))
 }
 
 function resolveEventVenue(row: EventVenueRow): EventVenueRow {
@@ -1107,7 +1109,7 @@ export async function listApprovedPerformersByIds(ids: string[]): Promise<Perfor
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', unique).eq('is_approved', true)
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((performer) => !isPublicTestPerformer(performer))
+  return ((data as unknown as Performer[]) ?? []).filter((performer) => !isPublicTestPerformer(performer))
 }
 
 export async function upsertEventSlot(row: Omit<EventSlotRow, 'id'> & { id?: string }) {
@@ -1165,7 +1167,7 @@ export async function listEventLineupPerformers(eventId: string): Promise<Perfor
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (error) throw error
-  const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
+  const byId = new Map(((data as unknown as Performer[]) ?? []).map((performer) => [performer.id, performer]))
   return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
 }
 
@@ -1176,7 +1178,7 @@ export async function listVotingEligibleEventLineupPerformers(eventId: string): 
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (error) throw error
-  const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
+  const byId = new Map(((data as unknown as Performer[]) ?? []).map((performer) => [performer.id, performer]))
   return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
 }
 
@@ -1217,7 +1219,7 @@ export async function listVoteRankingNamed(eventId: string): Promise<Array<{ per
   const ids = ranks.map((r) => r.performer_id)
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids)
   if (error) throw error
-  const map = new Map(((data as Performer[]) ?? []).map((p) => [p.id, p]))
+  const map = new Map(((data as unknown as Performer[]) ?? []).map((p) => [p.id, p]))
   return ranks
     .map((r) => {
       const performer = map.get(r.performer_id)

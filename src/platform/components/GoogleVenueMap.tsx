@@ -55,7 +55,7 @@ function loadGoogleMaps(apiKey: string, lang: Lang) {
 
   window.__daidougeiGoogleMaps = new Promise((resolve, reject) => {
     const callback = `__daidougeiMapsReady_${language.replace('-', '_')}`
-    ;(window as Window & { [key: string]: unknown })[callback] = () => {
+    ;(window as unknown as Window & { [key: string]: unknown })[callback] = () => {
       if (window.google?.maps) resolve(window.google)
       else reject(new Error('Google Maps could not start'))
     }

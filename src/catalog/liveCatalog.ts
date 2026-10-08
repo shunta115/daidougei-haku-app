@@ -199,7 +199,7 @@ export async function refreshLiveCatalog(): Promise<void> {
         isStream: Boolean(s.is_stream),
       }))
 
-    const allPlatform = (performerRes.data ?? []) as PlatformPerformer[]
+    const allPlatform = (performerRes.data ?? []) as unknown as PlatformPerformer[]
     performers = allPlatform.map(platformToFestival)
 
     const fromSlots = Array.from(new Set(slots.map((s) => s.date))).sort()
