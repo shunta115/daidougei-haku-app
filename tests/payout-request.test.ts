@@ -8,6 +8,7 @@ const fake = vi.hoisted(() => ({
   inserted: null as Record<string, unknown> | null,
   stripeAvailable: 20_000,
   createTransfer: vi.fn(),
+  selectedColumns: {} as Record<string, string>,
 }))
 
 vi.mock('../api/stripe/_shared.js', () => ({}))
@@ -28,18 +29,21 @@ function selectTable(table: string) {
 
 const sb = {
   from: (table: string) => ({
-    select: () => ({
-      eq: () => {
-        const result = selectTable(table)
-        return {
-          order: () => ({
-            limit: async () => result,
-          }),
-          then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) =>
-            Promise.resolve(result).then(resolve, reject),
-        }
-      },
-    }),
+    select: (columns: string) => {
+      fake.selectedColumns[table] = columns
+      return {
+        eq: () => {
+          const result = selectTable(table)
+          return {
+            order: () => ({
+              limit: async () => result,
+            }),
+            then: (resolve: (value: unknown) => void, reject?: (reason: unknown) => void) =>
+              Promise.resolve(result).then(resolve, reject),
+          }
+        },
+      }
+    },
     insert: (row: Record<string, unknown>) => ({
       select: () => ({
         maybeSingle: async () => {
@@ -74,6 +78,7 @@ beforeEach(() => {
   fake.inserted = null
   fake.stripeAvailable = 20_000
   fake.createTransfer.mockResolvedValue({ id: 'tr_test' })
+  fake.selectedColumns = {}
 })
 
 describe('requestPerformerPayout', () => {
@@ -122,6 +127,22 @@ describe('requestPerformerPayout', () => {
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'fee_adjust_failed', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(res.status).toBe(400)
+    expect(fake.createTransfer).not.toHaveBeenCalled()
+  })
+
+  it('loads actual fee and fee rate columns needed to recalculate a partial refund', async () => {
+    fake.tips = [{
+      id: 't1', status: 'succeeded', settlement_status: 'settled',
+      gross_amount_yen: 12_000, stripe_fee_yen: 400, haku_fee_bps: 1500,
+      performer_share_yen: 9860, refunded_amount_yen: 2000, dispute_status: null,
+    }]
+    const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(res.status).toBe(400)
+    expect(res.body).toMatchObject({ availableYen: 8160 })
+    expect(fake.selectedColumns.tips).toContain('stripe_fee_yen')
+    expect(fake.selectedColumns.tips).toContain('haku_fee_bps')
+    expect(fake.selectedColumns.merch_orders).toContain('stripe_fee_yen')
+    expect(fake.selectedColumns.merch_orders).toContain('haku_fee_bps')
     expect(fake.createTransfer).not.toHaveBeenCalled()
   })
 
