@@ -129,7 +129,6 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
   const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
-  const selectedSlots = useMemo(() => slots.filter((slot) => (!selectedVenue || slot.venue_id === selectedVenue) && String(slot.date).slice(0, 10) === selectedDate), [slots, selectedVenue, selectedDate])
   const dates = useMemo(() => {
     const values = [...new Set(slots.map((slot) => String(slot.date).slice(0, 10)))]
     return values.length ? values : ['2026-10-10', '2026-10-11', '2026-10-12']

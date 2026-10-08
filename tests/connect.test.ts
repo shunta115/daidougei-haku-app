@@ -4,7 +4,7 @@ const fake = vi.hoisted(() => ({
   user: { id: 'performer-fixture' } as { id: string } | null,
   profile: { role: 'performer', status: 'pending' },
   performer: { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false },
-  account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: { disabled_reason: null, currently_due: [], pending_verification: [] } },
+  account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } },
   saveError: null as null | { message: string },
   update: vi.fn(), create: vi.fn(), retrieve: vi.fn(), link: vi.fn(),
 }))
@@ -12,7 +12,7 @@ const fake = vi.hoisted(() => ({
 vi.mock('../api/stripe/_shared.js', () => ({
   requireAuthUser: vi.fn(async (_req, res) => { if (!fake.user) res.status(401).json({ error: 'Authorization required' }); return fake.user }),
   getAppUrl: () => 'https://app.example.test',
-  isConnectedAccountChargeReady: (account: typeof fake.account) => Boolean(account.charges_enabled && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason),
+  isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
   getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve }, accountLinks: { create: fake.link } }),
   getAdminSupabase: () => ({ from: (table: string) => ({
     select: () => ({ eq: () => ({ single: async () => ({ data: table === 'profiles' ? fake.profile : fake.performer, error: null }) }) }),
@@ -34,7 +34,7 @@ beforeEach(() => {
   fake.user = { id: 'performer-fixture' }
   fake.profile = { role: 'performer', status: 'pending' }
   fake.performer = { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false }
-  fake.account = { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: { disabled_reason: null, currently_due: [], pending_verification: [] } }
+  fake.account = { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } }
   fake.saveError = null
   fake.retrieve.mockImplementation(async () => fake.account)
   fake.create.mockResolvedValue({ id: 'acct_new_fixture' })
@@ -69,6 +69,16 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('acct_fixture')
+  })
+  it('distinguishes information required, review, and restricted states', async () => {
+    fake.account.requirements.currently_due = ['individual.verification.document']
+    expect((await request({ performerId: 'performer-fixture', action: 'status' })).body).toMatchObject({ complete: false, needsInformation: true, state: 'needs_information' })
+    fake.account.requirements.currently_due = []
+    fake.account.requirements.pending_verification = ['individual.verification.document']
+    expect((await request({ performerId: 'performer-fixture', action: 'status' })).body).toMatchObject({ complete: false, underReview: true, state: 'under_review' })
+    fake.account.requirements.pending_verification = []
+    fake.account.requirements.disabled_reason = 'requirements.past_due'
+    expect((await request({ performerId: 'performer-fixture', action: 'status' })).body).toMatchObject({ complete: false, restricted: true, state: 'restricted' })
   })
   it('does not treat submitted details as completion when payouts are disabled', async () => {
     fake.account.payouts_enabled = false

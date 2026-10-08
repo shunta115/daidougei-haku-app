@@ -18,7 +18,7 @@ import {
 } from './_finalizeMerchOrder.js'
 import { markPerformerPayout, markPerformerTransfer } from './_payouts.js'
 import { settleCheckoutPayment, settleSaleByCharge } from './_settlement.js'
-import { getAdminSupabase, getStripe } from './_shared.js'
+import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from './_shared.js'
 
 export const config = {
   api: { bodyParser: false },
@@ -235,12 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (event.type === 'account.updated') {
         const account = event.data.object as Stripe.Account
-        const ready = Boolean(
-          account.charges_enabled &&
-            account.payouts_enabled &&
-            account.details_submitted &&
-            !account.requirements?.disabled_reason,
-        )
+        const ready = isConnectedAccountTransferReady(account)
         await sb
           .from('performers')
           .update({ stripe_onboarding_complete: ready })

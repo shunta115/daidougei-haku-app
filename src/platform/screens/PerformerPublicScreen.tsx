@@ -104,7 +104,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [busy, setBusy] = useState(false)
   const [section, setSection] = useState<SectionId>('media')
   const [qrOpen, setQrOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
@@ -135,7 +134,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       .catch(() => { if (alive) { setSlots([]); setVenues([]) } })
     const timer = window.setInterval(() => {
       getPerformer(performerId)
-        .then((row) => { if (alive) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
+        .then((row) => { if (alive && row) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
         .catch(() => undefined)
     }, 20000)
     return () => { alive = false; window.clearInterval(timer) }
@@ -172,11 +171,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     } finally {
       setBusy(false)
     }
-  }
-
-  const showToast = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast(null), 2200)
   }
 
   const shareProfile = async () => {
@@ -460,7 +454,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       </div>
 
       {error ? <p className="pl-error">{error}</p> : null}
-      {toast ? <p className="hp-toast" role="status">{toast}</p> : null}
 
       {qrOpen ? (
         <div className="hp-qr" role="dialog" aria-modal="true" aria-label={t('hpQr')}>

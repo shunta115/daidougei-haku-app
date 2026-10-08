@@ -44,7 +44,7 @@ async function loadProfile(userId: string): Promise<{ profile: Profile | null; p
   if (profile?.role === 'performer') {
     const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).maybeSingle()
     if (error) throw error
-    performer = (data as Performer) ?? null
+    performer = (data as unknown as Performer) ?? null
     if (!performer) {
       const stageName = profile.display_name?.trim() || 'Performer'
       const { error: insertError } = await sb
@@ -53,11 +53,11 @@ async function loadProfile(userId: string): Promise<{ profile: Profile | null; p
       if (insertError && insertError.code !== '23505') throw insertError
       const { data: inserted, error: reloadError } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).single()
       if (reloadError) throw reloadError
-      performer = (inserted as Performer) ?? null
+      performer = (inserted as unknown as Performer) ?? null
     }
   } else if (profile?.role === 'admin') {
     const { data } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).maybeSingle()
-    performer = (data as Performer) ?? null
+    performer = (data as unknown as Performer) ?? null
   }
   return { profile: (profile as Profile) ?? null, performer }
 }

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountChargeReady, requireAuthUser } from './_shared.js'
+import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady, requireAuthUser } from './_shared.js'
 import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       const account = await stripe.accounts.retrieve(accountId)
-      if (!isConnectedAccountChargeReady(account)) {
+      if (!isConnectedAccountTransferReady(account)) {
         res.status(409).json({ error: '受取設定に確認が必要です。Stripeの登録状況を確認してください。' })
         return
       }
@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     if (action === 'status' && !accountId) {
-      res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false })
+      res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, transfersEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false, restricted: false, state: 'not_started' })
       return
     }
     const stripe = getStripe()
@@ -88,7 +88,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (saveError) throw saveError
     } else {
       const account = await stripe.accounts.retrieve(accountId)
-      const complete = isConnectedAccountChargeReady(account)
+      const complete = isConnectedAccountTransferReady(account)
+      const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
+      const underReview = Boolean(account.requirements?.pending_verification?.length)
+      const restricted = Boolean(account.requirements?.disabled_reason)
+      const transfersEnabled = account.capabilities?.transfers === 'active'
+      const state = restricted ? 'restricted' : complete ? 'ready' : needsInformation ? 'needs_information' : underReview ? 'under_review' : 'in_progress'
       const { error: saveError } = await sb
         .from('performers')
         .update({ stripe_onboarding_complete: complete })
@@ -99,9 +104,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           connected: true, complete,
           chargesEnabled: account.charges_enabled,
           payoutsEnabled: account.payouts_enabled,
+          transfersEnabled,
           detailsSubmitted: account.details_submitted,
-          needsInformation: Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length),
-          underReview: Boolean(account.requirements?.pending_verification?.length),
+          needsInformation,
+          underReview,
+          restricted,
+          state,
         })
         return
       }

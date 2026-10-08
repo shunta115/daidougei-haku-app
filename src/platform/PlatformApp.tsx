@@ -35,6 +35,7 @@ import { AdminVoteDeskScreen } from './screens/AdminVoteDeskScreen'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
+import { useTipConfirmation } from './lib/useTipConfirmation'
 import { PERFORMER_REGISTER_PATH } from './lib/onboarding'
 import './platform.css'
 import './screens/registration.css'
@@ -175,7 +176,7 @@ export function initialGuestScreen(): PlatformScreen {
     if (q.get('live') === '1') return 'live-list'
     if (q.get('merch') === '1') return 'merch-list'
     if (q.get('account') === '1') return 'auth'
-    if (q.get('auth') === '1' || q.get('stripe')) return 'auth'
+    if (q.get('auth') === '1') return 'auth'
   } catch {
     /* ignore */
   }
@@ -211,8 +212,10 @@ function PlatformShell() {
     const eventRoute = parseEventsPath(window.location.pathname)
     return eventRoute && eventRoute.kind !== 'list' ? eventRoute.slug : null
   })
-  const [tipFlash, setTipFlash] = useState<string | null>(null)
-  const [tipFollowId, setTipFollowId] = useState<string | null>(null)
+  const [checkoutFlash, setTipFlash] = useState<string | null>(null)
+  const tipConfirmation = useTipConfirmation()
+  const tipFlash = tipConfirmation.message ?? checkoutFlash
+  const tipFollowId = tipConfirmation.performerId
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
   const [showSplash, setShowSplash] = useState(() => {
     if (hasPasswordRecoveryParams()) return false
@@ -320,33 +323,27 @@ function PlatformShell() {
       else if (merchProduct) setScreen('merch-detail')
       else if (merch === '1') setScreen('merch-list')
       else if (account === '1') setScreen('auth')
-      else setScreen('auth')
+      else if (!stripe) setScreen('auth')
       url.searchParams.delete('auth')
     }
     if (tip === 'success') {
-      setTipFlash('tipSuccess')
-      setTipFollowId(pid)
-      trackProductEvent('tip_complete', { performerId: pid })
-      if (sessionId) window.sessionStorage.setItem('pl-tip-confirm', sessionId)
+      // Success is displayed only after the signed webhook has finalized the tip.
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     } else if (tip === 'cancel') {
       setTipFlash('tipCancelled')
-      setTipFollowId(null)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     }
     if (merch === 'success') {
       setTipFlash('merchSuccess')
-      setTipFollowId(null)
       trackProductEvent('merch_purchase', { performerId: pid, props: { product_id: merchProductResultId } })
       if (sessionId) window.sessionStorage.setItem('pl-merch-confirm', sessionId)
       setScreen('merch-list')
     } else if (merch === 'cancel') {
       setTipFlash('merchCancelled')
-      setTipFollowId(null)
       setScreen('merch-list')
     }
     if (tip || watch || auth || tipTo || stripe || liveList || merch || merchProduct || account) {
@@ -365,21 +362,6 @@ function PlatformShell() {
       window.history.replaceState({}, '', url.pathname + url.search + url.hash)
     }
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    const sessionId = window.sessionStorage.getItem('pl-tip-confirm')
-    if (!sessionId) return
-    window.sessionStorage.removeItem('pl-tip-confirm')
-    void (async () => {
-      const headers = await supabaseAuthHeaders()
-      await fetch('/api/stripe/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ sessionId }),
-      }).catch(() => undefined)
-    })()
-  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -740,7 +722,8 @@ function PlatformShell() {
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
-                {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+                {tipConfirmation.message ? t(tipConfirmation.message) : tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+                {tipConfirmation.canRetry ? <button type="button" className="pl-btn pl-btn--ghost" onClick={tipConfirmation.retry}>{t('tipConfirmationRetry')}</button> : null}
                 {tipFlash === 'tipSuccess' && tipFollowId ? (
                   <button
                     type="button"
@@ -1025,7 +1008,8 @@ function PlatformShell() {
         {showNav && screen !== 'fan-home' && navRole !== 'fan' && navRole !== 'performer' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' || role === 'performer' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
-            {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+            {tipConfirmation.message ? t(tipConfirmation.message) : tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+            {tipConfirmation.canRetry ? <button type="button" className="pl-btn pl-btn--ghost" onClick={tipConfirmation.retry}>{t('tipConfirmationRetry')}</button> : null}
             {tipFlash === 'tipSuccess' && tipFollowId ? (
               <button
                 type="button"
