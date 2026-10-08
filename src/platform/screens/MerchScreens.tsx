@@ -344,6 +344,7 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
       <AppBackButton className="pl-btn pl-btn--ghost" onClick={onBack} label="戻る" />
       <h1 className="pl-h1">グッズ管理</h1>
       <p className="pl-muted">パフォーマンスを好きになってくれたファンへ、あなたのオリジナルグッズを届けられます。</p>
+      {!performer.stripe_onboarding_complete ? <p className="pl-registration__notice" role="status">商品画像・説明・在庫は今から登録して下書き保存できます。Stripe受取設定が完了するまでは、お客様のキャッシュレス購入は開始されません。</p> : <p className="pl-registration__notice" role="status">Stripe受取設定済みです。販売中の商品はお客様がキャッシュレスで購入できます。</p>}
       {msg ? <p className="pl-muted">{msg}</p> : null}
       {error ? <p className="pl-error">{error}</p> : null}
 

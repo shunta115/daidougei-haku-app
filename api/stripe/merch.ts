@@ -5,7 +5,7 @@ import {
   getAppUrl,
   getStripe,
   requireAuthUser,
-  requireConnectedAccountChargeReady,
+  isConnectedAccountTransferReady,
 } from './_shared.js'
 
 function missingColumn(error: unknown) {
@@ -76,8 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const stripe = getStripe()
-    const account = await requireConnectedAccountChargeReady(stripe, seller.stripe_account_id)
-    if (!account) {
+    const account = await stripe.accounts.retrieve(seller.stripe_account_id)
+    if (!isConnectedAccountTransferReady(account)) {
       await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', seller.id)
       res.status(400).json({ code: 'seller_checkout_unavailable' })
       return

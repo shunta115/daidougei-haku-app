@@ -175,7 +175,7 @@ export function initialGuestScreen(): PlatformScreen {
     if (q.get('live') === '1') return 'live-list'
     if (q.get('merch') === '1') return 'merch-list'
     if (q.get('account') === '1') return 'auth'
-    if (q.get('auth') === '1' || q.get('stripe')) return 'auth'
+    if (q.get('auth') === '1') return 'auth'
   } catch {
     /* ignore */
   }
@@ -320,7 +320,7 @@ function PlatformShell() {
       else if (merchProduct) setScreen('merch-detail')
       else if (merch === '1') setScreen('merch-list')
       else if (account === '1') setScreen('auth')
-      else setScreen('auth')
+      else if (!stripe) setScreen('auth')
       url.searchParams.delete('auth')
     }
     if (tip === 'success') {

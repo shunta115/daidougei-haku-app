@@ -80,6 +80,21 @@ export function isConnectedAccountChargeReady(account: Stripe.Account) {
   )
 }
 
+/** Readiness for Platform -> Connected Account transfers.
+ * Platform charges do not require the connected account to accept charges.
+ */
+export function isConnectedAccountTransferReady(account: Stripe.Account) {
+  return Boolean(
+    account.details_submitted &&
+      account.payouts_enabled &&
+      account.capabilities?.transfers === 'active' &&
+      !account.requirements?.disabled_reason &&
+      !account.requirements?.currently_due?.length &&
+      !account.requirements?.past_due?.length &&
+      !account.requirements?.pending_verification?.length,
+  )
+}
+
 export async function requireConnectedAccountChargeReady(
   stripe: Stripe,
   accountId: string | null | undefined,

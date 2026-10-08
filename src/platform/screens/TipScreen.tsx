@@ -25,7 +25,9 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const checkoutRequestId = useRef('')
-  const supportReady = Boolean(p?.is_approved && p?.stripe_onboarding_complete)
+  // Tips are Platform charges. Connected Account onboarding is required only
+  // before a later transfer, not before a guest can support an approved artist.
+  const supportReady = Boolean(p?.is_approved)
 
   const setSafeAmount = (value: number) => {
     setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))

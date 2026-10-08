@@ -7,7 +7,6 @@ import {
   getIntSetting,
   getOptionalAuthUser,
   getStripe,
-  requireConnectedAccountChargeReady,
 } from './_shared.js'
 
 function missingColumn(error: unknown) {
@@ -66,21 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(403).json({ code: 'performer_support_unavailable' })
       return
     }
-    if (!performer.stripe_account_id) {
-      res.status(400).json({ code: 'performer_support_unavailable' })
-      return
-    }
-
     const stripe = getStripe()
-    const account = await requireConnectedAccountChargeReady(stripe, performer.stripe_account_id)
-    if (!account) {
-      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', performerId)
-      res.status(400).json({ code: 'performer_support_unavailable' })
-      return
-    }
-    if (!performer.stripe_onboarding_complete) {
-      await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', performerId)
-    }
 
     const origin = getAppUrl(req)
     const safeReturn = returnTo === 'live'
@@ -121,7 +106,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (existing.stripe_session_id) {
         const existingSession = existing.stripe_checkout_mode === 'platform_separate'
           ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
-          : await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: performer.stripe_account_id })
+          : performer.stripe_account_id
+            ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: performer.stripe_account_id })
+            : await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
         if (existingSession.url && existing.status === 'pending') {
           res.status(200).json({ url: existingSession.url })
           return
@@ -134,12 +121,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
 
-    const connectedAccountId = performer.stripe_account_id as string
+    const connectedAccountId = (performer.stripe_account_id as string | null) ?? null
     const tipMetaPatch = {
       gross_amount_yen: amountYen,
       platform_fee_yen: 0,
       connected_account_id: connectedAccountId,
       stripe_checkout_mode: 'platform_separate',
+      funding_model: 'platform_separate',
+      transfer_status: 'pending_onboarding',
     }
     const { error: tipMetaErr } = await sb.from('tips').update(tipMetaPatch).eq('id', tip.id)
     if (tipMetaErr && !missingColumn(tipMetaErr)) throw tipMetaErr
@@ -150,8 +139,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       performer_id: performerId,
       fan_id: payerId ?? 'guest',
       anonymous: anonymous ? '1' : '0',
-      connected_account_id: connectedAccountId,
       charge_type: 'platform_separate',
+      funding_model: 'platform_separate',
       platform_fee_bps: String(feeBps),
     }
 

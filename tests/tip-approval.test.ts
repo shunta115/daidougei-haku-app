@@ -58,6 +58,20 @@ beforeEach(() => {
   fake.status = 'pending'
   fake.stripeAccount = 'acct_fixture'
   fake.checkout.mockReset()
+  fake.checkout.mockResolvedValue({ id: 'cs_test_fixture1234567890', url: 'https://checkout.stripe.test/session' })
+})
+
+it('allows an approved active performer to receive a Platform tip before Connect onboarding', async () => {
+  fake.approved = true
+  fake.status = 'active'
+  fake.stripeAccount = null
+  const response = await request()
+  expect(response.code).toBe(200)
+  expect(response.body.url).toBe('https://checkout.stripe.test/session')
+  expect(fake.checkout).toHaveBeenCalledTimes(1)
+  const session = fake.checkout.mock.calls[0][0]
+  expect(session.payment_intent_data.metadata).toMatchObject({ kind: 'tip', performer_id: 'performer-1', funding_model: 'platform_separate' })
+  expect(session.payment_intent_data).not.toHaveProperty('application_fee_amount')
 })
 
 it('rejects a new tip checkout for an unapproved performer', async () => {
