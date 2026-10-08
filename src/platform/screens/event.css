@@ -1755,3 +1755,22 @@ html:has(.pl-event-detail) .pl-bg__grain {
 @media(max-width:430px) {
   .awp-official-links__actions { grid-template-columns:1fr; }
 }
+.pl-event-support__choices {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:12px;
+}
+
+.pl-event-support__choices button {
+  min-height:44px;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+/* Keep cancelled times visible without advertising an available performance. */
+.pl-slot-cancellation { color: #a51d2d; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pl-event-slot[data-cancelled="true"] { border-color: #a51d2d; }
+.pl-event-slot[data-cancelled="true"] button:disabled { cursor: not-allowed; }
+.pl-schedule-row[data-cancelled="true"] { opacity: 1; border-color: #a51d2d; cursor: not-allowed; }
+
+.pl-event-slot > .pl-slot-cancellation { grid-column: 1 / -1; margin: 0; }
