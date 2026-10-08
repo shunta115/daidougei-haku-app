@@ -52,6 +52,34 @@ function accountCreateParams(performerId: string, legacyTestAccountId?: string) 
   }
 }
 
+const LIVE_CONNECT_ACCOUNT_IDEMPOTENCY_VERSION = 'v2'
+
+async function findLiveAccountsForPerformer(stripe: ReturnType<typeof getStripe>, performerId: string) {
+  const exactMatches = []
+  for await (const candidate of stripe.accounts.list({ limit: 100 })) {
+    if (candidate.metadata?.performer_id === performerId) exactMatches.push(candidate)
+    if (exactMatches.length > 1) break
+  }
+  return exactMatches
+}
+
+async function createOrReuseLiveAccount(stripe: ReturnType<typeof getStripe>, performerId: string) {
+  const exactMatches = await findLiveAccountsForPerformer(stripe, performerId)
+  if (exactMatches.length > 1) throw new Error('Multiple live Connect accounts match the performer')
+  if (exactMatches[0]) return { account: exactMatches[0], reused: true }
+
+  // The version is changed only when a previous Stripe response is known to be
+  // permanently cached under an older key. Every concurrent/retry request for
+  // this performer still shares this one key and therefore converges on one
+  // Stripe Account. A later request also searches Stripe metadata first, which
+  // recovers safely when Stripe succeeded but the DB write or response failed.
+  const account = await stripe.accounts.create(
+    accountCreateParams(performerId),
+    { idempotencyKey: `performer-connect:live:${LIVE_CONNECT_ACCOUNT_IDEMPOTENCY_VERSION}:${performerId}` },
+  )
+  return { account, reused: false }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -122,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stripe = getStripe()
     if (!accountId) {
       stripeStep = 'account_create'
-      const account = await stripe.accounts.create(accountCreateParams(performerId), { idempotencyKey: `performer-connect:${performerId}` })
+      const { account } = await createOrReuseLiveAccount(stripe, performerId)
       accountId = account.id
       const { error: saveError } = await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
       if (saveError) throw saveError
@@ -143,20 +171,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         stripeStep = 'account_recover'
-        const exactMatches = []
-        for await (const candidate of stripe.accounts.list({ limit: 100 })) {
-          if (candidate.metadata?.performer_id === performerId) exactMatches.push(candidate)
-          if (exactMatches.length > 1) break
-        }
-        if (exactMatches.length > 1) {
-          throw new Error('Multiple live Connect accounts match the performer')
-        }
         const previousAccountId = accountId
-        account = exactMatches[0] ?? await stripe.accounts.create(
-          accountCreateParams(performerId, previousAccountId),
-          { idempotencyKey: `performer-connect:live:${performerId}` },
-        )
-        if (exactMatches[0] && exactMatches[0].metadata?.legacy_test_account_id !== previousAccountId) {
+        const recovered = await createOrReuseLiveAccount(stripe, performerId)
+        account = recovered.account
+        if (account.metadata?.legacy_test_account_id !== previousAccountId) {
           account = await stripe.accounts.update(account.id, { metadata: { legacy_test_account_id: previousAccountId } })
         }
         accountId = account.id
