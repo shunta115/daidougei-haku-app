@@ -1,3 +1,4 @@
+import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
@@ -56,7 +57,7 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
           const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
           setScheduled(
             slots.filter(
-              (s) => s.is_stream && String(s.date).slice(0, 10) >= today && s.status !== 'cancelled',
+              (s) => s.is_stream && String(s.date).slice(0, 10) >= today && isActiveEventSlot(s),
             ),
           )
           setEnded(sessions.filter((s) => Boolean(s.ended_at)))
