@@ -2,13 +2,48 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady, requireAuthUser } from './_shared.js'
 import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 
+type StripeErrorLike = {
+  message?: unknown
+  statusCode?: unknown
+  raw?: { message?: unknown; statusCode?: unknown }
+}
+
+function isLiveKeyReadingTestAccount(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as StripeErrorLike
+  const message = String(candidate.raw?.message ?? candidate.message ?? '').toLowerCase()
+  const status = Number(candidate.statusCode ?? candidate.raw?.statusCode ?? 0)
+  return status === 400
+    && message.includes('similar object exists in test mode')
+    && message.includes('live mode key')
+}
+
+function accountCreateParams(performerId: string, legacyTestAccountId?: string) {
+  return {
+    controller: {
+      fees: { payer: 'account' as const },
+      losses: { payments: 'stripe' as const },
+      requirement_collection: 'stripe' as const,
+      stripe_dashboard: { type: 'full' as const },
+    },
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    metadata: {
+      performer_id: performerId,
+      ...(legacyTestAccountId ? { legacy_test_account_id: legacyTestAccountId } : {}),
+    },
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
 
-  let stripeStep: 'not_started' | 'account_create' | 'account_retrieve' | 'account_link' = 'not_started'
+  let stripeStep: 'not_started' | 'account_create' | 'account_retrieve' | 'account_recover' | 'account_link' = 'not_started'
   try {
     const user = await requireAuthUser(req, res)
     if (!user) return
@@ -72,25 +107,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stripe = getStripe()
     if (!accountId) {
       stripeStep = 'account_create'
-      const account = await stripe.accounts.create({
-        controller: {
-          fees: { payer: 'account' },
-          losses: { payments: 'stripe' },
-          requirement_collection: 'stripe',
-          stripe_dashboard: { type: 'full' },
-        },
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        metadata: { performer_id: performerId },
-      }, { idempotencyKey: `performer-connect:${performerId}` })
+      const account = await stripe.accounts.create(accountCreateParams(performerId), { idempotencyKey: `performer-connect:${performerId}` })
       accountId = account.id
       const { error: saveError } = await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
       if (saveError) throw saveError
     } else {
       stripeStep = 'account_retrieve'
-      const account = await stripe.accounts.retrieve(accountId)
+      let account
+      try {
+        account = await stripe.accounts.retrieve(accountId)
+      } catch (retrieveError) {
+        if (!isLiveKeyReadingTestAccount(retrieveError)) throw retrieveError
+        console.warn('stripe_connect_account_mode_mismatch', { step: stripeStep, status: 400 })
+
+        // A status refresh must remain read-only. Recovery only runs after the performer
+        // explicitly presses the onboarding button (the request without an action).
+        if (action === 'status') {
+          res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, transfersEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false, restricted: false, state: 'not_started' })
+          return
+        }
+
+        stripeStep = 'account_recover'
+        const exactMatches = []
+        for await (const candidate of stripe.accounts.list({ limit: 100 })) {
+          if (candidate.metadata?.performer_id === performerId) exactMatches.push(candidate)
+          if (exactMatches.length > 1) break
+        }
+        if (exactMatches.length > 1) {
+          throw new Error('Multiple live Connect accounts match the performer')
+        }
+        const previousAccountId = accountId
+        account = exactMatches[0] ?? await stripe.accounts.create(
+          accountCreateParams(performerId, previousAccountId),
+          { idempotencyKey: `performer-connect:live:${performerId}` },
+        )
+        if (exactMatches[0] && exactMatches[0].metadata?.legacy_test_account_id !== previousAccountId) {
+          account = await stripe.accounts.update(account.id, { metadata: { legacy_test_account_id: previousAccountId } })
+        }
+        accountId = account.id
+        const { error: saveError } = await sb
+          .from('performers')
+          .update({ stripe_account_id: accountId, stripe_onboarding_complete: false })
+          .eq('id', performerId)
+          .eq('stripe_account_id', previousAccountId)
+        if (saveError) throw saveError
+      }
       const complete = isConnectedAccountTransferReady(account)
       const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
       const underReview = Boolean(account.requirements?.pending_verification?.length)
