@@ -72,7 +72,6 @@ function accountCreateParams(performerId: string, legacyTestAccountId?: string) 
     // change checkout ownership, fee calculation, ledgers, or payout gates.
     type: 'express' as const,
     capabilities: {
-      card_payments: { requested: true },
       transfers: { requested: true },
     },
     metadata: {

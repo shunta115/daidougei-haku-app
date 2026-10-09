@@ -106,7 +106,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.create).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'express',
-        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        capabilities: { transfers: { requested: true } },
         metadata: { performer_id: 'performer-fixture' },
       }),
       { idempotencyKey: 'performer-connect:live:v3-express:performer-fixture' },
