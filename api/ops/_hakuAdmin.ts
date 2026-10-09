@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getStripe, isConnectedAccountChargeReady } from '../stripe/_shared.js'
+import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from '../stripe/_shared.js'
 import { getPerformerPayoutView } from '../stripe/_payouts.js'
 import { requireAdmin, requireSuperAdmin } from './_guard.js'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, settleSaleAfterRefund } from '../../shared/fees.js'
@@ -720,7 +720,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!accountId) return {
           performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
           state: 'unregistered', charges_enabled: false, payouts_enabled: false, details_submitted: false,
-          needs_information: false, under_review: false, tip_available: false, merch_available: false,
+          needs_information: false, under_review: false, transfers_enabled: false, restricted: false,
+          tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
           confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
           held_yen: 0,
         }
@@ -729,15 +730,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             stripe.accounts.retrieve(accountId),
             getPerformerPayoutView(sb, stripe, { performerId: performer.id, stripeAccountId: accountId }),
           ])
-          const ready = isConnectedAccountChargeReady(account)
+          const ready = isConnectedAccountTransferReady(account)
           const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
           const underReview = Boolean(account.requirements?.pending_verification?.length)
           const state = ready ? 'ready' : account.requirements?.disabled_reason ? 'restricted' : needsInformation ? 'needs_information' : underReview ? 'under_review' : 'onboarding'
           return {
             performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
-            state, charges_enabled: Boolean(account.charges_enabled), payouts_enabled: Boolean(account.payouts_enabled), details_submitted: Boolean(account.details_submitted),
+            state, charges_enabled: Boolean(account.charges_enabled), payouts_enabled: Boolean(account.payouts_enabled), transfers_enabled: account.capabilities?.transfers === 'active', details_submitted: Boolean(account.details_submitted),
             needs_information: needsInformation, under_review: underReview,
-            tip_available: Boolean(performer.is_approved && ready), merch_available: Boolean(performer.is_approved && ready),
+            restricted: Boolean(account.requirements?.disabled_reason),
+            currently_due_count: account.requirements?.currently_due?.length ?? 0,
+            past_due_count: account.requirements?.past_due?.length ?? 0,
+            pending_verification_count: account.requirements?.pending_verification?.length ?? 0,
+            tip_available: Boolean(performer.is_approved), merch_available: Boolean(performer.is_approved && ready), checked_at: new Date().toISOString(),
             confirmed_sales_yen: payoutView.confirmedSalesYen, available_yen: payoutView.availableYen,
             paid_out_yen: payoutView.paidOutYen, pending_payout_yen: payoutView.pendingYen, held_yen: payoutView.heldYen,
           }
@@ -745,8 +750,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.error('admin Stripe status check failed', performer.id, error)
           return {
             performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
-            state: 'check_error', charges_enabled: false, payouts_enabled: false, details_submitted: Boolean(performer.stripe_onboarding_complete),
-            needs_information: false, under_review: false, tip_available: false, merch_available: false,
+            state: 'check_error', charges_enabled: false, payouts_enabled: false, transfers_enabled: false, details_submitted: false,
+            needs_information: false, under_review: false, restricted: false,
+            tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
             confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
             held_yen: 0,
           }

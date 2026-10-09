@@ -3,10 +3,12 @@ import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady
 import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 
 type StripeErrorLike = {
+  code?: unknown
   message?: unknown
+  param?: unknown
   requestId?: unknown
   statusCode?: unknown
-  raw?: { message?: unknown; statusCode?: unknown }
+  raw?: { code?: unknown; message?: unknown; param?: unknown; statusCode?: unknown }
 }
 
 function isLiveKeyReadingTestAccount(error: unknown) {
@@ -19,6 +21,35 @@ function isLiveKeyReadingTestAccount(error: unknown) {
       (message.includes('similar object exists in test mode') && message.includes('live mode key'))
       || (message.includes('was a test account created with a testmode key') && message.includes('only be used with testmode keys'))
     )
+}
+
+function isUnavailableConnectedAccount(error: unknown) {
+  if (isLiveKeyReadingTestAccount(error)) return true
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as StripeErrorLike
+  const code = String(candidate.raw?.code ?? candidate.code ?? '')
+  const param = String(candidate.raw?.param ?? candidate.param ?? '')
+  const status = Number(candidate.statusCode ?? candidate.raw?.statusCode ?? 0)
+  return code === 'resource_missing' && param === 'account' && (status === 400 || status === 404)
+}
+
+function disconnectedStatus(state: 'not_started' | 'account_mismatch') {
+  return {
+    connected: false,
+    complete: false,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    transfersEnabled: false,
+    detailsSubmitted: false,
+    needsInformation: false,
+    underReview: false,
+    restricted: false,
+    currentlyDueCount: 0,
+    pastDueCount: 0,
+    pendingVerificationCount: 0,
+    checkedAt: new Date().toISOString(),
+    state,
+  }
 }
 
 function safeStripeFailureReason(error: unknown) {
@@ -144,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     if (action === 'status' && !accountId) {
-      res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, transfersEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false, restricted: false, state: 'not_started' })
+      res.status(200).json(disconnectedStatus('not_started'))
       return
     }
     const stripe = getStripe()
@@ -160,13 +191,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         account = await stripe.accounts.retrieve(accountId)
       } catch (retrieveError) {
-        if (!isLiveKeyReadingTestAccount(retrieveError)) throw retrieveError
-        console.warn('stripe_connect_account_mode_mismatch', { step: stripeStep, status: 400 })
+        if (!isUnavailableConnectedAccount(retrieveError)) throw retrieveError
+        console.warn('stripe_connect_account_unavailable', { step: stripeStep, status: 400 })
 
-        // A status refresh must remain read-only. Recovery only runs after the performer
-        // explicitly presses the onboarding button (the request without an action).
+        // A status refresh never replaces the stored account id. It only clears a stale
+        // completion flag; recovery runs after the performer explicitly starts onboarding.
         if (action === 'status') {
-          res.status(200).json({ connected: false, complete: false, chargesEnabled: false, payoutsEnabled: false, transfersEnabled: false, detailsSubmitted: false, needsInformation: false, underReview: false, restricted: false, state: 'not_started' })
+          const { error: syncError } = await sb
+            .from('performers')
+            .update({ stripe_onboarding_complete: false })
+            .eq('id', performerId)
+            .eq('stripe_account_id', accountId)
+          if (syncError) throw syncError
+          res.status(200).json(disconnectedStatus('account_mismatch'))
           return
         }
 
@@ -206,6 +243,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           needsInformation,
           underReview,
           restricted,
+          currentlyDueCount: account.requirements?.currently_due?.length ?? 0,
+          pastDueCount: account.requirements?.past_due?.length ?? 0,
+          pendingVerificationCount: account.requirements?.pending_verification?.length ?? 0,
+          checkedAt: new Date().toISOString(),
           state,
         })
         return
