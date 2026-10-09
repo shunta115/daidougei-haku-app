@@ -66,12 +66,11 @@ function safeStripeFailureReason(error: unknown) {
 
 function accountCreateParams(performerId: string, legacyTestAccountId?: string) {
   return {
-    controller: {
-      fees: { payer: 'account' as const },
-      losses: { payments: 'stripe' as const },
-      requirement_collection: 'stripe' as const,
-      stripe_dashboard: { type: 'full' as const },
-    },
+    // New performers use Stripe Express. Existing linked LIVE accounts are
+    // always retrieved/reused above and are never converted or recreated.
+    // HAKU charges on the platform and transfers later, so this does not
+    // change checkout ownership, fee calculation, ledgers, or payout gates.
+    type: 'express' as const,
     capabilities: {
       card_payments: { requested: true },
       transfers: { requested: true },
@@ -83,7 +82,9 @@ function accountCreateParams(performerId: string, legacyTestAccountId?: string) 
   }
 }
 
-const LIVE_CONNECT_ACCOUNT_IDEMPOTENCY_VERSION = 'v2'
+// v2 created Full Dashboard accounts. A new key is required because Stripe
+// requires an idempotency key to be reused with identical parameters only.
+const LIVE_CONNECT_ACCOUNT_IDEMPOTENCY_VERSION = 'v3-express'
 
 async function findLiveAccountsForPerformer(stripe: ReturnType<typeof getStripe>, performerId: string) {
   const exactMatches = []

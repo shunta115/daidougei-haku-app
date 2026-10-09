@@ -100,10 +100,18 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh' }))
   })
-  it('makes account creation idempotent while retaining the existing Connect controller', async () => {
+  it('creates only new unlinked performers as Express accounts', async () => {
     fake.performer.stripe_account_id = ''
     await request({ performerId: 'performer-fixture' })
-    expect(fake.create).toHaveBeenCalledWith(expect.objectContaining({ controller: { fees: { payer: 'account' }, losses: { payments: 'stripe' }, requirement_collection: 'stripe', stripe_dashboard: { type: 'full' } } }), { idempotencyKey: 'performer-connect:live:v2:performer-fixture' })
+    expect(fake.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'express',
+        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+        metadata: { performer_id: 'performer-fixture' },
+      }),
+      { idempotencyKey: 'performer-connect:live:v3-express:performer-fixture' },
+    )
+    expect(fake.create.mock.calls[0]?.[0]).not.toHaveProperty('controller')
   })
   it('reuses an exact live metadata match before creating for an unlinked performer', async () => {
     fake.performer.stripe_account_id = ''
@@ -201,7 +209,7 @@ describe('Stripe onboarding without payment changes', () => {
     })
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(200)
-    expect(fake.create).toHaveBeenCalledWith(expect.objectContaining({ metadata: { performer_id: 'performer-fixture' } }), { idempotencyKey: 'performer-connect:live:v2:performer-fixture' })
+    expect(fake.create).toHaveBeenCalledWith(expect.objectContaining({ type: 'express', metadata: { performer_id: 'performer-fixture' } }), { idempotencyKey: 'performer-connect:live:v3-express:performer-fixture' })
     expect(fake.stripeUpdate).toHaveBeenCalledWith('acct_new_fixture', { metadata: { legacy_test_account_id: 'acct_fixture' } })
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_new_fixture' }))
   })
