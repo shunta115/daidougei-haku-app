@@ -15,10 +15,13 @@ import {
   listEventSlots,
   listEventVenues,
   listManagedEvents,
+  listOfficialNavigators,
   notifyEventAppearances,
   removeEventLineup,
   saveFeaturedEventPatch,
   saveEventVoteRule,
+  saveOfficialNavigator,
+  removeOfficialNavigator,
   setEventLineupVotingEligibility,
   upsertEventSlot,
   upsertEventVenue,
@@ -34,7 +37,7 @@ import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
 import { supabaseAuthHeaders } from '../lib/supabase'
 
-type Tab = 'meta' | 'venues' | 'slots' | 'lineup' | 'voting' | 'live'
+type Tab = 'meta' | 'venues' | 'slots' | 'lineup' | 'voting' | 'navigator' | 'live'
 
 export function AdminEventScreen() {
   const [tab, setTab] = useState<Tab>('meta')
@@ -49,6 +52,8 @@ export function AdminEventScreen() {
   const [lineupRows, setLineupRows] = useState<EventLineupRow[]>([])
   const [lives, setLives] = useState<LiveSession[]>([])
   const [approved, setApproved] = useState<Performer[]>([])
+  const [navigators, setNavigators] = useState<Awaited<ReturnType<typeof listOfficialNavigators>>>([])
+  const [navigatorDraft, setNavigatorDraft] = useState({ date: '2026-10-10', performerId: '', showOnHome: true })
   const [error, setError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -91,7 +96,7 @@ export function AdminEventScreen() {
       setEvent(ev)
       setFeeBps(bps)
       if (ev) {
-        const [v, s, l, p, sessions, rule, ranking] = await Promise.all([
+        const [v, s, l, p, sessions, rule, ranking, navigatorRows] = await Promise.all([
           listEventVenues(ev.id),
           listEventSlots(ev.id),
           listEventLineupRows(ev.id),
@@ -99,6 +104,7 @@ export function AdminEventScreen() {
           listEventLiveSessions(ev.id),
           getEventVoteRule(ev.id).catch(() => null),
           listAdminVoteRanking(ev.id).catch(() => []),
+          listOfficialNavigators(ev.id).catch(() => []),
         ])
         setVenues(v)
         setSlots(s)
@@ -108,8 +114,10 @@ export function AdminEventScreen() {
         setLives(sessions)
         setVoteRule(rule)
         setVoteRanking(ranking)
+        setNavigators(navigatorRows)
         setSlotDraft((d) => ({ ...d, venue_id: d.venue_id || v[0]?.id || '' }))
         setLineupPick((cur) => cur || p[0]?.id || '')
+        setNavigatorDraft((cur) => ({ ...cur, performerId: cur.performerId || p[0]?.id || '' }))
       }
       setError(null)
       await refreshLiveCatalog()
@@ -297,9 +305,9 @@ export function AdminEventScreen() {
       </div>
 
       <div className="pl-live-tabs">
-        {(['meta', 'venues', 'slots', 'lineup', 'voting', 'live'] as const).map((key) => (
+        {(['meta', 'venues', 'slots', 'lineup', 'voting', 'navigator', 'live'] as const).map((key) => (
           <button key={key} type="button" className="pl-live-tabs__btn" data-active={tab === key} onClick={() => setTab(key)}>
-            {key === 'meta' ? '開催情報' : key === 'venues' ? '会場' : key === 'slots' ? '時間割' : key === 'lineup' ? '出演者' : key === 'voting' ? '投票' : 'LIVE'}
+            {key === 'meta' ? '開催情報' : key === 'venues' ? '会場' : key === 'slots' ? '時間割' : key === 'lineup' ? '出演者' : key === 'voting' ? '投票' : key === 'navigator' ? '公式ナビ' : 'LIVE'}
           </button>
         ))}
       </div>
@@ -595,6 +603,23 @@ export function AdminEventScreen() {
             </div>
           )}
           <div className="pl-card"><h2 className="pl-h2">途中集計（運営のみ）</h2>{voteRanking.length === 0 ? <p className="pl-muted">投票はまだありません。</p> : voteRanking.map((row, index) => <p key={row.performer_id}><strong>{index + 1}位 {approved.find((performer) => performer.id === row.performer_id)?.stage_name ?? row.performer_id}</strong>・{row.votes}票</p>)}<button className="pl-btn pl-btn--ghost pl-btn--block" disabled={voteRanking.length < 3} onClick={() => void assignFinalists()}>上位3組をSPECIAL NIGHTへ設定</button><button className="pl-btn pl-btn--block" onClick={() => void publishResults(!event?.results_published_at)}>{event?.results_published_at ? '結果を非公開に戻す' : '投票を終了して結果を公開'}</button><p className="pl-muted">結果公開までは一般ユーザーに途中順位を表示しません。</p></div>
+        </>
+      ) : null}
+
+      {tab === 'navigator' ? (
+        <>
+          <div className="pl-card">
+            <h2 className="pl-h2">公式ナビゲーター管理</h2>
+            <p className="pl-muted">実在する承認済みパフォーマーをIDで紐付けます。ナビゲーターに運営権限や投票資格は付与されません。</p>
+            <label><span className="pl-label">担当日（JST）</span><input className="pl-input" type="date" value={navigatorDraft.date} onChange={(e) => setNavigatorDraft({ ...navigatorDraft, date: e.target.value })} /></label>
+            <label><span className="pl-label">担当パフォーマー</span><select className="pl-input" value={navigatorDraft.performerId} onChange={(e) => setNavigatorDraft({ ...navigatorDraft, performerId: e.target.value })}><option value="">選択してください</option>{approved.map((performer) => <option key={performer.id} value={performer.id}>{performer.stage_name}</option>)}</select></label>
+            <label className="pl-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={navigatorDraft.showOnHome} onChange={(e) => setNavigatorDraft({ ...navigatorDraft, showOnHome: e.target.checked })} />ホームに表示する</label>
+            <button type="button" className="pl-btn pl-btn--block" disabled={!event || !navigatorDraft.date || !navigatorDraft.performerId} onClick={() => {
+              if (!event || !navigatorDraft.performerId) return
+              void saveOfficialNavigator(event.id, navigatorDraft.date, navigatorDraft.performerId, navigatorDraft.showOnHome).then(() => { setMsg('公式ナビゲーターを保存しました'); return reload(event.id) }).catch((e) => setError(e instanceof Error ? e.message : '保存できませんでした'))
+            }}>設定を保存</button>
+          </div>
+          {navigators.map((row) => <article key={row.event_date} className="pl-card"><strong>{row.event_date}（JST）</strong><p>{row.performer.stage_name} · {row.live_status === 'live' ? '🔴 LIVE配信中' : row.live_status === 'ended' ? '配信終了' : '配信準備中'} · ホーム{row.show_on_home ? '表示中' : '非表示'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => { if (!event || !window.confirm(`${row.event_date}の担当設定を解除しますか？`)) return; void removeOfficialNavigator(event.id, row.event_date).then(() => reload(event.id)).catch((e) => setError(e instanceof Error ? e.message : '解除できませんでした')) }}>担当を解除</button></article>)}
         </>
       ) : null}
 
