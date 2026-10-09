@@ -114,8 +114,13 @@ set starts_at = excluded.starts_at,
     updated_at = now()
 where public.event_vote_days.finalized_at is null;
 
+-- Preserve the existing master STOP/OPEN state during the migration.  Turning
+-- voting on here would let the still-running pre-deploy API accept ballots in
+-- the migration-to-deploy window.  Operations explicitly opens the master
+-- switch only after the new application is Ready; the per-day JST windows then
+-- control each day's automatic start and close.
 update public.event_vote_rules
-set voting_enabled = true, voting_open = true, votes_per_device = 3,
+set voting_enabled = true, votes_per_device = 3,
     voting_starts_at = null, voting_ends_at = null, updated_at = now()
 where event_id = (select id from public.events where slug = 'award-winning-performers-2026');
 
