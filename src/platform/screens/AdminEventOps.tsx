@@ -29,6 +29,7 @@ import {
   type EventLineupRow,
 } from '../lib/api'
 import { fromVotingDateTimeInput, toVotingDateTimeInput } from '../lib/votingDateTime'
+import { buildFinalistAssignments } from '../lib/finalistAssignments'
 import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -198,10 +199,10 @@ export function AdminEventScreen() {
 
   const assignFinalists = async () => {
     if (!event || voteRanking.length < 3) return
-    const finals = slots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
-    if (finals.length !== 3 || !window.confirm('現在の上位3組をSPECIAL NIGHT出演枠へ設定しますか？')) return
+    const assignments = buildFinalistAssignments(slots, voteRanking)
+    if (!assignments || !window.confirm(`現在の上位3組をSPECIAL NIGHT出演枠（${assignments.length}枠）へ設定しますか？`)) return
     try {
-      await Promise.all(finals.map((slot, index) => upsertEventSlot({ ...slot, performer_id: voteRanking[index].performer_id })))
+      await Promise.all(assignments.map(({ slot, performerId }) => upsertEventSlot({ ...slot, performer_id: performerId })))
       setMsg('上位3組をSPECIAL NIGHTへ設定しました。公開前に時間と会場を確認してください。')
       await reload(event.id)
     } catch (e) { setError(e instanceof Error ? e.message : '上位3組を設定できませんでした') }
