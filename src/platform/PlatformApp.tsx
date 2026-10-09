@@ -159,6 +159,10 @@ const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
 export function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PASSWORD_RESET_PATH) return 'auth'
+    // Explicit merchandise deep links take precedence over a previously saved screen.
+    const entryParams = new URLSearchParams(window.location.search)
+    if (entryParams.get('merchProduct')) return 'merch-detail'
+    if (entryParams.has('merch')) return 'merch-list'
     const saved = savedNavigationSnapshot()
     if (saved) return saved.screen
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
