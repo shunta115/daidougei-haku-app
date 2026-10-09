@@ -7,11 +7,13 @@ import { AWP_EVENT_SLUG } from '../../app/routes'
 import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
   getFeaturedEvent,
+  getTodayOfficialNavigator,
   listEventLineup,
   listFollowedPerformers,
   listLivePerformers,
   listOshiPerformers,
   searchPerformers,
+  type OfficialNavigator,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
@@ -66,7 +68,41 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
+function OfficialNavigatorCard({ navigator, onOpen, onWatch, onTip }: {
+  navigator: OfficialNavigator
+  onOpen: (id: string) => void
+  onWatch: (id: string) => void
+  onTip: (id: string) => void
+}) {
+  const performer = navigator.performer
+  const status = navigator.live_status === 'live' ? '🔴 LIVE配信中' : navigator.live_status === 'ended' ? '配信終了' : '配信準備中'
+  return (
+    <section className="pl-navigator" aria-labelledby="official-navigator-title">
+      <header>
+        <p>OFFICIAL NAVIGATOR</p>
+        <h2 id="official-navigator-title">🎙️ オフィシャルナビゲーター</h2>
+        <span>会場案内MC｜はじめての方はこちら！</span>
+      </header>
+      <div className="pl-navigator__person">
+        <button type="button" className="pl-navigator__avatar" onClick={() => onOpen(performer.id)} aria-label={`${performer.stage_name}のプロフィール`}>
+          {performer.photo_url ? <img src={performer.photo_url} alt="" /> : <span>{performer.stage_name.slice(0, 2)}</span>}
+        </button>
+        <div><strong>{performer.stage_name}</strong><span data-live={performer.is_live}>{status}</span></div>
+      </div>
+      <div className="pl-navigator__actions">
+        <button type="button" className="pl-action pl-action--primary" disabled={!performer.is_live} onClick={() => onWatch(performer.id)}>
+          <Play size={17} fill="currentColor" /> {performer.is_live ? '無料でLIVEを見る' : status}
+        </button>
+        <button type="button" className="pl-action pl-action--glass" onClick={() => onOpen(performer.id)}>プロフィール</button>
+        <button type="button" className="pl-action pl-action--glass" disabled={!performer.stripe_onboarding_complete} title={performer.stripe_onboarding_complete ? undefined : '受取設定の完了後に利用できます'} onClick={() => onTip(performer.id)}>
+          {performer.stripe_onboarding_complete ? '応援・投げ銭' : '投げ銭は準備中'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onTip, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
@@ -75,6 +111,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const [followed, setFollowed] = useState<Performer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [navigator, setNavigator] = useState<OfficialNavigator | null>(null)
   const [eventLabel, setEventLabel] = useState({ date: PUBLIC_EVENT_META.dateLabel, place: PUBLIC_EVENT_META.placeLabel, slug: 'award-winning-performers-2026' })
 
   useEffect(() => {
@@ -84,9 +121,13 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       if (cancelled) return
       if (event) {
         setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
-        const lineup = await listEventLineup(event.id).catch((): string[] => [])
+        const [lineup, officialNavigator] = await Promise.all([
+          listEventLineup(event.id).catch((): string[] => []),
+          getTodayOfficialNavigator(event.id).catch(() => null),
+        ])
         if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
-      } else setRoster(allRows)
+        if (!cancelled) setNavigator(officialNavigator)
+      } else { setRoster(allRows); setNavigator(null) }
       setLive(liveRows)
       if (user) {
         const favorites = await listOshiPerformers(user.id).catch(() => [])
@@ -161,6 +202,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       )}
 
       <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
+      {navigator ? <OfficialNavigatorCard navigator={navigator} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
       <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
 

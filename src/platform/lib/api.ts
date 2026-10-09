@@ -768,6 +768,75 @@ export async function listManagedEvents(): Promise<FeaturedEvent[]> {
   return (data as FeaturedEvent[]) ?? []
 }
 
+export type OfficialNavigator = {
+  event_id: string
+  event_date: string
+  performer_id: string
+  show_on_home: boolean
+  performer: Performer
+  live_status: 'preparing' | 'live' | 'ended'
+}
+
+async function navigatorLiveStatus(performer: Performer, eventDate: string): Promise<OfficialNavigator['live_status']> {
+  if (performer.is_live) return 'live'
+  const sb = requireSupabase()
+  const dayStart = `${eventDate}T00:00:00+09:00`
+  const next = new Date(`${eventDate}T00:00:00+09:00`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  const { data } = await sb.from('live_sessions').select('id').eq('performer_id', performer.id).gte('started_at', dayStart).lt('started_at', next.toISOString()).not('ended_at', 'is', null).limit(1)
+  return data?.length ? 'ended' : 'preparing'
+}
+
+export async function getTodayOfficialNavigator(eventId: string): Promise<OfficialNavigator | null> {
+  const sb = requireSupabase()
+  const todayJst = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+  const { data, error } = await sb
+    .from('event_official_navigators')
+    .select('event_id,event_date,performer_id,show_on_home')
+    .eq('event_id', eventId)
+    .eq('event_date', todayJst)
+    .eq('show_on_home', true)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const performer = await getPerformer(data.performer_id)
+  if (!performer) return null
+  return { ...data, performer, live_status: await navigatorLiveStatus(performer, data.event_date) } as OfficialNavigator
+}
+
+export async function listOfficialNavigators(eventId: string): Promise<OfficialNavigator[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('event_official_navigators')
+    .select('event_id,event_date,performer_id,show_on_home')
+    .eq('event_id', eventId)
+    .order('event_date')
+  if (error) throw error
+  const rows = await Promise.all((data ?? []).map(async (row) => {
+    const performer = await getPerformer(row.performer_id)
+    return performer ? { ...row, performer, live_status: await navigatorLiveStatus(performer, row.event_date) } as OfficialNavigator : null
+  }))
+  return rows.filter((row): row is OfficialNavigator => row !== null)
+}
+
+export async function saveOfficialNavigator(eventId: string, eventDate: string, performerId: string, showOnHome: boolean) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('event_official_navigators').upsert({
+    event_id: eventId,
+    event_date: eventDate,
+    performer_id: performerId,
+    show_on_home: showOnHome,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'event_id,event_date' })
+  if (error) throw error
+}
+
+export async function removeOfficialNavigator(eventId: string, eventDate: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('event_official_navigators').delete().eq('event_id', eventId).eq('event_date', eventDate)
+  if (error) throw error
+}
+
 export async function getEventBySlug(slug: string): Promise<FeaturedEvent | null> {
   const sb = requireSupabase()
   const { data, error } = await sb.from('events').select('*').eq('slug', slug).maybeSingle()
