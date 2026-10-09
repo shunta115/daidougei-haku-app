@@ -18,6 +18,7 @@ const fake = vi.hoisted(() => ({
   listEventGuestAppearances: vi.fn(),
   listApprovedPerformersByIds: vi.fn(),
   listVoteRankingNamed: vi.fn(),
+  getDailyVoteResults: vi.fn(),
   voteForPerformer: vi.fn(),
 }))
 
@@ -36,6 +37,7 @@ vi.mock('../src/platform/lib/api', () => ({
   listApprovedPerformersByIds: fake.listApprovedPerformersByIds,
   listPublishedEvents: fake.listPublishedEvents,
   listVoteRankingNamed: fake.listVoteRankingNamed,
+  getDailyVoteResults: fake.getDailyVoteResults,
   voteForPerformer: fake.voteForPerformer,
 }))
 
@@ -94,6 +96,7 @@ beforeEach(() => {
   fake.listEventGuestAppearances.mockResolvedValue([])
   fake.listApprovedPerformersByIds.mockResolvedValue([])
   fake.listVoteRankingNamed.mockResolvedValue([{ performer: { ...performer, id: 'hidden-rank', stage_name: '途中順位' }, votes: 99 }])
+  fake.getDailyVoteResults.mockResolvedValue({ vote_date: '2026-10-10', voting_open: true, results_public: false, result_status: 'pending', assignment_status: 'pending', ranking: [] })
   fake.voteForPerformer.mockResolvedValue(undefined)
   vi.stubGlobal('confirm', vi.fn(() => true))
   vi.stubGlobal('scrollTo', vi.fn())

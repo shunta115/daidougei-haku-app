@@ -8,7 +8,6 @@ import {
   getEventVoteRule,
   getFeaturedEvent,
   getTipFeeBps,
-  listAdminVoteRanking,
   listApprovedPerformers,
   listEventLineupRows,
   listEventLiveSessions,
@@ -29,7 +28,6 @@ import {
   type EventLineupRow,
 } from '../lib/api'
 import { fromVotingDateTimeInput, toVotingDateTimeInput } from '../lib/votingDateTime'
-import { buildFinalistAssignments } from '../lib/finalistAssignments'
 import type { LiveSession, Performer } from '../lib/types'
 import { refreshLiveCatalog } from '../../catalog/liveCatalog'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -41,7 +39,6 @@ export function AdminEventScreen() {
   const [event, setEvent] = useState<Awaited<ReturnType<typeof getFeaturedEvent>>>(null)
   const [events, setEvents] = useState<FeaturedEvent[]>([])
   const [voteRule, setVoteRule] = useState<EventVoteRule | null>(null)
-  const [voteRanking, setVoteRanking] = useState<Array<{ performer_id: string; votes: number }>>([])
   const [feeBps, setFeeBps] = useState(1500)
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [slots, setSlots] = useState<EventSlotRow[]>([])
@@ -91,14 +88,13 @@ export function AdminEventScreen() {
       setEvent(ev)
       setFeeBps(bps)
       if (ev) {
-        const [v, s, l, p, sessions, rule, ranking] = await Promise.all([
+        const [v, s, l, p, sessions, rule] = await Promise.all([
           listEventVenues(ev.id),
           listEventSlots(ev.id),
           listEventLineupRows(ev.id),
           listApprovedPerformers(),
           listEventLiveSessions(ev.id),
           getEventVoteRule(ev.id).catch(() => null),
-          listAdminVoteRanking(ev.id).catch(() => []),
         ])
         setVenues(v)
         setSlots(s)
@@ -107,7 +103,6 @@ export function AdminEventScreen() {
         setApproved(p)
         setLives(sessions)
         setVoteRule(rule)
-        setVoteRanking(ranking)
         setSlotDraft((d) => ({ ...d, venue_id: d.venue_id || v[0]?.id || '' }))
         setLineupPick((cur) => cur || p[0]?.id || '')
       }
@@ -185,27 +180,6 @@ export function AdminEventScreen() {
       setError(null)
       setMsg(open ? '投票 OPEN' : '投票 STOP')
     } catch (e) { setError(e instanceof Error ? e.message : '更新失敗') }
-  }
-
-  const publishResults = async (published: boolean) => {
-    if (!event) return
-    try {
-      await saveEventVoteRule(event.id, { voting_open: false })
-      await saveFeaturedEventPatch(event.id, { results_published_at: published ? new Date().toISOString() : null })
-      setMsg(published ? '投票結果を公開しました' : '投票結果を非公開にしました')
-      await reload(event.id)
-    } catch (e) { setError(e instanceof Error ? e.message : '結果公開を更新できませんでした') }
-  }
-
-  const assignFinalists = async () => {
-    if (!event || voteRanking.length < 3) return
-    const assignments = buildFinalistAssignments(slots, voteRanking)
-    if (!assignments || !window.confirm(`現在の上位3組をSPECIAL NIGHT出演枠（${assignments.length}枠）へ設定しますか？`)) return
-    try {
-      await Promise.all(assignments.map(({ slot, performerId }) => upsertEventSlot({ ...slot, performer_id: performerId })))
-      setMsg('上位3組をSPECIAL NIGHTへ設定しました。公開前に時間と会場を確認してください。')
-      await reload(event.id)
-    } catch (e) { setError(e instanceof Error ? e.message : '上位3組を設定できませんでした') }
   }
 
   const saveVenue = async () => {
@@ -567,12 +541,12 @@ export function AdminEventScreen() {
               <label className="pl-muted" style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={voteRule.voting_open} onChange={(e) => setVoteRule({ ...voteRule, voting_open: e.target.checked })} />投票受付中</label>
               <fieldset>
                 <legend>公式端末投票（AWP）</legend>
-                <p className="pl-muted">登録・ログイン不要。ログイン中も同じ端末の上限を使います。日ごとにはリセットされません。</p>
+                <p className="pl-muted">登録・ログイン不要。AWPは開催日ごとに3票へリセットされ、同じ出演者には1日1票までです。</p>
                 {voteRule.votes_per_device == null ? (
                   <p className="pl-error">端末投票の設定を取得できません。端末投票migrationの適用状況を確認してください。</p>
                 ) : (
                   <label>
-                    <span className="pl-label">1端末あたりの票数（イベント全期間）</span>
+                    <span className="pl-label">1端末あたりの票数（開催日ごと）</span>
                     <select className="pl-input" value={voteRule.votes_per_device} onChange={(e) => setVoteRule({ ...voteRule, votes_per_device: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}票</option>)}
                     </select>
@@ -594,7 +568,7 @@ export function AdminEventScreen() {
               <a className="pl-registration__link" href="/live?adminVotes=1">投票デスクを開く</a>
             </div>
           )}
-          <div className="pl-card"><h2 className="pl-h2">途中集計（運営のみ）</h2>{voteRanking.length === 0 ? <p className="pl-muted">投票はまだありません。</p> : voteRanking.map((row, index) => <p key={row.performer_id}><strong>{index + 1}位 {approved.find((performer) => performer.id === row.performer_id)?.stage_name ?? row.performer_id}</strong>・{row.votes}票</p>)}<button className="pl-btn pl-btn--ghost pl-btn--block" disabled={voteRanking.length < 3} onClick={() => void assignFinalists()}>上位3組をSPECIAL NIGHTへ設定</button><button className="pl-btn pl-btn--block" onClick={() => void publishResults(!event?.results_published_at)}>{event?.results_published_at ? '結果を非公開に戻す' : '投票を終了して結果を公開'}</button><p className="pl-muted">結果公開までは一般ユーザーに途中順位を表示しません。</p></div>
+          <div className="pl-card"><h2 className="pl-h2">途中集計（運営のみ）</h2><p className="pl-muted">AWPの日別途中集計・確定状態・SPECIAL STAGE反映は専用投票デスクで確認してください。16:20に自動確定します。同票時は自動割当しません。</p><a className="pl-registration__link" href="/live?adminVotes=1">日別投票デスクを開く</a></div>
         </>
       ) : null}
 

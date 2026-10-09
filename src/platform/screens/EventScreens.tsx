@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, ExternalLi
 import { isActiveEventSlot, eventSlotCancellation } from '../lib/eventSlotStatus'
 import {
   getEventBySlug,
+  getDailyVoteResults,
   getEventVoteRule,
   getMyVotes,
   listEventLineupPerformers,
@@ -19,6 +20,7 @@ import {
   type EventVenueRow,
   type EventVoteRule,
   type FeaturedEvent,
+  type DailyVoteResults,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
@@ -245,6 +247,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
   const [votingPerformers, setVotingPerformers] = useState<Performer[]>([])
   const [rule, setRule] = useState<EventVoteRule | null>(null)
   const [ranking, setRanking] = useState<Array<{ performer: Performer; votes: number }>>([])
+  const [dailyResults, setDailyResults] = useState<DailyVoteResults | null>(null)
   const [selectedDate, setSelectedDate] = useState('')
   const [myVotes, setMyVotes] = useState<string[]>([])
   const [deviceVotes, setDeviceVotes] = useState<{ eventId: string; voted: string[] | null } | null>(null)
@@ -265,6 +268,17 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     const timer = window.setInterval(() => setClock(nowJst()), 30_000)
     return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (!event || event.slug !== AWP_SLUG || !selectedDate) return
+    let active = true
+    const refresh = () => void getDailyVoteResults(event.id, selectedDate)
+      .then((value) => { if (active) setDailyResults(value) })
+      .catch(() => { if (active) setDailyResults(null) })
+    refresh()
+    const timer = window.setInterval(refresh, 30_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [event?.id, selectedDate])
 
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]')
@@ -472,11 +486,11 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
 
     {isAwp ? <section className="awp-watch-now"><header><Clock3 size={20} /><div><p>QUICK PICKS</p><h2>今から観られる！</h2></div></header>{watchNow.length ? <div>{watchNow.map((slot, index) => { const venue = venueById.get(slot.venue_id); return <article key={slot.id} data-state={slotState(slot, clock) === '開催中' ? 'live' : index === 0 ? 'soon' : 'next'}><span>{displayStageName(venue?.name_ja || slot.stage_ja)}</span><strong>{slot.performer_name_ja || (slot.performer_id ? performerById.get(slot.performer_id)?.stage_name : null) || slot.stage_ja}</strong><small>{timeKey(slot.start_time)} START · {liveTimingLabel(slot)}</small><button onClick={() => openVenueMap(slot.venue_id)}><MapPin size={14} />場所</button></article>})}</div> : <p className="pl-event-inline-empty">この日の出演は終了しました。</p>}</section> : null}
 
-    {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:00</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:00+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL NIGHT</strong></li></ol></details> : null}
+    {phase === 'during' ? <details className="pl-event-guide"><summary>{t('eventHowTo')}</summary><ol><li><em>10:00〜16:20</em><strong>{t('eventDayShow')}</strong></li><li><em>STEP 2</em><strong>{t('eventVoteStep')}</strong></li><li><em>16:20+</em><strong>{t('eventResults')}</strong></li><li><em>16:30〜19:00</em><strong>SPECIAL STAGE</strong></li></ol></details> : null}
 
     <section className="pl-event-schedule" id="event-schedule"><header><p>TIMETABLE</p><h2>{t('eventTimetable')}</h2><span>{t('eventTimetableLead')}</span></header>{!isAwp ? <div className="pl-event-schedule__dates" role="tablist">{dates.map((date) => <button role="tab" aria-selected={selectedDate === date} data-active={selectedDate === date} key={date} onClick={() => setSelectedDate(date)}>{date.slice(5).replace('-', '/')}</button>)}</div> : null}{regularDateSlots.length === 0 ? <p className="pl-event-inline-empty">{t('eventDayEmpty')}</p> : regularDateSlots.map((slot) => { const performer = slot.performer_id ? performerById.get(slot.performer_id) : null; const venue = venueById.get(slot.venue_id); const displayName = slot.performer_name_ja || performer?.stage_name || slot.stage_ja || t('eventAdjusting'); const state = slotState(slot, clock); const cancelled = !isActiveEventSlot(slot); const stateLabel = cancelled ? '中止' : selectedDate === clock.date ? liveTimingLabel(slot) : state === '終了' ? t('slotEnded') : t('slotPlanned'); const wanted = wantedSlots.includes(slot.id); const stageName = displayStageName(venue?.name_ja || slot.stage_ja); return <article className="pl-event-slot" key={slot.id} data-cancelled={cancelled} data-live={state === '開催中'} data-stage={stageName}><time>{timeKey(slot.start_time)}<small>{t('eventUntil', { time: timeKey(slot.end_time) })}</small></time><button disabled={cancelled || !performer} onClick={() => performer && onOpenPerformer(performer.id)}>{performer?.photo_url ? <img src={performer.photo_url} alt="" /> : <span /> }<strong>{displayName}</strong><em>{performer?.genre || 'Performance'}</em></button><i>{stateLabel}</i>{cancelled ? <p className="pl-slot-cancellation">{eventSlotCancellation(slot)}</p> : null}<div className="pl-event-slot__actions"><button className="pl-event-slot__venue" disabled={cancelled} onClick={() => openVenueMap(slot.venue_id)}><MapPin size={14} />{stageName}</button><button className="pl-event-slot__want" disabled={cancelled} data-active={!cancelled && wanted} aria-pressed={!cancelled && wanted} onClick={() => toggleWanted(slot.id)}><Heart size={14} fill={wanted ? 'currentColor' : 'none'} />{cancelled ? '中止' : wanted ? '観たい済み' : '観たい'}</button></div>{!cancelled && performer?.is_live && slot.is_stream ? <button className="pl-event-slot__live" onClick={() => onWatchLive(performer.id)}>{t('navLive')}</button> : null}</article>})}</section>
 
-    {isAwp ? <section className="awp-special"><header><Trophy size={25} /><div><p>SPECIAL NIGHT</p><h2>あなたの一票で、夜のステージが決まる。</h2></div></header><div>{dateSlots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => timeKey(a.start_time).localeCompare(timeKey(b.start_time))).map((slot) => <article key={slot.id} data-cancelled={!isActiveEventSlot(slot)}>{!isActiveEventSlot(slot) ? <p className="pl-slot-cancellation">{eventSlotCancellation(slot)}</p> : null}<time>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</time><strong>{slot.ranking_position === 3 ? '🥉' : slot.ranking_position === 2 ? '🥈' : '🥇'} 投票結果{slot.ranking_position}位</strong><span>{displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}</span></article>)}</div>{votingOpen ? <button onClick={() => onOpenVote ? onOpenVote() : jump('event-vote')}><Vote size={17} />投票する</button> : <p className="awp-special__closed">投票受付前</p>}</section> : null}
+    {isAwp ? <section className="awp-special"><header><Trophy size={25} /><div><p>SPECIAL STAGE</p><h2>{dailyResults?.results_public ? 'AWP 2026 本日の投票結果' : 'あなたの一票で、SPECIAL STAGE出演者が決まります'}</h2><span>{selectedDate.replaceAll('-', '/')}</span></div></header>{dailyResults?.results_public ? <><div>{dailyResults.ranking.slice(0, 3).map((row) => { const performer = performerById.get(row.performer_id); return <article key={row.performer_id}><strong>{row.ranking_position === 1 ? '🥇' : row.ranking_position === 2 ? '🥈' : '🥉'} {row.ranking_position}位：{performer?.stage_name || '出演者'}</strong><span>{row.votes}票{row.tied ? '（同票）' : ' · SPECIAL STAGE出演決定'}</span></article> })}</div>{dailyResults.result_status === 'tie' ? <p className="awp-special__closed">同票のため出演者は運営確認中です。</p> : null}{dailyResults.ranking.length > 3 ? <details><summary>4位以下の最終ランキング</summary>{dailyResults.ranking.slice(3).map((row) => <p key={row.performer_id}>{row.ranking_position}位 {performerById.get(row.performer_id)?.stage_name || '出演者'} · {row.votes}票</p>)}</details> : null}</> : <><div>{dateSlots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => timeKey(a.start_time).localeCompare(timeKey(b.start_time))).map((slot) => <article key={slot.id} data-cancelled={!isActiveEventSlot(slot)}>{!isActiveEventSlot(slot) ? <p className="pl-slot-cancellation">{eventSlotCancellation(slot)}</p> : null}<time>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</time><strong>{slot.ranking_position === 3 ? '🥉' : slot.ranking_position === 2 ? '🥈' : '🥇'} 投票結果{slot.ranking_position}位</strong><span>{displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}</span></article>)}</div><p className="awp-special__closed">{dailyResults?.voting_open ? '投票受付中 · 結果発表は16:20' : '投票受付は10:00〜16:20です'}</p>{dailyResults?.voting_open ? <button onClick={() => onOpenVote ? onOpenVote() : jump('event-vote')}><Vote size={17} />投票する</button> : null}</>}</section> : null}
 
     {isAwp ? <section className="pl-event-lineup-full awp-roving"><header><p>STATUE / ROVING</p><h2>会場を歩いて出会おう</h2><span>どこで会えるかは当日のお楽しみ。投票対象とは別のAWP公式出演です。</span></header><div>{guestAppearances.filter((row) => dateKey(row.appearance_date) === selectedDate).map((row) => { const linked = resolveLinkedGuestPerformer(row, guestPerformerById); return <OfficialAppearanceCard key={row.id} name={row.official_name_ja} category={officialAppearanceCategory(row.appearance_type)} genre={linked?.genre} place={linked ? performerPlace(linked) : undefined} photoUrl={linked?.photo_url ?? null} linked={Boolean(linked)} pendingLabel="公式出演者（プロフィール準備中）" profileLabel={t('eventSeeProfile')} onOpen={linked ? () => onOpenPerformer(linked.id) : undefined} /> })}</div></section> : null}
 

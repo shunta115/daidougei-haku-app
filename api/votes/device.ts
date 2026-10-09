@@ -33,14 +33,6 @@ function sameOrigin(req: VercelRequest) {
   try { return new URL(origin).host === host } catch { return false }
 }
 
-function openNow(rule: Record<string, unknown> | null) {
-  if (!rule?.voting_enabled || !rule.voting_open) return false
-  const now = Date.now()
-  if (rule.voting_starts_at && now < Date.parse(String(rule.voting_starts_at))) return false
-  if (rule.voting_ends_at && now >= Date.parse(String(rule.voting_ends_at))) return false
-  return true
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -85,17 +77,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const [{ data: rule, error: ruleError }, { data: ballots, error: ballotError }] = await Promise.all([
-      sb.from('event_vote_rules').select('voting_enabled,voting_open,votes_per_device,voting_starts_at,voting_ends_at').eq('event_id', eventId).maybeSingle(),
-      sb.from('event_device_ballots').select('performer_id').eq('event_id', eventId).eq('device_hash', hash),
+    const { data: dayState, error: stateError } = await sb.rpc('get_event_vote_day_state', {
+      p_event_id: eventId,
+      p_vote_date: null,
+    })
+    if (stateError) throw stateError
+    const state = (dayState ?? {}) as Record<string, unknown>
+    const voteDate = String(state.vote_date || '')
+    const [{ data: rule, error: ruleError }, { data: ballots, error: ballotError }, { data: eligible, error: eligibleError }] = await Promise.all([
+      sb.from('event_vote_rules').select('voting_enabled,voting_open,votes_per_device').eq('event_id', eventId).maybeSingle(),
+      sb.from('event_device_ballots').select('performer_id').eq('event_id', eventId).eq('vote_date', voteDate).eq('device_hash', hash),
+      sb.from('event_slots').select('performer_id').eq('event_id', eventId).eq('date', voteDate).eq('performance_type', 'regular').not('performer_id', 'is', null).not('status', 'in', '(cancelled,canceled)'),
     ])
     if (ruleError) throw ruleError
     if (ballotError) throw ballotError
+    if (eligibleError) throw eligibleError
     const voted = (ballots ?? []).map((row) => String(row.performer_id))
+    const eligibleIds = [...new Set((eligible ?? []).map((row) => String(row.performer_id)).filter(Boolean))]
     const max = Math.max(1, Math.min(10, Number(rule?.votes_per_device) || 3))
     res.status(200).json({
       voting_enabled: Boolean(rule?.voting_enabled),
-      voting_open: openNow(rule as Record<string, unknown> | null),
+      voting_open: Boolean(state.voting_open),
+      vote_date: voteDate,
+      starts_at: state.starts_at ?? null,
+      ends_at: state.ends_at ?? null,
+      results_public: Boolean(state.results_public),
+      result_status: String(state.result_status || 'pending'),
+      eligible_performer_ids: eligibleIds,
       max_votes: max,
       used: voted.length,
       remaining: Math.max(0, max - voted.length),

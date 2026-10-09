@@ -9,11 +9,12 @@ export function AdminVoteDeskScreen() {
   const [acts, setActs] = useState<Performer[]>([])
   const [error, setError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [voteDate, setVoteDate] = useState('2026-10-10')
 
   const reload = async () => {
     const event = await getEventBySlug(AWP_EVENT_SLUG)
     if (!event) throw new Error('AWPイベントが見つかりません')
-    const [next, lineup] = await Promise.all([getAdminVoteDesk(event.id), listEventLineupPerformers(event.id)])
+    const [next, lineup] = await Promise.all([getAdminVoteDesk(event.id, voteDate), listEventLineupPerformers(event.id)])
     setEventId(event.id)
     setDesk(next)
     setActs(lineup)
@@ -21,7 +22,7 @@ export function AdminVoteDeskScreen() {
 
   useEffect(() => {
     void reload().catch((e) => setError(e instanceof Error ? e.message : '読み込みに失敗しました'))
-  }, [])
+  }, [voteDate])
 
   const setOpen = async (open: boolean) => {
     if (!eventId) return
@@ -49,6 +50,8 @@ export function AdminVoteDeskScreen() {
         <>
           <div className="pl-card">
             <h2 className="pl-h2">受付</h2>
+            <label><span className="pl-label">開催日</span><select className="pl-input" value={voteDate} onChange={(event) => setVoteDate(event.target.value)}><option value="2026-10-10">10月10日</option><option value="2026-10-11">10月11日</option><option value="2026-10-12">10月12日</option></select></label>
+            <p>{desk.starts_at ? `${new Date(desk.starts_at).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}〜${new Date(desk.ends_at || '').toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo' })}` : '日別設定なし'}</p>
             <p>{desk.voting_open ? 'OPEN' : 'STOP'}</p>
             <button type="button" className="pl-btn pl-btn--block" onClick={() => void setOpen(true)}>投票 OPEN</button>
             <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={() => void setOpen(false)}>投票 STOP</button>
@@ -58,6 +61,8 @@ export function AdminVoteDeskScreen() {
             <p>総投票数 {desk.total_votes}</p>
             <p>ユニーク端末数 {desk.unique_voters}</p>
             <p>1端末あたり上限 {desk.votes_per_device}票</p>
+            <p>結果: {desk.result_status || 'pending'} / SPECIAL STAGE: {desk.assignment_status || 'pending'}</p>
+            {desk.error_message ? <p className="pl-error">要確認: {desk.error_message}</p> : null}
           </div>
           <div className="pl-card">
             <h2 className="pl-h2">順位（運営のみ）</h2>
