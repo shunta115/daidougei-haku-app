@@ -14,6 +14,13 @@ describe('official AWP admin vote ranking', () => {
     expect(migration).toContain("'votes_per_device'")
   })
 
+  it('does not make the official desk depend on optional legacy tables', () => {
+    expect(migration).toContain("to_regclass('public.event_ballots')")
+    expect(migration).toContain("to_regclass('public.event_anon_ballots')")
+    expect(migration).toContain("'legacy_test_votes', legacy_test_votes")
+    expect(migration).not.toContain('(select count(*) from public.event_anon_ballots')
+  })
+
   it('does not silently fall back to legacy ballots for finalist ranking', () => {
     const rankingFunction = api.slice(api.indexOf('export async function listAdminVoteRanking'), api.indexOf('export async function createBookingInquiry'))
     expect(rankingFunction).toContain('getAdminVoteDesk(eventId)')

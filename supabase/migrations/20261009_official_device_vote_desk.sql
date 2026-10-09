@@ -11,6 +11,7 @@ set search_path = public
 as $$
 declare
   rule public.event_vote_rules%rowtype;
+  legacy_test_votes bigint := 0;
 begin
   if not public.is_admin() then
     raise exception 'admin_required';
@@ -19,6 +20,18 @@ begin
   select * into rule
   from public.event_vote_rules
   where event_id = p_event_id;
+
+  -- Older production schemas do not necessarily contain both legacy ballot
+  -- tables. They are diagnostics only, so inspect them when present instead
+  -- of making the official device-vote desk depend on obsolete tables.
+  if to_regclass('public.event_ballots') is not null then
+    execute 'select count(*) from public.event_ballots where event_id = $1'
+      into legacy_test_votes using p_event_id;
+  end if;
+  if to_regclass('public.event_anon_ballots') is not null then
+    execute 'select $1 + count(*) from public.event_anon_ballots where event_id = $2'
+      into legacy_test_votes using legacy_test_votes, p_event_id;
+  end if;
 
   return jsonb_build_object(
     'voting_enabled', coalesce(rule.voting_enabled, false),
@@ -86,10 +99,7 @@ begin
           and extract(epoch from (max(b.created_at) - min(b.created_at))) < 20
       ) a
     ), '[]'::jsonb),
-    'legacy_test_votes', (
-      (select count(*) from public.event_ballots where event_id = p_event_id)
-      + (select count(*) from public.event_anon_ballots where event_id = p_event_id)
-    )
+    'legacy_test_votes', legacy_test_votes
   );
 end;
 $$;
