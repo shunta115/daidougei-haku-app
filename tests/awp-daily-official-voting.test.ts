@@ -3,7 +3,6 @@ import fs from 'node:fs'
 
 const sql = fs.readFileSync('supabase/migrations/20261010_awp_daily_official_voting.sql', 'utf8')
 const api = fs.readFileSync('api/votes/device.ts', 'utf8')
-const resultsApi = fs.readFileSync('api/votes/results.ts', 'utf8')
 
 describe('AWP daily official voting safety contract', () => {
   it('configures each JST day at 10:00–16:20 without deleting ballots', () => {
@@ -34,15 +33,15 @@ describe('AWP daily official voting safety contract', () => {
     expect(sql).toContain("assignment_status='manual_required'")
     expect(sql).toContain('rank() over(order by x.votes desc)')
     expect(sql).not.toContain('row_number() over (order by count(*) desc')
-    expect(resultsApi).toContain('if (!state.results_public)')
-    expect(resultsApi).toContain('ranking: []')
+    expect(api).toContain('if (!state.results_public)')
+    expect(api).toContain('ranking: []')
   })
 
   it('uses server-side daily state and prevents cross-day browser ballot restoration', () => {
     expect(api).toContain("rpc('get_event_vote_day_state'")
     expect(api).toContain(".eq('vote_date', voteDate)")
     expect(api).toContain('eligible_performer_ids')
-    expect(resultsApi).toContain("rpc('finalize_event_vote_day'")
+    expect(api).toContain("rpc('finalize_event_vote_day'")
   })
 
   it('only assigns empty same-day SPECIAL STAGE slots after an unambiguous top three', () => {

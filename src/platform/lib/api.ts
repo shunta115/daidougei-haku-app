@@ -898,7 +898,7 @@ export type DailyVoteResults = {
 }
 
 export async function getDailyVoteResults(eventId: string, voteDate: string): Promise<DailyVoteResults> {
-  const response = await fetch(`/api/votes/results?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(voteDate)}`, { credentials: 'same-origin' })
+  const response = await fetch(`/api/votes/device?results=1&eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(voteDate)}`, { credentials: 'same-origin' })
   const row = await response.json().catch(() => ({})) as Partial<DailyVoteResults> & { error?: string }
   if (!response.ok) throw new Error(row.error || 'vote_results_unavailable')
   return {
