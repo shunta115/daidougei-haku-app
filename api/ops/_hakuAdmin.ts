@@ -679,7 +679,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const nameById = new Map((performerNames ?? []).map((row) => [row.id, row.stage_name]))
       res.status(200).json({
         ok: true,
-        source: 'event_ballots',
+        source: 'event_device_ballots',
         desk: {
           voting_enabled: Boolean(rule?.voting_enabled),
           voting_open: Boolean(rule?.voting_open),

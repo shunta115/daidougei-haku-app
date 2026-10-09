@@ -887,9 +887,9 @@ export async function castAnonEventVote(eventId: string, performerId: string, _l
 }
 
 export type AdminVoteDesk = {
+  voting_enabled: boolean
   voting_open: boolean
-  allow_anonymous: boolean
-  votes_per_voter: number
+  votes_per_device: number
   total_votes: number
   unique_voters: number
   ranking: Array<{ performer_id: string; votes: number }>
@@ -903,9 +903,9 @@ export async function getAdminVoteDesk(eventId: string): Promise<AdminVoteDesk> 
   if (error) throw error
   const row = (data ?? {}) as Partial<AdminVoteDesk>
   return {
+    voting_enabled: Boolean(row.voting_enabled),
     voting_open: Boolean(row.voting_open),
-    allow_anonymous: Boolean(row.allow_anonymous),
-    votes_per_voter: Number(row.votes_per_voter) || 3,
+    votes_per_device: Number(row.votes_per_device) || 3,
     total_votes: Number(row.total_votes) || 0,
     unique_voters: Number(row.unique_voters) || 0,
     ranking: Array.isArray(row.ranking) ? row.ranking.map((item) => ({ performer_id: String(item.performer_id), votes: Number(item.votes) || 0 })) : [],
@@ -934,17 +934,8 @@ export async function listVoteRanking(eventId: string): Promise<Array<{ performe
 }
 
 export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
-  try {
-    const desk = await getAdminVoteDesk(eventId)
-    return desk.ranking
-  } catch {
-    const sb = requireSupabase()
-    const { data, error } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId)
-    if (error) throw error
-    const counts = new Map<string, number>()
-    for (const row of data ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
-    return [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes)
-  }
+  const desk = await getAdminVoteDesk(eventId)
+  return desk.ranking
 }
 
 export async function createBookingInquiry(organizerId: string, performerId: string, message: string) {

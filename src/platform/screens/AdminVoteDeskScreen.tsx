@@ -56,8 +56,8 @@ export function AdminVoteDeskScreen() {
           <div className="pl-card">
             <h2 className="pl-h2">集計</h2>
             <p>総投票数 {desk.total_votes}</p>
-            <p>ユニーク匿名投票者 {desk.unique_voters}</p>
-            <p>1人あたり上限 {desk.votes_per_voter}票</p>
+            <p>ユニーク端末数 {desk.unique_voters}</p>
+            <p>1端末あたり上限 {desk.votes_per_device}票</p>
           </div>
           <div className="pl-card">
             <h2 className="pl-h2">順位（運営のみ）</h2>
