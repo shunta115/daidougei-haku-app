@@ -142,7 +142,6 @@ with event_row as (
   select id from public.events where slug = 'award-winning-performers-2026'
 ), official(appearance_date,official_name_ja,appearance_type,source_key,sort_order) as (
 values
-  ('2026-10-10', 'オリーブ', 'statue_roving', 'awp-2026-2026-10-10-appearance-1', 1),
   ('2026-10-10', 'CLOWN BELLA', 'statue_roving', 'awp-2026-2026-10-10-appearance-2', 2),
   ('2026-10-10', 'ドレミふぁ共和国', 'statue_roving', 'awp-2026-2026-10-10-appearance-3', 3),
   ('2026-10-10', 'アンドロイドールYuE', 'statue_roving', 'awp-2026-2026-10-10-appearance-4', 4),
@@ -170,7 +169,7 @@ on conflict (event_id,source_key) do nothing;
 commit;
 
 -- Expected after a first successful run: 8 venues from this source, 84 slots,
--- 12 statue/roving daily appearances. Coordinates remain NULL intentionally.
+-- 11 statue/roving daily appearances. Coordinates remain NULL intentionally.
 select
   (select count(*) from public.event_venues v join public.events e on e.id=v.event_id where e.slug='award-winning-performers-2026' and v.id like 'awp-2026-%') as imported_venues,
   (select count(*) from public.event_slots s join public.events e on e.id=s.event_id where e.slug='award-winning-performers-2026' and s.source_label='AWPプログラム2026 全日分.pdf') as imported_slots,
