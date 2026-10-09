@@ -854,6 +854,12 @@ export async function voteForPerformer(eventId: string, performerId: string, _fa
 
 export type AnonVoteState = {
   voting_open: boolean
+  vote_date?: string
+  starts_at?: string | null
+  ends_at?: string | null
+  results_public?: boolean
+  result_status?: string
+  eligible_performer_ids?: string[]
   max_votes: number
   used: number
   remaining: number
@@ -867,10 +873,42 @@ export async function getAnonVoteState(eventId: string, _legacyVoterId = ''): Pr
   const voted = Array.isArray(row.voted) ? row.voted.map(String) : []
   return {
     voting_open: Boolean(row.voting_open),
+    vote_date: row.vote_date ? String(row.vote_date) : undefined,
+    starts_at: row.starts_at ? String(row.starts_at) : null,
+    ends_at: row.ends_at ? String(row.ends_at) : null,
+    results_public: Boolean(row.results_public),
+    result_status: row.result_status ? String(row.result_status) : 'pending',
+    eligible_performer_ids: Array.isArray(row.eligible_performer_ids) ? row.eligible_performer_ids.map(String) : [],
     max_votes: Number(row.max_votes) || 3,
     used: Number(row.used) || voted.length,
     remaining: Number(row.remaining) || 0,
     voted,
+  }
+}
+
+export type DailyVoteResults = {
+  vote_date: string
+  voting_open: boolean
+  results_public: boolean
+  result_status: 'pending' | 'final' | 'tie' | 'error'
+  assignment_status: string
+  starts_at?: string
+  ends_at?: string
+  ranking: Array<{ performer_id: string; votes: number; ranking_position: number; tied: boolean }>
+}
+
+export async function getDailyVoteResults(eventId: string, voteDate: string): Promise<DailyVoteResults> {
+  const response = await fetch(`/api/votes/device?results=1&eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(voteDate)}`, { credentials: 'same-origin' })
+  const row = await response.json().catch(() => ({})) as Partial<DailyVoteResults> & { error?: string }
+  if (!response.ok) throw new Error(row.error || 'vote_results_unavailable')
+  return {
+    vote_date: String(row.vote_date || voteDate), voting_open: Boolean(row.voting_open),
+    results_public: Boolean(row.results_public), result_status: row.result_status || 'pending',
+    assignment_status: String(row.assignment_status || 'pending'), starts_at: row.starts_at, ends_at: row.ends_at,
+    ranking: Array.isArray(row.ranking) ? row.ranking.map((item) => ({
+      performer_id: String(item.performer_id), votes: Number(item.votes) || 0,
+      ranking_position: Number(item.ranking_position) || 0, tied: Boolean(item.tied),
+    })) : [],
   }
 }
 
@@ -887,6 +925,12 @@ export async function castAnonEventVote(eventId: string, performerId: string, _l
 }
 
 export type AdminVoteDesk = {
+  vote_date?: string
+  starts_at?: string
+  ends_at?: string
+  result_status?: string
+  assignment_status?: string
+  error_message?: string | null
   voting_enabled: boolean
   voting_open: boolean
   votes_per_device: number
@@ -897,12 +941,20 @@ export type AdminVoteDesk = {
   anomalies: Array<{ voter_prefix: string; votes: number; span_seconds: number; kind: string }>
 }
 
-export async function getAdminVoteDesk(eventId: string): Promise<AdminVoteDesk> {
+export async function getAdminVoteDesk(eventId: string, voteDate?: string): Promise<AdminVoteDesk> {
   const sb = requireSupabase()
-  const { data, error } = await sb.rpc('admin_event_vote_desk', { p_event_id: eventId })
+  const { data, error } = voteDate
+    ? await sb.rpc('admin_event_vote_desk', { p_event_id: eventId, p_vote_date: voteDate })
+    : await sb.rpc('admin_event_vote_desk', { p_event_id: eventId })
   if (error) throw error
   const row = (data ?? {}) as Partial<AdminVoteDesk>
   return {
+    vote_date: row.vote_date ? String(row.vote_date) : voteDate,
+    starts_at: row.starts_at ? String(row.starts_at) : undefined,
+    ends_at: row.ends_at ? String(row.ends_at) : undefined,
+    result_status: row.result_status ? String(row.result_status) : undefined,
+    assignment_status: row.assignment_status ? String(row.assignment_status) : undefined,
+    error_message: row.error_message ? String(row.error_message) : null,
     voting_enabled: Boolean(row.voting_enabled),
     voting_open: Boolean(row.voting_open),
     votes_per_device: Number(row.votes_per_device) || 3,

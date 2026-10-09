@@ -35,7 +35,7 @@ vi.mock('../src/platform/lib/api', async (importOriginal) => {
 })
 import { AdminEventScreen } from '../src/platform/screens/AdminEventOps'
 
-const deviceLabel = '1端末あたりの票数（イベント全期間）'
+const deviceLabel = '1端末あたりの票数（開催日ごと）'
 beforeEach(() => {
   fake.rule = {
     event_id: 'awp', voting_enabled: true, voting_open: true,

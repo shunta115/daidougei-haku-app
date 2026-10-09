@@ -5,6 +5,7 @@ import { getAdminSupabase } from '../stripe/_shared.js'
 const COOKIE_NAME = 'haku_vote_device'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
+const AWP_DATE_RE = /^2026-10-(10|11|12)$/
 
 function cookieValue(req: VercelRequest, name: string) {
   const raw = req.headers.cookie || ''
@@ -33,14 +34,6 @@ function sameOrigin(req: VercelRequest) {
   try { return new URL(origin).host === host } catch { return false }
 }
 
-function openNow(rule: Record<string, unknown> | null) {
-  if (!rule?.voting_enabled || !rule.voting_open) return false
-  const now = Date.now()
-  if (rule.voting_starts_at && now < Date.parse(String(rule.voting_starts_at))) return false
-  if (rule.voting_ends_at && now >= Date.parse(String(rule.voting_ends_at))) return false
-  return true
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -64,6 +57,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const sb = getAdminSupabase()
 
   try {
+    if (req.method === 'GET' && String(req.query.results || '') === '1') {
+      const voteDate = String(req.query.date || '')
+      if (!AWP_DATE_RE.test(voteDate)) return res.status(400).json({ error: 'invalid_vote_date' })
+      const { data: initialState, error: initialError } = await sb.rpc('get_event_vote_day_state', {
+        p_event_id: eventId, p_vote_date: voteDate,
+      })
+      if (initialError) throw initialError
+      let state = (initialState ?? {}) as Record<string, unknown>
+      if (state.configured && Date.parse(String(state.server_now)) >= Date.parse(String(state.ends_at)) && !state.results_public) {
+        const { data, error } = await sb.rpc('finalize_event_vote_day', { p_event_id: eventId, p_vote_date: voteDate })
+        if (error) throw error
+        state = (data ?? state) as Record<string, unknown>
+      }
+      if (!state.results_public) return res.status(200).json({ ...state, ranking: [] })
+      const { data: ranking, error } = await sb.rpc('get_public_event_results_by_day', {
+        p_event_id: eventId, p_vote_date: voteDate,
+      })
+      if (error) throw error
+      return res.status(200).json({ ...state, ranking: ranking ?? [] })
+    }
     if (req.method === 'POST') {
       const performerId = String(req.body?.performerId || '')
       if (!UUID_RE.test(performerId)) {
@@ -85,17 +98,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const [{ data: rule, error: ruleError }, { data: ballots, error: ballotError }] = await Promise.all([
-      sb.from('event_vote_rules').select('voting_enabled,voting_open,votes_per_device,voting_starts_at,voting_ends_at').eq('event_id', eventId).maybeSingle(),
-      sb.from('event_device_ballots').select('performer_id').eq('event_id', eventId).eq('device_hash', hash),
+    const { data: dayState, error: stateError } = await sb.rpc('get_event_vote_day_state', {
+      p_event_id: eventId,
+      p_vote_date: null,
+    })
+    if (stateError) throw stateError
+    const state = (dayState ?? {}) as Record<string, unknown>
+    const voteDate = String(state.vote_date || '')
+    const [{ data: rule, error: ruleError }, { data: ballots, error: ballotError }, { data: eligible, error: eligibleError }] = await Promise.all([
+      sb.from('event_vote_rules').select('voting_enabled,voting_open,votes_per_device').eq('event_id', eventId).maybeSingle(),
+      sb.from('event_device_ballots').select('performer_id').eq('event_id', eventId).eq('vote_date', voteDate).eq('device_hash', hash),
+      sb.from('event_slots').select('performer_id').eq('event_id', eventId).eq('date', voteDate).eq('performance_type', 'regular').not('performer_id', 'is', null).not('status', 'in', '(cancelled,canceled)'),
     ])
     if (ruleError) throw ruleError
     if (ballotError) throw ballotError
+    if (eligibleError) throw eligibleError
     const voted = (ballots ?? []).map((row) => String(row.performer_id))
+    const eligibleIds = [...new Set((eligible ?? []).map((row) => String(row.performer_id)).filter(Boolean))]
     const max = Math.max(1, Math.min(10, Number(rule?.votes_per_device) || 3))
     res.status(200).json({
       voting_enabled: Boolean(rule?.voting_enabled),
-      voting_open: openNow(rule as Record<string, unknown> | null),
+      voting_open: Boolean(state.voting_open),
+      vote_date: voteDate,
+      starts_at: state.starts_at ?? null,
+      ends_at: state.ends_at ?? null,
+      results_public: Boolean(state.results_public),
+      result_status: String(state.result_status || 'pending'),
+      eligible_performer_ids: eligibleIds,
       max_votes: max,
       used: voted.length,
       remaining: Math.max(0, max - voted.length),
