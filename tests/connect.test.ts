@@ -145,17 +145,17 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.link).not.toHaveBeenCalled()
   })
 
-  it('keeps a live/test mismatch read-only during status refresh', async () => {
+  it('preserves the account id but clears a stale completion flag on live/test mismatch', async () => {
     fake.retrieve.mockRejectedValueOnce({
       type: 'StripeInvalidRequestError', statusCode: 400,
       raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
     })
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.code).toBe(200)
-    expect(res.body).toMatchObject({ connected: false, state: 'not_started' })
+    expect(res.body).toMatchObject({ connected: false, complete: false, state: 'account_mismatch' })
     expect(fake.list).not.toHaveBeenCalled()
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.update).not.toHaveBeenCalled()
+    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
   })
 
   it('recognizes the exact Stripe testmode-account wording seen in production', async () => {
@@ -165,8 +165,17 @@ describe('Stripe onboarding without payment changes', () => {
     })
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.code).toBe(200)
-    expect(res.body).toMatchObject({ connected: false, state: 'not_started' })
-    expect(fake.update).not.toHaveBeenCalled()
+    expect(res.body).toMatchObject({ connected: false, state: 'account_mismatch' })
+    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
+  })
+
+  it('reports requirement counts and the Stripe check time without exposing requirement details', async () => {
+    fake.account.requirements.currently_due = ['individual.verification.document']
+    fake.account.requirements.past_due = ['external_account']
+    const res = await request({ performerId: 'performer-fixture', action: 'status' })
+    expect(res.body).toMatchObject({ currentlyDueCount: 1, pastDueCount: 1, pendingVerificationCount: 0 })
+    expect(typeof res.body.checkedAt).toBe('string')
+    expect(JSON.stringify(res.body)).not.toContain('external_account')
   })
 
   it('reuses the single exact live metadata match after an explicit onboarding click', async () => {
