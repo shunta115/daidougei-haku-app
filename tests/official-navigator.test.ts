@@ -23,12 +23,13 @@ describe('official navigator safety', () => {
     expect(api).toContain(".eq('event_date', todayJst)")
   })
 
-  it('reuses existing live, profile and tip routes without changing permissions', () => {
+  it('reuses the existing live and profile routes without changing payment permissions', () => {
     const home = read('src/platform/screens/FanHomeScreen.tsx')
     expect(home).toContain("navigator.live_status === 'live'")
     expect(home).toContain('onWatch(performer.id)')
     expect(home).toContain('onOpen(performer.id)')
-    expect(home).toContain('disabled={!performer.stripe_onboarding_complete}')
-    expect(home).toContain('onTip(performer.id)')
+    expect(home).toContain('pl-navigator__cheer')
+    expect(home).toContain('応援する')
+    expect(home).not.toContain('投げ銭は準備中')
   })
 })
