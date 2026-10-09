@@ -191,12 +191,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sb.from('profiles').select('id,role,status', { count: 'exact', head: false }).limit(4000),
         sb.from('performers').select('id,is_approved,review_status,is_live,stripe_onboarding_complete,stage_name,genre,city,bio,photo_url').limit(4000),
         sb.from('live_sessions').select('id,ended_at,heartbeat_at').is('ended_at', null),
-        sb.from('tips').select('id,status,gross_amount_yen,amount_cents,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen').limit(4000),
-        sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen').limit(4000),
+        sb.from('tips').select('id,status,gross_amount_yen,amount_cents,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen,created_at').gte('created_at', '2026-10-09T20:20:00.000Z').limit(4000),
+        sb.from('merch_orders').select('id,status,gross_amount_yen,amount_yen,stripe_fee_yen,haku_fee_yen,performer_share_yen,settlement_status,refunded_amount_yen,created_at').gte('created_at', '2026-10-09T20:20:00.000Z').limit(4000),
         sb.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         sb.from('event_ballots').select('id', { count: 'exact', head: true }),
         sb.from('event_slots').select('id', { count: 'exact', head: true }).gte('date', '2026-10-10').lte('date', '2026-10-12'),
       ])
+      if (tips.error) throw tips.error
+      if (orders.error) throw orders.error
       const tipPaid = (tips.data ?? []).filter((row) => row.status === 'succeeded')
       const merchPaid = (orders.data ?? []).filter((row) => row.status === 'succeeded')
       const tipGmv = yenSum(tipPaid, ['gross_amount_yen', 'amount_cents'])
