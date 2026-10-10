@@ -116,9 +116,9 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
       <button type="button" className="pl-btn pl-btn--block" onClick={onAuth}>
         {t('start')}
       </button>
-      <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+      <a className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} href={`${PLATFORM_PATH}?merch=1`}>
         {t('navGoods')}
-      </button>
+      </a>
       <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(FESTIVAL_PATH)}>
         {t('seeEvent')}
       </button>
