@@ -1,5 +1,5 @@
 /* Production PWA shell. Authenticated API responses are deliberately never cached. */
-const CACHE = 'daidougei-platform-v8-haku-icon'
+const CACHE = 'daidougei-platform-v9-merch-routing'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/favicon-32.png', '/favicon-48.png', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {

@@ -420,23 +420,22 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           ) : (
             <div className="hp-goods">
               {goodsPreview.map((item) => (
-                <button
+                <a
                   key={item.id}
-                  type="button"
                   className="hp-good"
-                  onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
+                  href={`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`}
                 >
                   {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span className="hp-good__ph" />}
                   <strong>{item.name}</strong>
                   <small>{item.status === 'sold_out' ? t('hpSoldOut') : formatYen(item.price_yen)}</small>
-                </button>
+                </a>
               ))}
             </div>
           )}
           {merch.length > 0 ? (
-            <button type="button" className="hp-more" onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+            <a className="hp-more" href={`${PLATFORM_PATH}?merch=1`}>
               {t('hpAllGoods')}
-            </button>
+            </a>
           ) : null}
         </section>
 
