@@ -21,8 +21,8 @@ describe('payment safety boundaries', () => {
     expect(merchUi).toContain("paymentErrorMessage('seller_checkout_unavailable', lang)")
     expect(merchUi).toContain('disabled={busy || !available || !seller || !checkoutAllowed}')
     expect(merchUi).not.toContain('seller?.stripe_onboarding_complete')
-    expect(read('api/stripe/merch.ts')).toContain('stripe.accounts.retrieve(seller.stripe_account_id)')
-    expect(read('api/stripe/merch.ts')).toContain('isConnectedAccountTransferReady(account)')
+    expect(read('api/stripe/merch.ts')).not.toContain('stripe.accounts.retrieve(seller.stripe_account_id)')
+    expect(read('api/stripe/merch.ts')).not.toContain('isConnectedAccountTransferReady(account)')
   })
 
   it('uses customer-facing Japanese Checkout copy', () => {
@@ -89,6 +89,8 @@ describe('payment safety boundaries', () => {
     const payout = read('api/stripe/_payouts.ts')
     expect(tip).toContain("charge_type: 'platform_separate'")
     expect(merch).toContain("charge_type: 'platform_separate'")
+    expect(merch).toContain('transfers the settled seller')
+    expect(merch).not.toContain('if (!seller.stripe_account_id)')
     expect(tip).not.toContain('stripeAccount: connectedAccountId')
     expect(merch).not.toContain('stripeAccount: connectedAccountId')
     expect(payout).toContain('stripe.transfers.create')
