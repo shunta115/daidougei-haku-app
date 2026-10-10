@@ -5,7 +5,6 @@ import {
   getAppUrl,
   getStripe,
   requireAuthUser,
-  isConnectedAccountTransferReady,
 } from './_shared.js'
 
 function missingColumn(error: unknown) {
@@ -70,21 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(403).json({ code: 'seller_checkout_unavailable' })
       return
     }
-    if (!seller.stripe_account_id) {
-      res.status(400).json({ code: 'seller_checkout_unavailable' })
-      return
-    }
-
     const stripe = getStripe()
-    const account = await stripe.accounts.retrieve(seller.stripe_account_id)
-    if (!isConnectedAccountTransferReady(account)) {
-      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', seller.id)
-      res.status(400).json({ code: 'seller_checkout_unavailable' })
-      return
-    }
-    if (!seller.stripe_onboarding_complete) {
-      await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', seller.id)
-    }
 
     const amount = product.price_yen * qty
     // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
@@ -140,7 +125,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (orderErr || !order) throw orderErr || new Error('Order insert failed')
 
-    const connectedAccountId = seller.stripe_account_id as string
+    // HAKU collects the platform charge now and transfers the settled seller
+    // share only after the performer finishes Connect onboarding.
+    const connectedAccountId = (seller.stripe_account_id as string | null) ?? null
     const orderMetaPatch = {
       gross_amount_yen: amount,
       connected_account_id: connectedAccountId,
@@ -171,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         product_id: product.id,
         seller_id: product.seller_id,
         buyer_id: user.id,
-        connected_account_id: connectedAccountId,
+        ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
         charge_type: 'platform_separate',
         platform_fee_bps: String(feeBps),
         seller_responsibility: 'seller',
