@@ -209,7 +209,10 @@ export function MerchDetailScreen({
   if (!product && !error) return <p className="pl-muted">Loading…</p>
   if (!product) return <p className="pl-error">{error}</p>
   const available = productAvailable(product)
-  const checkoutReady = Boolean(seller?.is_approved && seller?.stripe_onboarding_complete)
+  // The server checks the connected account against Stripe on every checkout
+  // and repairs a stale stripe_onboarding_complete flag. Do not block that
+  // authoritative refresh with an older public performer snapshot.
+  const checkoutAllowed = Boolean(seller?.is_approved)
   const maxQty = Math.min(20, Math.max(1, product.stock))
 
   return (
@@ -235,9 +238,9 @@ export function MerchDetailScreen({
             onChange={(e) => setQuantity(Math.min(maxQty, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
           />
         </label>
-        {!checkoutReady && seller ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('seller_checkout_unavailable', lang)}</p> : null}
-        <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available || !checkoutReady} onClick={() => void buy()}>
-          {busy ? '購入画面を準備中…' : !checkoutReady && seller ? paymentErrorMessage('seller_checkout_unavailable', lang) : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
+        {!checkoutAllowed && seller ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('seller_checkout_unavailable', lang)}</p> : null}
+        <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available || !seller || !checkoutAllowed} onClick={() => void buy()}>
+          {busy ? '購入画面を準備中…' : !seller ? '販売状態を確認中…' : !checkoutAllowed ? paymentErrorMessage('seller_checkout_unavailable', lang) : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
         </button>
         </div>
       </div>
