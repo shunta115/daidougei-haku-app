@@ -36,3 +36,15 @@ it('prevents parent navigation and invokes only the supplied refresh action', ()
   expect(refresh).toHaveBeenCalledTimes(1)
   expect(parent).not.toHaveBeenCalled()
 })
+
+for (const query of ['?merch=1', '?merchProduct=product-2']) {
+  it(`prioritizes explicit ${query} over a saved home screen`, () => {
+    window.history.replaceState({ hakuSnapshot: routes[0].snapshot }, '', '/live' + query)
+    expect(initialGuestScreen()).toBe(query.includes('merchProduct') ? 'merch-detail' : 'merch-list')
+  })
+}
+
+it('does not interpret arbitrary merch values as list links', () => {
+  window.history.replaceState({ hakuSnapshot: routes[6].snapshot }, '', '/live?merch=invalid')
+  expect(initialGuestScreen()).toBe('notifications')
+})

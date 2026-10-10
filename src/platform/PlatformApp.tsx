@@ -68,6 +68,7 @@ const REFRESHABLE_SCREENS = new Set<PlatformScreen>([
   'fan-home',
   'search',
   'merch-list',
+  'merch-detail',
   'live-list',
   'map-schedule',
   'event-list',
@@ -156,13 +157,25 @@ const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
   'performer-history',
 ])
 
+function merchandiseEntry(): NavigationSnapshot | null {
+  if (window.location.pathname === PASSWORD_RESET_PATH) return null
+  const params = new URLSearchParams(window.location.search)
+  const productId = params.get('merchProduct')
+  if (!productId && params.get('merch') !== '1') return null
+  return {
+    screen: productId ? 'merch-detail' : 'merch-list',
+    performerId: null,
+    merchProductId: productId,
+    eventSlug: null,
+  }
+}
+
 export function initialGuestScreen(): PlatformScreen {
   try {
     if (window.location.pathname === PASSWORD_RESET_PATH) return 'auth'
     // Explicit merchandise deep links take precedence over a previously saved screen.
-    const entryParams = new URLSearchParams(window.location.search)
-    if (entryParams.get('merchProduct')) return 'merch-detail'
-    if (entryParams.has('merch')) return 'merch-list'
+    const merchEntry = merchandiseEntry()
+    if (merchEntry) return merchEntry.screen
     const saved = savedNavigationSnapshot()
     if (saved) return saved.screen
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
@@ -209,7 +222,9 @@ function PlatformShell() {
       return null
     }
   })
-  const [merchProductId, setMerchProductId] = useState<string | null>(null)
+  const [merchProductId, setMerchProductId] = useState<string | null>(() =>
+    (merchandiseEntry() ?? savedNavigationSnapshot())?.merchProductId ?? null,
+  )
   const [eventSlug, setEventSlug] = useState<string | null>(() => {
     const saved = savedNavigationSnapshot()
     if (saved) return saved.eventSlug
@@ -229,6 +244,19 @@ function PlatformShell() {
 
   useEffect(() => {
     const syncEventRoute = () => {
+      const merchEntry = merchandiseEntry()
+      if (merchEntry) {
+        setPerformerId(null)
+        setMerchProductId(merchEntry.merchProductId)
+        setEventSlug(null)
+        setScreen(merchEntry.screen)
+        // Consume the entry query so Back can restore a later detail snapshot.
+        const url = new URL(window.location.href)
+        url.searchParams.delete('merch')
+        url.searchParams.delete('merchProduct')
+        window.history.replaceState({ hakuSnapshot: merchEntry }, '', url.pathname + url.search + url.hash)
+        return
+      }
       const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
       if (saved) {
         setPerformerId(saved.performerId)
@@ -267,6 +295,7 @@ function PlatformShell() {
   }, [screen])
 
   useEffect(() => {
+    const entrySnapshot = merchandiseEntry()
     const url = new URL(window.location.href)
     const tip = url.searchParams.get('tip')
     const sessionId = url.searchParams.get('session_id')
@@ -363,7 +392,7 @@ function PlatformShell() {
       url.searchParams.delete('role')
       // Supabase must consume recovery tokens before the app cleans the URL.
       // Preserve the callback hash; the auth client removes it after session recovery.
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+      window.history.replaceState(entrySnapshot ? { hakuSnapshot: entrySnapshot } : {}, '', url.pathname + url.search + url.hash)
     }
   }, [])
 

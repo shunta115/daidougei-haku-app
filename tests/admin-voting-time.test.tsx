@@ -18,6 +18,7 @@ vi.mock('../src/platform/lib/api', () => ({
   listApprovedPerformers: async () => [],
   listEventLiveSessions: async () => [],
   listAdminVoteRanking: async () => [],
+  listOfficialNavigators: async () => [],
   getEventVoteRule: fake.getEventVoteRule,
   saveEventVoteRule: fake.saveEventVoteRule,
 }))

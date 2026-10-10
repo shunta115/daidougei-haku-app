@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({ auth: {} as Record<string, unknown> }))
@@ -19,13 +19,13 @@ vi.mock('../src/platform/screens/PerformerPublicScreen', () => ({ PerformerPubli
 vi.mock('../src/platform/screens/LiveListScreen', () => ({ LiveListScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>live-list</p><button onClick={() => onOpenPerformer('performer-1')}>live-performer</button></> }))
 vi.mock('../src/platform/screens/MerchScreens', () => ({
   MerchListScreen: ({ onOpenProduct }: { onOpenProduct: (id: string) => void }) => <><p>merch-list</p><button onClick={() => onOpenProduct('product-1')}>open-product</button></>,
-  MerchDetailScreen: ({ onBack }: { onBack: () => void }) => <><p>merch-detail</p><button onClick={onBack}>product-back</button></>,
+  MerchDetailScreen: ({ onBack, productId }: { onBack: () => void; productId: string }) => <><p>merch-detail</p><p>product:{productId}</p><button onClick={onBack}>product-back</button></>,
   PerformerMerchScreen: () => null,
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
-import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath } from '../src/app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath, spaGo } from '../src/app/routes'
 
 it('recognizes the public MAP permalink', () => {
   expect(isPlatformPath('/map')).toBe(true)
@@ -213,4 +213,60 @@ it('returns from Stripe to the performer dashboard', async () => {
   fake.auth.profile = { role: 'performer', status: 'pending' }
   render(<PlatformApp />)
   await screen.findByText('performer-dashboard')
+})
+
+const merchandiseEntries = [
+  { query: '?merch=1', expected: 'merch-list' },
+  { query: '?merchProduct=product-2', expected: 'product:product-2' },
+]
+const merchandiseRoles = [null, 'fan', 'performer', 'organizer', 'admin'] as const
+for (const role of merchandiseRoles) {
+  for (const entry of merchandiseEntries) {
+    for (const saved of [false, true]) {
+      it(`opens ${entry.query} for ${role ?? 'guest'} with saved=${saved}, including reload`, async () => {
+        if (role) {
+          fake.auth.user = { id: 'fixture' }
+          fake.auth.profile = { role, status: 'active' }
+        }
+        window.history.replaceState(saved ? { hakuSnapshot: { screen: 'fan-home', performerId: null, merchProductId: null, eventSlug: null } } : {}, '', '/live' + entry.query)
+        const view = render(<PlatformApp />)
+        await screen.findByText(entry.expected)
+        view.unmount()
+        render(<PlatformApp />)
+        await screen.findByText(entry.expected)
+      })
+    }
+    it(`opens ${entry.query} during an existing ${role ?? 'guest'} session`, async () => {
+      if (role) {
+        fake.auth.user = { id: 'fixture' }
+        fake.auth.profile = { role, status: 'active' }
+      }
+      window.history.replaceState({}, '', '/')
+      render(<PlatformApp />)
+      act(() => spaGo('/live' + entry.query))
+      await screen.findByText(entry.expected)
+    })
+  }
+}
+
+for (const entry of merchandiseEntries) {
+  it(`preserves ${entry.query} while authentication finishes`, async () => {
+    window.history.replaceState({ hakuSnapshot: { screen: 'fan-home', performerId: null, merchProductId: null, eventSlug: null } }, '', '/live' + entry.query)
+    fake.auth = { ...fake.auth, ready: false }
+    const view = render(<PlatformApp />)
+    fake.auth = { ...fake.auth, ready: true, user: { id: 'fixture' }, profile: { role: 'fan', status: 'active' } }
+    view.rerender(<PlatformApp />)
+    await screen.findByText(entry.expected)
+  })
+}
+
+it('restores the correct merchandise product through Back and Forward', async () => {
+  window.history.replaceState({}, '', '/live?merch=1')
+  render(<PlatformApp />)
+  fireEvent.click(await screen.findByRole('button', { name: 'open-product' }))
+  await screen.findByText('product:product-1')
+  act(() => window.history.back())
+  await screen.findByText('merch-list')
+  act(() => window.history.forward())
+  await screen.findByText('product:product-1')
 })
