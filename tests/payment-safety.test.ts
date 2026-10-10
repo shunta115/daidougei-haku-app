@@ -13,13 +13,16 @@ describe('payment safety boundaries', () => {
     expect(read('api/stripe/merch.ts')).not.toContain("json({ error: 'Seller has not finished Stripe onboarding yet' })")
   })
 
-  it('blocks the support button before Stripe onboarding is ready', () => {
+  it('keeps Stripe readiness server-authoritative at checkout', () => {
     const tipUi = read('src/platform/screens/TipScreen.tsx')
     const merchUi = read('src/platform/screens/MerchScreens.tsx')
     expect(tipUi).toContain("paymentErrorMessage('performer_support_unavailable', lang)")
     expect(tipUi).toContain('disabled={busy || amount < 100 || !supportReady}')
     expect(merchUi).toContain("paymentErrorMessage('seller_checkout_unavailable', lang)")
-    expect(merchUi).toContain('disabled={busy || !available || !checkoutReady}')
+    expect(merchUi).toContain('disabled={busy || !available || !seller || !checkoutAllowed}')
+    expect(merchUi).not.toContain('seller?.stripe_onboarding_complete')
+    expect(read('api/stripe/merch.ts')).toContain('stripe.accounts.retrieve(seller.stripe_account_id)')
+    expect(read('api/stripe/merch.ts')).toContain('isConnectedAccountTransferReady(account)')
   })
 
   it('uses customer-facing Japanese Checkout copy', () => {
