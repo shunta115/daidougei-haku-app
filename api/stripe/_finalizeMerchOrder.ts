@@ -102,6 +102,7 @@ export async function finalizePaidMerchOrder(
     connected_account_id: connectedAccountId ?? session.metadata?.connected_account_id ?? null,
     gross_amount_yen: amount,
     paid_at: new Date().toISOString(),
+    fulfillment_status: 'awaiting_pickup',
   }
   const claimed = await updateOrderWithFallback(sb, orderId, patch, oldPatch, ['pending'])
 
@@ -138,6 +139,7 @@ export async function finalizePaidMerchOrderFromPaymentIntent(
     connected_account_id: connectedAccountId ?? paymentIntent.metadata?.connected_account_id ?? null,
     gross_amount_yen: amount,
     paid_at: new Date().toISOString(),
+    fulfillment_status: 'awaiting_pickup',
   }
   const claimed = await updateOrderWithFallback(sb, orderId, patch, oldPatch, ['pending'])
   if (!claimed?.id) return { ok: true, already: true, orderId, amount }

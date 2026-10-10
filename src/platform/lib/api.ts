@@ -1328,6 +1328,9 @@ export async function saveSellerMerchProduct(
     price_yen: number
     stock: number
     status: MerchProduct['status']
+    pickup_location?: string | null
+    pickup_deadline?: string | null
+    reservation_enabled?: boolean
   },
 ) {
   const sb = requireSupabase()
@@ -1339,6 +1342,9 @@ export async function saveSellerMerchProduct(
     price_yen: Math.max(100, Math.min(1000000, Math.floor(input.price_yen) || 100)),
     stock: Math.max(0, Math.min(9999, Math.floor(input.stock) || 0)),
     status: input.status,
+    pickup_location: input.pickup_location?.trim().slice(0, 200) || null,
+    pickup_deadline: input.pickup_deadline || null,
+    reservation_enabled: input.reservation_enabled ?? true,
   }
   const query = input.id
     ? sb.from('merch_products').update(payload).eq('id', input.id).eq('seller_id', sellerId)
@@ -1348,27 +1354,19 @@ export async function saveSellerMerchProduct(
 }
 
 export async function listMyMerchOrders(buyerId: string): Promise<MerchOrder[]> {
-  const sb = requireSupabase()
-  const { data, error } = await sb
-    .from('merch_orders')
-    .select('*')
-    .eq('buyer_id', buyerId)
-    .order('created_at', { ascending: false })
-    .limit(50)
-  if (error) throw error
-  return (data as MerchOrder[]) ?? []
+  void buyerId
+  const res = await fetch('/api/stripe/merch?action=orders&scope=buyer', { headers: await supabaseAuthHeaders() })
+  const json = (await res.json()) as { orders?: MerchOrder[]; code?: string }
+  if (!res.ok) throw new Error(json.code || 'orders_unavailable')
+  return json.orders ?? []
 }
 
 export async function listSellerMerchOrders(sellerId: string): Promise<MerchOrder[]> {
-  const sb = requireSupabase()
-  const { data, error } = await sb
-    .from('merch_orders')
-    .select('*')
-    .eq('seller_id', sellerId)
-    .order('created_at', { ascending: false })
-    .limit(100)
-  if (error) throw error
-  return (data as MerchOrder[]) ?? []
+  void sellerId
+  const res = await fetch('/api/stripe/merch?action=orders&scope=seller', { headers: await supabaseAuthHeaders() })
+  const json = (await res.json()) as { orders?: MerchOrder[]; code?: string }
+  if (!res.ok) throw new Error(json.code || 'orders_unavailable')
+  return json.orders ?? []
 }
 
 export async function createMerchCheckout(productId: string, quantity: number, requestId: string): Promise<string> {
@@ -1380,4 +1378,25 @@ export async function createMerchCheckout(productId: string, quantity: number, r
   const json = (await res.json()) as { url?: string; code?: string }
   if (!res.ok || !json.url) throw new Error(json.code || 'checkout_failed')
   return json.url
+}
+
+export async function createMerchReservation(productId: string, quantity: number, requestId: string): Promise<{ orderId: string; orderNumber: string }> {
+  const res = await fetch('/api/stripe/merch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ action: 'reserve', productId, quantity, requestId }),
+  })
+  const json = (await res.json()) as { orderId?: string; orderNumber?: string; code?: string }
+  if (!res.ok || !json.orderId || !json.orderNumber) throw new Error(json.code || 'reservation_failed')
+  return { orderId: json.orderId, orderNumber: json.orderNumber }
+}
+
+export async function updateMerchOrderHandoff(orderId: string, action: 'fulfill' | 'cancel' | 'expire') {
+  const res = await fetch('/api/stripe/merch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ action: 'order_action', orderId, handoffAction: action }),
+  })
+  const json = (await res.json()) as { ok?: boolean; code?: string }
+  if (!res.ok || !json.ok) throw new Error(json.code || 'order_action_failed')
 }

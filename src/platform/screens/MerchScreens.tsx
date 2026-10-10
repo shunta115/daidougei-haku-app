@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   createMerchCheckout,
+  createMerchReservation,
   getPerformer,
   getMerchProduct,
   listActiveMerchProducts,
@@ -9,6 +10,7 @@ import {
   listSellerMerchProducts,
   saveSellerMerchProduct,
   uploadMerchImage,
+  updateMerchOrderHandoff,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
@@ -33,6 +35,11 @@ function orderBuyerLabel(order: MerchOrder) {
   const name = order.checkout_customer_name || order.buyer_display_name || '購入者'
   const email = order.checkout_customer_email || order.buyer_email
   return email ? `${name} · ${email}` : name
+}
+
+function pickupDeadlineLabel(value?: string | null) {
+  if (!value) return '商品ごとにパフォーマーへご確認ください'
+  return new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
 const MERCH_PREVIEW = [
@@ -143,8 +150,17 @@ export function MerchListScreen({ onOpenProduct, onOpenSearch }: MerchListProps)
             <div key={o.id} className="pl-card">
               <div style={{ fontWeight: 700 }}>{o.product_name}</div>
               <div className="pl-muted">
-                {formatYen(o.amount_yen)} · {o.quantity}点 · {o.status}
+                {o.order_kind === 'cash_reservation' ? '当日現金・取り置き' : 'キャッシュレス'} · {formatYen(o.amount_yen)} · {o.quantity}点
               </div>
+              <div className="pl-muted">番号 {o.order_number || '発行前'} · {o.fulfillment_status === 'fulfilled' ? '受取済み' : '未受取'}</div>
+              {o.order_kind === 'cash_reservation' && o.fulfillment_status === 'awaiting_pickup' ? (
+                <button type="button" className="pl-btn pl-btn--ghost" onClick={async () => {
+                  try {
+                    await updateMerchOrderHandoff(o.id, 'cancel')
+                    setOrders((current) => current.map((item) => item.id === o.id ? { ...item, status: 'failed', fulfillment_status: 'cancelled' } : item))
+                  } catch { setError('取り置きをキャンセルできませんでした。') }
+                }}>取り置きをキャンセル</button>
+              ) : null}
             </div>
           ))}
         </>
@@ -169,6 +185,7 @@ export function MerchDetailScreen({
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [reservation, setReservation] = useState<{ orderNumber: string } | null>(null)
   const checkoutRequestId = useRef<string | null>(null)
 
   useEffect(() => {
@@ -206,6 +223,28 @@ export function MerchDetailScreen({
     }
   }
 
+  const reserve = async () => {
+    if (!product) return
+    if (!user) {
+      window.sessionStorage.setItem('pl-merch-product', productId)
+      if (onRequireAuth) onRequireAuth()
+      else spaGo(`${PLATFORM_PATH}?auth=1`)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await createMerchReservation(productId, quantity, crypto.randomUUID())
+      setReservation({ orderNumber: result.orderNumber })
+      setProduct((current) => current ? { ...current, stock: Math.max(0, current.stock - quantity) } : current)
+    } catch (e) {
+      const code = e instanceof Error ? e.message : 'reservation_failed'
+      setError(code === 'product_unavailable' ? '在庫が不足しているか、取り置き受付が終了しました。' : '取り置きを受け付けられませんでした。時間をおいてお試しください。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (!product && !error) return <p className="pl-muted">Loading…</p>
   if (!product) return <p className="pl-error">{error}</p>
   const available = productAvailable(product)
@@ -213,6 +252,7 @@ export function MerchDetailScreen({
   // and repairs a stale stripe_onboarding_complete flag. Do not block that
   // authoritative refresh with an older public performer snapshot.
   const checkoutAllowed = Boolean(seller?.is_approved)
+  const reservationReady = Boolean(seller?.is_approved && product.reservation_enabled !== false)
   const maxQty = Math.min(20, Math.max(1, product.stock))
 
   return (
@@ -225,7 +265,12 @@ export function MerchDetailScreen({
         <h1 className="pl-h1">{product.name}</h1>
         <p className="pl-tip__amount">{formatYen(product.price_yen)}</p>
         <p className="pl-muted">{product.description || 'この商品を購入して、パフォーマーの活動を応援できます。'}</p>
-        <p className="pl-merch-detail__stock">{product.stock > 0 ? `在庫 ${product.stock}` : '売り切れ'}</p>
+        <dl className="pl-merch-pickup-info">
+          <div><dt>在庫</dt><dd>{product.stock > 0 ? `${product.stock}点` : '売り切れ'}</dd></div>
+          <div><dt>受取場所</dt><dd>{product.pickup_location || 'イベント会場・パフォーマー物販受付'}</dd></div>
+          <div><dt>受取期限</dt><dd>{pickupDeadlineLabel(product.pickup_deadline)}</dd></div>
+          <div><dt>送料</dt><dd>0円（会場で手渡し）</dd></div>
+        </dl>
         <label>
           <span className="pl-label">数量</span>
           <input
@@ -238,10 +283,34 @@ export function MerchDetailScreen({
             onChange={(e) => setQuantity(Math.min(maxQty, Math.max(1, Math.floor(Number(e.target.value) || 1))))}
           />
         </label>
-        {!checkoutAllowed && seller ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('seller_checkout_unavailable', lang)}</p> : null}
-        <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available || !seller || !checkoutAllowed} onClick={() => void buy()}>
-          {busy ? '購入画面を準備中…' : !seller ? '販売状態を確認中…' : !checkoutAllowed ? paymentErrorMessage('seller_checkout_unavailable', lang) : user ? `${formatYen(product.price_yen * quantity)}で購入する` : 'ログインして購入'}
-        </button>
+        {reservation ? (
+          <section className="pl-merch-reservation-success" role="status">
+            <strong>取り置きを受け付けました</strong>
+            <span>取り置き番号</span><b>{reservation.orderNumber}</b>
+            <p>会場でこの番号を見せ、パフォーマーへ現金でお支払いください。</p>
+          </section>
+        ) : (
+          <div className="pl-merch-buy-options">
+            <section className="pl-merch-buy-option pl-merch-buy-option--recommended">
+              <span className="pl-merch-buy-option__badge">おすすめ</span>
+              <h2>先にキャッシュレスで支払う</h2>
+              <p>決済後に購入番号を発行します。会場では番号を見せて受け取るだけです。</p>
+              {!checkoutAllowed && seller ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('seller_checkout_unavailable', lang)} 無料取り置きをご利用ください。</p> : null}
+              <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || !available || !seller || !checkoutAllowed} onClick={() => void buy()}>
+                {busy ? '手続き中…' : !seller ? '販売状態を確認中…' : user ? `${formatYen(product.price_yen * quantity)}を支払って会場受取` : 'ログインして購入'}
+              </button>
+              <small>HAKUの決済画面で安全にお支払い · 送料0円</small>
+            </section>
+            <section className="pl-merch-buy-option">
+              <h2>無料で取り置く</h2>
+              <p>今は支払いません。在庫だけ確保し、当日パフォーマーへ直接現金でお支払いください。</p>
+              <button type="button" className="pl-btn pl-btn--block pl-btn--ghost" disabled={busy || !available || !reservationReady} onClick={() => void reserve()}>
+                {user ? '無料で取り置く' : 'ログインして取り置く'}
+              </button>
+              <small>取り置きにHAKU販売手数料はかかりません</small>
+            </section>
+          </div>
+        )}
         </div>
       </div>
       {error ? <p className="pl-error">{error}</p> : null}
@@ -261,6 +330,9 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
     price_yen: 1000,
     stock: 10,
     status: 'draft' as MerchProduct['status'],
+    pickup_location: 'イベント会場・パフォーマー物販受付',
+    pickup_deadline: '',
+    reservation_enabled: true,
   })
   const [busy, setBusy] = useState(false)
   const [imageStatus, setImageStatus] = useState<'idle' | 'preview' | 'uploading' | 'success' | 'error'>('idle')
@@ -284,7 +356,7 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
   }, [performer?.id])
 
   const resetDraft = () => {
-    setDraft({ id: '', name: '', description: '', image_url: '', price_yen: 1000, stock: 10, status: 'draft' })
+    setDraft({ id: '', name: '', description: '', image_url: '', price_yen: 1000, stock: 10, status: 'draft', pickup_location: 'イベント会場・パフォーマー物販受付', pickup_deadline: '', reservation_enabled: true })
     setImagePreview('')
     setImageStatus('idle')
   }
@@ -306,6 +378,9 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
         price_yen: draft.price_yen,
         stock: draft.stock,
         status: draft.status,
+        pickup_location: draft.pickup_location,
+        pickup_deadline: draft.pickup_deadline ? new Date(draft.pickup_deadline).toISOString() : null,
+        reservation_enabled: draft.reservation_enabled,
       })
       setMsg('商品を保存しました')
       resetDraft()
@@ -341,6 +416,13 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
   }
 
   if (!performer) return <p className="pl-muted">Loading…</p>
+  const cashlessSalesYen = orders
+    .filter((order) => order.order_kind !== 'cash_reservation' && order.status === 'succeeded')
+    .reduce((sum, order) => sum + order.amount_yen, 0)
+  const cashSalesYen = orders
+    .filter((order) => order.order_kind === 'cash_reservation' && order.fulfillment_status === 'fulfilled')
+    .reduce((sum, order) => sum + order.amount_yen, 0)
+  const awaitingPickupCount = orders.filter((order) => order.fulfillment_status === 'awaiting_pickup').length
 
   return (
     <>
@@ -350,6 +432,12 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
       {!performer.stripe_onboarding_complete ? <p className="pl-registration__notice" role="status">商品画像・説明・在庫は今から登録して下書き保存できます。Stripe受取設定が完了するまでは、お客様のキャッシュレス購入は開始されません。</p> : <p className="pl-registration__notice" role="status">Stripe受取設定済みです。販売中の商品はお客様がキャッシュレスで購入できます。</p>}
       {msg ? <p className="pl-muted">{msg}</p> : null}
       {error ? <p className="pl-error">{error}</p> : null}
+
+      <div className="pl-merch-sales-summary" aria-label="グッズ販売状況">
+        <div><span>未受取</span><strong>{awaitingPickupCount}件</strong></div>
+        <div><span>キャッシュレス売上</span><strong>{formatYen(cashlessSalesYen)}</strong></div>
+        <div><span>当日現金売上</span><strong>{formatYen(cashSalesYen)}</strong><small>HAKU手数料なし</small></div>
+      </div>
 
       <div className="pl-card">
         <label><span className="pl-label">商品名</span><input className="pl-input" placeholder="例：オリジナルTシャツ" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
@@ -362,6 +450,9 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
         {imagePreview || draft.image_url ? <figure className="pl-merch-upload-preview"><img className="pl-merch-hero" src={imagePreview || draft.image_url} alt="選択した商品画像のプレビュー" /><figcaption>{imageStatus === 'uploading' ? '画像をアップロードしています…' : imageStatus === 'success' ? '画像アップロード完了' : imageStatus === 'error' ? '画像をアップロードできませんでした' : '選択した画像のプレビュー'}</figcaption></figure> : null}
         <label><span className="pl-label">価格（税込・円）</span><input className="pl-input" type="number" min={100} max={1000000} value={draft.price_yen} onChange={(e) => setDraft({ ...draft, price_yen: Number(e.target.value) || 100 })} /></label>
         <label><span className="pl-label">在庫数</span><input className="pl-input" type="number" min={0} max={9999} value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) || 0 })} /></label>
+        <label><span className="pl-label">会場での受取場所</span><input className="pl-input" value={draft.pickup_location} onChange={(e) => setDraft({ ...draft, pickup_location: e.target.value })} /></label>
+        <label><span className="pl-label">受取期限</span><input className="pl-input" type="datetime-local" value={draft.pickup_deadline} onChange={(e) => setDraft({ ...draft, pickup_deadline: e.target.value })} /></label>
+        <label className="pl-check"><input type="checkbox" checked={draft.reservation_enabled} onChange={(e) => setDraft({ ...draft, reservation_enabled: e.target.checked })} /><span>無料取り置きを受け付ける</span></label>
         <label><span className="pl-label">販売状態</span><select className="pl-input" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as MerchProduct['status'] })}>
           <option value="draft">下書き</option>
           <option value="active">販売中</option>
@@ -383,7 +474,7 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
             <div className="pl-muted">{formatYen(p.price_yen)} · 在庫 {p.stock} · {p.status}</div>
           </div>
           <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
-            setDraft({ id: p.id, name: p.name, description: p.description, image_url: p.image_url ?? '', price_yen: p.price_yen, stock: p.stock, status: p.status })
+            setDraft({ id: p.id, name: p.name, description: p.description, image_url: p.image_url ?? '', price_yen: p.price_yen, stock: p.stock, status: p.status, pickup_location: p.pickup_location ?? 'イベント会場・パフォーマー物販受付', pickup_deadline: p.pickup_deadline ? new Date(p.pickup_deadline).toISOString().slice(0, 16) : '', reservation_enabled: p.reservation_enabled !== false })
             setImagePreview(p.image_url ?? '')
             setImageStatus(p.image_url ? 'success' : 'idle')
           }}>
@@ -398,11 +489,20 @@ export function PerformerMerchScreen({ onBack }: { onBack: () => void }) {
         <div key={o.id} className="pl-card">
           <div style={{ fontWeight: 700 }}>{o.product_name}</div>
           <div className="pl-muted">
-            {formatYen(o.amount_yen)} · {o.quantity}点 · {o.status}
+            {o.order_kind === 'cash_reservation' ? '当日現金・無料取り置き' : 'キャッシュレス決済'} · {formatYen(o.amount_yen)} · {o.quantity}点
           </div>
+          <div className="pl-muted">番号 {o.order_number || '発行前'} · {o.fulfillment_status === 'fulfilled' ? '受取済み' : '未受取'}</div>
           <div className="pl-muted">{orderBuyerLabel(o)}</div>
           {o.checkout_customer_phone ? <div className="pl-muted">{o.checkout_customer_phone}</div> : null}
           <div className="pl-muted">{new Date(o.created_at).toLocaleString()}</div>
+          {o.fulfillment_status === 'awaiting_pickup' ? (
+            <button type="button" className="pl-btn pl-btn--ghost" disabled={busy} onClick={async () => {
+              setBusy(true); setError(null)
+              try { await updateMerchOrderHandoff(o.id, 'fulfill'); await reload(); setMsg('受取完了を登録しました') }
+              catch (e) { setError(e instanceof Error && e.message === 'payment_not_confirmed' ? '決済完了が確認できないため、受取完了にできません。' : '受取完了を登録できませんでした') }
+              finally { setBusy(false) }
+            }}>受取完了にする</button>
+          ) : null}
         </div>
       ))}
     </>

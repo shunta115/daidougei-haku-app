@@ -150,6 +150,9 @@ export type MerchProduct = {
   image_url: string | null
   price_yen: number
   stock: number
+  pickup_location?: string | null
+  pickup_deadline?: string | null
+  reservation_enabled?: boolean
   status: MerchProductStatus
   created_at: string
   updated_at: string
@@ -180,6 +183,13 @@ export type MerchOrder = {
   stripe_fee_yen?: number | null
   settlement_status?: string | null
   status: MerchOrderStatus
+  order_kind?: 'cashless' | 'cash_reservation'
+  order_number?: string | null
+  fulfillment_status?: 'awaiting_payment' | 'awaiting_pickup' | 'fulfilled' | 'cancelled' | 'expired'
+  reservation_expires_at?: string | null
+  fulfilled_at?: string | null
+  cancelled_at?: string | null
+  cash_received_at?: string | null
   stripe_session_id: string | null
   stripe_payment_intent: string | null
   stripe_payment_intent_id?: string | null
