@@ -37,7 +37,9 @@ async function loadBalanceTransaction(
   if (typeof charge.balance_transaction === 'object' && charge.balance_transaction && 'fee' in charge.balance_transaction) {
     return charge.balance_transaction
   }
-  return stripe.balanceTransactions.retrieve(btId, connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+  return connectedAccountId
+    ? stripe.balanceTransactions.retrieve(btId, {}, { stripeAccount: connectedAccountId })
+    : stripe.balanceTransactions.retrieve(btId)
 }
 
 async function reconcileApplicationFee(
@@ -90,7 +92,9 @@ export async function settleCharge(
   // charges still fail closed without the owning connected account.
   if (args.chargeType === 'direct' && !args.connectedAccountId) return
   const stripeAccount = args.chargeType === 'direct' ? args.connectedAccountId : null
-  const charge = await stripe.charges.retrieve(args.chargeId, stripeAccount ? { stripeAccount } : undefined)
+  const charge = stripeAccount
+    ? await stripe.charges.retrieve(args.chargeId, {}, { stripeAccount })
+    : await stripe.charges.retrieve(args.chargeId)
   const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
   const grossYen = yenFromStripe(charge.amount)
   const stripeFeeYen = yenFromStripe(bt?.fee)
@@ -200,7 +204,9 @@ export async function settleCheckoutPayment(
   const paymentIntentId = stripeId(session.payment_intent)
   if (!paymentIntentId) return
   const platformCharge = session.metadata?.charge_type === 'platform_separate'
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, !platformCharge && connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+  const paymentIntent = !platformCharge && connectedAccountId
+    ? await stripe.paymentIntents.retrieve(paymentIntentId, {}, { stripeAccount: connectedAccountId })
+    : await stripe.paymentIntents.retrieve(paymentIntentId)
   const chargeId = stripeId(paymentIntent.latest_charge)
   if (!chargeId) return
   await settleSaleByCharge(

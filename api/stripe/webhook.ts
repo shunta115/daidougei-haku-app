@@ -210,7 +210,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const refund = event.data.object as Stripe.Refund
         const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge?.id
         if (chargeId) {
-          const charge = await stripe.charges.retrieve(chargeId, connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+          const charge = connectedAccountId
+            ? await stripe.charges.retrieve(chargeId, {}, { stripeAccount: connectedAccountId })
+            : await stripe.charges.retrieve(chargeId)
           await markTipRefunded(sb, charge, connectedAccountId)
           await markMerchOrderRefunded(sb, charge, connectedAccountId)
           await settleSaleByCharge(sb, stripe, charge, connectedAccountId)

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { User } from '@supabase/supabase-js'
 import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from '../stripe/_shared.js'
 import { getPerformerPayoutView } from '../stripe/_payouts.js'
 import { requireAdmin, requireSuperAdmin } from './_guard.js'
@@ -93,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         const { data: usersPage, error: usersError } = await sb.auth.admin.listUsers({ page: 1, perPage: 1000 })
         if (usersError) throw usersError
-        let target = usersPage.users.find((candidate) => candidate.email?.trim().toLowerCase() === email) ?? null
+        let target: User | null = (usersPage.users as User[]).find((candidate) => candidate.email?.trim().toLowerCase() === email) ?? null
         let invited = false
         if (target) {
           const { data: existingProfile, error: existingProfileError } = await sb.from('profiles').select('role').eq('id', target.id).maybeSingle()
@@ -533,7 +534,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const [approvedResult, currentResult, scheduledResult] = await Promise.all([
           requested.length
             ? sb.from('performers').select('id').in('id', requested).eq('is_approved', true)
-            : Promise.resolve({ data: [] as Array<{ id: string }> }),
+            : Promise.resolve({ data: [] as Array<{ id: string }>, error: null }),
           sb.from('event_lineup').select('performer_id,sort_order,is_voting_eligible').eq('event_id', id).order('sort_order'),
           sb.from('event_slots').select('performer_id').eq('event_id', id).not('performer_id', 'is', null),
         ])
