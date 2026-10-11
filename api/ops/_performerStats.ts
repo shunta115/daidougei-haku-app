@@ -18,22 +18,15 @@ export function countCompletedAppearances(rows: Array<{ event_slot_id: string | 
 
 export function countConfirmedSupporters(rows: SupportRow[]): number | null {
   const confirmed = rows.filter((row) => {
-      const gross = Number(row.gross_amount_yen ?? row.amount_cents) || 0
-      const refunded = Number(row.refunded_amount_yen) || 0
-      return gross > refunded
-    })
+    const gross = Number(row.gross_amount_yen ?? row.amount_cents) || 0
+    const refunded = Number(row.refunded_amount_yen) || 0
+    return gross > refunded
+  })
   if (confirmed.some((row) => !row.fan_id)) return null
-  return new Set(confirmed
-    .map((row) => row.fan_id as string)).size
+  return new Set(confirmed.map((row) => row.fan_id as string)).size
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET')
-    res.status(405).json({ error: 'method_not_allowed' })
-    return
-  }
-
+export async function handlePublicPerformerStats(req: VercelRequest, res: VercelResponse) {
   const performerId = typeof req.query.performerId === 'string' ? req.query.performerId : ''
   if (!UUID.test(performerId)) {
     res.status(400).json({ error: 'invalid_performer' })
@@ -74,12 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ])
 
   const followerCount: Metric = followers.error ? null : followers.count ?? 0
-  const appearanceCount: Metric = completedLives.error
-    ? null
-    : countCompletedAppearances(completedLives.data ?? [])
-  const supportCount: Metric = supporters.error
-    ? null
-    : countConfirmedSupporters(supporters.data ?? [])
+  const appearanceCount: Metric = completedLives.error ? null : countCompletedAppearances(completedLives.data ?? [])
+  const supportCount: Metric = supporters.error ? null : countConfirmedSupporters(supporters.data ?? [])
   const liveViewCount: Metric = liveViews.error ? null : liveViews.count ?? 0
 
   res.setHeader('Cache-Control', 'private, no-store')

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { countCompletedAppearances, countConfirmedSupporters } from '../api/public/performer-stats'
+import { countCompletedAppearances, countConfirmedSupporters } from '../api/ops/_performerStats'
 
 const read = (path: string) => readFileSync(path, 'utf8')
 
@@ -28,13 +28,16 @@ describe('performer profile statistics', () => {
   })
 
   it('uses only existing ledgers, live-mode settled support, and viewing logs', () => {
-    const api = read('api/public/performer-stats.ts')
+    const api = read('api/ops/_performerStats.ts')
+    const route = read('api/ops/inbox.ts')
     expect(api).toMatch(/from\('follows'\)/)
     expect(api).toMatch(/from\('live_sessions'\)[\s\S]*not\('ended_at', 'is', null\)[\s\S]*not\('event_slot_id', 'is', null\)/)
     expect(api).toMatch(/eq\('settlement_status', 'settled'\)/)
     expect(api).toMatch(/like\('stripe_session_id', 'cs_live_%'\)/)
     expect(api).toMatch(/is\('dispute_status', null\)/)
     expect(api).toMatch(/from\('product_events'\)/)
+    expect(route).toMatch(/resource === 'performer-stats'/)
+    expect(route).toMatch(/handlePublicPerformerStats/)
   })
 
   it('renders four iPhone columns and preserves unknown values as uncounted', () => {

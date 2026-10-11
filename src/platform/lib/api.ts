@@ -481,7 +481,7 @@ export type PerformerProfileStats = {
 }
 
 export async function getPerformerProfileStats(performerId: string): Promise<PerformerProfileStats> {
-  const response = await fetch(`/api/public/performer-stats?performerId=${encodeURIComponent(performerId)}`, {
+  const response = await fetch(`/api/ops/inbox?resource=performer-stats&performerId=${encodeURIComponent(performerId)}`, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
   })
