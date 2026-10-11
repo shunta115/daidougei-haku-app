@@ -18,7 +18,7 @@ vi.mock('../api/stripe/_settlement.js', async () => {
   return actual
 })
 
-import { requestPerformerPayout } from '../api/stripe/_payouts'
+import { getPerformerPayoutView, requestPerformerPayout } from '../api/stripe/_payouts'
 
 function selectTable(table: string) {
   if (table === 'tips') return { data: fake.tips, error: null }
@@ -82,6 +82,27 @@ beforeEach(() => {
 })
 
 describe('requestPerformerPayout', () => {
+  it('keeps an unregistered performer balance attributable by performer id', async () => {
+    const view = await getPerformerPayoutView(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: null })
+    expect(view.confirmedSalesYen).toBe(10_000)
+    expect(view.hakuAvailableYen).toBe(10_000)
+    expect(view.availableYen).toBe(10_000)
+    expect(view.canPayout).toBe(false)
+  })
+
+  it('separates reserved, processing, completed, failed, and canceled transfers', async () => {
+    fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 50_000, performer_share_yen: 50_000, refunded_amount_yen: 0 }]
+    fake.payouts = [
+      { id: 'r', amount_yen: 1_000, status: 'reserved', stripe_transfer_id: null, created_at: '2026-10-01T00:00:00Z' },
+      { id: 'p', amount_yen: 2_000, status: 'reserved', stripe_transfer_id: 'tr_processing', created_at: '2026-10-02T00:00:00Z' },
+      { id: 'd', amount_yen: 3_000, status: 'paid', stripe_transfer_id: 'tr_paid', created_at: '2026-10-03T00:00:00Z' },
+      { id: 'f', amount_yen: 4_000, status: 'failed', stripe_transfer_id: null, created_at: '2026-10-04T00:00:00Z' },
+      { id: 'c', amount_yen: 5_000, status: 'canceled', stripe_transfer_id: null, created_at: '2026-10-05T00:00:00Z' },
+    ]
+    const view = await getPerformerPayoutView(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(view).toMatchObject({ reservedYen: 1_000, processingYen: 2_000, pendingYen: 3_000, paidOutYen: 3_000, failedYen: 4_000, canceledYen: 5_000, hakuAvailableYen: 44_000 })
+  })
+
   it('rejects 9,999 and pays 10,000 once', async () => {
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 9999, refunded_amount_yen: 0 }]
     const blocked = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })

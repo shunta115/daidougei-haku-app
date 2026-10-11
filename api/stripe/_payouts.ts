@@ -5,6 +5,7 @@ import { missingColumn, missingTable, yenFromStripe } from './_settlement.js'
 
 type SaleRow = {
   id: string
+  created_at?: string | null
   status: string
   gross_amount_yen?: number | null
   amount_cents?: number | null
@@ -65,6 +66,15 @@ function adjustedConfirmedShare(row: SaleRow): number {
   })
 }
 
+const HOLDING_REVIEW_DAYS = 30
+
+function ageInDays(value: string | null): number | null {
+  if (!value) return null
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return null
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000))
+}
+
 async function jpyAvailable(stripe: Stripe): Promise<number> {
   const balance = await stripe.balance.retrieve()
   return yenFromStripe(balance.available.find((item) => item.currency === 'jpy')?.amount)
@@ -76,17 +86,19 @@ export async function getPerformerPayoutView(
   args: { performerId: string; stripeAccountId: string | null },
 ) {
   const [{ data: tips, error: tipError }, { data: orders, error: orderError }] = await Promise.all([
-    sb.from('tips').select('id, status, gross_amount_yen, amount_cents, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('performer_id', args.performerId),
-    sb.from('merch_orders').select('id, status, gross_amount_yen, amount_yen, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('seller_id', args.performerId),
+    sb.from('tips').select('id, created_at, status, gross_amount_yen, amount_cents, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('performer_id', args.performerId),
+    sb.from('merch_orders').select('id, created_at, status, gross_amount_yen, amount_yen, performer_share_yen, stripe_fee_yen, haku_fee_bps, refunded_amount_yen, dispute_status, settlement_status').eq('seller_id', args.performerId),
   ])
   const salesMissing = Boolean((tipError && missingColumn(tipError)) || (orderError && missingColumn(orderError)))
   if (tipError && !missingColumn(tipError)) throw tipError
   if (orderError && !missingColumn(orderError)) throw orderError
 
   const sales = salesMissing ? [] : [...((tips ?? []) as SaleRow[]), ...((orders ?? []) as SaleRow[])]
+  const originalConfirmedSalesYen = sales.reduce((sum, row) => sum + confirmedShare(row), 0)
   const confirmedSalesYen = sales.reduce((sum, row) => sum + adjustedConfirmedShare(row), 0)
   const hakuAvailableYen = sales.reduce((sum, row) => sum + availableShare(row), 0)
   const heldYen = Math.max(0, confirmedSalesYen - hakuAvailableYen)
+  const adjustmentYen = Math.max(0, originalConfirmedSalesYen - hakuAvailableYen)
 
   let payouts: PayoutRow[] = []
   const { data: payoutRows, error: payoutError } = await sb
@@ -94,19 +106,37 @@ export async function getPerformerPayoutView(
     .select('id, amount_yen, status, stripe_payout_id, stripe_transfer_id, created_at')
     .eq('performer_id', args.performerId)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(5000)
   if (payoutError && !missingTable(payoutError) && !missingColumn(payoutError)) throw payoutError
   if (!payoutError) payouts = (payoutRows ?? []) as PayoutRow[]
 
-  const reservedYen = payouts.filter((row) => row.status === 'reserved').reduce((sum, row) => sum + row.amount_yen, 0)
+  const reservedYen = payouts.filter((row) => row.status === 'reserved' && !row.stripe_transfer_id).reduce((sum, row) => sum + row.amount_yen, 0)
+  const processingYen = payouts.filter((row) => row.status === 'reserved' && row.stripe_transfer_id).reduce((sum, row) => sum + row.amount_yen, 0)
   const paidOutYen = payouts.filter((row) => row.status === 'paid').reduce((sum, row) => sum + row.amount_yen, 0)
-  const pendingYen = reservedYen
-  const hakuNetAvailable = Math.max(0, hakuAvailableYen - reservedYen - paidOutYen)
+  const failedYen = payouts.filter((row) => row.status === 'failed').reduce((sum, row) => sum + row.amount_yen, 0)
+  const canceledYen = payouts.filter((row) => row.status === 'canceled').reduce((sum, row) => sum + row.amount_yen, 0)
+  const pendingYen = reservedYen + processingYen
+  const hakuNetAvailable = Math.max(0, hakuAvailableYen - pendingYen - paidOutYen)
   // New sales remain on the platform until the internal payable balance reaches
   // the threshold, so the relevant Stripe constraint is the platform balance.
   const stripeAvailableYen = await jpyAvailable(stripe).catch(() => 0)
   const availableYen = eligiblePayoutYen(hakuNetAvailable, stripeAvailableYen)
   const openPayout = payouts.find((row) => row.status === 'reserved') ?? null
+  let previouslyAllocatedYen = pendingYen + paidOutYen
+  const unpaidSales = sales
+    .filter((row) => availableShare(row) > 0 && row.created_at)
+    .sort((left, right) => String(left.created_at).localeCompare(String(right.created_at)))
+    .filter((row) => {
+      const share = availableShare(row)
+      if (previouslyAllocatedYen >= share) {
+        previouslyAllocatedYen -= share
+        return false
+      }
+      previouslyAllocatedYen = 0
+      return true
+    })
+  const oldestEligibleSaleAt = unpaidSales[0]?.created_at ? String(unpaidSales[0].created_at) : null
+  const holdingAgeDays = hakuNetAvailable > 0 ? ageInDays(oldestEligibleSaleAt) : null
 
   return {
     minPayoutYen: MIN_PAYOUT_YEN,
@@ -115,8 +145,17 @@ export async function getPerformerPayoutView(
     stripeAvailableYen,
     availableYen,
     heldYen,
+    adjustmentYen,
+    reservedYen,
+    processingYen,
     pendingYen,
     paidOutYen,
+    failedYen,
+    canceledYen,
+    oldestEligibleSaleAt,
+    holdingAgeDays,
+    holdingReviewDays: HOLDING_REVIEW_DAYS,
+    holdingReviewRequired: holdingAgeDays !== null && holdingAgeDays >= HOLDING_REVIEW_DAYS,
     remainingYen: remainingToMinPayout(availableYen),
     canPayout: canRequestPayout(availableYen) && !openPayout && Boolean(args.stripeAccountId),
     ledgerReady: !payoutError && !salesMissing,

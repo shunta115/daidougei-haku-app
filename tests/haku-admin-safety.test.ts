@@ -24,6 +24,18 @@ describe('HAKU admin and public performer safety', () => {
     expect(supabase).not.toMatch(/SERVICE_ROLE/)
   })
 
+  it('shows performer-ledger balances even before Stripe Connect registration', () => {
+    const admin = read('api/ops/_hakuAdmin.ts')
+    const app = read('src/haku-admin/HakuAdminApp.tsx')
+    expect(admin).toMatch(/const payoutView = await getPerformerPayoutView[\s\S]{0,1400}if \(!accountId\)/)
+    expect(admin).toMatch(/available_yen: payoutView\.hakuAvailableYen/)
+    expect(admin).toMatch(/reserved_payout_yen: payoutView\.reservedYen/)
+    expect(admin).toMatch(/processing_payout_yen: payoutView\.processingYen/)
+    expect(admin).not.toMatch(/state: 'unregistered'[\s\S]{0,500}confirmed_sales_yen: 0/)
+    expect(app).toMatch(/返金・紛争調整/)
+    expect(app).toMatch(/Stripeとの契約上の期限を別途確認/)
+  })
+
   it('adds review workflow without destructive schema changes and protects review fields', () => {
     const sql = read('supabase/migrations/20261003_admin_review_workflow.sql')
     expect(sql).toMatch(/add column if not exists review_status/i)

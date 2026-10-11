@@ -514,7 +514,11 @@ export function HakuAdminApp() {
               <h3>{String(row.stage_name || '名称未登録')} <small>{label}</small></h3>
               <p>承認 {row.approved ? '済み' : '未承認'} · 投げ銭 {row.tip_available ? '受付可' : '受付不可'} · グッズ {row.merch_available ? '販売可' : '販売不可'}</p>
               <p>charges_enabled {String(Boolean(row.charges_enabled))} · payouts_enabled {String(Boolean(row.payouts_enabled))} · 登録情報 {row.details_submitted ? '提出済み' : '未完了'}</p>
-              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 未Transfer残高 {formatYen(Number(row.available_yen) || 0)} · 保留 {formatYen(Number(row.held_yen) || 0)} · Transfer処理中 {formatYen(Number(row.pending_payout_yen) || 0)} · Transfer済み {formatYen(Number(row.paid_out_yen) || 0)}</p>
+              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 未Transfer残高 {formatYen(Number(row.available_yen) || 0)} · 現在出金可能 {formatYen(Number(row.payout_eligible_yen) || 0)}</p>
+              <p>送金予約 {formatYen(Number(row.reserved_payout_yen) || 0)} · Transfer処理中 {formatYen(Number(row.processing_payout_yen) || 0)} · Transfer済み {formatYen(Number(row.paid_out_yen) || 0)} · 失敗 {formatYen(Number(row.failed_payout_yen) || 0)} · 取消 {formatYen(Number(row.canceled_payout_yen) || 0)}</p>
+              <p>返金・紛争調整 {formatYen(Number(row.adjustment_yen) || 0)}{row.holding_age_days !== null && row.holding_age_days !== undefined ? ` · 最古の未精算対象 ${String(row.holding_age_days)}日経過` : ''}</p>
+              {row.holding_review_required ? <p className="ha-note">資金保有が内部確認基準（{String(row.holding_review_days)}日）を超えています。Stripeとの契約上の期限を別途確認し、運営対応してください。</p> : null}
+              {!row.ledger_ready ? <p className="ha-note">内部台帳を完全に確認できません。Transferを行わず運営確認してください。</p> : null}
             </article>
           })}
           <p className="ha-note">Stripe実手数料控除後に、投げ銭15%・グッズ8%を計算した確定台帳です。</p>

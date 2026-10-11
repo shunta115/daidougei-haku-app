@@ -719,19 +719,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const stripe = getStripe()
       const stripePerformers = await Promise.all((performerRows ?? []).map(async (performer) => {
         const accountId = performer.stripe_account_id as string | null
+        const payoutView = await getPerformerPayoutView(sb, stripe, {
+          performerId: performer.id,
+          stripeAccountId: accountId,
+        })
+        const balances = {
+          confirmed_sales_yen: payoutView.confirmedSalesYen,
+          available_yen: payoutView.hakuAvailableYen,
+          payout_eligible_yen: payoutView.availableYen,
+          reserved_payout_yen: payoutView.reservedYen,
+          processing_payout_yen: payoutView.processingYen,
+          pending_payout_yen: payoutView.pendingYen,
+          paid_out_yen: payoutView.paidOutYen,
+          failed_payout_yen: payoutView.failedYen,
+          canceled_payout_yen: payoutView.canceledYen,
+          adjustment_yen: payoutView.adjustmentYen,
+          held_yen: payoutView.heldYen,
+          oldest_eligible_sale_at: payoutView.oldestEligibleSaleAt,
+          holding_age_days: payoutView.holdingAgeDays,
+          holding_review_days: payoutView.holdingReviewDays,
+          holding_review_required: payoutView.holdingReviewRequired,
+          ledger_ready: payoutView.ledgerReady,
+        }
         if (!accountId) return {
           performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
           state: 'unregistered', charges_enabled: false, payouts_enabled: false, details_submitted: false,
           needs_information: false, under_review: false, transfers_enabled: false, restricted: false,
           tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
-          confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
-          held_yen: 0,
+          ...balances,
         }
         try {
-          const [account, payoutView] = await Promise.all([
-            stripe.accounts.retrieve(accountId),
-            getPerformerPayoutView(sb, stripe, { performerId: performer.id, stripeAccountId: accountId }),
-          ])
+          const account = await stripe.accounts.retrieve(accountId)
           const ready = isConnectedAccountTransferReady(account)
           const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
           const underReview = Boolean(account.requirements?.pending_verification?.length)
@@ -745,8 +763,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             past_due_count: account.requirements?.past_due?.length ?? 0,
             pending_verification_count: account.requirements?.pending_verification?.length ?? 0,
             tip_available: Boolean(performer.is_approved), merch_available: Boolean(performer.is_approved && ready), checked_at: new Date().toISOString(),
-            confirmed_sales_yen: payoutView.confirmedSalesYen, available_yen: payoutView.availableYen,
-            paid_out_yen: payoutView.paidOutYen, pending_payout_yen: payoutView.pendingYen, held_yen: payoutView.heldYen,
+            ...balances,
           }
         } catch (error) {
           console.error('admin Stripe status check failed', performer.id, error)
@@ -755,8 +772,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             state: 'check_error', charges_enabled: false, payouts_enabled: false, transfers_enabled: false, details_submitted: false,
             needs_information: false, under_review: false, restricted: false,
             tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
-            confirmed_sales_yen: 0, available_yen: 0, paid_out_yen: 0, pending_payout_yen: 0,
-            held_yen: 0,
+            ...balances,
           }
         }
       }))
