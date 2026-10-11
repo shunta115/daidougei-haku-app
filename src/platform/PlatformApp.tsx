@@ -7,6 +7,7 @@ import { hasPasswordRecoveryParams } from './lib/authCallback'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
+import { PullToRefresh } from './components/PullToRefresh'
 import { RefreshButton } from './components/RefreshButton'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
@@ -756,7 +757,7 @@ function PlatformShell() {
       const guestShowNav = !['tip', 'live-watch'].includes(screen)
       return (
         <div className="pl-app">
-          {REFRESHABLE_SCREENS.has(screen) ? <RefreshButton onRefresh={refreshCurrentScreen} /> : null}
+          {REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
@@ -1035,7 +1036,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
-      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <RefreshButton onRefresh={refreshCurrentScreen} /> : null}
+      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
       {previewOn ? (
         <aside className="pl-preview-bar" role="status">
           <strong>READ ONLY</strong>

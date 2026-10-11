@@ -68,10 +68,11 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
   )
 }
 
-function OfficialNavigatorCard({ navigator, onOpen, onWatch }: {
+function OfficialNavigatorCard({ navigator, onOpen, onWatch, onTip }: {
   navigator: OfficialNavigator
   onOpen: (id: string) => void
   onWatch: (id: string) => void
+  onTip: (id: string) => void
 }) {
   const performer = navigator.performer
   const status = navigator.live_status === 'live' ? '🔴 LIVE配信中' : navigator.live_status === 'ended' ? '配信終了' : '配信準備中'
@@ -93,7 +94,7 @@ function OfficialNavigatorCard({ navigator, onOpen, onWatch }: {
           <Play size={17} fill="currentColor" /> {performer.is_live ? '無料でLIVEを見る' : status}
         </button>
         <button type="button" className="pl-action pl-navigator__profile" onClick={() => onOpen(performer.id)}>プロフィール</button>
-        <button type="button" className="pl-action pl-navigator__cheer" onClick={() => onOpen(performer.id)}>
+        <button type="button" className="pl-action pl-navigator__cheer" onClick={() => onTip(performer.id)}>
           <Heart size={17} fill="currentColor" aria-hidden="true" /> 応援する
         </button>
       </div>
@@ -101,7 +102,7 @@ function OfficialNavigatorCard({ navigator, onOpen, onWatch }: {
   )
 }
 
-export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
+export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onTip, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
@@ -156,7 +157,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   return (
     <main className="pl-experience pl-home-v7">
       <header className="pl-home-v7__masthead">
-        <button type="button" className="pl-home-v7__identity" onClick={onOpenTitle} aria-label={t('openTitleScreen')}><BrandLogo size={42} variant="official" /></button>
+        <button type="button" className="pl-home-v7__identity" onClick={onOpenTitle} aria-label={t('openTitleScreen')} title="タイトル画面へ戻る"><BrandLogo size={42} variant="official" /></button>
         <div className="pl-home-v7__tools">
           <button type="button" className="pl-icon-button" onClick={onOpenSearch} aria-label={t('searchAria')}><Search size={19} /></button>
           <button type="button" className="pl-icon-button" onClick={onOpenNotifications} aria-label={t('notifications')}><Bell size={19} /></button>
@@ -201,7 +202,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       )}
 
       <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
-      {navigator ? <OfficialNavigatorCard navigator={navigator} onOpen={onOpenPerformer} onWatch={onWatchLive} /> : null}
+      {navigator ? <OfficialNavigatorCard navigator={navigator} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
       <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
 

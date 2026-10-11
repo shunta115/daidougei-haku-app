@@ -1,5 +1,5 @@
 /* Production PWA shell. Authenticated API responses are deliberately never cached. */
-const CACHE = 'daidougei-platform-v9-merch-routing'
+const CACHE = 'daidougei-platform-v10-official-navigator'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/favicon-32.png', '/favicon-48.png', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -23,11 +23,8 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  event.respondWith(caches.match(request).then((cached) => {
-    const network = fetch(request).then((response) => {
+  event.respondWith(fetch(request).then((response) => {
       if (response.ok) void caches.open(CACHE).then((cache) => cache.put(request, response.clone()))
       return response
-    })
-    return cached || network
-  }))
+    }).catch(() => caches.match(request)))
 })
