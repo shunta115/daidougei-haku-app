@@ -4,15 +4,15 @@ import { PerformerAvatar } from '../components/PerformerAvatar'
 import { AppBackButton } from '../components/AppBackButton'
 import {
   follow,
+  getPerformerProfileStats,
   getPerformer,
   isFollowing,
   listEventVenues,
   listPerformerEventSlots,
   listSellerMerchProducts,
-  sumLiveViews,
-  tipSummaryForPerformer,
   unfollow,
   type EventVenueRow,
+  type PerformerProfileStats,
   type PerformerEventSlot,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -89,6 +89,8 @@ function compactCount(n: number) {
   return String(n)
 }
 
+const emptyStats: PerformerProfileStats = { followers: null, appearances: null, supporters: null, liveViews: null }
+
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive, onRequireAuth }: Props) {
   const { user } = useAuth()
   const { t } = useLang()
@@ -96,8 +98,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
   const [merch, setMerch] = useState<MerchProduct[]>([])
-  const [supportCount, setSupportCount] = useState(0)
-  const [liveViews, setLiveViews] = useState(0)
+  const [stats, setStats] = useState<PerformerProfileStats>(emptyStats)
   const [slots, setSlots] = useState<PerformerEventSlot[]>([])
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -120,8 +121,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     listSellerMerchProducts(performerId)
       .then((items) => { if (alive) setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out')) })
       .catch(() => { if (alive) setMerch([]) })
-    tipSummaryForPerformer(performerId).then((summary) => { if (alive) setSupportCount(summary.count) }).catch(() => { if (alive) setSupportCount(0) })
-    sumLiveViews(performerId).then((n) => { if (alive) setLiveViews(n) }).catch(() => { if (alive) setLiveViews(0) })
+    getPerformerProfileStats(performerId).then((value) => { if (alive) setStats(value) }).catch(() => { if (alive) setStats(emptyStats) })
     listPerformerEventSlots(performerId)
       .then(async (rows) => {
         if (!alive) return
@@ -163,9 +163,15 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     setBusy(true)
     trackProductEvent('follow_click', { performerId, props: { surface: 'profile' } })
     try {
-      if (following) await unfollow(user.id, performerId)
+      const wasFollowing = following
+      if (wasFollowing) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
-      setFollowing(!following)
+      setFollowing(!wasFollowing)
+      setStats((current) => ({
+        ...current,
+        followers: current.followers === null ? null : Math.max(0, current.followers + (wasFollowing ? -1 : 1)),
+      }))
+      void getPerformerProfileStats(performerId).then(setStats).catch(() => undefined)
     } catch {
       setError(t('hpFollowFail'))
     } finally {
@@ -257,6 +263,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     setSection(id)
     window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+  const metric = (value: number | null) => value === null ? t('hpUncounted') : compactCount(value)
 
   return (
     <article className={`hp-page${p.is_live ? ' hp-page--live' : ''}`}>
@@ -307,9 +314,10 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         {officialAwpAwards(p.stage_name).length ? <details className="hp-awards"><summary>主な受賞歴</summary><ul>{officialAwpAwards(p.stage_name).map((award) => <li key={award}>{award}</li>)}</ul></details> : null}
 
         <dl className="hp-metrics">
-          <div><dd>{compactCount(0)}</dd><dt>{t('hpAudience')}</dt></div>
-          <div><dd>{compactCount(supportCount)}</dd><dt>{t('hpSupport')}</dt></div>
-          <div><dd>{compactCount(liveViews)}</dd><dt>{t('hpLiveViews')}</dt></div>
+          <div title={t('hpFollowersDefinition')} aria-label={`${t('hpFollowers')}: ${t('hpFollowersDefinition')}`}><dd data-unavailable={stats.followers === null}>{metric(stats.followers)}</dd><dt>{t('hpFollowers')}</dt></div>
+          <div title={t('hpAppearancesDefinition')} aria-label={`${t('hpAppearances')}: ${t('hpAppearancesDefinition')}`}><dd data-unavailable={stats.appearances === null}>{metric(stats.appearances)}</dd><dt>{t('hpAppearances')}</dt></div>
+          <div title={t('hpSupportDefinition')} aria-label={`${t('hpSupport')}: ${t('hpSupportDefinition')}`}><dd data-unavailable={stats.supporters === null}>{metric(stats.supporters)}</dd><dt>{t('hpSupport')}</dt></div>
+          <div title={t('hpLiveViewsDefinition')} aria-label={`${t('hpLiveViews')}: ${t('hpLiveViewsDefinition')}`}><dd data-unavailable={stats.liveViews === null}>{metric(stats.liveViews)}</dd><dt>{t('hpLiveViews')}</dt></div>
         </dl>
 
         {p.is_live ? (

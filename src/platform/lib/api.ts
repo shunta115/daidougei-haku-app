@@ -473,6 +473,22 @@ export async function sumLiveViews(performerId: string): Promise<number> {
   return (data ?? []).reduce((sum, row) => sum + (Number((row as { viewer_peak?: number }).viewer_peak) || 0), 0)
 }
 
+export type PerformerProfileStats = {
+  followers: number | null
+  appearances: number | null
+  supporters: number | null
+  liveViews: number | null
+}
+
+export async function getPerformerProfileStats(performerId: string): Promise<PerformerProfileStats> {
+  const response = await fetch(`/api/public/performer-stats?performerId=${encodeURIComponent(performerId)}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error('performer_stats_unavailable')
+  return response.json() as Promise<PerformerProfileStats>
+}
+
 export async function isFollowing(fanId: string, performerId: string): Promise<boolean> {
   const sb = requireSupabase()
   const { data } = await sb

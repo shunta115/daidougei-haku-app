@@ -233,7 +233,7 @@ body:has(.hp-page) { overflow-x: hidden; }
 
 .hp-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 16px 0 0;
   padding: 4px 0;
 }
@@ -248,10 +248,11 @@ body:has(.hp-page) { overflow-x: hidden; }
   font-weight: 900;
   letter-spacing: -.04em;
 }
+.hp-metrics dd[data-unavailable="true"] { font-size: 11px; letter-spacing: 0; }
 .hp-metrics dt {
   margin-top: 2px;
   color: var(--hp-dim);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
 }
 
