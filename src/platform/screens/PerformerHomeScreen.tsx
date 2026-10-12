@@ -86,6 +86,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
     <div className="pl-registration__identity">
       <Avatar url={performer.photo_url ?? profile.avatar_url} name={performer.stage_name} large />
       <div><h1 className="pl-h1">{performer.stage_name}</h1><p className="pl-muted">{status.approved ? t('stepLive') : t('continueReg')}{performer.is_live ? `・${t('liveNow')}` : ''}</p></div>
+      <button type="button" className="pl-btn pl-btn--ghost pl-registration__identity-edit" onClick={onEdit}><Pencil size={17} />{t('profileEdit')}</button>
     </div>
 
     <section className="pl-registration__section" aria-labelledby="registration-heading">

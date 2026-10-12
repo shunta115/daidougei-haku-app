@@ -697,6 +697,8 @@
 .pl-my-hero__photo:disabled { opacity: .7; }
 .pl-my-hero__cam { position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(255,255,255,.28); border-radius: 50%; background: #0b1c2e; color: #d8ecff; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
 .pl-my-hero__glow { position: absolute; z-index: -1; inset: 0; background: radial-gradient(70% 120% at 90% 0%, rgba(75,163,255,.28), transparent 70%); }
+.pl-my-hero__edit { position: absolute; top: 13px; right: 13px; display: inline-flex; align-items: center; gap: 5px; min-height: 40px; padding: 0 11px; border: 1px solid rgba(139,195,255,.28); border-radius: 999px; background: rgba(7,24,41,.72); color: #eaf6ff; font: inherit; font-size: 11px; font-weight: 800; touch-action: manipulation; }
+.pl-my-hero__edit:disabled { opacity: .58; }
 .pl-my-hero p, .pl-my-hero h1, .pl-my-hero span { margin: 0; }
 .pl-my-hero p { color: #8bc3ff; font-size: 9px; font-weight: 900; }
 .pl-my-hero h1 { margin-top: 4px; font-size: 24px; }
@@ -704,6 +706,12 @@
 .pl-my-hero__stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3,1fr); padding-top: 13px; border-top: 1px solid var(--xp-line); }
 .pl-my-hero__stats span { display: grid; justify-items: center; gap: 2px; color: var(--xp-muted); font-size: 9px; }
 .pl-my-hero__stats strong { color: white; font-size: 17px; }
+.pl-name-editor { display: grid; gap: 13px; padding: 18px; border: 1px solid rgba(139,195,255,.25); border-radius: 22px; background: rgba(12,29,48,.88); box-shadow: 0 18px 48px rgba(0,0,0,.22); }
+.pl-name-editor__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pl-name-editor__heading h2 { margin: 0; font-size: 18px; }
+.pl-name-editor__heading button { display: grid; place-items: center; width: 44px; height: 44px; margin: -10px -10px -10px 0; border: 0; background: transparent; color: white; }
+.pl-name-editor .pl-muted { margin: -5px 0 0; font-size: 11px; }
+.pl-registration__identity-edit { grid-column: 1 / -1; min-height: 44px; }
 .pl-my-menu { overflow: hidden; border: 1px solid var(--xp-line); border-radius: 22px; background: rgba(12,29,48,.64); }
 .pl-my-menu > * { box-sizing: border-box; width: 100%; min-height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; border: 0; border-bottom: 1px solid var(--xp-line); background: transparent; color: white; }
 .pl-my-menu > *:last-child { border-bottom: 0; }

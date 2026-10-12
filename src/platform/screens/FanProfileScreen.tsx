@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { Avatar } from '../components/Avatar'
 import { useLang } from '../../i18n/LangProvider'
-import { listFollowedPerformers, listMyMerchOrders, updateOwnAvatar } from '../lib/api'
+import { listFollowedPerformers, listMyMerchOrders, updateOwnAvatar, updateOwnDisplayName } from '../lib/api'
+import { DISPLAY_NAME_MAX_LENGTH, normalizeDisplayName } from '../lib/displayName'
 import { prepareProfilePhoto } from '../lib/profilePhoto'
 import { registrationError } from '../lib/onboarding'
 import { formatYen } from '../lib/money'
 import type { MerchOrder, Performer } from '../lib/types'
-import { Bell, Camera, ChevronRight, Clapperboard, Heart, History, Settings, ShoppingBag, Ticket } from 'lucide-react'
+import { Bell, Camera, ChevronRight, Clapperboard, Heart, History, Pencil, Save, Settings, ShoppingBag, Ticket, X } from 'lucide-react'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 
 type Props = {
@@ -25,6 +26,9 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
   const [orders, setOrders] = useState<MerchOrder[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [name, setName] = useState('')
+  const [message, setMessage] = useState<string | null>(null)
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -67,6 +71,29 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
     }
   }
 
+  const openNameEditor = () => {
+    setName(profile?.display_name ?? '')
+    setError(null)
+    setMessage(null)
+    setEditingName(true)
+  }
+
+  const saveName = async () => {
+    if (!user || busy) return
+    let nextName: string
+    try { nextName = normalizeDisplayName(name) }
+    catch (e) { setError(e instanceof Error ? e.message : t('profileNameInvalid')); return }
+    setBusy(true); setError(null); setMessage(null)
+    try {
+      await updateOwnDisplayName(nextName)
+      await refreshProfile()
+      setEditingName(false)
+      setMessage(t('profileNameSaved'))
+    } catch (e) {
+      setError(registrationError(e, t('profileNameSaveFail')))
+    } finally { setBusy(false) }
+  }
+
   if (!profile) return <p className="pl-muted">{t('processing')}</p>
   const username = (profile.email?.split('@')[0] || profile.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '')
 
@@ -74,6 +101,7 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
     <>
       <section className="pl-my-hero">
         <div className="pl-my-hero__glow" aria-hidden="true" />
+        <button type="button" className="pl-my-hero__edit" disabled={busy || !user} onClick={openNameEditor}><Pencil size={14} />{t('profileEdit')}</button>
         <button
           type="button"
           className="pl-my-hero__photo"
@@ -98,8 +126,17 @@ export function FanProfileScreen({ onOpenPerformer, onOpenProduct, onOpenNotific
         </div>
         <div className="pl-my-hero__stats"><span><strong>{follows.length}</strong>{t('profileFollows')}</span><span><strong>0</strong>{t('profileFollowers')}</span><span><strong>0</strong>{t('profileCheers')}</span></div>
       </section>
+      {editingName ? (
+        <section className="pl-name-editor" aria-labelledby="profile-name-editor-title">
+          <div className="pl-name-editor__heading"><h2 id="profile-name-editor-title">{t('profileEdit')}</h2><button type="button" aria-label={t('profileEditClose')} disabled={busy} onClick={() => { setEditingName(false); setError(null) }}><X size={20} /></button></div>
+          <label><span className="pl-label">{t('profileDisplayName')}</span><input className="pl-input" autoComplete="nickname" autoFocus maxLength={DISPLAY_NAME_MAX_LENGTH} value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <p className="pl-muted">{t('profileNameHint', { n: DISPLAY_NAME_MAX_LENGTH })}</p>
+          <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void saveName()}><Save size={18} />{busy ? t('editSaving') : t('profileNameSave')}</button>
+        </section>
+      ) : null}
       <GlobalMessageBar className="pl-my-global-message" />
-      {error ? <p className="pl-error">{error}</p> : null}
+      {error ? <p className="pl-error" role="alert">{error}</p> : null}
+      {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
 
       <section className="pl-card" aria-labelledby="pl-my-follows">
         <h2 id="pl-my-follows" className="pl-h2" style={{ marginTop: 0 }}>{t('profileFollows')}</h2>

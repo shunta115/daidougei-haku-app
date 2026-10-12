@@ -5,11 +5,11 @@ import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
   auth: {} as Record<string, unknown>, signUp: vi.fn(), signIn: vi.fn(), update: vi.fn(),
-  refresh: vi.fn(), queryUpdate: vi.fn(), upload: vi.fn(), resend: vi.fn(),
+  refresh: vi.fn(), queryUpdate: vi.fn(), upload: vi.fn(), resend: vi.fn(), updateName: vi.fn(),
 }))
 vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ ...fake.auth, signUp: fake.signUp, signIn: fake.signIn, refreshProfile: fake.refresh, signOut: vi.fn() }) }))
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
-vi.mock('../src/platform/lib/api', () => ({ updatePerformer: fake.update, uploadAvatar: fake.upload }))
+vi.mock('../src/platform/lib/api', () => ({ updatePerformer: fake.update, uploadAvatar: fake.upload, updateOwnDisplayName: fake.updateName }))
 vi.mock('../src/platform/lib/supabase', () => ({
   supabaseAuthHeaders: async () => ({}),
   requireSupabase: () => ({ auth: { resend: fake.resend }, from: () => ({ update: fake.queryUpdate }) }),
@@ -30,6 +30,7 @@ beforeEach(() => {
   fake.signUp.mockResolvedValue(null)
   fake.signIn.mockResolvedValue(null)
   fake.update.mockResolvedValue(undefined)
+  fake.updateName.mockResolvedValue('登録テスト')
   fake.refresh.mockResolvedValue(undefined)
   fake.queryUpdate.mockReturnValue({ eq: async () => ({ error: null }) })
 })
@@ -94,6 +95,8 @@ describe('smartphone performer registration', () => {
     expect(patch).not.toHaveProperty('is_approved')
     expect(patch).not.toHaveProperty('stripe_account_id')
     expect(patch).not.toHaveProperty('real_name')
+    expect(patch).not.toHaveProperty('stage_name')
+    expect(fake.updateName).toHaveBeenCalledWith('登録テスト')
     expect(localStorage.getItem('pl-profile-draft:performer-fixture')).toBeNull()
   })
   it('stores a ticket sales link with the existing public link data', async () => {

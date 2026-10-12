@@ -16,6 +16,7 @@ import { supabaseAuthHeaders } from './supabase'
 import { AWP_ENTRANCE_ZONE } from './venueDisplay'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../../../shared/fees'
+import { normalizeDisplayName } from './displayName'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -175,6 +176,18 @@ export async function updatePerformer(id: string, patch: Partial<Performer>) {
   const { data, error } = await sb.from('performers').update(patch).eq('id', id).select('id')
   if (error) throw error
   if (!data?.length) throw new Error('Performer update unavailable')
+}
+
+export async function updateOwnDisplayName(value: string): Promise<string> {
+  const displayName = normalizeDisplayName(value)
+  const response = await fetch('/api/profile/display-name', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ displayName }),
+  })
+  if (!response.ok) throw new Error('Display name update failed')
+  const data = await response.json() as { displayName?: string }
+  return data.displayName || displayName
 }
 
 export async function startLive(performerId: string, title?: string) {

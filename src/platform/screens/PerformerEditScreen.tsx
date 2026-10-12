@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Camera, Save } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
-import { updatePerformer, uploadAvatar } from '../lib/api'
+import { updateOwnDisplayName, updatePerformer, uploadAvatar } from '../lib/api'
+import { DISPLAY_NAME_MAX_LENGTH, normalizeDisplayName } from '../lib/displayName'
 import { useAuth } from '../lib/auth'
 import { requireSupabase } from '../lib/supabase'
 import { isValidHttpUrl } from '../../festival/lib/productionGuard'
@@ -73,7 +74,9 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
     if (busy) return
     setBusy(true); setError(null); setMessage(null)
     try {
-      if (!fields.stage_name.trim()) { setError(t('editNeedName')); return }
+      let displayName: string
+      try { displayName = normalizeDisplayName(fields.stage_name) }
+      catch (e) { setError(e instanceof Error ? e.message : t('editNeedName')); return }
       const sns_json = [
         ...SNS_FIELDS.map((key) => ({ label: key, url: fields[key].trim() })).filter((s) => s.url),
         ...(performer.sns_json ?? []).filter((item) => !SNS_FIELDS.some((key) => key === item.label)),
@@ -83,13 +86,12 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
         setError(t('editBadUrl', { label: invalidSns?.label ?? t('editVideo') })); return
       }
       await updatePerformer(performer.id, {
-        stage_name: fields.stage_name.trim(), genre: fields.genre.trim(), bio: fields.bio.trim(),
+        genre: fields.genre.trim(), bio: fields.bio.trim(),
         country: fields.country.trim(), city: fields.city.trim(), support_blurb: fields.support_blurb.trim(),
         awards: fields.awards.trim(), appearances: fields.appearances.trim(), video_url: fields.video_url.trim() || null,
         sns_json,
       })
-      const { error: profileError } = await requireSupabase().from('profiles').update({ display_name: fields.stage_name.trim() }).eq('id', performer.id)
-      if (profileError) throw profileError
+      await updateOwnDisplayName(displayName)
       await refreshProfile()
       savedFields.current = JSON.stringify(fields)
       setDirty(false)
@@ -137,7 +139,7 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
     </div>
     <form noValidate onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy} className="pl-registration__fields">
-        {field('stage_name', t('editStage'), { required: true, max: 80 })}
+        {field('stage_name', t('editStage'), { required: true, max: DISPLAY_NAME_MAX_LENGTH })}
         {field('genre', t('editGenre'))}
         {field('bio', t('editBio'), { multiline: true })}
         {field('city', t('editArea'))}
