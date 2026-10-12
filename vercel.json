@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/profile/display-name",
+      "destination": "/api/stripe/tip?action=display-name"
+    },
+    {
       "source": "/official",
       "destination": "/official-v6.html"
     },

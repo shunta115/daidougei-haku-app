@@ -19,7 +19,7 @@ vi.mock('../api/stripe/_shared.js', () => ({
   }),
 }))
 
-import handler from '../api/profile/display-name'
+import { handleDisplayNameUpdate as handler } from '../api/profile/_displayName'
 
 function response() {
   return {

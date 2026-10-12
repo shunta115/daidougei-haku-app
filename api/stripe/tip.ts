@@ -8,6 +8,7 @@ import {
   getOptionalAuthUser,
   getStripe,
 } from './_shared.js'
+import { handleDisplayNameUpdate } from '../profile/_displayName.js'
 
 function missingColumn(error: unknown) {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
@@ -15,6 +16,8 @@ function missingColumn(error: unknown) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const action = req.query ? req.query.action : undefined
+  if (action === 'display-name') return handleDisplayNameUpdate(req, res)
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

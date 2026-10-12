@@ -10,7 +10,7 @@ function validatedDisplayName(value: unknown): string | null {
   return normalized
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleDisplayNameUpdate(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const user = await requireAuthUser(req, res)
   if (!user) return

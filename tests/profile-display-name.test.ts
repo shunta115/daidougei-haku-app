@@ -11,12 +11,15 @@ describe('public display name changes', () => {
   })
 
   it('derives the production API target from the authenticated session, never request input', () => {
-    const api = readFileSync('api/profile/display-name.ts', 'utf8')
+    const api = readFileSync('api/profile/_displayName.ts', 'utf8')
     expect(api).toMatch(/requireAuthUser\(req, res\)/)
     expect(api).toMatch(/\.eq\('id', user\.id\)/)
     expect(api).not.toMatch(/req\.body\?\.(userId|id)/)
     expect(api).toMatch(/\['fan', 'performer'\]\.includes\(profile\.role\)/)
     expect(api).toMatch(/update\(\{ stage_name: displayName \}\)/)
     expect(api).toMatch(/update\(\{ display_name: previousName \}\)/)
+    const vercel = readFileSync('vercel.json', 'utf8')
+    expect(vercel).toMatch(/\/api\/profile\/display-name/)
+    expect(vercel).toMatch(/\/api\/stripe\/tip\?action=display-name/)
   })
 })
