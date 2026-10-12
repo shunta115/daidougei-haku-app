@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, ExternalLink, Gift, Heart, Image, MapPin, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, Clock3, Crown, ExternalLink, Gift, Heart, Image, MapPin, Medal, Radio, Sparkles, Ticket, Trophy, Vote } from 'lucide-react'
 import { isActiveEventSlot, eventSlotCancellation } from '../lib/eventSlotStatus'
 import {
   getEventBySlug,
@@ -356,8 +356,8 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     .slice(0, 3)
   const wantedToday = activeDateSlots.filter((slot) => wantedSlots.includes(slot.id))
   const resultsPublished = Boolean(event?.results_published_at && new Date(event.results_published_at).getTime() <= Date.now()) || event?.status === 'archived'
-  const awpResultsPublished = resultsPublished || Date.now() >= Date.parse('2026-10-12T16:20:00+09:00')
-  const finalSlots = slots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
+  const awpResultsPublished = resultsPublished
+  const finalSlots = slots.filter((slot) => slot.performance_type === 'special_final' && dateKey(slot.date) === '2026-10-12').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
   const votingOpen = Boolean(rule?.voting_open && (!rule.voting_starts_at || Date.now() >= Date.parse(rule.voting_starts_at)) && (!rule.voting_ends_at || Date.now() < Date.parse(rule.voting_ends_at)))
   const phase = event ? eventPhase(event, clock.date) : 'before'
   const countdown = daysUntil(event?.starts_on)
@@ -468,7 +468,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     </section>
     )}
 
-    {isAwp && awpResultsPublished && ranking.length ? <section className="awp-special awp-special--results" aria-label="本日の投票TOP3"><header><Trophy size={25} /><div><p>AWP 2026 RESULTS</p><h2>本日のTOP3</h2></div></header><div>{ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{index + 1}位</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}` : t('eventTimePending')}</small></span></article> })}</div></section> : null}
+    {isAwp && awpResultsPublished && ranking.length ? <section className="awp-special awp-special--results" aria-labelledby="awp-today-ranking-title"><span className="awp-special__shine" aria-hidden="true" /><header><div className="awp-special__crest" aria-hidden="true"><span>◆</span><Crown size={28} /><span>◆</span></div><p>AWP 2026</p><h2 id="awp-today-ranking-title">本日のTOP3</h2><small>TODAY&apos;S RANKING</small></header><div className="awp-special__ranking">{ranking.slice(0, 3).map((row, index) => { const rank = index + 1; const slot = finalSlots.find((item) => item.ranking_position === rank); const tone = rank === 1 ? 'gold' : rank === 2 ? 'silver' : 'bronze'; const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'; return <button type="button" className={`awp-rank-card awp-rank-card--${tone}`} key={row.performer.id} onClick={() => onOpenPerformer(row.performer.id)} aria-label={`${rank}位 ${row.performer.stage_name} の詳細を見る`}><span className="awp-rank-card__number" aria-hidden="true"><small>{medal}</small><b>{rank}</b><em>RANK</em></span><span className="awp-rank-card__photo">{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : <span>{row.performer.stage_name.slice(0, 2)}</span>}<i><Medal size={13} /> TOP {rank}</i></span><span className="awp-rank-card__body"><small>{rank === 1 ? <Crown size={15} /> : <Medal size={15} />} 第{rank}位</small><strong>{row.performer.stage_name}</strong><span>{slot ? <><time>{timeKey(slot.start_time)}〜{timeKey(slot.end_time)}</time><em>{displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}</em></> : t('eventTimePending')}</span></span><ChevronRight size={20} aria-hidden="true" /></button> })}</div><footer><Trophy size={15} /><span>OFFICIAL DAILY RANKING</span><Trophy size={15} /></footer></section> : null}
 
     <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={() => openVenueMap()}>{t('mapTab')}</button></nav>
 
