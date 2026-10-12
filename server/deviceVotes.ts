@@ -49,6 +49,27 @@ function tokyoDay() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })
 }
 
+async function eligiblePerformersToday(sb: ReturnType<typeof getAdminSupabase>, eventId: string, voteDate: string) {
+  const { data: slots, error: slotError } = await sb.from('event_slots')
+    .select('performer_id,start_time')
+    .eq('event_id', eventId)
+    .eq('date', voteDate)
+    .eq('performance_type', 'regular')
+    .or('status.is.null,status.neq.cancelled')
+    .order('start_time', { ascending: true })
+  if (slotError) throw slotError
+
+  const ids = [...new Set((slots ?? []).map((row) => String(row.performer_id)).filter((id) => UUID_RE.test(id)))]
+  if (!ids.length) return []
+  const { data: performers, error: performerError } = await sb.from('performers')
+    .select('id,stage_name')
+    .in('id', ids)
+    .eq('is_approved', true)
+  if (performerError) throw performerError
+  const byId = new Map((performers ?? []).map((performer) => [String(performer.id), String(performer.stage_name || '')]))
+  return ids.flatMap((id) => byId.has(id) ? [{ id, stage_name: byId.get(id)! }] : [])
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -73,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const voteDate = tokyoDay()
 
   try {
+    let eligiblePerformers: Awaited<ReturnType<typeof eligiblePerformersToday>> | null = null
     if (req.method === 'POST') {
       const performerId = String(req.body?.performerId || '')
       if (!UUID_RE.test(performerId)) {
@@ -83,12 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(403).json({ error: 'voting_closed' })
         return
       }
-      const [{ data: slots, error: slotError }, { data: performer, error: performerError }] = await Promise.all([
-        sb.from('event_slots').select('id').eq('event_id', eventId).eq('date', voteDate).eq('performer_id', performerId).eq('performance_type', 'regular').or('status.is.null,status.neq.cancelled').limit(1),
-        sb.from('performers').select('id').eq('id', performerId).eq('is_approved', true).maybeSingle(),
-      ])
-      if (slotError || performerError) throw slotError || performerError
-      if (!slots?.length || !performer) {
+      eligiblePerformers = await eligiblePerformersToday(sb, eventId, voteDate)
+      if (!eligiblePerformers.some((performer) => performer.id === performerId)) {
         res.status(422).json({ error: 'performer_not_eligible_today' })
         return
       }
@@ -113,6 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ])
     if (ruleError) throw ruleError
     if (ballotError) throw ballotError
+    eligiblePerformers ??= await eligiblePerformersToday(sb, eventId, voteDate)
     const voted = (ballots ?? []).map((row) => String(row.performer_id))
     const max = Math.max(1, Math.min(10, Number(rule?.votes_per_device) || 3))
     res.status(200).json({
@@ -123,6 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       used: voted.length,
       remaining: Math.max(0, max - voted.length),
       voted,
+      eligible_performers: eligiblePerformers,
     })
   } catch {
     res.status(500).json({ error: 'vote_service_unavailable' })

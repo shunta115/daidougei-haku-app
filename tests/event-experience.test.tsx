@@ -84,7 +84,7 @@ beforeEach(() => {
   fake.listPublishedEvents.mockResolvedValue([event])
   fake.getEventBySlug.mockResolvedValue(event)
   fake.getEventVoteRule.mockResolvedValue({ event_id: event.id, voting_enabled: true, voting_open: true, votes_per_user_per_day: 1, voting_starts_at: null, voting_ends_at: null, updated_at: '' })
-  fake.getAnonVoteState.mockResolvedValue({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
+  fake.getAnonVoteState.mockResolvedValue({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [], eligible_performers: [{ id: performer.id, stage_name: performer.stage_name }] })
   fake.castAnonEventVote.mockResolvedValue(undefined)
   fake.getMyVotes.mockResolvedValue([])
   fake.listEventLineupPerformers.mockResolvedValue([performer])
@@ -161,12 +161,22 @@ it('allows an anonymous visitor to use the device-scoped vote API', async () => 
   expect(fake.voteForPerformer).not.toHaveBeenCalled()
 })
 
+it('shows only performers returned by the server eligibility check in the audience vote list', async () => {
+  const excluded = { ...performer, id: 'performer-excluded', stage_name: '対象外出演者' }
+  fake.listVotingEligibleEventLineupPerformers.mockResolvedValue([performer, excluded])
+  render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
+  await waitFor(() => expect(document.getElementById('event-vote')).toBeTruthy())
+  const voteSection = document.getElementById('event-vote')!
+  await waitFor(() => expect(within(voteSection).getByText('SUI')).toBeTruthy())
+  expect(within(voteSection).queryByText('対象外出演者')).toBeNull()
+})
+
 it('casts an authenticated fan vote through the same device-scoped server API and shows completion feedback', async () => {
   fake.auth = { user: { id: 'fan-1' }, profile: { role: 'fan', status: 'active' } }
   fake.getAnonVoteState
-    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
-    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [] })
-    .mockResolvedValue({ voting_open: true, max_votes: 3, used: 1, remaining: 2, voted: [performer.id] })
+    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [], eligible_performers: [{ id: performer.id, stage_name: performer.stage_name }] })
+    .mockResolvedValueOnce({ voting_open: true, max_votes: 3, used: 0, remaining: 3, voted: [], eligible_performers: [{ id: performer.id, stage_name: performer.stage_name }] })
+    .mockResolvedValue({ voting_open: true, max_votes: 3, used: 1, remaining: 2, voted: [performer.id], eligible_performers: [{ id: performer.id, stage_name: performer.stage_name }] })
   render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
   await screen.findAllByText('SUI')
   const voteSection = document.getElementById('event-vote')
@@ -183,7 +193,7 @@ it('casts an authenticated fan vote through the same device-scoped server API an
 const supportLineup = [performer, { ...performer, id: 'performer-2', stage_name: '紙磨呂' }, { ...performer, id: 'performer-3', stage_name: 'MUTSUKIN' }]
 
 function deviceBallot(voted: string[]) {
-  return { voting_open: true, max_votes: 3, used: voted.length, remaining: 3 - voted.length, voted }
+  return { voting_open: true, max_votes: 3, used: voted.length, remaining: 3 - voted.length, voted, eligible_performers: supportLineup.map(({ id, stage_name }) => ({ id, stage_name })) }
 }
 
 function renderSupport(slug = event.slug) {

@@ -107,6 +107,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
   const [error, setError] = useState<string | null>(null)
   const [lastName, setLastName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [eligiblePerformerIds, setEligiblePerformerIds] = useState<string[]>([])
 
   const refreshVersion = useRef(0)
   const refresh = async () => {
@@ -121,6 +122,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
       setRemaining(state.remaining)
       setMaxVotes(state.max_votes)
       setOpen(state.voting_open && Boolean(rule?.voting_enabled))
+      setEligiblePerformerIds(state.eligible_performers.map((performer) => performer.id))
       onVotedChange?.(state.voted)
     } catch (error) {
       if (version === refreshVersion.current) onVotedChange?.(null)
@@ -141,6 +143,8 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
 
   const used = maxVotes - remaining
   const lastPerformer = lastName
+  const eligibleIdSet = new Set(eligiblePerformerIds)
+  const visiblePerformers = performers.filter((performer) => eligibleIdSet.has(performer.id))
 
   const cast = async (performer: Performer) => {
     const gate = canCastAnonVote({ votingOpen: open, votedIds: voted, performerId: performer.id, maxVotes })
@@ -205,7 +209,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
 
       {loading ? <p role="status">{t('processing')}</p> : (
         <div className="pl-event-vote__grid">
-          {performers.map((performer) => {
+          {visiblePerformers.map((performer) => {
             const already = voted.includes(performer.id)
             const disabled = busy || !open || already || remaining <= 0
             return (

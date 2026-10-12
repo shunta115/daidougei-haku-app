@@ -956,10 +956,11 @@ export type AnonVoteState = {
   used: number
   remaining: number
   voted: string[]
+  eligible_performers: Array<{ id: string; stage_name: string }>
 }
 
 export async function getAnonVoteState(eventId: string, _legacyVoterId = ''): Promise<AnonVoteState> {
-  const response = await fetch(`/api/votes/device?eventId=${encodeURIComponent(eventId)}`, { credentials: 'same-origin' })
+  const response = await fetch(`/api/votes/device?eventId=${encodeURIComponent(eventId)}`, { credentials: 'same-origin', cache: 'no-store' })
   const row = await response.json().catch(() => ({})) as Partial<AnonVoteState> & { error?: string }
   if (!response.ok) throw new Error(row.error || 'vote_service_unavailable')
   const voted = Array.isArray(row.voted) ? row.voted.map(String) : []
@@ -969,6 +970,9 @@ export async function getAnonVoteState(eventId: string, _legacyVoterId = ''): Pr
     used: Number(row.used) || voted.length,
     remaining: Number(row.remaining) || 0,
     voted,
+    eligible_performers: Array.isArray(row.eligible_performers)
+      ? row.eligible_performers.map((performer) => ({ id: String(performer.id), stage_name: String(performer.stage_name) }))
+      : [],
   }
 }
 
