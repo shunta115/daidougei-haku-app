@@ -7,7 +7,7 @@ const styles = readFileSync(new URL('../src/platform/screens/event.css', import.
 describe('AWP 本日のTOP3 presentation', () => {
   it('keeps the 2026-10-12 ranking separate from prior event days', () => {
     expect(screen).toContain("dateKey(slot.date) === '2026-10-12'")
-    expect(screen).toContain('const awpResultsPublished = resultsPublished')
+    expect(screen).toContain("Date.parse('2026-10-12T16:20:00+09:00')")
   })
 
   it('shows official ranking details without exposing vote totals', () => {
