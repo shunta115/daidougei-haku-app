@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { User } from '@supabase/supabase-js'
 import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from '../stripe/_shared.js'
 import { getPerformerPayoutView } from '../stripe/_payouts.js'
-import { requireAdmin, requireSuperAdmin } from './_guard.js'
+import { requireAdmin, requireSuperAdmin, tokyoDay } from './_guard.js'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, settleSaleAfterRefund } from '../../shared/fees.js'
 
 type Json = Record<string, unknown>
@@ -657,22 +657,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       const day = tokyoDay()
-      const [{ data: rule }, { data: ballots }, { data: signedBallots }, { data: eligibleRows }] = await Promise.all([
+      const [ruleResult, ballotResult, signedResult, slotResult] = await Promise.all([
         sb.from('event_vote_rules').select('*').eq('event_id', eventId).maybeSingle(),
         sb.from('event_device_ballots').select('performer_id,device_hash,created_at').eq('event_id', eventId).eq('vote_date', day),
         sb.from('event_ballots').select('performer_id,fan_id,created_at').eq('event_id', eventId).eq('vote_date', day),
-        sb.from('event_slots').select('performer_id').eq('event_id', eventId).eq('date', day).eq('performance_type', 'regular').not('performer_id', 'is', null),
+        sb.from('event_slots').select('performer_id').eq('event_id', eventId).eq('date', day).eq('performance_type', 'regular').or('status.is.null,status.neq.cancelled').not('performer_id', 'is', null),
       ])
-      const eligibleIds = new Set((eligibleRows ?? []).map((row) => String(row.performer_id)))
+      if (ruleResult.error || ballotResult.error || signedResult.error || slotResult.error) throw ruleResult.error || ballotResult.error || signedResult.error || slotResult.error
+      const rule = ruleResult.data
+      const ballots = ballotResult.data ?? []
+      const signedBallots = signedResult.data ?? []
+      const candidateIds = [...new Set((slotResult.data ?? []).map((row) => String(row.performer_id)))]
+      const { data: performerNames, error: performerError } = candidateIds.length ? await sb.from('performers').select('id,stage_name').in('id', candidateIds).eq('is_approved', true) : { data: [], error: null }
+      if (performerError) throw performerError
+      const eligibleIds = new Set((performerNames ?? []).map((row) => String(row.id)))
       const counts = new Map<string, number>()
       for (const row of [...(ballots ?? []), ...(signedBallots ?? [])]) {
         const performerId = String(row.performer_id)
         if (eligibleIds.has(performerId)) counts.set(performerId, (counts.get(performerId) ?? 0) + 1)
       }
       for (const performerId of eligibleIds) if (!counts.has(performerId)) counts.set(performerId, 0)
-      const performerIds = [...eligibleIds]
-      const { data: performerNames } = performerIds.length ? await sb.from('performers').select('id,stage_name').in('id', performerIds) : { data: [] }
       const nameById = new Map((performerNames ?? []).map((row) => [row.id, row.stage_name]))
+      const validDeviceBallots = ballots.filter((row) => eligibleIds.has(String(row.performer_id)))
+      const validSignedBallots = signedBallots.filter((row) => eligibleIds.has(String(row.performer_id)))
       res.status(200).json({
         ok: true,
         source: 'event_device_ballots',
@@ -683,7 +690,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           voting_open: Boolean(rule?.voting_open),
           votes_per_device: Number(rule?.votes_per_device) || 3,
           total_votes: [...counts.values()].reduce((sum, value) => sum + value, 0),
-          unique_voters: new Set([...(ballots ?? []).map((row) => `d:${row.device_hash}`), ...(signedBallots ?? []).map((row) => `f:${row.fan_id}`)]).size,
+          unique_voters: new Set([...validDeviceBallots.map((row) => `d:${row.device_hash}`), ...validSignedBallots.map((row) => `f:${row.fan_id}`)]).size,
           legacy_test_votes: 0,
           ranking: [...counts].map(([performer_id, votes]) => ({ performer_id, performer_name: nameById.get(performer_id) ?? '名称未登録', stage_name: nameById.get(performer_id) ?? '名称未登録', votes })).sort((a, b) => b.votes - a.votes || a.stage_name.localeCompare(b.stage_name, 'ja')),
         },

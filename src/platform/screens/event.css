@@ -1569,6 +1569,12 @@ html:has(.pl-event-detail) .pl-bg__grain {
 .awp-special article span { color:#9fb3c2; font-size:11px; }
 .awp-special>button { width:100%; min-height:46px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:10px; background:linear-gradient(180deg,#e2b84f,#a56d12); color:#130d02; font-weight:950; }
 .awp-special__closed { margin:10px 0 0; padding:11px; border:1px solid rgba(224,176,73,.22); border-radius:10px; color:#d2c19a; text-align:center; font-size:12px; font-weight:800; }
+.awp-special--results { margin-top:0; padding:18px 20px; border:1px solid rgba(224,176,73,.35); background:linear-gradient(145deg,#090909,#17090b 58%,#241806); }
+.awp-special--results article { grid-template-columns:44px 56px minmax(0,1fr); gap:10px; }
+.awp-special--results article>strong { color:#e0b049; }
+.awp-special--results article img { width:48px; height:48px; border-radius:50%; object-fit:cover; border:1px solid rgba(224,176,73,.55); }
+.awp-special--results article span { display:grid; gap:3px; }
+.awp-special--results article span b { color:#fff; font-size:14px; }
 .awp-roving header>span { color:#a9bdcb; font-size:12px; line-height:1.5; }
 .awp-roving>div {
   align-items:stretch;

@@ -100,6 +100,7 @@ export function HakuAdminApp() {
       if (next === 'reports') setReports(((await hakuAdmin('reports')).rows as Array<Record<string, unknown>>) ?? [])
       if (next === 'preview') setPerformers(((await hakuAdmin('performers')).rows as Array<Record<string, unknown>>) ?? [])
     } catch (e) {
+      if (next === 'votes') setVotes(null)
       setError(e instanceof Error ? e.message : '読み込みに失敗しました')
     } finally {
       setBusy(false)
@@ -114,6 +115,12 @@ export function HakuAdminApp() {
       void reload('home')
     }).catch(() => setServerAllowed(false))
   }, [locallyEligible])
+
+  useEffect(() => {
+    if (!serverAllowed || tab !== 'votes') return
+    const timer = window.setInterval(() => { void reload('votes') }, 15_000)
+    return () => window.clearInterval(timer)
+  }, [serverAllowed, tab, eventId])
 
   const moneyBlock = (dash?.money ?? money) as Record<string, unknown> | undefined
   const recorded = moneyBlock && moneyBlock.kind === 'recorded' ? moneyBlock : null

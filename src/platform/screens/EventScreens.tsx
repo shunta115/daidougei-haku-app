@@ -321,6 +321,13 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     return () => { active = false }
   }, [slug, user?.id])
 
+  useEffect(() => {
+    if (slug !== AWP_SLUG || !event) return
+    const refresh = () => { void listVoteRankingNamed(event.id).then(setRanking).catch(() => setRanking([])) }
+    const timer = window.setInterval(refresh, 15_000)
+    return () => window.clearInterval(timer)
+  }, [slug, event?.id])
+
   const performerById = useMemo(() => new Map([...performers, ...slotPerformers].map((performer) => [performer.id, performer])), [performers, slotPerformers])
   const guestPerformerById = useMemo(() => {
     const map = new Map(guestPerformers.map((performer) => [performer.id, performer]))
@@ -349,6 +356,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     .slice(0, 3)
   const wantedToday = activeDateSlots.filter((slot) => wantedSlots.includes(slot.id))
   const resultsPublished = Boolean(event?.results_published_at && new Date(event.results_published_at).getTime() <= Date.now()) || event?.status === 'archived'
+  const awpResultsPublished = resultsPublished || Date.now() >= Date.parse('2026-10-12T16:20:00+09:00')
   const finalSlots = slots.filter((slot) => slot.performance_type === 'special_final').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
   const votingOpen = Boolean(rule?.voting_open && (!rule.voting_starts_at || Date.now() >= Date.parse(rule.voting_starts_at)) && (!rule.voting_ends_at || Date.now() < Date.parse(rule.voting_ends_at)))
   const phase = event ? eventPhase(event, clock.date) : 'before'
@@ -459,6 +467,8 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
       </div>
     </section>
     )}
+
+    {isAwp && awpResultsPublished && ranking.length ? <section className="awp-special awp-special--results" aria-label="本日の投票TOP3"><header><Trophy size={25} /><div><p>AWP 2026 RESULTS</p><h2>本日のTOP3</h2></div></header><div>{ranking.slice(0, 3).map((row, index) => { const slot = finalSlots.find((item) => item.ranking_position === index + 1); return <article key={row.performer.id}><strong>{index + 1}位</strong>{row.performer.photo_url ? <img src={row.performer.photo_url} alt="" /> : null}<span><b>{row.performer.stage_name}</b><small>{slot ? `${timeKey(slot.start_time)}〜${timeKey(slot.end_time)} · ${displayStageName(venueById.get(slot.venue_id)?.name_ja || slot.stage_ja)}` : t('eventTimePending')}</small></span></article> })}</div></section> : null}
 
     <nav className="pl-event-jump" aria-label={t('eventMenu')}><button onClick={() => jump('event-now')}>NOW</button><button onClick={() => jump('event-schedule')}>{t('eventJumpTime')}</button><button onClick={() => jump('event-vote')}>{t('eventJumpVote')}</button><button onClick={() => jump('event-lineup')}>{t('eventJumpActs')}</button><button onClick={() => openVenueMap()}>{t('mapTab')}</button></nav>
 

@@ -5,6 +5,9 @@ import { getAdminSupabase } from '../api/stripe/_shared.js'
 const COOKIE_NAME = 'haku_vote_device'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
+const AWP_EVENT_ID = '7ed8fc94-60b7-4729-b523-881cd3b4e72c'
+const AWP_START = Date.parse('2026-10-12T10:00:00+09:00')
+const AWP_END = Date.parse('2026-10-12T16:20:00+09:00')
 
 function cookieValue(req: VercelRequest, name: string) {
   const raw = req.headers.cookie || ''
@@ -33,9 +36,10 @@ function sameOrigin(req: VercelRequest) {
   try { return new URL(origin).host === host } catch { return false }
 }
 
-function openNow(rule: Record<string, unknown> | null) {
+function openNow(rule: Record<string, unknown> | null, eventId: string) {
   if (!rule?.voting_enabled || !rule.voting_open) return false
   const now = Date.now()
+  if (eventId === AWP_EVENT_ID && (now < AWP_START || now >= AWP_END)) return false
   if (rule.voting_starts_at && now < Date.parse(String(rule.voting_starts_at))) return false
   if (rule.voting_ends_at && now >= Date.parse(String(rule.voting_ends_at))) return false
   return true
@@ -75,6 +79,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: 'invalid_performer' })
         return
       }
+      if (eventId === AWP_EVENT_ID && (Date.now() < AWP_START || Date.now() >= AWP_END)) {
+        res.status(403).json({ error: 'voting_closed' })
+        return
+      }
+      const [{ data: slots, error: slotError }, { data: performer, error: performerError }] = await Promise.all([
+        sb.from('event_slots').select('id').eq('event_id', eventId).eq('date', voteDate).eq('performer_id', performerId).eq('performance_type', 'regular').or('status.is.null,status.neq.cancelled').limit(1),
+        sb.from('performers').select('id').eq('id', performerId).eq('is_approved', true).maybeSingle(),
+      ])
+      if (slotError || performerError) throw slotError || performerError
+      if (!slots?.length || !performer) {
+        res.status(422).json({ error: 'performer_not_eligible_today' })
+        return
+      }
       const { error } = await sb.rpc('cast_device_event_vote', {
         p_event_id: eventId,
         p_performer_id: performerId,
@@ -100,7 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const max = Math.max(1, Math.min(10, Number(rule?.votes_per_device) || 3))
     res.status(200).json({
       voting_enabled: Boolean(rule?.voting_enabled),
-      voting_open: openNow(rule as Record<string, unknown> | null),
+      voting_open: openNow(rule as Record<string, unknown> | null, eventId),
       vote_date: voteDate,
       max_votes: max,
       used: voted.length,

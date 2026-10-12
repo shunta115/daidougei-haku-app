@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 
-const api = readFileSync(new URL('../api/votes/device.ts', import.meta.url), 'utf8')
+const api = readFileSync(new URL('../server/deviceVotes.ts', import.meta.url), 'utf8')
 const migration = readFileSync(new URL('../supabase/migrations/20261004_awp_device_voting.sql', import.meta.url), 'utf8')
 
 it('uses an HttpOnly same-site server-issued device cookie', () => {
