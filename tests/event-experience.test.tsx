@@ -139,6 +139,8 @@ it('shows a readable hero and opens the official flyer without using it as the b
 })
 
 it('allows anonymous event viewing while hiding unpublished intermediate results', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-10-12T16:19:59+09:00'))
   render(<EventDetailScreen slug={event.slug} onBack={vi.fn()} onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onTip={vi.fn()} onOpenMap={vi.fn()} onRequireAuth={vi.fn()} />)
   await screen.findAllByText('受賞者たち')
   expect(screen.getByText('観る。選ぶ。もう一度、沸く。')).toBeTruthy()

@@ -356,7 +356,7 @@ export function EventDetailScreen({ slug, onBack, onOpenPerformer, onWatchLive, 
     .slice(0, 3)
   const wantedToday = activeDateSlots.filter((slot) => wantedSlots.includes(slot.id))
   const resultsPublished = Boolean(event?.results_published_at && new Date(event.results_published_at).getTime() <= Date.now()) || event?.status === 'archived'
-  const awpResultsPublished = resultsPublished
+  const awpResultsPublished = resultsPublished || Date.now() >= Date.parse('2026-10-12T16:20:00+09:00')
   const finalSlots = slots.filter((slot) => slot.performance_type === 'special_final' && dateKey(slot.date) === '2026-10-12').sort((a, b) => (a.ranking_position ?? 99) - (b.ranking_position ?? 99))
   const votingOpen = Boolean(rule?.voting_open && (!rule.voting_starts_at || Date.now() >= Date.parse(rule.voting_starts_at)) && (!rule.voting_ends_at || Date.now() < Date.parse(rule.voting_ends_at)))
   const phase = event ? eventPhase(event, clock.date) : 'before'
