@@ -1,9 +1,8 @@
 {
   "rewrites": [
-    {
-      "source": "/api/profile/display-name",
-      "destination": "/api/stripe/tip?action=display-name"
-    },
+    { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
+    { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },
+    { "source": "/api/awp-results", "destination": "/api/ops/run?job=awp-results" },
     {
       "source": "/official",
       "destination": "/official-v6.html"

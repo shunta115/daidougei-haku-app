@@ -458,6 +458,7 @@ export function HakuAdminApp() {
       {tab === 'votes' ? (
         <section className="ha-card">
           <h2>投票デスク</h2>
+          <p>対象日: {String((votes?.desk as { day?: string } | undefined)?.day ?? '—')}（Asia/Tokyo）</p>
           <p>投票機能: {String((votes?.desk as { voting_enabled?: boolean } | undefined)?.voting_enabled ? 'ON' : 'OFF')} · 受付: {String((votes?.desk as { voting_open?: boolean } | undefined)?.voting_open ? 'OPEN' : 'STOP')}</p>
           <p>正式票 {String((votes?.desk as { total_votes?: number } | undefined)?.total_votes ?? '—')} · 投票端末 {String((votes?.desk as { unique_voters?: number } | undefined)?.unique_voters ?? '—')} · 1端末最大 {String((votes?.desk as { votes_per_device?: number } | undefined)?.votes_per_device ?? 3)}票</p>
           {Number((votes?.desk as { legacy_test_votes?: number } | undefined)?.legacy_test_votes) > 0 ? <p className="ha-note">旧方式の開催前テスト票 {(votes?.desk as { legacy_test_votes?: number }).legacy_test_votes}件は正式ランキングから除外して保持しています。</p> : null}

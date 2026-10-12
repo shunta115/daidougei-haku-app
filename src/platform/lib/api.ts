@@ -1025,10 +1025,10 @@ export async function getMyVotes(eventId: string, fanId: string): Promise<string
 }
 
 export async function listVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.rpc('get_public_event_results', { p_event_id: eventId })
-  if (error) throw error
-  return ((data ?? []) as Array<{ performer_id: string; votes: number | string }>).map((row) => ({ performer_id: row.performer_id, votes: Number(row.votes) || 0 }))
+  const response = await fetch(`/api/awp-results?eventId=${encodeURIComponent(eventId)}`, { credentials: 'same-origin' })
+  const body = await response.json().catch(() => ({})) as { ranking?: Array<{ performer_id: string }>; error?: string }
+  if (!response.ok) throw new Error(body.error || 'results_unavailable')
+  return (body.ranking ?? []).map((row) => ({ performer_id: String(row.performer_id), votes: 0 }))
 }
 
 export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
