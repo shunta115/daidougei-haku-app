@@ -427,6 +427,17 @@
 .pl-nav--fan .pl-nav__btn--live .pl-nav__icon { width: 42px; height: 34px; border-radius: 14px; background: var(--xp-live); color: white; box-shadow: 0 8px 22px rgba(244,63,94,.24); }
 .pl-nav--fan .pl-nav__btn--live[data-active='true'] { background: transparent; }
 
+/* Keep the floating fan navigation centred after this file's mobile rules
+   override the shared desktop navigation positioning in platform.css. */
+@media (min-width: 768px) {
+  .pl-nav--fan {
+    left: 50%;
+    right: auto;
+    width: min(620px, calc(100% - 48px));
+    transform: translateX(-50%);
+  }
+}
+
 /* Performer story: media first, then proof and the next real-world encounter. */
 .pl-profile-back { position: fixed; z-index: 30; top: max(14px, env(safe-area-inset-top)); left: 14px; width: 44px; min-height: 44px; overflow: hidden; display: flex; gap: 12px; padding: 0 12px; border-radius: 50%; background: rgba(12,12,14,.48); backdrop-filter: blur(16px); }
 .pl-profile-stage { min-height: min(710px, 84dvh); margin: calc(-1 * max(12px, env(safe-area-inset-top))) -12px 0; border: 0; border-radius: 0 0 var(--xp-radius-lg) var(--xp-radius-lg); background: #171719; box-shadow: var(--xp-shadow); }
