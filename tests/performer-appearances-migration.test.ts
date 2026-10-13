@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-const migration = readFileSync('supabase/migrations/20261013_performer_appearances_and_notifications.sql', 'utf8')
+const migration = readFileSync('supabase/migrations/20261014_performer_appearances_and_notifications.sql', 'utf8')
 const performer = '10000000-0000-4000-8000-000000000001'
 const fan = '20000000-0000-4000-8000-000000000002'
 const nonFollower = '20000000-0000-4000-8000-000000000003'

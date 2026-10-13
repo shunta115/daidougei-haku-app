@@ -1,3 +1,4 @@
+-- Runs after the independently reviewed 20261013 payout reservation migration.
 begin;
 
 create table if not exists public.performer_appearances (
