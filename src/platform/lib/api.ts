@@ -935,6 +935,7 @@ export type PerformerPayoutView = {
   thresholdMet: boolean
   payoutBlockReason: string | null
   canPayout: boolean
+  canReconcile: boolean
   ledgerReady: boolean
   openPayout: { id: string; amount_yen: number; status: string } | null
 }

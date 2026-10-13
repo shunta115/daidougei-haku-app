@@ -52,7 +52,7 @@ function confirmedShare(row: SaleRow): number {
 }
 
 function grossForMode(row: SaleRow, prefix: 'cs_live_' | 'cs_test_'): number {
-  return row.stripe_session_id?.startsWith(prefix) && row.status !== 'failed' && row.status !== 'pending'
+  return row.stripe_session_id?.startsWith(prefix) && (row.status === 'succeeded' || row.status === 'refunded')
     ? saleGross(row)
     : 0
 }
@@ -85,6 +85,7 @@ function adjustedConfirmedShare(row: SaleRow): number {
     stripeFeeYen: yenFromStripe(row.stripe_fee_yen),
     feeBps: yenFromStripe(row.haku_fee_bps),
     status: row.status,
+    disputeStatus: row.dispute_status,
   })
 }
 
@@ -131,9 +132,15 @@ export async function getPerformerPayoutView(
   const sales = salesMissing ? [] : [...((tips ?? []) as SaleRow[]), ...((orders ?? []) as SaleRow[])]
   const originalConfirmedSalesYen = sales.reduce((sum, row) => sum + confirmedShare(row), 0)
   const confirmedSalesYen = sales.reduce((sum, row) => sum + adjustedConfirmedShare(row), 0)
+  const platformSales = sales.filter((row) => row.stripe_checkout_mode === 'platform_separate')
+  const platformOriginalShareYen = platformSales.reduce((sum, row) => sum + confirmedShare(row), 0)
+  const platformAdjustedShareYen = platformSales.reduce((sum, row) => sum + adjustedConfirmedShare(row), 0)
   const hakuAvailableYen = sales.reduce((sum, row) => sum + availableShare(row), 0)
-  const heldYen = Math.max(0, confirmedSalesYen - hakuAvailableYen)
-  const adjustmentYen = Math.max(0, originalConfirmedSalesYen - hakuAvailableYen)
+  // Direct charges already belong to the connected account. They remain part
+  // of lifetime sales/share totals, but are never classified as HAKU-held or
+  // as a refund/dispute adjustment in the platform Transfer ledger.
+  const heldYen = Math.max(0, platformAdjustedShareYen - hakuAvailableYen)
+  const adjustmentYen = Math.max(0, platformOriginalShareYen - platformAdjustedShareYen)
   const productionGrossYen = sales.reduce((sum, row) => sum + grossForMode(row, 'cs_live_'), 0)
   const testGrossYen = sales.reduce((sum, row) => sum + grossForMode(row, 'cs_test_'), 0)
   const stripeFeeYen = sales.reduce((sum, row) => sum + (confirmedShare(row) > 0 ? yenFromStripe(row.stripe_fee_yen) : 0), 0)
@@ -165,6 +172,7 @@ export async function getPerformerPayoutView(
   const stripeAvailableYen = await jpyAvailable(stripe).catch(() => 0)
   const availableYen = eligiblePayoutYen(fundedUnallocatedYen, stripeAvailableYen)
   const openPayout = payouts.find((row) => row.status === 'reserved') ?? null
+  const canReconcile = openPayout?.transfer_status === 'needs_reconciliation'
   let previouslyAllocatedYen = pendingYen + paidOutYen
   const unpaidSales = sales
     .filter((row) => availableShare(row) > 0 && row.created_at)
@@ -190,7 +198,8 @@ export async function getPerformerPayoutView(
     } catch { connectReady = false }
   }
   const thresholdMet = canRequestPayout(availableYen)
-  const payoutBlockReason = openPayout ? '出金申請を処理中です。'
+  const payoutBlockReason = canReconcile ? '送金状態の再照合が必要です。新しい出金申請は停止されています。'
+    : openPayout ? '出金申請を処理中です。'
     : !args.stripeAccountId ? 'Stripeの受取設定が未登録です。'
       : !connectReady ? 'Stripeの本人確認・銀行口座・送金設定を完了してください。'
         : !thresholdMet ? `確定済みの出金申請可能額が最低出金額${MIN_PAYOUT_YEN.toLocaleString('ja-JP')}円に達していません。`
@@ -198,7 +207,7 @@ export async function getPerformerPayoutView(
   return {
     minPayoutYen: MIN_PAYOUT_YEN,
     productionGrossYen,
-    performerShareYen: originalConfirmedSalesYen,
+    performerShareYen: confirmedSalesYen,
     testGrossYen,
     stripeFeeYen,
     hakuFeeYen,
@@ -226,6 +235,7 @@ export async function getPerformerPayoutView(
     thresholdMet,
     payoutBlockReason,
     canPayout: thresholdMet && !openPayout && connectReady,
+    canReconcile,
     ledgerReady: !payoutError && !salesMissing,
     openPayout,
   }
@@ -249,18 +259,39 @@ export async function requestPerformerPayout(
       return { status: 409, body: { error: '受取先が変更されています。運営による照合が必要です。' } }
     }
     const key = row.idempotency_key || `haku-payout:${row.id}`
+    const finishTransfer = async (transfer: Stripe.Transfer) => {
+      const destination = typeof transfer.destination === 'string' ? transfer.destination : transfer.destination?.id
+      if (transfer.amount !== row.amount_yen || destination !== args.stripeAccountId || transfer.metadata?.payout_row !== row.id) {
+        await sb.from('performer_payouts').update({
+          transfer_status: 'needs_reconciliation', failure_message: 'Stripe Transfer does not match the reserved payout',
+          updated_at: new Date().toISOString(),
+        }).eq('id', row.id).eq('status', 'reserved')
+        return { status: 409, body: { error: '送金情報が予約内容と一致しません。運営による照合が必要です。' } }
+      }
+      const reversed = Boolean(transfer.reversed)
+      const { error } = await sb.from('performer_payouts').update({
+        stripe_transfer_id: transfer.id,
+        status: reversed ? 'canceled' : 'paid',
+        transfer_status: reversed ? 'reversed' : 'succeeded',
+        transfer_completed_at: reversed ? null : new Date().toISOString(),
+        idempotency_key: key, failure_message: null, updated_at: new Date().toISOString(),
+      }).eq('id', row.id).eq('status', 'reserved')
+      if (error && !missingColumn(error)) throw error
+      return reversed
+        ? { status: 409, body: { error: '送金はStripeで取り消されています。残高の再計算が必要です。' } }
+        : { status: 200, body: { ok: true, amountYen: row.amount_yen, payoutId: row.id, stripeTransferId: transfer.id } }
+    }
     try {
+      if (row.stripe_transfer_id) {
+        const existing = await stripe.transfers.retrieve(row.stripe_transfer_id)
+        return await finishTransfer(existing)
+      }
       const transfer = await stripe.transfers.create({
         amount: row.amount_yen, currency: 'jpy', destination: args.stripeAccountId,
         transfer_group: `haku-payout:${row.id}`,
         metadata: { performer_id: args.performerId, payout_row: row.id },
       }, { idempotencyKey: key })
-      const { error } = await sb.from('performer_payouts').update({
-        stripe_transfer_id: transfer.id, status: 'paid', transfer_status: 'succeeded',
-        idempotency_key: key, failure_message: null, updated_at: new Date().toISOString(),
-      }).eq('id', row.id).eq('status', 'reserved')
-      if (error && !missingColumn(error)) throw error
-      return { status: 200, body: { ok: true, amountYen: row.amount_yen, payoutId: row.id, stripeTransferId: transfer.id } }
+      return await finishTransfer(transfer)
     } catch (error) {
       // Keep the reservation locked. A network error can occur after Stripe
       // created the Transfer; retrying with the same key safely reconciles it.

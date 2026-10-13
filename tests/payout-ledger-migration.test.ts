@@ -23,4 +23,12 @@ describe('payout reservation migration', () => {
     expect(sql).toContain('grant execute on function public.reserve_performer_payout')
     expect(sql).toContain('to service_role')
   })
+
+  it('recomputes partial and full refunds inside the locked reservation transaction', () => {
+    expect(sql).toContain('create or replace function public.payout_remaining_share_yen')
+    expect(sql).toContain('p_refunded_yen >= p_gross_yen')
+    expect(sql).toContain('p_gross_yen - p_refunded_yen')
+    expect(sql).toContain('refunded_amount_yen')
+    expect(sql).toContain('payout_remaining_share_yen(')
+  })
 })
