@@ -1,15 +1,16 @@
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_SECRET_KEY']
-for (const name of required) {
-  if (!process.env[name]) throw new Error(`Missing required environment variable: ${name}`)
-}
+const supabaseAuditKey = process.env.SUPABASE_AUDIT_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+const stripeAuditKey = process.env.STRIPE_AUDIT_KEY || process.env.STRIPE_SECRET_KEY
+if (!process.env.SUPABASE_URL) throw new Error('Missing required environment variable: SUPABASE_URL')
+if (!supabaseAuditKey) throw new Error('Missing SUPABASE_AUDIT_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY)')
+if (!stripeAuditKey) throw new Error('Missing STRIPE_AUDIT_KEY (or STRIPE_SECRET_KEY)')
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+const supabase = createClient(process.env.SUPABASE_URL, supabaseAuditKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+const stripe = new Stripe(stripeAuditKey)
 const start = '2026-10-10T00:00:00+09:00'
 const end = '2026-10-13T00:00:00+09:00'
 const safeDbError = (error) => String(error?.message || error?.code || 'unknown').replace(/https?:\/\/\S+/g, '[url-redacted]').slice(0, 240)

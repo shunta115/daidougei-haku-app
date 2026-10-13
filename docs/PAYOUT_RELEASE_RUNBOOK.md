@@ -2,6 +2,14 @@
 
 この手順は承認後にのみ実行する。本番決済、Transfer、Payout、返金は実行しない。
 
+## 0. 監査認証
+
+- 本番アプリのruntime Secretは変更・取得・ログ出力しない。
+- DB金額の確認だけなら、Supabase DashboardのSQL Editorで `supabase/verify_payout_release_readonly.sql` を実行する。SQLは `begin transaction read only` で開始する。
+- CLIでバックアップ・migration履歴を確認する場合は、対象プロジェクトだけに届くSupabase scoped personal access tokenとDBパスワードを運営端末へ設定する。アプリのservice keyでManagement APIを代用しない。
+- Stripe照合はPaymentIntents、Charges、Balance Transactions、Transfers、Accounts、Balanceのread権限だけを持つrestricted keyを `STRIPE_AUDIT_KEY` として一時設定する。
+- `scripts/audit-awp-payout-readonly.mjs` は `SUPABASE_AUDIT_KEY` と `STRIPE_AUDIT_KEY` を優先する。Secret値はコマンド引数、画面、ログ、報告へ貼り付けない。
+
 ## 1. リリース固定とバックアップ
 
 1. 対象commit、Vercel project ID、Supabase projectを記録する。
