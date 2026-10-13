@@ -8,6 +8,7 @@ const fake = vi.hoisted(() => ({
   inserted: null as Record<string, unknown> | null,
   stripeAvailable: 20_000,
   createTransfer: vi.fn(),
+  retrieveTransfer: vi.fn(),
   selectedColumns: {} as Record<string, string>,
 }))
 
@@ -88,7 +89,10 @@ const stripe = {
   balance: { retrieve: async () => ({ available: [{ currency: 'jpy', amount: fake.stripeAvailable }] }) },
   balanceTransactions: { retrieve: async () => ({ status: 'available', available_on: 0 }) },
   accounts: { retrieve: async () => ({ details_submitted: true, payouts_enabled: true, capabilities: { transfers: 'active' }, requirements: { currently_due: [], past_due: [] } }) },
-  transfers: { create: (...args: unknown[]) => fake.createTransfer(...args) },
+  transfers: {
+    create: (...args: unknown[]) => fake.createTransfer(...args),
+    retrieve: (...args: unknown[]) => fake.retrieveTransfer(...args),
+  },
 }
 
 beforeEach(() => {
@@ -100,7 +104,14 @@ beforeEach(() => {
   fake.insertError = null
   fake.inserted = null
   fake.stripeAvailable = 20_000
-  fake.createTransfer.mockResolvedValue({ id: 'tr_test' })
+  fake.createTransfer.mockImplementation(async (params: Record<string, unknown>) => ({
+    id: 'tr_test', amount: params.amount, destination: params.destination, reversed: false,
+    metadata: params.metadata,
+  }))
+  fake.retrieveTransfer.mockResolvedValue({
+    id: 'tr_existing', amount: 10_000, destination: 'acct_1', reversed: false,
+    metadata: { performer_id: 'p1', payout_row: 'open' },
+  })
   fake.selectedColumns = {}
 })
 
@@ -199,6 +210,51 @@ describe('requestPerformerPayout', () => {
     expect(fake.payouts[0]).toMatchObject({ status: 'reserved', transfer_status: 'needs_reconciliation' })
   })
 
+  it('retries a timed-out create with the same key and records only one transfer', async () => {
+    fake.createTransfer
+      .mockRejectedValueOnce(new Error('network timeout'))
+      .mockResolvedValueOnce({
+        id: 'tr_after_timeout', amount: 10_000, destination: 'acct_1', reversed: false,
+        metadata: { performer_id: 'p1', payout_row: 'payout-row' },
+      })
+    const first = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    const second = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(first.status).toBe(409)
+    expect(second.status).toBe(200)
+    expect(fake.createTransfer).toHaveBeenCalledTimes(2)
+    expect(fake.createTransfer.mock.calls[0][1]).toEqual(fake.createTransfer.mock.calls[1][1])
+    expect(fake.payouts[0]).toMatchObject({ status: 'paid', stripe_transfer_id: 'tr_after_timeout' })
+  })
+
+  it('retrieves a known Transfer instead of creating a second one', async () => {
+    fake.payouts = [{
+      id: 'open', amount_yen: 10_000, status: 'reserved', stripe_transfer_id: 'tr_existing',
+      connected_account_id: 'acct_1', idempotency_key: 'same-key', transfer_status: 'needs_reconciliation',
+      created_at: '2026-10-03T00:00:00Z',
+    }]
+    const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(res.status).toBe(200)
+    expect(fake.retrieveTransfer).toHaveBeenCalledWith('tr_existing')
+    expect(fake.createTransfer).not.toHaveBeenCalled()
+    expect(fake.payouts[0]).toMatchObject({ status: 'paid', transfer_status: 'succeeded' })
+  })
+
+  it('keeps the reservation when the retrieved Transfer belongs to another payout', async () => {
+    fake.payouts = [{
+      id: 'open', amount_yen: 10_000, status: 'reserved', stripe_transfer_id: 'tr_existing',
+      connected_account_id: 'acct_1', idempotency_key: 'same-key', transfer_status: 'needs_reconciliation',
+      created_at: '2026-10-03T00:00:00Z',
+    }]
+    fake.retrieveTransfer.mockResolvedValue({
+      id: 'tr_existing', amount: 10_000, destination: 'acct_other', reversed: false,
+      metadata: { performer_id: 'other', payout_row: 'other-row' },
+    })
+    const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(res.status).toBe(409)
+    expect(fake.createTransfer).not.toHaveBeenCalled()
+    expect(fake.payouts[0]).toMatchObject({ status: 'reserved', transfer_status: 'needs_reconciliation' })
+  })
+
   it('does not create a second Stripe payout after the first create succeeds', async () => {
     const first = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(first.status).toBe(200)
@@ -233,6 +289,28 @@ describe('requestPerformerPayout', () => {
       connected_account_id: 'acct_1',
     }]
     const view = await getPerformerPayoutView(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
-    expect(view).toMatchObject({ productionGrossYen: 20_000, performerShareYen: 17_000, hakuAvailableYen: 0, canPayout: false })
+    expect(view).toMatchObject({
+      productionGrossYen: 20_000, performerShareYen: 17_000, hakuAvailableYen: 0,
+      heldYen: 0, adjustmentYen: 0, canPayout: false,
+    })
+  })
+
+  it('excludes expired and unconfirmed sessions from production gross', async () => {
+    fake.tips = [
+      { id: 'expired', status: 'expired', settlement_status: null, gross_amount_yen: 50_000, performer_share_yen: 40_000 },
+      { id: 'pending', status: 'pending', settlement_status: null, gross_amount_yen: 30_000, performer_share_yen: 0 },
+      { id: 'paid', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 500, performer_share_yen: 408 },
+    ]
+    const view = await getPerformerPayoutView(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(view.productionGrossYen).toBe(500)
+  })
+
+  it('removes a fully refunded payment from the payout balance', async () => {
+    fake.tips = [{
+      id: 'refund', status: 'refunded', settlement_status: 'settled', gross_amount_yen: 12_000,
+      stripe_fee_yen: 400, haku_fee_bps: 1500, performer_share_yen: 9_860, refunded_amount_yen: 12_000,
+    }]
+    const view = await getPerformerPayoutView(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
+    expect(view).toMatchObject({ performerShareYen: 0, hakuAvailableYen: 0, availableYen: 0, adjustmentYen: 9_860, canPayout: false })
   })
 })

@@ -108,8 +108,9 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const locale = lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP'
   const available = payout?.availableYen ?? 0
   const canPayout = Boolean(payout?.canPayout)
+  const canReconcile = Boolean(payout?.canReconcile)
   const requestPayout = async () => {
-    if (!performer || busy || !canPayout) return
+    if (!performer || busy || (!canPayout && !canReconcile)) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -150,6 +151,8 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
           <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void requestPayout()}>{busy ? t('payoutWorking') : t('payoutConfirm')}</button>
           <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => setConfirming(false)}>{t('payoutCancel')}</button>
         </div>
+      ) : canReconcile ? (
+        <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void requestPayout()}>{busy ? t('payoutWorking') : t('payoutReconcile')}</button>
       ) : (
         <button type="button" className="pl-btn pl-btn--block" disabled={!canPayout || busy} onClick={() => setConfirming(true)}>{t('payoutRequest')}</button>
       )}

@@ -37,6 +37,42 @@ create policy payout_audit_admin_read on public.payout_audit_events
 grant select on public.payout_audit_events to authenticated;
 revoke insert, update, delete on public.payout_audit_events from anon, authenticated;
 
+-- Keep the reservation-side calculation identical to the application ledger.
+-- This is deliberately evaluated again inside the locked transaction so a
+-- refund or dispute committed after the screen was loaded cannot be overpaid.
+create or replace function public.payout_remaining_share_yen(
+  p_status text,
+  p_dispute_status text,
+  p_performer_share_yen integer,
+  p_gross_yen integer,
+  p_stripe_fee_yen integer,
+  p_haku_fee_bps integer,
+  p_refunded_yen integer
+) returns integer
+language sql immutable set search_path = public as $$
+  select case
+    when coalesce(p_status, '') in ('pending','failed','expired','refunded') then 0
+    when coalesce(p_dispute_status, '') not in ('','won','warning_closed') then 0
+    when coalesce(p_performer_share_yen, 0) <= 0 or coalesce(p_gross_yen, 0) <= 0 then 0
+    when coalesce(p_refunded_yen, 0) <= 0 then p_performer_share_yen
+    when p_refunded_yen >= p_gross_yen then 0
+    when p_stripe_fee_yen is not null and p_haku_fee_bps is not null then
+      greatest(0,
+        greatest(0, p_gross_yen - p_refunded_yen - greatest(0, p_stripe_fee_yen))
+        - floor(
+            greatest(0, p_gross_yen - p_refunded_yen - greatest(0, p_stripe_fee_yen))
+            * greatest(0, p_haku_fee_bps)::numeric / 10000
+          )::integer
+      )
+    else floor(
+      p_performer_share_yen::numeric * (p_gross_yen - greatest(0, p_refunded_yen)) / p_gross_yen
+    )::integer
+  end
+$$;
+
+revoke all on function public.payout_remaining_share_yen(text,text,integer,integer,integer,integer,integer)
+  from public, anon, authenticated;
+
 create or replace function public.audit_performer_payout_change()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -93,16 +129,30 @@ begin
   end if;
 
   select greatest(0,
-    coalesce((select sum(coalesce(performer_share_yen, 0)) from public.tips
+    coalesce((select sum(public.payout_remaining_share_yen(
+        status,
+        dispute_status,
+        performer_share_yen,
+        coalesce(gross_amount_yen, amount_cents),
+        stripe_fee_yen,
+        haku_fee_bps,
+        refunded_amount_yen
+      )) from public.tips
       where performer_id = p_performer_id and stripe_session_id like 'cs_live_%'
         and stripe_checkout_mode = 'platform_separate'
-        and settlement_status = 'settled' and status not in ('pending','failed','expired','refunded')
-        and (coalesce(dispute_status, '') = '' or dispute_status in ('won','warning_closed'))), 0)
-    + coalesce((select sum(coalesce(performer_share_yen, 0)) from public.merch_orders
+        and settlement_status = 'settled'), 0)
+    + coalesce((select sum(public.payout_remaining_share_yen(
+        status,
+        dispute_status,
+        performer_share_yen,
+        coalesce(gross_amount_yen, amount_yen),
+        stripe_fee_yen,
+        haku_fee_bps,
+        refunded_amount_yen
+      )) from public.merch_orders
       where seller_id = p_performer_id and stripe_session_id like 'cs_live_%'
         and stripe_checkout_mode = 'platform_separate'
-        and settlement_status = 'settled' and status not in ('pending','failed','expired','refunded')
-        and (coalesce(dispute_status, '') = '' or dispute_status in ('won','warning_closed'))), 0)
+        and settlement_status = 'settled'), 0)
     - coalesce((select sum(amount_yen) from public.performer_payouts
       where performer_id = p_performer_id and status in ('reserved','paid')), 0)
   ) into v_internal_unallocated;

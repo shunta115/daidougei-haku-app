@@ -55,3 +55,14 @@
 3. migrationは加算型のため、緊急時にテーブルや列をDROPしない。旧コードは追加列を無視できる。
 4. 状態不明のTransferは予約を解除しない。StripeのTransfer IDと冪等キーを照合してから復旧する。
 5. AWP基準との差異があればDBを自動修正せず、バックアップ・Stripeオブジェクト・監査ログを照合する。
+
+## 6. needs_reconciliation の復旧
+
+1. 新しい出金申請を作成せず、既存の予約行を保持する。
+2. `stripe_transfer_id` が保存済みなら、同じTransferをStripeから取得し、金額・送金先Connect ID・`metadata.payout_row`が予約行と完全一致する場合だけ状態を確定する。
+3. Transfer IDがない通信タイムアウトでは、既存予約の同じidempotency keyを使う。新しいキーや新しい予約行を作らない。
+4. 金額・送金先・metadataのいずれかが一致しなければ自動復旧せず、予約を`needs_reconciliation`のまま保持する。
+5. `transfer.reversed`はTransfer取消として記録する。銀行Payoutの失敗・取消と混同しない。
+6. 復旧前後にStripe DashboardのTransfer、内部予約行、`payout_audit_events`を照合する。
+
+本番Transfer機能が無効な間は状態再確認も403で停止する。機能フラグを監査目的だけで有効化しない。
