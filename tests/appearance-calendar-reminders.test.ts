@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { appearanceToIcs } from '../src/platform/lib/appearanceIcs'
 import type { PerformerAppearance } from '../src/platform/lib/types'
 
-const migration = readFileSync('supabase/migrations/20261014050000_appearance_calendar_reminders.sql', 'utf8')
+const migration = readFileSync('supabase/migrations/20261015_appearance_calendar_reminders.sql', 'utf8')
 const owner = '10000000-0000-4000-8000-000000000001'
 const fan = '20000000-0000-4000-8000-000000000002'
 const guest = '30000000-0000-4000-8000-000000000003'
