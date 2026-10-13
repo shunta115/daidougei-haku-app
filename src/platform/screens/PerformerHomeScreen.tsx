@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Circle, Camera, Pencil, ShoppingBag, CalendarDays, Share2, WalletCards } from 'lucide-react'
+import { CheckCircle2, Circle, Camera, Pencil, ShoppingBag, CalendarDays, Share2, WalletCards, Mail } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
 import { PayoutSetup, type ConnectStatus } from '../components/PayoutSetup'
 import { listLiveHistory, listTipsForPerformer, tipSummaryForPerformer, updatePerformer } from '../lib/api'
@@ -10,7 +10,7 @@ import { useLang } from '../../i18n/LangProvider'
 import { PLATFORM_PATH } from '../../app/routes'
 import type { LiveSession, TipRow, TipSummary } from '../lib/types'
 
-export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings, onNotifications, onOpenTitle }: {
+export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPreview, onSchedule, onEarnings, onOffers, onNotifications, onOpenTitle }: {
   onEdit: () => void
   onLive: () => void
   onHistory: () => void
@@ -18,6 +18,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
   onPreview: () => void
   onSchedule: () => void
   onEarnings: () => void
+  onOffers: () => void
   onNotifications?: () => void
   onOpenTitle?: () => void
 }) {
@@ -118,6 +119,7 @@ export function PerformerHomeScreen({ onEdit, onLive, onHistory, onMerch, onPrev
         <button className="pl-activity-card" disabled={!status.approved} onClick={onLive}><Camera size={20} /><strong>{t('navLive')}</strong><span>{t('liveCardBody')}</span><em>{performer.is_live ? t('liveManage') : t('livePrepare')}</em></button>
         <button className="pl-activity-card" onClick={onSchedule}><CalendarDays size={20} /><strong>{t('scheduleTitle')}</strong><span>{t('scheduleCardBody')}</span><em>{t('scheduleAction')}</em></button>
         <button className="pl-activity-card" onClick={onHistory}><Camera size={20} /><strong>{t('liveHistory')}</strong><span>{t('liveHistoryMenu')}</span><em>{t('liveHistory')}</em></button>
+        <button className="pl-activity-card" onClick={onOffers}><Mail size={20} /><strong>{lang === 'en' ? 'Appearance offers' : lang === 'zh-TW' ? '演出邀請' : '出演依頼'}</strong><span>{lang === 'en' ? 'Review and respond to organizer offers' : lang === 'zh-TW' ? '確認主辦方邀請並回覆' : '主催者からの依頼を確認・回答'}</span><em>{lang === 'en' ? 'Open' : lang === 'zh-TW' ? '查看' : '確認する'}</em></button>
       </div>
       {!status.approved ? <p className="pl-muted">{t('pendingNote')}</p> : null}
     </section>

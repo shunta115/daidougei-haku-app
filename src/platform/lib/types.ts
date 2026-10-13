@@ -162,6 +162,38 @@ export type PerformerAppearance = {
   updated_at: string
 }
 
+export type OrganizerProfile = {
+  user_id: string
+  organization_name: string
+  description: string
+  website_url: string | null
+  country: string
+  region: string
+  created_at: string
+  updated_at: string
+}
+
+export type PerformanceOfferStatus = 'draft' | 'sent' | 'reviewing' | 'accepted' | 'declined' | 'cancelled' | 'expired'
+export type PerformanceOffer = {
+  id: string
+  organizer_id: string
+  performer_id: string
+  requester_name: string
+  event_name: string
+  desired_date: string
+  location: string
+  performance_details: string
+  requested_duration: string
+  compensation_terms: string
+  notes: string
+  response_deadline: string | null
+  status: PerformanceOfferStatus
+  sent_at: string | null
+  responded_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type NotificationPreference = {
   user_id: string
   appearance_in_app_enabled: boolean
@@ -266,6 +298,7 @@ export type PlatformScreen =
   | 'performer-earnings'
   | 'performer-live'
   | 'performer-history'
+  | 'performer-offers'
   | 'live-watch'
   | 'tip'
   | 'admin'
@@ -274,4 +307,5 @@ export type PlatformScreen =
   | 'admin-votes'
   | 'admin-ops'
   | 'organizer-home'
+  | 'organizer-management'
   | 'setup'
