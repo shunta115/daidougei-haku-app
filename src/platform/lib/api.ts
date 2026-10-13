@@ -1108,14 +1108,29 @@ export async function getMerchFeeBps(): Promise<number> {
 
 export type PerformerPayoutView = {
   minPayoutYen: number
+  productionGrossYen: number
+  performerShareYen: number
+  testGrossYen: number
+  stripeFeeYen: number
+  hakuFeeYen: number
   confirmedSalesYen: number
   hakuAvailableYen: number
   stripeAvailableYen: number
+  platformTransferCapacityYen: number
+  fundedUnallocatedYen: number
+  fundsPendingYen: number
   availableYen: number
   heldYen: number
+  reservedYen: number
+  processingYen: number
   pendingYen: number
   paidOutYen: number
+  failedYen: number
+  canceledYen: number
   remainingYen: number
+  connectReady: boolean
+  thresholdMet: boolean
+  payoutBlockReason: string | null
   canPayout: boolean
   ledgerReady: boolean
   openPayout: { id: string; amount_yen: number; status: string } | null
