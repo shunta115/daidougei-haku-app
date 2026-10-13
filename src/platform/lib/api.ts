@@ -575,7 +575,7 @@ export type PerformerAppearanceInput = Pick<PerformerAppearance,
 export async function listPerformerAppearances(performerId: string, includePrivate = false): Promise<PerformerAppearance[]> {
   const sb = requireSupabase()
   let query = sb.from('performer_appearances').select('*').eq('performer_id', performerId)
-  if (!includePrivate) query = query.in('status', ['published', 'cancelled']).gte('starts_at', new Date().toISOString())
+  if (!includePrivate) query = query.or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null)').gte('starts_at', new Date().toISOString())
   const { data, error } = await query.order('starts_at')
   if (error) throw error
   return (data as PerformerAppearance[]) ?? []
@@ -592,11 +592,16 @@ async function dispatchAppearanceEvent(appearanceId: string) {
     .maybeSingle()
   if (!data?.id) return
   const headers = await supabaseAuthHeaders()
-  await fetch('/api/notifications/push', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify({ eventId: data.id }),
-  }).catch(() => undefined)
+  for (let batch = 0; batch < 10; batch += 1) {
+    const response = await fetch('/api/notifications/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ eventId: data.id }),
+    }).catch(() => null)
+    if (!response?.ok) return
+    const result = await response.json().catch(() => ({})) as { remaining?: boolean }
+    if (!result.remaining) return
+  }
 }
 
 export async function createPerformerAppearance(performerId: string, input: PerformerAppearanceInput) {
@@ -650,7 +655,7 @@ function pushKey(value: string) {
 export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
   const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY
   if (!publicKey) throw new Error('push_not_configured')
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('push_unsupported')
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('push_unsupported')
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('push_denied')
   const registration = await navigator.serviceWorker.ready
@@ -672,7 +677,8 @@ export async function disableAppearancePush(userId: string, locale: Notification
     const subscription = await registration.pushManager.getSubscription()
     if (subscription) {
       const sb = requireSupabase()
-      await sb.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', subscription.endpoint)
+      const { error } = await sb.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', subscription.endpoint)
+      if (error) throw error
       await subscription.unsubscribe()
     }
   }

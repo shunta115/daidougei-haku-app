@@ -50,7 +50,8 @@ alter table public.performer_appearances enable row level security;
 drop policy if exists performer_appearances_read on public.performer_appearances;
 create policy performer_appearances_read on public.performer_appearances
   for select using (
-    status in ('published','cancelled')
+    status = 'published'
+    or (status = 'cancelled' and published_at is not null)
     or performer_id = auth.uid()
     or public.is_admin()
   );
@@ -63,7 +64,7 @@ create policy performer_appearances_update on public.performer_appearances
   with check (performer_id = auth.uid() or public.is_admin());
 drop policy if exists performer_appearances_delete on public.performer_appearances;
 create policy performer_appearances_delete on public.performer_appearances
-  for delete using (performer_id = auth.uid() or public.is_admin());
+  for delete using ((performer_id = auth.uid() and status in ('draft','private')) or public.is_admin());
 
 grant select on public.performer_appearances to anon, authenticated;
 grant insert, update, delete on public.performer_appearances to authenticated;
@@ -133,6 +134,7 @@ alter table public.push_notification_deliveries enable row level security;
 drop policy if exists push_notification_deliveries_admin_read on public.push_notification_deliveries;
 create policy push_notification_deliveries_admin_read on public.push_notification_deliveries
   for select using (public.is_admin());
+grant select on public.push_notification_deliveries to authenticated;
 
 create or replace function public.prepare_performer_appearance()
 returns trigger
@@ -147,13 +149,16 @@ begin
   end if;
   new.starts_at := (new.performance_date + new.start_time) at time zone new.timezone;
   new.ends_at := case when new.end_time is null then null else (new.performance_date + new.end_time) at time zone new.timezone end;
-  if new.status = 'published' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
-    new.published_at := now();
+  if tg_op = 'INSERT' then
+    new.published_at := case when new.status = 'published' then clock_timestamp() else null end;
+    new.cancelled_at := case when new.status = 'cancelled' then clock_timestamp() else null end;
+  else
+    new.published_at := old.published_at;
+    new.cancelled_at := old.cancelled_at;
+    if new.status = 'published' and old.published_at is null then new.published_at := clock_timestamp(); end if;
+    if new.status = 'cancelled' and old.status is distinct from 'cancelled' then new.cancelled_at := clock_timestamp(); end if;
   end if;
-  if new.status = 'cancelled' and (tg_op = 'INSERT' or old.status is distinct from 'cancelled') then
-    new.cancelled_at := now();
-  end if;
-  new.updated_at := now();
+  new.updated_at := clock_timestamp();
   return new;
 end;
 $$;
@@ -174,9 +179,13 @@ declare
   v_event_id uuid;
   v_stage_name text;
 begin
-  if new.status = 'cancelled' and (tg_op = 'INSERT' or old.status is distinct from 'cancelled') then
+  if new.status = 'cancelled'
+    and tg_op = 'UPDATE'
+    and old.status is distinct from 'cancelled'
+    and old.published_at is not null then
     v_type := 'cancelled';
-  elsif new.status = 'published' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
+  elsif new.status = 'published'
+    and (tg_op = 'INSERT' or old.published_at is null) then
     v_type := 'published';
   elsif tg_op = 'UPDATE' and new.status = 'published' and old.status = 'published' and (
     new.performance_date is distinct from old.performance_date
@@ -194,7 +203,7 @@ begin
   end if;
 
   select stage_name into v_stage_name from public.performers where id = new.performer_id;
-  v_fingerprint := md5(concat_ws('|', v_type, new.performance_date, new.start_time, new.end_time, new.timezone, new.venue_name, new.venue_address, new.region, new.country));
+  v_fingerprint := md5(concat_ws('|', v_type, new.performance_date, new.start_time, new.end_time, new.timezone, new.venue_name, new.venue_address, new.region, new.country, new.updated_at));
 
   insert into public.appearance_notification_events (appearance_id, performer_id, event_type, change_fingerprint, payload)
   values (new.id, new.performer_id, v_type, v_fingerprint, jsonb_build_object(
@@ -246,12 +255,32 @@ security definer
 set search_path = public
 as $$
 begin
+  update public.push_notification_deliveries d
+  set status = 'suppressed', last_error = 'recipient_not_eligible', updated_at = now()
+  where d.notification_event_id = p_event_id
+    and d.status = 'queued'
+    and not exists (
+      select 1
+      from public.appearance_notification_events ev
+      join public.follows f on f.fan_id = d.user_id and f.performer_id = ev.performer_id
+      join public.notification_preferences pref on pref.user_id = d.user_id and pref.appearance_push_enabled
+      join public.push_subscriptions ps on ps.id = d.subscription_id and ps.user_id = d.user_id and ps.disabled_at is null
+      where ev.id = d.notification_event_id
+    );
+
   return query
   with claimed as (
     select d.id
     from public.push_notification_deliveries d
+    join public.appearance_notification_events ev on ev.id = d.notification_event_id
+    join public.follows f on f.fan_id = d.user_id and f.performer_id = ev.performer_id
+    join public.notification_preferences pref on pref.user_id = d.user_id and pref.appearance_push_enabled
+    join public.push_subscriptions ps on ps.id = d.subscription_id and ps.user_id = d.user_id and ps.disabled_at is null
     where d.notification_event_id = p_event_id
-      and d.status in ('queued','failed')
+      and (
+        d.status in ('queued','failed')
+        or (d.status = 'processing' and d.updated_at < now() - interval '15 minutes')
+      )
       and d.attempts < 4
       and d.next_attempt_at <= now()
     order by d.created_at
@@ -266,8 +295,9 @@ begin
   select u.id, ps.id, ps.endpoint, ps.p256dh, ps.auth,
     coalesce(pref.locale, 'ja'), ev.payload, u.attempts
   from updated u
-  join public.push_subscriptions ps on ps.id = u.subscription_id and ps.disabled_at is null
+  join public.push_subscriptions ps on ps.id = u.subscription_id and ps.user_id = u.user_id and ps.disabled_at is null
   join public.appearance_notification_events ev on ev.id = u.notification_event_id
+  join public.follows f on f.fan_id = u.user_id and f.performer_id = ev.performer_id
   left join public.notification_preferences pref on pref.user_id = u.user_id
   where coalesce(pref.appearance_push_enabled, false);
 end;

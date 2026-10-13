@@ -76,7 +76,12 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
       setPushOn(!pushOn)
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : ''
-      setError(code === 'push_denied' ? '通知が許可されていません。iPhoneの設定からHAKUの通知を許可してください。' : code === 'push_unsupported' ? 'iPhoneではSafariからホーム画面に追加したHAKUで通知を有効にしてください。' : 'Push通知を設定できませんでした。')
+      const messages = lang === 'en'
+        ? { denied: 'Notifications are blocked. Allow HAKU notifications in iPhone Settings.', unsupported: 'On iPhone, add HAKU to the Home Screen from Safari before enabling notifications.', failed: 'Push notifications could not be configured.' }
+        : lang === 'zh-TW'
+          ? { denied: '通知權限已被拒絕。請在iPhone設定中允許HAKU通知。', unsupported: 'iPhone請先從Safari將HAKU加入主畫面，再開啟通知。', failed: '無法設定Push通知。' }
+          : { denied: '通知が許可されていません。iPhoneの設定からHAKUの通知を許可してください。', unsupported: 'iPhoneではSafariからホーム画面に追加したHAKUで通知を有効にしてください。', failed: 'Push通知を設定できませんでした。' }
+      setError(code === 'push_denied' ? messages.denied : code === 'push_unsupported' ? messages.unsupported : messages.failed)
     } finally { setPushBusy(false) }
   }
 

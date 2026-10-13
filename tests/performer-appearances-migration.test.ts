@@ -45,8 +45,10 @@ describe('performer appearance migration', () => {
     expect(migration).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
     expect(migration).not.toMatch(/alter\s+table\s+public\.(tips|event_votes|event_ballots|merch_orders)/i)
     expect(migration).toContain('alter table public.performer_appearances enable row level security')
-    expect(migration).toContain("status in ('published','cancelled')")
+    expect(migration).toContain("status = 'published'")
+    expect(migration).toContain("status = 'cancelled' and published_at is not null")
     expect(migration).toContain('performer_id = auth.uid()')
+    expect(migration).toContain("status in ('draft','private')")
   })
 
   it('creates one in-app and one push delivery on first publication', async () => {
@@ -70,8 +72,32 @@ describe('performer appearance migration', () => {
     expect(disabledFollowerPushRows.rows[0].count).toBe(0)
   })
 
+  it('re-checks the current follow relationship, claims once, and recovers a stale claim', async () => {
+    const event = await db.query<{ id: string }>("select id from public.appearance_notification_events where event_type='published' limit 1")
+    await db.exec(`delete from public.follows where fan_id='${fan}' and performer_id='${performer}'`)
+    const afterUnfollow = await db.query('select * from public.claim_appearance_push_deliveries($1,100)', [event.rows[0].id])
+    expect(afterUnfollow.rows).toHaveLength(0)
+    const suppressed = await db.query<{ status: string }>('select status from public.push_notification_deliveries where user_id=$1', [fan])
+    expect(suppressed.rows[0].status).toBe('suppressed')
+    await db.exec(`insert into public.follows values ('${fan}','${performer}')`)
+    const retryEvent = await db.query<{ id: string }>(`insert into public.appearance_notification_events(appearance_id,performer_id,event_type,change_fingerprint,payload)
+      values ('30000000-0000-4000-8000-000000000003','${performer}','important_update','claim-test','{}') returning id`)
+    await db.exec(`insert into public.push_notification_deliveries(notification_event_id,user_id,subscription_id)
+      select '${retryEvent.rows[0].id}','${fan}',id from public.push_subscriptions where user_id='${fan}'`)
+    const firstClaim = await db.query('select * from public.claim_appearance_push_deliveries($1,100)', [retryEvent.rows[0].id])
+    const simultaneousRetry = await db.query('select * from public.claim_appearance_push_deliveries($1,100)', [retryEvent.rows[0].id])
+    expect(firstClaim.rows).toHaveLength(1)
+    expect(simultaneousRetry.rows).toHaveLength(0)
+    await db.exec(`update public.push_notification_deliveries set updated_at=now()-interval '20 minutes' where notification_event_id='${retryEvent.rows[0].id}'`)
+    const staleRecovery = await db.query('select * from public.claim_appearance_push_deliveries($1,100)', [retryEvent.rows[0].id])
+    expect(staleRecovery.rows).toHaveLength(1)
+    await db.exec(`delete from public.appearance_notification_events where id='${retryEvent.rows[0].id}'`)
+  })
+
   it('does not notify for a light edit or identical retry', async () => {
     await db.exec("update public.performer_appearances set description='説明だけ変更' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set status='published' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set status='private' where id='30000000-0000-4000-8000-000000000003'")
     await db.exec("update public.performer_appearances set status='published' where id='30000000-0000-4000-8000-000000000003'")
     const result = await db.query<{ count: number }>('select count(*)::int as count from public.appearance_notification_events')
     expect(result.rows[0].count).toBe(1)
@@ -80,9 +106,11 @@ describe('performer appearance migration', () => {
   it('notifies exactly once for an important venue change and cancellation', async () => {
     await db.exec("update public.performer_appearances set venue_name='新会場' where id='30000000-0000-4000-8000-000000000003'")
     await db.exec("update public.performer_appearances set venue_name='新会場' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set venue_name='中野駅前' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set venue_name='新会場' where id='30000000-0000-4000-8000-000000000003'")
     await db.exec("update public.performer_appearances set status='cancelled' where id='30000000-0000-4000-8000-000000000003'")
     const result = await db.query<{ event_type: string }>('select event_type from public.appearance_notification_events order by created_at')
-    expect(result.rows.map((row) => row.event_type)).toEqual(['published', 'important_update', 'cancelled'])
+    expect(result.rows.map((row) => row.event_type)).toEqual(['published', 'important_update', 'important_update', 'important_update', 'cancelled'])
   })
 
   it('never notifies for drafts and rejects duplicate active schedules', async () => {
@@ -90,10 +118,14 @@ describe('performer appearance migration', () => {
       (performer_id,title,performance_date,start_time,timezone,starts_at,venue_name,status)
       values ('${performer}','下書き','2026-11-01','10:00','Asia/Tokyo',now(),'会場','draft')`)
     const before = await db.query<{ count: number }>('select count(*)::int as count from public.appearance_notification_events')
-    expect(before.rows[0].count).toBe(3)
+    expect(before.rows[0].count).toBe(5)
     await expect(db.exec(`insert into public.performer_appearances
       (performer_id,title,performance_date,start_time,timezone,starts_at,venue_name,status)
       values ('${performer}','下書き','2026-11-01','10:00','Asia/Tokyo',now(),'会場','draft')`)).rejects.toThrow()
+    await db.exec("update public.performer_appearances set status='cancelled' where title='下書き'")
+    const draftCancellation = await db.query<{ count: number; published_at: string | null }>("select (select count(*)::int from public.appearance_notification_events) as count,published_at from public.performer_appearances where title='下書き'")
+    expect(draftCancellation.rows[0].count).toBe(5)
+    expect(draftCancellation.rows[0].published_at).toBeNull()
   })
 
   it('keeps push claims service-role only and uses row locks', () => {

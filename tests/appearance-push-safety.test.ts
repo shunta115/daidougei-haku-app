@@ -22,12 +22,14 @@ describe('appearance push safety', () => {
     expect(endpoint).toMatch(/statusCode === 404 \|\| statusCode === 410/)
     expect(endpoint).toMatch(/delivery\.attempts >= 4/)
     expect(endpoint).toContain("eq('status', 'processing')")
+    expect(api).toContain('batch < 10')
   })
 
   it('keeps appearance saves independent from Push delivery failures and hides past appearances', () => {
     expect(api).toContain("await fetch('/api/notifications/push'")
     expect(api).toContain('.catch(() => undefined)')
     expect(api).toContain(".gte('starts_at', new Date().toISOString())")
+    expect(api).toContain('published_at.not.is.null')
   })
 
   it('opens only same-origin paths from notification clicks', () => {
