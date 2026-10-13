@@ -924,6 +924,13 @@ function PlatformShell() {
           <NotificationsScreen
             onOpenLive={openWatch}
             onOpenPerformer={openPerformer}
+            onOpenSchedule={(id, appearanceId) => {
+              const url = new URL(window.location.href)
+              url.searchParams.set('profile', id)
+              url.searchParams.set('schedule', appearanceId)
+              window.history.replaceState({}, '', url)
+              openPerformer(id)
+            }}
             onBack={() => backOr(() => setScreen(role === 'performer' ? 'profile' : 'fan-home'))}
           />
         )

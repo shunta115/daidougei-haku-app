@@ -7,8 +7,10 @@ import type {
   LiveTipEvent,
   MerchOrder,
   MerchProduct,
+  NotificationPreference,
   NotificationRow,
   Performer,
+  PerformerAppearance,
   TipRow,
   TipSummary,
 } from './types'
@@ -562,6 +564,119 @@ export async function listNotifications(userId: string): Promise<NotificationRow
 export async function markNotificationRead(id: string) {
   const sb = requireSupabase()
   await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id)
+}
+
+export type PerformerAppearanceInput = Pick<PerformerAppearance,
+  'title' | 'performance_date' | 'start_time' | 'end_time' | 'timezone' | 'venue_name' |
+  'venue_address' | 'region' | 'country' | 'description' | 'admission_type' |
+  'admission_details' | 'image_url' | 'ticket_url' | 'is_live_planned' | 'rain_policy' |
+  'notes' | 'status'>
+
+export async function listPerformerAppearances(performerId: string, includePrivate = false): Promise<PerformerAppearance[]> {
+  const sb = requireSupabase()
+  let query = sb.from('performer_appearances').select('*').eq('performer_id', performerId)
+  if (!includePrivate) query = query.in('status', ['published', 'cancelled']).gte('starts_at', new Date().toISOString())
+  const { data, error } = await query.order('starts_at')
+  if (error) throw error
+  return (data as PerformerAppearance[]) ?? []
+}
+
+async function dispatchAppearanceEvent(appearanceId: string) {
+  const sb = requireSupabase()
+  const { data } = await sb
+    .from('appearance_notification_events')
+    .select('id')
+    .eq('appearance_id', appearanceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data?.id) return
+  const headers = await supabaseAuthHeaders()
+  await fetch('/api/notifications/push', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify({ eventId: data.id }),
+  }).catch(() => undefined)
+}
+
+export async function createPerformerAppearance(performerId: string, input: PerformerAppearanceInput) {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performer_appearances').insert({ ...input, performer_id: performerId }).select('*').single()
+  if (error) throw error
+  await dispatchAppearanceEvent(data.id as string)
+  return data as PerformerAppearance
+}
+
+export async function updatePerformerAppearance(id: string, input: Partial<PerformerAppearanceInput>) {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performer_appearances').update(input).eq('id', id).select('*').single()
+  if (error) throw error
+  await dispatchAppearanceEvent(id)
+  return data as PerformerAppearance
+}
+
+export async function deletePerformerAppearance(id: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('performer_appearances').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getNotificationPreference(userId: string): Promise<NotificationPreference> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('notification_preferences').select('*').eq('user_id', userId).maybeSingle()
+  if (error) throw error
+  if (data) return data as NotificationPreference
+  return {
+    user_id: userId,
+    appearance_in_app_enabled: true,
+    appearance_push_enabled: false,
+    locale: 'ja',
+    updated_at: new Date(0).toISOString(),
+  }
+}
+
+export async function saveNotificationPreference(preference: Omit<NotificationPreference, 'updated_at'>) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('notification_preferences').upsert({ ...preference, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
+function pushKey(value: string) {
+  const padded = value.padEnd(value.length + (4 - value.length % 4) % 4, '=')
+  const bytes = atob(padded.replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(bytes, (char) => char.charCodeAt(0))
+}
+
+export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+  const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY
+  if (!publicKey) throw new Error('push_not_configured')
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('push_unsupported')
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted') throw new Error('push_denied')
+  const registration = await navigator.serviceWorker.ready
+  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
+  const json = subscription.toJSON()
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('push_invalid_subscription')
+  const sb = requireSupabase()
+  const { error } = await sb.from('push_subscriptions').upsert({
+    user_id: userId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth,
+    disabled_at: null, last_error: null, updated_at: new Date().toISOString(),
+  }, { onConflict: 'endpoint' })
+  if (error) throw error
+  await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: true, locale })
+}
+
+export async function disableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.ready
+    const subscription = await registration.pushManager.getSubscription()
+    if (subscription) {
+      const sb = requireSupabase()
+      await sb.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', subscription.endpoint)
+      await subscription.unsubscribe()
+    }
+  }
+  await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: false, locale })
 }
 
 export async function fetchAdminMetrics(): Promise<AdminMetrics | null> {

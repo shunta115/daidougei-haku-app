@@ -127,6 +127,46 @@ export type NotificationRow = {
   link: string | null
   read_at: string | null
   created_at: string
+  kind?: string | null
+  meta?: Record<string, unknown> | null
+}
+
+export type PerformerAppearanceStatus = 'draft' | 'published' | 'private' | 'cancelled'
+export type PerformerAppearance = {
+  id: string
+  performer_id: string
+  title: string
+  performance_date: string
+  start_time: string
+  end_time: string | null
+  timezone: string
+  starts_at: string
+  ends_at: string | null
+  venue_name: string
+  venue_address: string
+  region: string
+  country: string
+  description: string
+  admission_type: 'free' | 'paid' | 'tip'
+  admission_details: string
+  image_url: string | null
+  ticket_url: string | null
+  is_live_planned: boolean
+  rain_policy: string
+  notes: string
+  status: PerformerAppearanceStatus
+  published_at: string | null
+  cancelled_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type NotificationPreference = {
+  user_id: string
+  appearance_in_app_enabled: boolean
+  appearance_push_enabled: boolean
+  locale: 'ja' | 'en' | 'zh-TW'
+  updated_at: string
 }
 
 export type AdminMetrics = {
