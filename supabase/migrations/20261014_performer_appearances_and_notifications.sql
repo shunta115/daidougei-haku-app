@@ -22,8 +22,9 @@ create table if not exists public.performer_appearances (
   ticket_url text,
   is_live_planned boolean not null default false,
   rain_policy text not null default '',
+  organizer_info text not null default '',
   notes text not null default '',
-  status text not null default 'draft' check (status in ('draft','published','private','cancelled')),
+  status text not null default 'draft' check (status in ('draft','published','private','cancelled','postponed','archived')),
   published_at timestamptz,
   cancelled_at timestamptz,
   created_at timestamptz not null default now(),
@@ -42,7 +43,7 @@ create unique index if not exists performer_appearances_no_duplicate_idx
     performance_date,
     start_time,
     lower(btrim(venue_name))
-  ) where status <> 'cancelled';
+  ) where status not in ('cancelled','archived');
 create index if not exists performer_appearances_public_upcoming_idx
   on public.performer_appearances (performer_id, starts_at)
   where status = 'published';
@@ -52,7 +53,7 @@ drop policy if exists performer_appearances_read on public.performer_appearances
 create policy performer_appearances_read on public.performer_appearances
   for select using (
     status = 'published'
-    or (status = 'cancelled' and published_at is not null)
+    or (status in ('cancelled','postponed') and published_at is not null)
     or performer_id = auth.uid()
     or public.is_admin()
   );
@@ -65,7 +66,7 @@ create policy performer_appearances_update on public.performer_appearances
   with check (performer_id = auth.uid() or public.is_admin());
 drop policy if exists performer_appearances_delete on public.performer_appearances;
 create policy performer_appearances_delete on public.performer_appearances
-  for delete using ((performer_id = auth.uid() and status in ('draft','private')) or public.is_admin());
+  for delete using ((performer_id = auth.uid() and status in ('draft','private','archived')) or public.is_admin());
 
 grant select on public.performer_appearances to anon, authenticated;
 grant insert, update, delete on public.performer_appearances to authenticated;
@@ -94,7 +95,7 @@ create table if not exists public.appearance_notification_events (
   id uuid primary key default gen_random_uuid(),
   appearance_id uuid not null references public.performer_appearances(id) on delete cascade,
   performer_id uuid not null references public.performers(id) on delete restrict,
-  event_type text not null check (event_type in ('published','important_update','cancelled')),
+  event_type text not null check (event_type in ('published','important_update','cancelled','postponed')),
   change_fingerprint text not null,
   payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
@@ -185,6 +186,11 @@ begin
     and old.status is distinct from 'cancelled'
     and old.published_at is not null then
     v_type := 'cancelled';
+  elsif new.status = 'postponed'
+    and tg_op = 'UPDATE'
+    and old.status is distinct from 'postponed'
+    and old.published_at is not null then
+    v_type := 'postponed';
   elsif new.status = 'published'
     and (tg_op = 'INSERT' or old.published_at is null) then
     v_type := 'published';
@@ -220,7 +226,7 @@ begin
 
   insert into public.notifications (user_id, title, body, link, notification_event_id, kind, meta)
   select f.fan_id,
-    case v_type when 'cancelled' then '出演中止のお知らせ' when 'important_update' then '出演予定が変更されました' else '新しい出演予定' end,
+    case v_type when 'cancelled' then '出演中止のお知らせ' when 'postponed' then '出演延期のお知らせ' when 'important_update' then '出演予定が変更されました' else '新しい出演予定' end,
     coalesce(v_stage_name, 'パフォーマー') || '・' || new.title,
     '/?profile=' || new.performer_id::text || '&schedule=' || new.id::text,
     v_event_id, 'appearance', (select payload from public.appearance_notification_events where id = v_event_id)

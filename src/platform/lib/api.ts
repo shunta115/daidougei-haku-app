@@ -570,12 +570,12 @@ export type PerformerAppearanceInput = Pick<PerformerAppearance,
   'title' | 'performance_date' | 'start_time' | 'end_time' | 'timezone' | 'venue_name' |
   'venue_address' | 'region' | 'country' | 'description' | 'admission_type' |
   'admission_details' | 'image_url' | 'ticket_url' | 'is_live_planned' | 'rain_policy' |
-  'notes' | 'status'>
+  'organizer_info' | 'notes' | 'status'>
 
 export async function listPerformerAppearances(performerId: string, includePrivate = false): Promise<PerformerAppearance[]> {
   const sb = requireSupabase()
   let query = sb.from('performer_appearances').select('*').eq('performer_id', performerId)
-  if (!includePrivate) query = query.or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null)').gte('starts_at', new Date().toISOString())
+  if (!includePrivate) query = query.or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)').gte('starts_at', new Date().toISOString())
   const { data, error } = await query.order('starts_at')
   if (error) throw error
   return (data as PerformerAppearance[]) ?? []

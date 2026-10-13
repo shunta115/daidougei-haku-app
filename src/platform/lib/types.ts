@@ -131,7 +131,7 @@ export type NotificationRow = {
   meta?: Record<string, unknown> | null
 }
 
-export type PerformerAppearanceStatus = 'draft' | 'published' | 'private' | 'cancelled'
+export type PerformerAppearanceStatus = 'draft' | 'published' | 'private' | 'cancelled' | 'postponed' | 'archived'
 export type PerformerAppearance = {
   id: string
   performer_id: string
@@ -153,6 +153,7 @@ export type PerformerAppearance = {
   ticket_url: string | null
   is_live_planned: boolean
   rain_policy: string
+  organizer_info: string
   notes: string
   status: PerformerAppearanceStatus
   published_at: string | null

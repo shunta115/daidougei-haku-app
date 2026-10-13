@@ -114,7 +114,7 @@ function appearanceCopy(row: NotificationRow, lang: 'ja' | 'en' | 'zh-TW') {
   const kind = String(meta.eventType ?? '')
   const name = String(meta.stageName ?? '')
   const title = String(meta.title ?? '')
-  if (lang === 'en') return { title: kind === 'cancelled' ? 'Performance cancelled' : kind === 'important_update' ? 'Performance updated' : 'New performance announced', body: `${name}: ${title}` }
-  if (lang === 'zh-TW') return { title: kind === 'cancelled' ? '演出取消通知' : kind === 'important_update' ? '演出資訊已更新' : '新的演出預定', body: `${name}：${title}` }
-  return { title: kind === 'cancelled' ? '出演中止のお知らせ' : kind === 'important_update' ? '出演予定が変更されました' : '新しい出演予定', body: `${name}・${title}` }
+  if (lang === 'en') return { title: kind === 'cancelled' ? 'Performance cancelled' : kind === 'postponed' ? 'Performance postponed' : kind === 'important_update' ? 'Performance updated' : 'New performance announced', body: `${name}: ${title}` }
+  if (lang === 'zh-TW') return { title: kind === 'cancelled' ? '演出取消通知' : kind === 'postponed' ? '演出延期通知' : kind === 'important_update' ? '演出資訊已更新' : '新的演出預定', body: `${name}：${title}` }
+  return { title: kind === 'cancelled' ? '出演中止のお知らせ' : kind === 'postponed' ? '出演延期のお知らせ' : kind === 'important_update' ? '出演予定が変更されました' : '新しい出演予定', body: `${name}・${title}` }
 }

@@ -46,9 +46,9 @@ describe('performer appearance migration', () => {
     expect(migration).not.toMatch(/alter\s+table\s+public\.(tips|event_votes|event_ballots|merch_orders)/i)
     expect(migration).toContain('alter table public.performer_appearances enable row level security')
     expect(migration).toContain("status = 'published'")
-    expect(migration).toContain("status = 'cancelled' and published_at is not null")
+    expect(migration).toContain("status in ('cancelled','postponed') and published_at is not null")
     expect(migration).toContain('performer_id = auth.uid()')
-    expect(migration).toContain("status in ('draft','private')")
+    expect(migration).toContain("status in ('draft','private','archived')")
   })
 
   it('creates one in-app and one push delivery on first publication', async () => {
@@ -113,18 +113,26 @@ describe('performer appearance migration', () => {
     expect(result.rows.map((row) => row.event_type)).toEqual(['published', 'important_update', 'important_update', 'important_update', 'cancelled'])
   })
 
+  it('creates exactly one postponement event for a previously published appearance', async () => {
+    await db.exec("update public.performer_appearances set status='published' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set status='postponed' where id='30000000-0000-4000-8000-000000000003'")
+    await db.exec("update public.performer_appearances set status='postponed' where id='30000000-0000-4000-8000-000000000003'")
+    const result = await db.query<{ count: number }>("select count(*)::int as count from public.appearance_notification_events where event_type='postponed'")
+    expect(result.rows[0].count).toBe(1)
+  })
+
   it('never notifies for drafts and rejects duplicate active schedules', async () => {
     await db.exec(`insert into public.performer_appearances
       (performer_id,title,performance_date,start_time,timezone,starts_at,venue_name,status)
       values ('${performer}','下書き','2026-11-01','10:00','Asia/Tokyo',now(),'会場','draft')`)
     const before = await db.query<{ count: number }>('select count(*)::int as count from public.appearance_notification_events')
-    expect(before.rows[0].count).toBe(5)
+    expect(before.rows[0].count).toBe(6)
     await expect(db.exec(`insert into public.performer_appearances
       (performer_id,title,performance_date,start_time,timezone,starts_at,venue_name,status)
       values ('${performer}','下書き','2026-11-01','10:00','Asia/Tokyo',now(),'会場','draft')`)).rejects.toThrow()
     await db.exec("update public.performer_appearances set status='cancelled' where title='下書き'")
     const draftCancellation = await db.query<{ count: number; published_at: string | null }>("select (select count(*)::int from public.appearance_notification_events) as count,published_at from public.performer_appearances where title='下書き'")
-    expect(draftCancellation.rows[0].count).toBe(5)
+    expect(draftCancellation.rows[0].count).toBe(6)
     expect(draftCancellation.rows[0].published_at).toBeNull()
   })
 
