@@ -162,6 +162,24 @@ export type PerformerAppearance = {
   updated_at: string
 }
 
+export type AppearanceReminderOffset = 0 | 30 | 60 | 1440
+export type AppearanceReminder = {
+  id: string
+  user_id: string
+  appearance_id: string
+  offset_minutes: AppearanceReminderOffset
+  scheduled_for: string
+  status: 'pending' | 'cancelled' | 'sent' | 'failed'
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type AppearanceCalendarItem = PerformerAppearance & {
+  performer: Pick<Performer, 'id' | 'stage_name' | 'photo_url' | 'genre'> | null
+  participants: Array<Pick<Performer, 'id' | 'stage_name' | 'photo_url' | 'genre'>>
+}
+
 export type NotificationPreference = {
   user_id: string
   appearance_in_app_enabled: boolean
