@@ -28,6 +28,8 @@ import { FanProfileScreen } from './screens/FanProfileScreen'
 import { AdminDashboardScreen, AdminEventScreen, AdminUsersScreen } from './screens/AdminScreens'
 import { AdminOpsScreen } from './screens/AdminOpsScreen'
 import { OrganizerHomeScreen } from './screens/OrganizerHomeScreen'
+import { OrganizerManagementScreen } from './screens/OrganizerManagementScreen'
+import { PerformerOffersScreen } from './screens/PerformerOffersScreen'
 import { MerchDetailScreen, MerchListScreen, PerformerMerchScreen } from './screens/MerchScreens'
 import { SplashScreen } from './screens/SplashScreen'
 import { EventDetailScreen, EventListScreen } from './screens/EventScreens'
@@ -945,6 +947,7 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
+            onOffers={() => setScreen('performer-offers')}
             onNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
           />
@@ -967,6 +970,7 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
+            onOffers={() => setScreen('performer-offers')}
             onNotifications={() => openChildScreen('notifications')}
             onOpenTitle={() => setShowSplash(true)}
           />
@@ -977,6 +981,9 @@ function PlatformShell() {
         break
       case 'performer-earnings':
         body = <PerformerEarningsScreen onBack={() => setScreen('profile')} />
+        break
+      case 'performer-offers':
+        body = <PerformerOffersScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-edit':
         body = <PerformerEditScreen onBack={() => setScreen('profile')} />
@@ -1006,7 +1013,10 @@ function PlatformShell() {
         body = <AdminOpsScreen />
         break
       case 'organizer-home':
-        body = <OrganizerHomeScreen onOpenPerformer={openPerformer} />
+        body = <OrganizerHomeScreen onOpenPerformer={openPerformer} onOpenManagement={() => setScreen('organizer-management')} />
+        break
+      case 'organizer-management':
+        body = <OrganizerManagementScreen onOpenPerformer={openPerformer} />
         break
       default:
         body = (
