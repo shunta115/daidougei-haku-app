@@ -140,5 +140,6 @@ describe('performer appearance migration', () => {
     expect(migration).toContain('for update skip locked')
     expect(migration).toContain('grant execute on function public.claim_appearance_push_deliveries(uuid, integer) to service_role')
     expect(migration).toContain('unique (notification_event_id, subscription_id)')
+    expect(migration).toContain('revoke all on function public.enqueue_appearance_notifications() from public, anon, authenticated')
   })
 })

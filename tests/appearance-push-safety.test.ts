@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 const endpoint = readFileSync('api/notifications/push.ts', 'utf8')
 const worker = readFileSync('public/sw.js', 'utf8')
 const api = readFileSync('src/platform/lib/api.ts', 'utf8')
+const profile = readFileSync('src/platform/screens/PerformerPublicScreen.tsx', 'utf8')
 
 describe('appearance push safety', () => {
   it('requires an authenticated owner and a disabled-by-default production flag', () => {
@@ -25,11 +26,13 @@ describe('appearance push safety', () => {
     expect(api).toContain('batch < 10')
   })
 
-  it('keeps appearance saves independent from Push delivery failures and hides past appearances', () => {
+  it('keeps appearance saves independent from Push delivery failures and separates public past appearances', () => {
     expect(api).toContain("await fetch('/api/notifications/push'")
     expect(api).toContain('.catch(() => undefined)')
-    expect(api).toContain(".gte('starts_at', new Date().toISOString())")
     expect(api).toContain('published_at.not.is.null')
+    expect(profile).toContain('upcomingAppearances')
+    expect(profile).toContain('pastAppearances')
+    expect(profile).toContain("history: '過去の出演'")
   })
 
   it('opens only same-origin paths from notification clicks', () => {
