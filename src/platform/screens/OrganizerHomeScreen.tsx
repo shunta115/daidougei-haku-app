@@ -7,9 +7,10 @@ import { Avatar } from '../components/Avatar'
 
 type Props = {
   onOpenPerformer: (id: string) => void
+  onOpenManagement?: () => void
 }
 
-export function OrganizerHomeScreen({ onOpenPerformer }: Props) {
+export function OrganizerHomeScreen({ onOpenPerformer, onOpenManagement }: Props) {
   const { user, profile, signOut } = useAuth()
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Performer[]>([])
@@ -50,6 +51,7 @@ export function OrganizerHomeScreen({ onOpenPerformer }: Props) {
       <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginBottom: 12 }} onClick={() => spaGo(FESTIVAL_PATH)}>
         受賞者たち（開催情報）
       </button>
+      {onOpenManagement ? <button type="button" className="pl-btn pl-btn--block" style={{ marginBottom: 12 }} onClick={onOpenManagement}>主催者プロフィール・正式な出演依頼を管理</button> : null}
       <input className="pl-input" placeholder="名前・ジャンル・地域" value={q} onChange={(e) => setQ(e.target.value)} />
       <button type="button" className="pl-btn pl-btn--block" style={{ marginTop: 8 }} onClick={() => void search()}>
         検索

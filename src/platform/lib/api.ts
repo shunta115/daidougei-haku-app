@@ -11,6 +11,9 @@ import type {
   NotificationRow,
   Performer,
   PerformerAppearance,
+  OrganizerProfile,
+  PerformanceOffer,
+  PerformanceOfferStatus,
   TipRow,
   TipSummary,
 } from './types'
@@ -1169,6 +1172,49 @@ export async function createBookingInquiry(organizerId: string, performerId: str
     message: message.trim().slice(0, 2000),
   })
   if (error) throw error
+}
+
+export async function getOrganizerProfile(userId: string): Promise<OrganizerProfile | null> {
+  const { data, error } = await requireSupabase().from('organizer_profiles').select('*').eq('user_id', userId).maybeSingle()
+  if (error) throw error
+  return (data as OrganizerProfile | null) ?? null
+}
+
+export async function saveOrganizerProfile(userId: string, input: Pick<OrganizerProfile, 'organization_name' | 'description' | 'website_url' | 'country' | 'region'>) {
+  const website = input.website_url?.trim() || null
+  if (website && new URL(website).protocol !== 'https:') throw new Error('https_required')
+  const { error } = await requireSupabase().from('organizer_profiles').upsert({ ...input, website_url: website, user_id: userId, updated_at: new Date().toISOString() })
+  if (error) throw error
+}
+
+export type PerformanceOfferInput = Pick<PerformanceOffer, 'requester_name' | 'event_name' | 'desired_date' | 'location' | 'performance_details' | 'requested_duration' | 'compensation_terms' | 'notes' | 'response_deadline'>
+
+export async function createPerformanceOffer(organizerId: string, performerId: string, input: PerformanceOfferInput, send: boolean) {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performance_offers').insert({ ...input, organizer_id: organizerId, performer_id: performerId, status: 'draft' }).select('*').single()
+  if (error) throw error
+  if (!send) return data as PerformanceOffer
+  const { data: sent, error: sendError } = await sb.from('performance_offers').update({ status: 'sent' }).eq('id', data.id).select('*').single()
+  if (sendError) throw sendError
+  return sent as PerformanceOffer
+}
+
+export async function listOrganizerOffers(organizerId: string): Promise<PerformanceOffer[]> {
+  const { data, error } = await requireSupabase().from('performance_offers').select('*').eq('organizer_id', organizerId).order('created_at', { ascending: false })
+  if (error) throw error
+  return (data as PerformanceOffer[]) ?? []
+}
+
+export async function listPerformerOffers(performerId: string): Promise<PerformanceOffer[]> {
+  const { data, error } = await requireSupabase().from('performance_offers').select('*').eq('performer_id', performerId).neq('status', 'draft').order('created_at', { ascending: false })
+  if (error) throw error
+  return (data as PerformanceOffer[]) ?? []
+}
+
+export async function updatePerformanceOfferStatus(id: string, status: PerformanceOfferStatus): Promise<PerformanceOffer> {
+  const { data, error } = await requireSupabase().from('performance_offers').update({ status }).eq('id', id).select('*').single()
+  if (error) throw error
+  return data as PerformanceOffer
 }
 
 export async function createReport(reporterId: string, targetType: string, targetId: string, reason: string) {
