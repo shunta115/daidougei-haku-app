@@ -581,7 +581,7 @@ export type PerformerAppearanceInput = Pick<PerformerAppearance,
 export async function listPerformerAppearances(performerId: string, includePrivate = false): Promise<PerformerAppearance[]> {
   const sb = requireSupabase()
   let query = sb.from('performer_appearances').select('*').eq('performer_id', performerId)
-  if (!includePrivate) query = query.or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)').gte('starts_at', new Date().toISOString())
+  if (!includePrivate) query = query.or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)')
   const { data, error } = await query.order('starts_at')
   if (error) throw error
   return (data as PerformerAppearance[]) ?? []
