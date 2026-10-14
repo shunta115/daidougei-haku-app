@@ -12,6 +12,7 @@ const fake = vi.hoisted(() => ({
   getMerchFeeBps: vi.fn(),
   fetchPerformerPayoutView: vi.fn(),
   requestPerformerPayout: vi.fn(),
+  listPerformerAppearances: vi.fn(),
 }))
 
 vi.mock('../src/platform/lib/auth', () => ({
@@ -32,6 +33,10 @@ vi.mock('../src/platform/lib/api', () => ({
   getMerchFeeBps: fake.getMerchFeeBps,
   fetchPerformerPayoutView: fake.fetchPerformerPayoutView,
   requestPerformerPayout: fake.requestPerformerPayout,
+  listPerformerAppearances: fake.listPerformerAppearances,
+  createPerformerAppearance: vi.fn(),
+  updatePerformerAppearance: vi.fn(),
+  deletePerformerAppearance: vi.fn(),
 }))
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn(), useTrackView: vi.fn() }))
 vi.mock('../src/i18n/LangProvider', async () => {
@@ -71,6 +76,7 @@ beforeEach(() => {
     openPayout: null,
   })
   fake.requestPerformerPayout.mockResolvedValue({ ok: true })
+  fake.listPerformerAppearances.mockResolvedValue([])
   fake.uploadMerchImage.mockResolvedValue('https://cdn.example.test/product.webp')
 })
 

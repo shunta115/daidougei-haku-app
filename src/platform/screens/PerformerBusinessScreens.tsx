@@ -15,6 +15,7 @@ import { useLang } from '../../i18n/LangProvider'
 import type { MerchOrder, TipRow } from '../lib/types'
 import { SystemFeeExplain } from '../components/SystemFeeExplain'
 import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS, bpsToPercentLabel, settleSaleAfterRefund } from '../../../shared/fees'
+import { PerformerAppearanceManager } from './PerformerAppearanceManager'
 import { displayStageName } from '../lib/stageLabel'
 
 export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void; onLive: () => void }) {
@@ -31,7 +32,7 @@ export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void
 
   return <div className="pl-registration">
     <button className="pl-btn pl-btn--ghost" onClick={onBack}><ArrowLeft size={18} />{t('back')}</button>
-    <p className="pl-brand">APPEARANCES</p><h1 className="pl-h1">{t('scheduleTitle')}</h1>
+    <p className="pl-brand">OFFICIAL SCHEDULE</p><h1 className="pl-h1">{t('scheduleTitle')}</h1>
     <p className="pl-muted">{t('scheduleLead')}</p>
     {error ? <p className="pl-error">{error}</p> : null}
     {loading ? <p role="status">{t('scheduleLoading')}</p> : null}
@@ -44,6 +45,7 @@ export function PerformerScheduleScreen({ onBack, onLive }: { onBack: () => void
       {slot.is_stream ? <span className="pl-registration__status"><Radio size={16} />{t('liveScheduled')}</span> : null}
     </article>)}
     {rows.some((slot) => slot.is_stream) ? <button className="pl-btn pl-btn--block pl-btn--live" onClick={onLive}>{t('schedulePrepareLive')}</button> : null}
+    <PerformerAppearanceManager />
   </div>
 }
 
