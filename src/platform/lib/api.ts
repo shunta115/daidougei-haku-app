@@ -11,6 +11,9 @@ import type {
   NotificationRow,
   Performer,
   PerformerAppearance,
+  AppearanceCalendarItem,
+  AppearanceReminder,
+  AppearanceReminderOffset,
   TipRow,
   TipSummary,
 } from './types'
@@ -579,6 +582,70 @@ export async function listPerformerAppearances(performerId: string, includePriva
   const { data, error } = await query.order('starts_at')
   if (error) throw error
   return (data as PerformerAppearance[]) ?? []
+}
+
+export async function listPublicAppearanceCalendar(): Promise<AppearanceCalendarItem[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('performer_appearances')
+    .select('*')
+    .or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)')
+    .gte('starts_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+    .order('starts_at')
+    .limit(300)
+  if (error) throw error
+  const appearances = (data as PerformerAppearance[]) ?? []
+  const appearanceIds = appearances.map((row) => row.id)
+  const { data: participantRows, error: participantError } = appearanceIds.length
+    ? await sb.from('appearance_performers').select('appearance_id,performer_id').in('appearance_id', appearanceIds).eq('invitation_status', 'accepted')
+    : { data: [], error: null }
+  if (participantError) throw participantError
+  const participantIds = (participantRows ?? []).map((row) => String(row.performer_id))
+  const performerIds = [...new Set([...appearances.map((row) => row.performer_id), ...participantIds])]
+  if (!performerIds.length) return []
+  const { data: performers, error: performerError } = await sb
+    .from('performers')
+    .select(PERFORMER_CLIENT_SELECT)
+    .in('id', performerIds)
+    .eq('is_approved', true)
+  if (performerError) throw performerError
+  const byId = new Map(((performers as unknown as Performer[]) ?? []).map((row) => [row.id, row]))
+  return appearances.map((row) => {
+    const performer = byId.get(row.performer_id)
+    const participants = (participantRows ?? []).filter((participant) => participant.appearance_id === row.id).map((participant) => byId.get(String(participant.performer_id))).filter((participant): participant is Performer => Boolean(participant)).map((participant) => ({ id: participant.id, stage_name: participant.stage_name, photo_url: participant.photo_url, genre: participant.genre }))
+    return { ...row, performer: performer ? { id: performer.id, stage_name: performer.stage_name, photo_url: performer.photo_url, genre: performer.genre } : null, participants }
+  }).filter((row) => row.performer)
+}
+
+export async function listAppearanceFavoriteIds(userId: string): Promise<string[]> {
+  const { data, error } = await requireSupabase().from('appearance_favorites').select('appearance_id').eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []).map((row) => String(row.appearance_id))
+}
+
+export async function setAppearanceFavorite(userId: string, appearanceId: string, enabled: boolean) {
+  const table = requireSupabase().from('appearance_favorites')
+  const { error } = enabled
+    ? await table.upsert({ user_id: userId, appearance_id: appearanceId })
+    : await table.delete().eq('user_id', userId).eq('appearance_id', appearanceId)
+  if (error) throw error
+}
+
+export async function listAppearanceReminders(userId: string): Promise<AppearanceReminder[]> {
+  const { data, error } = await requireSupabase().from('appearance_reminders').select('*').eq('user_id', userId)
+  if (error) throw error
+  return (data as AppearanceReminder[]) ?? []
+}
+
+export async function setAppearanceReminder(userId: string, appearanceId: string, offset: AppearanceReminderOffset, enabled: boolean) {
+  const table = requireSupabase().from('appearance_reminders')
+  if (!enabled) {
+    const { error } = await table.delete().eq('user_id', userId).eq('appearance_id', appearanceId).eq('offset_minutes', offset)
+    if (error) throw error
+    return
+  }
+  const { error } = await table.insert({ user_id: userId, appearance_id: appearanceId, offset_minutes: offset, scheduled_for: new Date(0).toISOString(), enabled: true })
+  if (error) throw error
 }
 
 async function dispatchAppearanceEvent(appearanceId: string) {
