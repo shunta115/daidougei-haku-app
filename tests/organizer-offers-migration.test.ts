@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-const migration = readFileSync('supabase/migrations/20261014060000_organizer_profiles_and_offers.sql', 'utf8')
+const migration = readFileSync('supabase/migrations/20261016_organizer_profiles_and_offers.sql', 'utf8')
 const organizer = '10000000-0000-4000-8000-000000000001'
 const performer = '20000000-0000-4000-8000-000000000002'
 
