@@ -111,10 +111,10 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
   const appearanceText = lang === 'en'
-    ? { detail: 'View details', cancelled: 'Cancelled', postponed: 'Postponed', organizer: 'Organizer', free: 'Free', paid: 'Paid', tip: 'Tips' }
+    ? { detail: 'View details', cancelled: 'Cancelled', postponed: 'Postponed', organizer: 'Organizer', free: 'Free', paid: 'Paid', tip: 'Tips', upcoming: 'Upcoming appearances', history: 'Past appearances' }
     : lang === 'zh-TW'
-      ? { detail: '查看詳情', cancelled: '已取消', postponed: '已延期', organizer: '主辦單位', free: '免費', paid: '付費', tip: '自由贊助' }
-      : { detail: '詳細を見る', cancelled: '中止', postponed: '延期', organizer: '主催者', free: '無料', paid: '有料', tip: '投げ銭' }
+      ? { detail: '查看詳情', cancelled: '已取消', postponed: '已延期', organizer: '主辦單位', free: '免費', paid: '付費', tip: '自由贊助', upcoming: '即將舉行', history: '過往演出' }
+      : { detail: '詳細を見る', cancelled: '中止', postponed: '延期', organizer: '主催者', free: '無料', paid: '有料', tip: '投げ銭', upcoming: '今後の出演予定', history: '過去の出演' }
   const canonicalUrl = useMemo(() => {
     const path = performerPath(performerId)
     return typeof window === 'undefined' ? path : `${window.location.origin}${path}`
@@ -275,6 +275,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     : []
   const goodsPreview = merch.slice(0, 4)
   const later = upcoming.slice(1)
+  const upcomingAppearances = appearances.filter((appearance) => Date.parse(appearance.ends_at ?? appearance.starts_at) >= Date.now())
+  const pastAppearances = appearances.filter((appearance) => Date.parse(appearance.ends_at ?? appearance.starts_at) < Date.now()).reverse()
   const goSection = (id: SectionId) => {
     setSection(id)
     window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -403,8 +405,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
             <p className="hp-empty">{t('hpNoSchedule')}</p>
           ) : (
             <>
-            {appearances.length > 0 ? <ul className="hp-slots hp-appearances">
-              {appearances.map((appearance) => <li id={`appearance-${appearance.id}`} key={appearance.id} data-cancelled={appearance.status === 'cancelled'}>
+            {upcomingAppearances.length > 0 ? <><h3>{appearanceText.upcoming}</h3><ul className="hp-slots hp-appearances">
+              {upcomingAppearances.map((appearance) => <li id={`appearance-${appearance.id}`} key={appearance.id} data-cancelled={appearance.status === 'cancelled'}>
                 {appearance.image_url ? <img src={appearance.image_url} alt="" loading="lazy" /> : <span />}
                 <div>
                   <strong>{new Date(appearance.starts_at).toLocaleString(undefined, { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: appearance.timezone })}</strong>
@@ -414,7 +416,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                 </div>
                 <div className="hp-appearance-links">{appearance.venue_address ? <a className="hp-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appearance.venue_address)}`} target="_blank" rel="noopener noreferrer">{t('hpMap')}</a> : null}{appearance.ticket_url ? <a className="hp-link" href={appearance.ticket_url} target="_blank" rel="noopener noreferrer">{t('profileTickets')}</a> : null}</div>
               </li>)}
-            </ul> : null}
+            </ul></> : null}
             <ul className="hp-slots">
               {(later.length ? later : upcoming).map((slot) => {
                 const venue = venues.find((row) => row.id === slot.venue_id)
@@ -433,6 +435,12 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                 )
               })}
             </ul>
+            {pastAppearances.length > 0 ? <><h3>{appearanceText.history}</h3><ul className="hp-slots hp-appearances">
+              {pastAppearances.map((appearance) => <li id={`appearance-${appearance.id}`} key={appearance.id} data-cancelled={appearance.status === 'cancelled'}>
+                {appearance.image_url ? <img src={appearance.image_url} alt="" loading="lazy" /> : <span />}
+                <div><strong>{new Date(appearance.starts_at).toLocaleString(undefined, { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: appearance.timezone })}</strong><p>{appearance.title}</p><p>{appearance.venue_name}{appearance.region ? `・${appearance.region}` : ''}</p></div>
+              </li>)}
+            </ul></> : null}
             </>
           )}
         </section>

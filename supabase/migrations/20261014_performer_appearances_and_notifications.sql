@@ -247,6 +247,7 @@ begin
   return new;
 end;
 $$;
+revoke all on function public.enqueue_appearance_notifications() from public, anon, authenticated;
 drop trigger if exists performer_appearances_notify on public.performer_appearances;
 create trigger performer_appearances_notify
   after insert or update on public.performer_appearances
