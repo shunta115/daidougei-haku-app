@@ -110,6 +110,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     </p>
     {expiredLink && !busy && !status?.complete ? <p className="pl-error" role="alert">Stripeの登録リンクの有効期限が切れたか、すでに使用されています。下の「登録を続ける」を押すと、新しい安全なリンクを発行できます。最初から登録し直す必要はありません。</p> : null}
     {returnedFromStripe && !expiredLink && !busy && !error && !status?.complete ? <p className="pl-muted" role="status">Stripeの登録はまだ完了していない可能性があります。下の「登録を続ける」から途中再開できます。確認コードや本人確認が必要な場合はStripeの案内に従ってください。</p> : null}
+    {status?.complete && !statusUnavailable ? <p className="pl-muted" role="status">Stripeの受取設定は完了しています。実際の入金には残高や振込処理などの条件があります。</p> : null}
     {statusUnavailable ? <p className="pl-muted" role="status">現在の受取状況を確認できません。これはStripeの利用制限が確定したという意味ではありません。通信状況を確認して「状態を更新」を押してください。</p> : null}
     {status?.connected && !status.complete && !busy && !error ? <p className="pl-muted">{status.needsInformation ? 'Stripeで追加情報の入力が必要です。' : status.underReview ? 'Stripeが提出情報を確認しています。' : status.restricted ? 'Stripe側の利用制限を確認してください。' : '登録状況を確認し、必要なら続きから再開してください。'}{typeof status.currentlyDueCount === 'number' && status.currentlyDueCount > 0 ? ` 未提出項目: ${status.currentlyDueCount}件。` : ''}</p> : null}
     {status?.checkedAt ? <p className="pl-muted">最終確認: {new Date(status.checkedAt).toLocaleString()}</p> : null}
@@ -117,6 +118,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <SystemFeeExplain compact />
     {status?.underReview && !status.needsInformation && !status.complete ? <p className="pl-muted">{t('payoutReviewNote')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
+    {status?.underReview && !status.needsInformation && !status.complete && !statusUnavailable ? <p className="pl-muted">提出済みの情報をStripeが審査中です。追加提出が必要になる場合は、この画面から登録を再開してください。</p> : null}
     {status?.state === 'restricted' && !statusUnavailable ? <p className="pl-error" role="alert">Stripe側で利用制限が報告されています。本人確認や追加情報の提出が必要な場合があります。「登録を続ける」からStripeの案内をご確認ください。</p> : null}
     {status?.state === 'account_mismatch' ? <p className="pl-error" role="alert">以前のテスト用または別環境の登録は本番では利用できません。既存情報を保護したまま、本番用の受取設定を開始してください。</p> : null}
     {onboardingUrl ? <p className="pl-muted">Stripe画面が開かない場合は、下のリンクを長押ししてSafariなどのブラウザで開いてください。リンクは短時間で期限切れになるため、開けない場合はこの画面からもう一度発行してください。 <a href={onboardingUrl} target="_blank" rel="noopener noreferrer">Stripeの登録画面を開く</a></p> : null}
