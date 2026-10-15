@@ -114,6 +114,8 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     {status?.complete && !statusUnavailable ? <p className="pl-muted" role="status">Stripeの受取設定は完了しています。実際の入金には残高や振込処理などの条件があります。</p> : null}
     {statusUnavailable ? <p className="pl-muted" role="status">現在の受取状況を確認できません。これはStripeの利用制限が確定したという意味ではありません。通信状況を確認して「状態を更新」を押してください。</p> : null}
     {status?.connected && !status.complete && !busy && !error ? <p className="pl-muted">{status.needsInformation ? 'Stripeで追加情報の入力が必要です。' : status.underReview ? 'Stripeが提出情報を確認しています。' : status.restricted ? 'Stripe側の利用制限を確認してください。' : '登録状況を確認し、必要なら続きから再開してください。'}{typeof status.currentlyDueCount === 'number' && status.currentlyDueCount > 0 ? ` 未提出項目: ${status.currentlyDueCount}件。` : ''}</p> : null}
+    {status && !status.complete && !statusUnavailable && (status.currentlyDueCount ?? 0) > 0 ? <p className="pl-muted">次にすること：下の「登録を続ける」を押して、Stripeに表示される未提出情報を入力してください。銀行口座・本人確認・事業情報など、必要な項目はアカウントごとに異なります。</p> : null}
+    {status && !status.complete && !statusUnavailable && status.underReview && !status.needsInformation ? <p className="pl-muted">審査中は同じ情報を繰り返し提出せず、Stripeから追加確認が届いた場合に対応してください。</p> : null}
     {status?.checkedAt ? <p className="pl-muted">最終確認: {new Date(status.checkedAt).toLocaleString()}</p> : null}
     <p className="pl-muted">{t('payoutPrivate')}</p>
     <SystemFeeExplain compact />
