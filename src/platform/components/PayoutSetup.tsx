@@ -69,10 +69,12 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   useEffect(() => {
     // A return from Stripe is not proof of completed onboarding. Recheck the account.
     const params = new URLSearchParams(window.location.search)
-    const returned = params.get('stripe')
+    const storedReturn = window.sessionStorage.getItem('pl-stripe-connect')
+    const returned = params.get('stripe') ?? storedReturn
     if (returned === 'return' || returned === 'refresh') {
       setReturnedFromStripe(true)
       setExpiredLink(returned === 'refresh')
+      window.sessionStorage.removeItem('pl-stripe-connect')
       params.delete('stripe')
       const query = params.toString()
       window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
