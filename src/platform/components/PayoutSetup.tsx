@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import { registrationError } from '../lib/onboarding'
+import { classifyConnectGuidance } from '../lib/connectGuidance'
 import { useLang } from '../../i18n/LangProvider'
 import { SystemFeeExplain } from './SystemFeeExplain'
 
@@ -46,6 +47,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   const [statusUnavailable, setStatusUnavailable] = useState(false)
   const inFlight = useRef(false)
   const lastChecked = useRef(0)
+  const guidance = classifyConnectGuidance(status, statusUnavailable, expiredLink)
   const refresh = useCallback(async () => {
     if (inFlight.current) return
     inFlight.current = true
@@ -108,11 +110,11 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <p className="pl-registration__status" role="status">
       {status?.state === 'account_mismatch' ? '本番用の受取設定が必要です' : status?.state === 'restricted' ? 'Stripeの確認が必要です' : status?.complete ? <><CheckCircle2 size={18} />{t('payoutDone')}</> : status?.needsInformation ? t('payoutNeedMore') : status?.underReview ? t('payoutReview') : status?.connected ? t('payoutContinue') : busy ? t('payoutChecking') : t('payoutRegister')}
     </p>
-    {expiredLink && !busy && !status?.complete ? <p className="pl-error" role="alert">Stripeの登録リンクの有効期限が切れたか、すでに使用されています。下の「登録を続ける」を押すと、新しい安全なリンクを発行できます。最初から登録し直す必要はありません。</p> : null}
+    {guidance === 'expired_link' && !busy ? <p className="pl-error" role="alert">Stripeの登録リンクの有効期限が切れたか、すでに使用されています。下の「登録を続ける」を押すと、新しい安全なリンクを発行できます。最初から登録し直す必要はありません。</p> : null}
     {returnedFromStripe && !expiredLink && !busy && !error && !status?.complete ? <p className="pl-muted" role="status">Stripeの登録はまだ完了していない可能性があります。下の「登録を続ける」から途中再開できます。確認コードや本人確認が必要な場合はStripeの案内に従ってください。</p> : null}
     {status && !statusUnavailable && !status.complete && status.needsInformation && status.currentlyDueCount === 0 && (status.pastDueCount ?? 0) > 0 ? <p className="pl-error" role="alert">提出期限を過ぎた確認項目があります。「登録を続ける」からStripeの指示に従ってください。</p> : null}
     {status?.complete && !statusUnavailable ? <p className="pl-muted" role="status">Stripeの受取設定は完了しています。実際の入金には残高や振込処理などの条件があります。</p> : null}
-    {statusUnavailable ? <p className="pl-muted" role="status">現在の受取状況を確認できません。これはStripeの利用制限が確定したという意味ではありません。通信状況を確認して「状態を更新」を押してください。</p> : null}
+    {guidance === 'status_unavailable' ? <p className="pl-muted" role="status">現在の受取状況を確認できません。これはStripeの利用制限が確定したという意味ではありません。通信状況を確認して「状態を更新」を押してください。</p> : null}
     {status?.connected && !status.complete && !busy && !error ? <p className="pl-muted">{status.needsInformation ? 'Stripeで追加情報の入力が必要です。' : status.underReview ? 'Stripeが提出情報を確認しています。' : status.restricted ? 'Stripe側の利用制限を確認してください。' : '登録状況を確認し、必要なら続きから再開してください。'}{typeof status.currentlyDueCount === 'number' && status.currentlyDueCount > 0 ? ` 未提出項目: ${status.currentlyDueCount}件。` : ''}</p> : null}
     {status && !status.complete && !statusUnavailable && (status.currentlyDueCount ?? 0) > 0 ? <p className="pl-muted">次にすること：下の「登録を続ける」を押して、Stripeに表示される未提出情報を入力してください。銀行口座・本人確認・事業情報など、必要な項目はアカウントごとに異なります。</p> : null}
     {status && !status.complete && !statusUnavailable && status.underReview && !status.needsInformation ? <p className="pl-muted">審査中は同じ情報を繰り返し提出せず、Stripeから追加確認が届いた場合に対応してください。</p> : null}
