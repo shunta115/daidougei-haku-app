@@ -41,6 +41,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null)
+  const [returnedFromStripe, setReturnedFromStripe] = useState(false)
   const inFlight = useRef(false)
   const lastChecked = useRef(0)
   const refresh = useCallback(async () => {
@@ -60,6 +61,15 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   }, [onStatus, performerId, t])
 
   useEffect(() => {
+    // A return from Stripe is not proof of completed onboarding. Recheck the account.
+    const params = new URLSearchParams(window.location.search)
+    const returned = params.get('stripe')
+    if (returned === 'return' || returned === 'refresh') {
+      setReturnedFromStripe(true)
+      params.delete('stripe')
+      const query = params.toString()
+      window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
+    }
     void refresh()
     const onFocus = () => { if (Date.now() - lastChecked.current > 30_000) void refresh() }
     window.addEventListener('focus', onFocus)
@@ -93,6 +103,8 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <p className="pl-registration__status" role="status">
       {status?.state === 'account_mismatch' ? '本番用の受取設定が必要です' : status?.state === 'restricted' ? 'Stripeの確認が必要です' : status?.complete ? <><CheckCircle2 size={18} />{t('payoutDone')}</> : status?.needsInformation ? t('payoutNeedMore') : status?.underReview ? t('payoutReview') : status?.connected ? t('payoutContinue') : busy ? t('payoutChecking') : t('payoutRegister')}
     </p>
+    {returnedFromStripe && !busy && !error && !status?.complete ? <p className="pl-muted" role="status">Stripeの登録はまだ完了していない可能性があります。下の「登録を続ける」から途中再開できます。確認コードや本人確認が必要な場合はStripeの案内に従ってください。</p> : null}
+    {status?.connected && !status.complete && !busy && !error ? <p className="pl-muted">{status.needsInformation ? 'Stripeで追加情報の入力が必要です。' : status.underReview ? 'Stripeが提出情報を確認しています。' : status.restricted ? 'Stripe側の利用制限を確認してください。' : '登録状況を確認し、必要なら続きから再開してください。'}{typeof status.currentlyDueCount === 'number' && status.currentlyDueCount > 0 ? ` 未提出項目: ${status.currentlyDueCount}件。` : ''}</p> : null}
     {status?.checkedAt ? <p className="pl-muted">最終確認: {new Date(status.checkedAt).toLocaleString()}</p> : null}
     <p className="pl-muted">{t('payoutPrivate')}</p>
     <SystemFeeExplain compact />
