@@ -207,13 +207,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return
         }
 
-        // Never silently replace an existing connected account: payments or
-        // pending transfers may still refer to it. Require a separate reviewed recovery.
-        res.status(409).json({
-          error: '以前の受取アカウントを確認できません。投げ銭の履歴を保護するため、自動で作り直さず運営にお問い合わせください。',
-          code: 'connect_account_recovery_required',
-        })
-        return
+        stripeStep = 'account_recover'
+        const previousAccountId = accountId
+        const recovered = await createOrReuseLiveAccount(stripe, performerId)
+        account = recovered.account
+        if (account.metadata?.legacy_test_account_id !== previousAccountId) {
+          account = await stripe.accounts.update(account.id, { metadata: { legacy_test_account_id: previousAccountId } })
+        }
+        accountId = account.id
+        const { error: saveError } = await sb
+          .from('performers')
+          .update({ stripe_account_id: accountId, stripe_onboarding_complete: false })
+          .eq('id', performerId)
+          .eq('stripe_account_id', previousAccountId)
+        if (saveError) throw saveError
       }
       const complete = isConnectedAccountTransferReady(account)
       const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
