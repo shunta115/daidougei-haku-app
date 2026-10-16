@@ -61,6 +61,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true)
   const [mediaBusy, setMediaBusy] = useState(false)
   const [privacyPaused, setPrivacyPaused] = useState(false)
+  const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
   const [draft, setDraft] = useState('')
@@ -408,11 +409,16 @@ export function PerformerLiveScreen({ onBack }: Props) {
     setSwitchingCamera(true)
     setError(null)
     try {
-      const facing = await switchHostCamera(room, cameraFacing)
-      if (roomRef.current === room) setCameraFacing(facing)
+      const facing = await switchHostCamera(room, cameraFacing, deviceOrient)
+      if (roomRef.current === room) {
+        setCameraFacing(facing)
+        setCameraRecoveryNeeded(false)
+      }
     } catch (e) {
       if (roomRef.current === room) {
-        setError(e instanceof Error ? e.message : 'カメラを切り替えられませんでした。')
+        const message = e instanceof Error ? e.message : 'カメラを切り替えられませんでした。'
+        setError(message)
+        setCameraRecoveryNeeded(/元の映像も復元|frames_not_advancing|processor_unavailable/.test(message))
       }
     } finally {
       cameraSwitchRef.current = false
@@ -449,9 +455,29 @@ export function PerformerLiveScreen({ onBack }: Props) {
       if (next) {
         attachLocalPreview(room)
         setPrivacyPaused(false)
+        setCameraRecoveryNeeded(false)
       }
     } catch {
       setError(next ? 'カメラを再開できませんでした。カメラ権限を確認してください。' : 'カメラを停止できませんでした。')
+    } finally {
+      setMediaBusy(false)
+    }
+  }
+
+  const retryCamera = async () => {
+    const room = roomRef.current
+    if (!room || mediaBusy) return
+    setMediaBusy(true)
+    setError(null)
+    try {
+      await setHostCameraEnabled(room, false, cameraFacing, deviceOrient)
+      await setHostCameraEnabled(room, true, cameraFacing, deviceOrient)
+      attachLocalPreview(room)
+      setCameraEnabled(true)
+      setCameraRecoveryNeeded(false)
+    } catch {
+      setCameraEnabled(false)
+      setError('カメラを復旧できませんでした。権限を確認して、もう一度再試行してください。音声とLIVE接続は維持しています。')
     } finally {
       setMediaBusy(false)
     }
@@ -621,6 +647,11 @@ export function PerformerLiveScreen({ onBack }: Props) {
         </div>
       )}
       {error ? <p className="pl-error">{error}</p> : null}
+      {cameraRecoveryNeeded ? (
+        <button type="button" className="pl-btn pl-btn--block" disabled={mediaBusy} onClick={() => void retryCamera()}>
+          {mediaBusy ? 'カメラ再試行中…' : 'カメラを再試行'}
+        </button>
+      ) : null}
     </div>
   )
 }
