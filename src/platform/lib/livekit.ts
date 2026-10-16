@@ -18,6 +18,7 @@ import {
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
 } from './liveCamera'
+import { canComposePortraitVideo, PortraitContainProcessor } from './livePortraitProcessor'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -209,6 +210,15 @@ export async function connectAsHost(url: string, token: string) {
     if (cameraTrack) {
       await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
       await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+      if (canComposePortraitVideo()) {
+        try {
+          await cameraTrack.setProcessor(new PortraitContainProcessor(), true)
+        } catch (error) {
+          // Composition is an enhancement: never tear down an otherwise
+          // healthy LIVE session if a browser cannot initialize captureStream.
+          console.warn('[HAKU LIVE] Portrait composition unavailable; using the camera track directly.', error)
+        }
+      }
     }
   } catch (e) {
     try {

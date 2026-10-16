@@ -3,10 +3,10 @@ import { Track, type LocalVideoTrack, type Room, type VideoCaptureOptions } from
 export type CameraFacing = 'user' | 'environment'
 
 export const PORTRAIT_LIVE_CAPTURE = {
-  width: 720,
+  width: 960,
   height: 1280,
   frameRate: 30,
-  aspectRatio: 9 / 16,
+  aspectRatio: 3 / 4,
 } as const
 
 export type TrackVideoOrientation = 'portrait' | 'landscape' | 'unknown'
@@ -61,7 +61,7 @@ export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrac
   }
 }
 
-/** Ask WebKit for a real portrait track and return the effective settings. */
+/** Prefer the camera sensor's natural portrait 4:3 mode without crop-and-scale. */
 export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
   let settings = mediaTrack.getSettings()
   if (trackVideoOrientation(settings) === 'portrait') return settings
@@ -71,21 +71,20 @@ export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
     | undefined
   const constraints: MediaTrackConstraints = {
     ...mediaTrack.getConstraints(),
-    width: { ideal: PORTRAIT_LIVE_CAPTURE.width },
-    height: { ideal: PORTRAIT_LIVE_CAPTURE.height },
+    width: { ideal: PORTRAIT_LIVE_CAPTURE.width, max: PORTRAIT_LIVE_CAPTURE.width },
+    height: { ideal: PORTRAIT_LIVE_CAPTURE.height, max: PORTRAIT_LIVE_CAPTURE.height },
     aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
     frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
   }
   if (supported?.resizeMode) {
-    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'crop-and-scale'
+    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'none'
   }
 
   try {
     await mediaTrack.applyConstraints(constraints)
     settings = mediaTrack.getSettings()
   } catch {
-    // Some iOS versions cannot crop the selected hardware mode to 9:16.
-    // The caller keeps the working LiveKit track and uses a display fallback.
+    // The 9:16 output processor can safely contain a landscape source too.
   }
   return settings
 }
