@@ -422,14 +422,26 @@ export async function deleteLiveComment(commentId: string) {
 
 export async function canModerateLiveComments(liveSessionId: string, userId: string) {
   const sb = requireSupabase()
-  const { data, error } = await sb
+  // Probe the moderation table first. Before the additive P3 migration is
+  // applied, PostgREST returns an error and the UI keeps privileged controls
+  // hidden while ordinary session-scoped comments continue to work.
+  const { data: moderator, error: moderatorError } = await sb
     .from('live_comment_moderators')
     .select('user_id')
     .eq('live_session_id', liveSessionId)
     .eq('user_id', userId)
     .maybeSingle()
-  if (error) return false
-  return Boolean(data)
+  if (moderatorError) return false
+  if (moderator) return true
+
+  const { data: session, error: sessionError } = await sb
+    .from('live_sessions')
+    .select('performer_id')
+    .eq('id', liveSessionId)
+    .eq('performer_id', userId)
+    .maybeSingle()
+  if (sessionError) return false
+  return Boolean(session)
 }
 
 export async function muteLiveCommentUser(input: {

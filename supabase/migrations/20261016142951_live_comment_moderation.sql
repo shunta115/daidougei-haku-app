@@ -17,6 +17,11 @@ create table if not exists public.live_comment_mutes (
   primary key (live_session_id, user_id)
 );
 
+create index if not exists live_comment_moderators_user_idx
+  on public.live_comment_moderators (user_id);
+create index if not exists live_comment_mutes_user_idx
+  on public.live_comment_mutes (user_id);
+
 alter table public.live_comment_moderators enable row level security;
 alter table public.live_comment_mutes enable row level security;
 alter table public.live_comment_moderators force row level security;
@@ -35,15 +40,9 @@ create policy live_comment_moderators_read on public.live_comment_moderators
   );
 
 drop policy if exists live_comment_moderators_owner_write on public.live_comment_moderators;
-create policy live_comment_moderators_owner_write on public.live_comment_moderators
-  for all to authenticated
-  using (
-    public.is_admin()
-    or exists (
-      select 1 from public.live_sessions s
-      where s.id = live_comment_moderators.live_session_id and s.performer_id = (select auth.uid())
-    )
-  )
+drop policy if exists live_comment_moderators_owner_insert on public.live_comment_moderators;
+create policy live_comment_moderators_owner_insert on public.live_comment_moderators
+  for insert to authenticated
   with check (
     granted_by = (select auth.uid())
     and (
@@ -52,6 +51,17 @@ create policy live_comment_moderators_owner_write on public.live_comment_moderat
         select 1 from public.live_sessions s
         where s.id = live_comment_moderators.live_session_id and s.performer_id = (select auth.uid())
       )
+    )
+  );
+
+drop policy if exists live_comment_moderators_owner_delete on public.live_comment_moderators;
+create policy live_comment_moderators_owner_delete on public.live_comment_moderators
+  for delete to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1 from public.live_sessions s
+      where s.id = live_comment_moderators.live_session_id and s.performer_id = (select auth.uid())
     )
   );
 
@@ -73,8 +83,28 @@ create policy live_comment_mutes_read on public.live_comment_mutes
   );
 
 drop policy if exists live_comment_mutes_moderator_write on public.live_comment_mutes;
-create policy live_comment_mutes_moderator_write on public.live_comment_mutes
-  for all to authenticated
+drop policy if exists live_comment_mutes_moderator_insert on public.live_comment_mutes;
+create policy live_comment_mutes_moderator_insert on public.live_comment_mutes
+  for insert to authenticated
+  with check (
+    muted_by = (select auth.uid())
+    and (
+      public.is_admin()
+      or exists (
+        select 1 from public.live_sessions s
+        where s.id = live_comment_mutes.live_session_id and s.performer_id = (select auth.uid())
+      )
+      or exists (
+        select 1 from public.live_comment_moderators m
+        where m.live_session_id = live_comment_mutes.live_session_id
+          and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
+drop policy if exists live_comment_mutes_moderator_update on public.live_comment_mutes;
+create policy live_comment_mutes_moderator_update on public.live_comment_mutes
+  for update to authenticated
   using (
     public.is_admin()
     or exists (
@@ -100,6 +130,22 @@ create policy live_comment_mutes_moderator_write on public.live_comment_mutes
         where m.live_session_id = live_comment_mutes.live_session_id
           and m.user_id = (select auth.uid())
       )
+    )
+  );
+
+drop policy if exists live_comment_mutes_moderator_delete on public.live_comment_mutes;
+create policy live_comment_mutes_moderator_delete on public.live_comment_mutes
+  for delete to authenticated
+  using (
+    public.is_admin()
+    or exists (
+      select 1 from public.live_sessions s
+      where s.id = live_comment_mutes.live_session_id and s.performer_id = (select auth.uid())
+    )
+    or exists (
+      select 1 from public.live_comment_moderators m
+      where m.live_session_id = live_comment_mutes.live_session_id
+        and m.user_id = (select auth.uid())
     )
   );
 
@@ -138,6 +184,9 @@ create policy live_comments_moderator_delete on public.live_comments
         and m.user_id = (select auth.uid())
     )
   );
+
+revoke all on public.live_comment_moderators from anon, authenticated;
+revoke all on public.live_comment_mutes from anon, authenticated;
 
 grant select, insert, delete on public.live_comments to authenticated;
 grant select, insert, delete on public.live_comment_moderators to authenticated;

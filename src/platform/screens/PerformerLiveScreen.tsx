@@ -3,6 +3,7 @@ import { RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
+  canModerateLiveComments,
   endLive,
   deleteLiveComment,
   getActiveLiveSessionId,
@@ -71,6 +72,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const cameraSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+  const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
@@ -249,6 +251,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
       onDelete: (commentId) => setComments((prev) => removeLiveComment(prev, commentId)),
     })
   }, [liveSessionId, performerId, phase])
+
+  useEffect(() => {
+    if (!liveSessionId || !profile?.id) {
+      setCanModerate(false)
+      return
+    }
+    canModerateLiveComments(liveSessionId, profile.id).then(setCanModerate).catch(() => setCanModerate(false))
+  }, [liveSessionId, profile?.id])
 
   const attachLocalPreview = (room: Room) => {
     const pub = [...room.localParticipant.trackPublications.values()].find((p) => p.kind === 'video')
@@ -662,10 +672,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
               {comments.map((c) => (
                 <div key={c.id} className="pl-live__comment">
                   <span><strong>{c.display_name}</strong> {c.body}</span>
-                  <span className="pl-live__comment-actions">
+                  {canModerate ? <span className="pl-live__comment-actions">
                     {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
                     <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
-                  </span>
+                  </span> : null}
                 </div>
               ))}
             </div>

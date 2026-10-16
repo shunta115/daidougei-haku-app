@@ -28,11 +28,56 @@ P3はLIVEコメントをセッション単位に分離し、配信者・登録�
 - `live_comments`のreplica identityはFULL。
 - 既存コメント件数と本文はマイグレーション前後で変化しない。
 
+## 本番DB承認対象
+
+承認対象は`supabase/migrations/20261016142951_live_comment_moderation.sql`の1ファイルだけとする。SHA-256は`0372607d090a66eec0ca0f466e9574d25a1b7f79713295eb9732f6f219cd9990`。承認時はファイル・PR・`supabase db push --dry-run`で照合する。
+
+SQLの影響は次に限定される。
+
+- `live_comment_moderators`と`live_comment_mutes`を新規作成する。
+- 両テーブルでRLSとFORCE RLSを有効化し、`anon`の権限を明示的に0にする。
+- 配信者・登録モデレーター・管理者だけに、担当LIVE内の必要最小限の操作を許可する。
+- `live_comments_insert`を、本人・配信中・セッション/出演者一致・非ミュートの条件へ置換する。
+- `live_comments_moderator_delete`を追加し、配信者・登録モデレーター・管理者だけに削除を許可する。
+- RealtimeのDELETE同期用に`live_comments`を`REPLICA IDENTITY FULL`へ変更する。
+
+既存行を変更または削除する`UPDATE`、`DELETE`、`TRUNCATE`は実行しない。投票、投げ銭、Stripe、Connect、出演者テーブルの定義・ポリシー・データは変更しない。
+
+## バックアップと事前検証
+
+本番project refを二者で照合してから、アクセス制限された一時ディレクトリへschemaとdataを取得する。バックアップ先はリポジトリへ追加しない。
+
+```sh
+backup_dir="$(mktemp -d)"
+chmod 700 "$backup_dir"
+supabase db dump --linked --schema public --file "$backup_dir/public-schema-before-p3.sql"
+supabase db dump --linked --data-only --schema public --file "$backup_dir/public-data-before-p3.sql"
+supabase migration list --linked
+supabase db push --linked --dry-run
+supabase db advisors --linked --type security --level warn
+supabase db advisors --linked --type performance --level warn
+```
+
+バックアップファイルのサイズが0でないことを確認し、暗号化された承認済み保管先へ移す。チャット、PR、GitへDB資格情報やデータを貼らない。
+
 ## 障害時
 
 アプリ公開後・DB適用前に問題があれば、直前の正常なVercel deploymentへ戻す。DB適用後は旧クライアントへの単独ロールバックを行わない。旧クライアントはセッションIDを送らないため、コメント投稿がRLSで拒否される。
 
 DB適用後にコメント投稿だけが停止した場合は、まずP3アプリがProductionへ割り当てられているか確認する。緊急に旧クライアントとの互換性を戻す必要がある場合のみ、承認を得て`live_comments_insert`を以前の`auth.uid() = user_id`へ戻す。この緩和中はミュート強制が無効になるため、恒久対応にしない。新規テーブルや既存コメントを削除してロールバックしない。
+
+互換性ポリシーへ戻す場合も本番DB変更として再承認し、次だけをトランザクション内で実行する。
+
+```sql
+begin;
+drop policy if exists live_comments_insert on public.live_comments;
+create policy live_comments_insert on public.live_comments
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+commit;
+```
+
+この復旧はコメント行や新規テーブルを削除しない。完全なDB復元は最終手段とし、Supabaseの承認済み復旧手順と事前バックアップを使ってDB管理者が実施する。`supabase db reset --linked`は本番で絶対に使用しない。
 
 ## 現在の環境状態
 
