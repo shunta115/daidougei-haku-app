@@ -58,6 +58,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
       const next = await connectRequest(performerId, 'status') as ConnectStatus
       if (typeof next.complete !== 'boolean') throw new Error('Invalid response')
       setStatus(next)
+      if (next.complete) setExpiredLink(false)
       onStatus(next)
       lastChecked.current = Date.now()
     } catch (e) {
