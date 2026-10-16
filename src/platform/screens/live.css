@@ -353,10 +353,6 @@
   border-radius: 0 0 24px 24px;
 }
 
-.pl-live[data-layout='phone-portrait'] .pl-live__video {
-  object-fit: cover;
-}
-
 .pl-live[data-layout='phone-portrait'] .pl-live__comments {
   max-height: min(18dvh, 132px);
 }
