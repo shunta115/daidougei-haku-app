@@ -131,6 +131,19 @@ describe('Stripe onboarding without payment changes', () => {
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh', collection_options: { fields: 'eventually_due' } }))
     expect(fake.adminClient).toHaveBeenCalled()
   })
+  it('reports Account Link creation separately and keeps the existing account reusable', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    fake.link.mockRejectedValueOnce({ type: 'StripeAPIError', message: 'temporary link failure' })
+    const res = await request({ performerId: 'performer-fixture' })
+    expect(res.code).toBe(500)
+    expect(res.body).toMatchObject({ code: 'connect_link_error' })
+    expect(fake.create).not.toHaveBeenCalled()
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', {
+      p_performer_id: 'performer-fixture',
+      p_onboarding_complete: true,
+    })
+    log.mockRestore()
+  })
   it('makes account creation idempotent while retaining the existing Connect controller', async () => {
     fake.performer.stripe_account_id = ''
     await request({ performerId: 'performer-fixture' })
