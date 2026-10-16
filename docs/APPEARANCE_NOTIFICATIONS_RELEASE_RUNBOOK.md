@@ -40,7 +40,7 @@ PR #37 の migration は追加型であり、既存テーブルの削除、既�
 ## 3. migration の適用
 
 1. 本番と同じ拡張・RLS構成の隔離DBで migration を2回実行し、再実行可能性を確認する。
-2. 出金管理を先行適用する場合は `20261013_payout_reservation_and_audit.sql` の完了を確認し、出演予定側の適用対象が `20261014_performer_appearances_and_notifications.sql` のみであることを確認する。出金管理を同じPRへ混在させない。
+2. 出金管理を先行適用する場合は `20261016100000_payout_reservation_and_audit.sql` の完了を確認し、出演予定側の適用対象が `20261014_performer_appearances_and_notifications.sql` のみであることを確認する。出金管理を同じPRへ混在させない。
 3. 本番の変更承認を取得する。
 4. 承認された Supabase CLI または Dashboard SQL Editor で migration を適用する。
 5. 適用中はPRのmergeとProductionデプロイを行わない。

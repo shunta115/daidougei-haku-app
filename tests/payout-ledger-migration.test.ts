@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const sql = readFileSync(new URL('../supabase/migrations/20261013_payout_reservation_and_audit.sql', import.meta.url), 'utf8')
+const sql = readFileSync(new URL('../supabase/migrations/20261016100000_payout_reservation_and_audit.sql', import.meta.url), 'utf8')
 const bankPayoutSql = readFileSync(new URL('../supabase/migrations/20261016101802_connect_bank_payout_ledger.sql', import.meta.url), 'utf8')
 
 describe('payout reservation migration', () => {

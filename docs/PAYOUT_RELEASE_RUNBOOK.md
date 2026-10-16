@@ -22,13 +22,15 @@
 
 ## 2. migration
 
-既存migrationがすべて適用済みであることを確認後、次を記載順に適用する。
+本番の `supabase_migrations.schema_migrations` とローカル履歴には既知の差異があるため、`supabase db push` は使用しない。過去migrationの再適用を招くためである。バックアップと管理者承認後、次の2ファイルだけをSQL Editorまたは対象projectを明示した `supabase db query --file` で記載順に個別適用する。
 
-`supabase/migrations/20261013_payout_reservation_and_audit.sql`
+`supabase/migrations/20261016100000_payout_reservation_and_audit.sql`
 
 `supabase/migrations/20261016101802_connect_bank_payout_ledger.sql`
 
 1本目は列、制約、監査テーブル、トリガー、service-role限定RPCを追加する。2本目はConnect Transferとは独立した銀行Payout観測台帳を追加する。どちらも既存売上・残高のUPDATE/DELETE/TRUNCATEは行わない。
+
+適用前に各ファイルを `begin transaction read only` では実行できないため、検証用DBで適用済みであることを再確認する。本番適用時は `ON_ERROR_STOP` 相当を有効にし、1ファイルずつ完了を確認する。migration履歴の修復は別作業とし、この公開作業と同時に実行しない。
 
 適用後は同じ読み取り専用検証SQLを再実行する。AWP基準値が不変で、`reserve_performer_payout` の実行権限が `service_role` のみにあること、`payout_audit_events` のRLSが有効であることを確認する。
 
