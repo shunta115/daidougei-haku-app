@@ -394,6 +394,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
           <button
             type="button"
             className="pl-live__camera-switch"
+            data-camera-facing={cameraFacing}
+            data-switch-available={cameraSwitchAvailable}
             aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
             title={cameraSwitchAvailable ? '前面・背面カメラを切り替える' : '利用できるカメラが1台のみです'}
             disabled={!roomRef.current || busy || switchingCamera || !cameraSwitchAvailable}
