@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady, requireAuthUser, stripeMode } from './_shared.js'
+import { getAdminSupabase, getAppUrl, getAuthenticatedSupabase, getStripe, isConnectedAccountTransferReady, requireAuthUser, stripeMode } from './_shared.js'
 import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
 import { previewReadiness } from './_previewReadiness.js'
 
@@ -147,7 +147,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
-    const sb = getAdminSupabase()
+    // Onboarding reads and writes only the signed-in performer's own rows. Keep
+    // the caller's JWT so RLS authorizes those operations; Preview must not
+    // depend on a privileged key for ordinary self-service registration.
+    const sb = getAuthenticatedSupabase(req)
     const { data: profile, error: profileError } = await sb.from('profiles').select('role,status').eq('id', user.id).single()
     if (profileError) throw profileError
     if (!profile || !['performer', 'admin'].includes(profile.role) || !['pending', 'active'].includes(profile.status)) {
@@ -163,8 +166,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let accountId = performer.stripe_account_id as string | null
     if (action === 'earnings' || action === 'payout') {
       const stripe = getStripe()
+      const adminSb = getAdminSupabase()
       if (action === 'earnings') {
-        res.status(200).json(await getPerformerPayoutView(sb, stripe, { performerId, stripeAccountId: accountId }))
+        res.status(200).json(await getPerformerPayoutView(adminSb, stripe, { performerId, stripeAccountId: accountId }))
         return
       }
       if (!accountId) {
@@ -180,7 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(409).json({ error: '受取設定に確認が必要です。Stripeの登録状況を確認してください。' })
         return
       }
-      const result = await requestPerformerPayout(sb, stripe, { performerId, stripeAccountId: accountId })
+      const result = await requestPerformerPayout(adminSb, stripe, { performerId, stripeAccountId: accountId })
       res.status(result.status).json(result.body)
       return
     }
@@ -283,7 +287,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const requestId = error && typeof error === 'object' && 'requestId' in error && typeof error.requestId === 'string' && /^req_[A-Za-z0-9]+$/.test(error.requestId)
       ? error.requestId
       : 'unknown'
-    const category = stripeType?.startsWith('Stripe') || stripeCode ? 'stripe' : 'internal'
+    // PostgREST errors also have a `code` (for example PostgreSQL 42501). A
+    // code alone therefore does not prove that Stripe failed.
+    const category = stripeType?.startsWith('Stripe') ? 'stripe' : 'internal'
     console.error('stripe_connect_failed', { category, step: stripeStep, type: stripeType ?? 'unknown', code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown', requestId, reason: category === 'stripe' ? safeStripeFailureReason(error) : 'internal' })
     const accountConflict = error instanceof Error && error.message === 'Multiple live Connect accounts match the performer'
     res.status(accountConflict ? 409 : 500).json({

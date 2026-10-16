@@ -7,16 +7,13 @@ const fake = vi.hoisted(() => ({
   account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } },
   saveError: null as null | { message: string },
   stripeMode: 'test' as 'test' | 'live' | 'unknown',
-  update: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
+  update: vi.fn(), adminClient: vi.fn(), userClient: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
 }))
 
-vi.mock('../api/stripe/_shared.js', () => ({
-  requireAuthUser: vi.fn(async (_req, res) => { if (!fake.user) res.status(401).json({ error: 'Authorization required' }); return fake.user }),
-  getAppUrl: () => 'https://app.example.test',
-  isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
-  getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
-  stripeMode: () => fake.stripeMode,
-  getAdminSupabase: () => ({ from: (table: string) => ({
+function supabaseClient(kind: 'admin' | 'user') {
+  const marker = kind === 'admin' ? fake.adminClient : fake.userClient
+  marker()
+  return { from: (table: string) => ({
     select: () => ({ eq: () => ({ single: async () => ({ data: table === 'profiles' ? fake.profile : fake.performer, error: null }) }) }),
     update: (patch: unknown) => {
       fake.update(table, patch)
@@ -24,7 +21,17 @@ vi.mock('../api/stripe/_shared.js', () => ({
       const chain = { eq: vi.fn(() => chain), then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve) }
       return chain
     },
-  }) }),
+  }) }
+}
+
+vi.mock('../api/stripe/_shared.js', () => ({
+  requireAuthUser: vi.fn(async (_req, res) => { if (!fake.user) res.status(401).json({ error: 'Authorization required' }); return fake.user }),
+  getAppUrl: () => 'https://app.example.test',
+  isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
+  getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
+  stripeMode: () => fake.stripeMode,
+  getAdminSupabase: () => supabaseClient('admin'),
+  getAuthenticatedSupabase: () => supabaseClient('user'),
 }))
 
 import handler from '../api/stripe/connect'
@@ -118,6 +125,8 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh', collection_options: { fields: 'eventually_due' } }))
+    expect(fake.userClient).toHaveBeenCalled()
+    expect(fake.adminClient).not.toHaveBeenCalled()
   })
   it('makes account creation idempotent while retaining the existing Connect controller', async () => {
     fake.performer.stripe_account_id = ''
@@ -142,6 +151,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.code).toBe(500)
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('private database detail')
+    expect(res.body).toMatchObject({ code: 'connect_server_error' })
   })
 
   it('returns a safe error when Stripe account retrieval fails', async () => {
