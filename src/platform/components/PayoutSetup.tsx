@@ -128,7 +128,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <SystemFeeExplain compact />
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {status?.state === 'restricted' && !statusUnavailable ? <p className="pl-error" role="alert">Stripe側で利用制限が報告されています。本人確認や追加情報の提出が必要な場合があります。「登録を続ける」からStripeの案内をご確認ください。</p> : null}
-    {status?.state === 'account_mismatch' ? <p className="pl-error" role="alert">以前のテスト用または別環境の登録は本番では利用できません。既存情報を保護したまま、本番用の受取設定を開始してください。</p> : null}
+    {status?.state === 'account_mismatch' && !statusUnavailable ? <p className="pl-error" role="alert">以前のテスト用または別環境の登録は本番では利用できません。既存情報を保護したまま、本番用の受取設定を開始してください。</p> : null}
     {onboardingUrl ? <p className="pl-muted">Stripe画面が開かない場合は、下のリンクを長押ししてSafariなどのブラウザで開いてください。リンクは短時間で期限切れになるため、開けない場合はこの画面からもう一度発行してください。 <a href={onboardingUrl} target="_blank" rel="noopener noreferrer">Stripeの登録画面を開く</a></p> : null}
     {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.state === 'account_mismatch' ? '本番用の受取設定を始める' : status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <p className="pl-muted">{t('salesBankNote')}</p>}
     <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} />{busy ? t('payoutRefreshing') : t('payoutRefresh')}</button>
