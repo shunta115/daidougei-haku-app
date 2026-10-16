@@ -22,6 +22,7 @@ import {
 } from '../lib/livekit'
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { useVideoAspect } from '../lib/useVideoAspect'
+import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import type { LiveComment } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import './live.css'
@@ -49,6 +50,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [busy, setBusy] = useState(false)
   const [viewers, setViewers] = useState(0)
   const [elapsed, setElapsed] = useState(0)
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('user')
+  const [cameraSwitchAvailable, setCameraSwitchAvailable] = useState(false)
+  const [switchingCamera, setSwitchingCamera] = useState(false)
+  const cameraSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
   const [draft, setDraft] = useState('')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
@@ -167,6 +172,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
   const wireRoom = (room: Room) => {
     roomRef.current = room
+    setCameraFacing(hostCameraTrack(room)?.mediaStreamTrack.getSettings().facingMode === 'environment' ? 'environment' : 'user')
+    void canSwitchHostCamera()
+      .then((available) => { if (roomRef.current === room) setCameraSwitchAvailable(available) })
+      .catch(() => { if (roomRef.current === room) setCameraSwitchAvailable(false) })
     room.on(RoomEvent.ParticipantConnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
     room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
     room.on(RoomEvent.ConnectionQualityChanged, () => {
@@ -321,6 +330,25 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
   }
 
+  const switchCamera = async () => {
+    const room = roomRef.current
+    if (!room || !cameraSwitchAvailable || cameraSwitchRef.current || busy) return
+    cameraSwitchRef.current = true
+    setSwitchingCamera(true)
+    setError(null)
+    try {
+      const facing = await switchHostCamera(room, cameraFacing)
+      if (roomRef.current === room) setCameraFacing(facing)
+    } catch (e) {
+      if (roomRef.current === room) {
+        setError(e instanceof Error ? e.message : 'カメラを切り替えられませんでした。')
+      }
+    } finally {
+      cameraSwitchRef.current = false
+      setSwitchingCamera(false)
+    }
+  }
+
   const sendComment = async () => {
     if (!draft.trim()) return
     try {
@@ -343,7 +371,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       style={{ '--video-aspect': String(ratio), '--video-fit': 'contain' } as CSSProperties}
     >
       <div className="pl-live__stage">
-        <video ref={videoRef} className="pl-live__video" playsInline muted autoPlay />
+        <video ref={videoRef} className="pl-live__video" style={{ transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none' }} playsInline muted autoPlay />
         {phase === 'live' && performer ? (
           <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} />
         ) : null}
@@ -417,6 +445,16 @@ export function PerformerLiveScreen({ onBack }: Props) {
             </button>
           </div>
           <div className="pl-live__prefs">
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost"
+              aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
+              title={cameraSwitchAvailable ? undefined : '利用できるカメラが1台のみです'}
+              disabled={!roomRef.current || busy || switchingCamera || !cameraSwitchAvailable}
+              onClick={() => void switchCamera()}
+            >
+              {switchingCamera ? 'カメラ切替中…' : 'カメラ切替'}
+            </button>
             <label>
               <input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />
               MAP位置共有
@@ -430,7 +468,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
               演出を抑える
             </label>
           </div>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--danger" disabled={busy} onClick={() => void stopLive()}>
+          <button type="button" className="pl-btn pl-btn--block pl-btn--danger" disabled={busy || switchingCamera} onClick={() => void stopLive()}>
             ライブ終了
           </button>
         </div>
