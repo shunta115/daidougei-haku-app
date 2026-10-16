@@ -65,7 +65,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   )
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
-  const { ratio } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
+  const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
   )
@@ -371,7 +371,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       data-layout={mode}
       style={{
         '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
-        '--video-fit': 'contain',
+        '--video-fit': deviceOrient === 'portrait' && videoOrient === 'landscape' ? 'cover' : 'contain',
       } as CSSProperties}
     >
       <div className="pl-live__stage">
