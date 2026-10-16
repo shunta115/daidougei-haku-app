@@ -109,6 +109,12 @@ create policy live_comments_insert on public.live_comments
   with check (
     (select auth.uid()) = user_id
     and live_session_id is not null
+    and exists (
+      select 1 from public.live_sessions s
+      where s.id = live_comments.live_session_id
+        and s.performer_id = live_comments.performer_id
+        and s.ended_at is null
+    )
     and not exists (
       select 1 from public.live_comment_mutes m
       where m.live_session_id = live_comments.live_session_id

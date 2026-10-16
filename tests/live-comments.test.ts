@@ -40,6 +40,7 @@ describe('LIVE comment session and scrolling', () => {
       expect(screen).toContain('muteLiveCommentUser')
     }
     expect(viewer).toContain('canModerateLiveComments')
+    expect(viewer).not.toContain("setError(e instanceof Error ? e.message : 'コメント失敗')")
   })
 
   it('adds non-destructive, session-scoped RLS policies', () => {

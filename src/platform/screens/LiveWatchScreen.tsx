@@ -273,8 +273,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         liveSessionId,
       })
       setDraft('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'コメント失敗')
+    } catch {
+      setError('コメントを送信できませんでした。このLIVEでのコメント権限または通信状態を確認してください。')
     }
   }
 
