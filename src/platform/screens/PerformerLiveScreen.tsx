@@ -20,6 +20,7 @@ import {
   fetchLiveKitToken,
   LiveKitClientError,
   liveKitErrorMessage,
+  liveMediaDeviceErrorMessage,
   restartHostCameraForOrientation,
   setHostCameraEnabled,
   setHostMicrophoneEnabled,
@@ -248,6 +249,15 @@ export function PerformerLiveScreen({ onBack }: Props) {
     room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
     room.on(RoomEvent.ConnectionQualityChanged, () => {
       applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
+    })
+    room.on(RoomEvent.MediaDevicesError, (mediaError) => {
+      if (roomRef.current !== room) return
+      setError(liveMediaDeviceErrorMessage(mediaError))
+      const cameraTrack = hostCameraTrack(room)
+      if (!cameraTrack || cameraTrack.mediaStreamTrack.readyState === 'ended') {
+        setCameraEnabled(false)
+        setCameraRecoveryNeeded(true)
+      }
     })
     attachLocalPreview(room)
     setCameraEnabled(true)

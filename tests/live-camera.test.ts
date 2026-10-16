@@ -5,6 +5,7 @@ import {
   canSwitchHostCamera,
   ensurePortraitCameraTrack,
   LANDSCAPE_LIVE_CAPTURE,
+  liveCameraSnapshot,
   naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
@@ -22,6 +23,7 @@ import {
 import { computeLiveLayoutMode } from '../src/platform/lib/useLiveLayout'
 import {
   restartHostCameraForOrientation,
+  liveMediaDeviceErrorMessage,
   setHostCameraEnabled,
   setHostMicrophoneEnabled,
 } from '../src/platform/lib/livekit'
@@ -31,6 +33,9 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?
   const track = {
     isMuted: false,
     mediaStreamTrack: {
+      readyState: 'live',
+      enabled: true,
+      muted: false,
       getSettings: () => settings,
       getCapabilities: vi.fn(() => zoom == null ? {} : { zoom: { min: 1, max: 5, step: 0.1 } }),
       getConstraints: vi.fn(() => ({ width: { ideal: 960, max: 960 }, height: { ideal: 1280, max: 1280 }, aspectRatio: { exact: 3 / 4 } })),
@@ -175,6 +180,30 @@ describe('LIVE camera switch', () => {
     expect(trackVideoOrientation({ width: 720, height: 1280 })).toBe('portrait')
     expect(trackVideoOrientation({ width: 1920, height: 1080, aspectRatio: 16 / 9 })).toBe('landscape')
     expect(trackVideoOrientation({})).toBe('unknown')
+  })
+
+  it('reports camera settings without exposing the device id', () => {
+    const { track } = fixture('environment', 2, 1)
+    const snapshot = liveCameraSnapshot(track.mediaStreamTrack as unknown as MediaStreamTrack)
+    expect(snapshot).toEqual({
+      facingMode: 'environment',
+      width: 960,
+      height: 1280,
+      aspectRatio: 3 / 4,
+      frameRate: 30,
+      zoom: 1,
+      readyState: 'live',
+      enabled: true,
+      muted: false,
+    })
+    expect(snapshot).not.toHaveProperty('deviceId')
+  })
+
+  it('maps official LiveKit media failure categories to actionable Japanese guidance', () => {
+    expect(liveMediaDeviceErrorMessage(new DOMException('', 'NotAllowedError'))).toContain('許可')
+    expect(liveMediaDeviceErrorMessage(new DOMException('', 'NotFoundError'))).toContain('見つかりません')
+    expect(liveMediaDeviceErrorMessage(new DOMException('', 'NotReadableError'))).toContain('他のアプリ')
+    expect(liveMediaDeviceErrorMessage(new Error('unknown'))).toContain('端末の状態')
   })
 
   it('locks the phone portrait stage without a crop-to-fill fallback', () => {
