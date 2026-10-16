@@ -21,6 +21,7 @@
 
 .pl-live__stage {
   position: relative;
+  isolation: isolate;
   width: 100%;
   aspect-ratio: var(--video-aspect, 9 / 16);
   max-height: min(62dvh, 560px);
@@ -179,6 +180,12 @@
   font-size: 11px;
   font-weight: 700;
   max-width: min(100%, 280px);
+}
+
+.pl-live__stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .pl-live__pill {
@@ -353,14 +360,85 @@
 
 .pl-live__actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 0.8fr));
+  gap: 7px;
+}
+
+.pl-live__actions > button {
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 14px;
+  font-size: 11px;
 }
 
 .pl-live__support-cta {
   min-height: 56px;
   border-radius: 17px;
   background: #d83a45 !important;
+}
+
+.pl-live__react {
+  border: 1px solid var(--xp-line, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  font-weight: 800;
+  transition: transform 0.18s ease;
+}
+
+.pl-live__react span { font-size: 17px; }
+.pl-live__react--on { transform: scale(1.08); background: rgba(244, 198, 109, 0.2); }
+
+.pl-live__composer .pl-input {
+  min-height: 48px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.pl-live__composer .pl-btn {
+  width: 48px;
+  min-width: 48px;
+  padding: 0;
+  border-radius: 15px;
+}
+
+.pl-live__send-label { display: none; }
+
+.pl-live__side-actions {
+  position: absolute;
+  z-index: 7;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(176px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 13px;
+}
+
+.pl-live__side-actions button {
+  width: 48px;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(7, 20, 36, 0.58);
+  color: white;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.pl-live__side-actions small {
+  max-width: 44px;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+}
+
+.pl-live__side-actions .pl-live__side-support {
+  background: rgba(255, 59, 137, 0.86);
+  box-shadow: 0 8px 26px rgba(255, 59, 137, 0.25);
 }
 
 .pl-live__prefs {
@@ -394,6 +472,55 @@
 
 .pl-live[data-layout='phone-portrait'] .pl-live__panel--live {
   gap: 8px;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #020813;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__stage {
+  width: 100%;
+  min-height: 100svh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: #020813;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__video {
+  min-height: 100svh;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 76px 72px calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, transparent, rgba(2, 8, 19, 0.78) 34%, rgba(2, 8, 19, 0.96));
+  backdrop-filter: none;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__comments {
+  max-height: 72px;
+  border: 0;
+  background: transparent;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__actions,
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__prefs {
+  display: none;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__composer {
+  grid-template-columns: minmax(0, 1fr) 46px;
 }
 
 /* —— Phone landscape: immersive overlay chrome —— */
@@ -475,6 +602,18 @@
   bottom: auto;
   top: auto;
   display: none;
+}
+
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions {
+  right: max(12px, env(safe-area-inset-right, 0px));
+  top: max(64px, calc(env(safe-area-inset-top, 0px) + 54px));
+  bottom: auto;
+  gap: 8px;
+}
+
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions button {
+  width: 44px;
+  min-height: 44px;
 }
 
 /* —— Tablet portrait —— */

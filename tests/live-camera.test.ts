@@ -211,7 +211,7 @@ describe('LIVE camera switch', () => {
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
-    expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
+    expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[^}]*object-fit: cover;/)
     expect(screen).toContain("'--video-fit': 'contain'")
     expect(viewer).toContain("'--video-fit': objectFit")
     expect(screen).not.toContain("? 'cover' : 'contain'")
@@ -275,6 +275,17 @@ describe('LIVE camera switch', () => {
     expect(css).toContain(".pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__panel--live")
     expect(css).toMatch(/phone-landscape'\] \.pl-live__media-controls\s*\{[\s\S]*top:[\s\S]*bottom: auto/)
     expect(css).toMatch(/phone-landscape'\] \.pl-live__panel\s*\{[\s\S]*right: max\(76px/)
+  })
+
+  it('keeps LIVE screen layout rules in one stylesheet so global CSS cannot override rotation layouts', () => {
+    const liveCss = readFileSync('src/platform/screens/live.css', 'utf8')
+    const experienceCss = readFileSync('src/platform/experience.css', 'utf8')
+    expect(experienceCss).not.toMatch(/^\.pl-live--watch\b/m)
+    expect(experienceCss).not.toMatch(/^\.pl-live__panel--live\b/m)
+    expect(experienceCss).not.toMatch(/^\.pl-live__side-actions\b/m)
+    expect(liveCss).toContain(".pl-live--watch[data-layout='phone-portrait']")
+    expect(liveCss).toContain(".pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions")
+    expect(liveCss).toMatch(/phone-landscape'\] \.pl-live__panel\s*\{[\s\S]*safe-area-inset-left[\s\S]*safe-area-inset-right/)
   })
 
   it('switches the published canvas between portrait 9:16 and landscape 16:9', () => {
