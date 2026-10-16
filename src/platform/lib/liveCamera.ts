@@ -19,6 +19,18 @@ export const LANDSCAPE_LIVE_CAPTURE = {
 
 export type TrackVideoOrientation = 'portrait' | 'landscape' | 'unknown'
 
+export type LiveCameraSnapshot = {
+  facingMode: string | null
+  width: number | null
+  height: number | null
+  aspectRatio: number | null
+  frameRate: number | null
+  zoom: number | null
+  readyState: MediaStreamTrackState
+  enabled: boolean
+  muted: boolean
+}
+
 type ZoomRange = { min: number; max: number; step?: number }
 type ZoomCapableTrack = MediaStreamTrack & {
   getCapabilities(): MediaTrackCapabilities & { zoom?: ZoomRange }
@@ -31,6 +43,24 @@ export function trackVideoOrientation(settings: MediaTrackSettings): TrackVideoO
   )
   if (!ratio) return 'unknown'
   return ratio > 1.05 ? 'landscape' : 'portrait'
+}
+
+/** Safe, non-identifying camera diagnostics for support and switch validation. */
+export function liveCameraSnapshot(mediaTrack: MediaStreamTrack): LiveCameraSnapshot {
+  const settings = mediaTrack.getSettings() as MediaTrackSettings & { zoom?: number }
+  return {
+    facingMode: settings.facingMode ?? null,
+    width: settings.width ?? null,
+    height: settings.height ?? null,
+    aspectRatio: settings.aspectRatio ?? (
+      settings.width && settings.height ? settings.width / settings.height : null
+    ),
+    frameRate: settings.frameRate ?? null,
+    zoom: settings.zoom ?? null,
+    readyState: mediaTrack.readyState,
+    enabled: mediaTrack.enabled,
+    muted: mediaTrack.muted,
+  }
 }
 
 export function naturalZoomForRange(range: ZoomRange) {
@@ -119,6 +149,7 @@ export async function switchHostCamera(
   }
 
   const previous = track.mediaStreamTrack.getSettings()
+  const previousSnapshot = liveCameraSnapshot(track.mediaStreamTrack)
   const next = current === 'user' ? 'environment' : 'user'
   // Do not inherit the previous camera's sensor dimensions. On iPhone Safari,
   // the rear camera commonly reports a native landscape size even while the
@@ -146,6 +177,12 @@ export async function switchHostCamera(
     await preferNaturalCameraFieldOfView(track.mediaStreamTrack)
     selected = track.mediaStreamTrack.getSettings()
 
+    console.info('[HAKU LIVE] Camera switch ready', {
+      orientation,
+      previous: previousSnapshot,
+      current: liveCameraSnapshot(track.mediaStreamTrack),
+    })
+
     // Read width/height/aspectRatio after every switch. Some Safari versions
     // retain sensor-native settings even though the rendered frames are rotated.
     // Keep the diagnostic, but never crop the preview merely to hide it.
@@ -158,12 +195,21 @@ export async function switchHostCamera(
       })
     }
     return next
-  } catch {
+  } catch (error) {
+    console.warn('[HAKU LIVE] Camera switch failed; restoring previous camera', {
+      orientation,
+      previous: previousSnapshot,
+      failure: error instanceof Error ? error.name : 'unknown',
+    })
     try {
       await track.restartTrack({
         ...capture,
         facingMode: current,
         ...(previous.deviceId ? { deviceId: { exact: previous.deviceId } } : {}),
+      })
+      console.info('[HAKU LIVE] Previous camera restored', {
+        orientation,
+        current: liveCameraSnapshot(track.mediaStreamTrack),
       })
     } catch {
       throw new Error('カメラを切り替えられず、元の映像も復元できませんでした。カメラの許可を確認してください。音声と配信ルームは維持しています。')

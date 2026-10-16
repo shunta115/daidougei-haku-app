@@ -1,5 +1,6 @@
 import {
   ConnectionQuality,
+  MediaDeviceFailure,
   Room,
   RoomEvent,
   Track,
@@ -34,6 +35,19 @@ export class LiveKitClientError extends Error {
     super(message)
     this.name = 'LiveKitClientError'
     this.kind = kind
+  }
+}
+
+export function liveMediaDeviceErrorMessage(error: unknown) {
+  switch (MediaDeviceFailure.getFailure(error)) {
+    case MediaDeviceFailure.PermissionDenied:
+      return 'カメラまたはマイクの利用が許可されていません。Safariのサイト設定を確認してください。'
+    case MediaDeviceFailure.NotFound:
+      return '利用できるカメラまたはマイクが見つかりません。端末の接続状態を確認してください。'
+    case MediaDeviceFailure.DeviceInUse:
+      return 'カメラまたはマイクを他のアプリが使用しています。他のカメラアプリを閉じて再試行してください。'
+    default:
+      return 'カメラまたはマイクを開始できませんでした。権限と端末の状態を確認してください。'
   }
 }
 
