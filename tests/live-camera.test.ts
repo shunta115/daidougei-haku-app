@@ -12,10 +12,18 @@ import {
 } from '../src/platform/lib/liveCamera'
 import {
   containedRect,
+  currentLiveVideoOrientation,
   coveredRect,
   LIVE_OUTPUT_HEIGHT,
   LIVE_OUTPUT_WIDTH,
+  liveOutputSize,
 } from '../src/platform/lib/livePortraitProcessor'
+import {
+  LANDSCAPE_LIVE_CAPTURE,
+  restartHostCameraForOrientation,
+  setHostCameraEnabled,
+  setHostMicrophoneEnabled,
+} from '../src/platform/lib/livekit'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
   let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, frameRate: 30, zoom }
@@ -46,11 +54,14 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?
         aspectRatio: options.resolution?.aspectRatio,
       }
     }),
+    getProcessor: vi.fn(() => undefined),
+    setProcessor: vi.fn(),
   }
   const room = {
     disconnect: vi.fn(),
     localParticipant: {
       getTrackPublication: vi.fn((source) => source === Track.Source.Camera ? { track } : undefined),
+      setCameraEnabled: vi.fn(),
       setMicrophoneEnabled: vi.fn(),
       unpublishTrack: vi.fn(),
     },
@@ -68,12 +79,13 @@ describe('LIVE camera switch', () => {
   it('renders a persistent in-video control with a mobile touch target', () => {
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
-    expect(screen).toContain('className="pl-live__camera-switch"')
+    expect(screen).toContain('className="pl-live__media-control pl-live__camera-switch"')
     expect(screen).toContain('data-camera-facing={cameraFacing}')
     expect(screen).toContain('data-switch-available={cameraSwitchAvailable}')
     expect(screen).toContain("phase === 'live'")
-    expect(css).toMatch(/\.pl-live__camera-switch\s*\{[\s\S]*position: absolute[\s\S]*width: 58px[\s\S]*height: 58px/)
-    expect(css).toContain(".pl-live[data-layout='phone-landscape'] .pl-live__camera-switch")
+    expect(css).toMatch(/\.pl-live__media-controls\s*\{[\s\S]*position: absolute/)
+    expect(css).toMatch(/\.pl-live__media-control\s*\{[\s\S]*width: 54px[\s\S]*height: 54px/)
+    expect(css).toContain(".pl-live[data-layout='phone-landscape'] .pl-live__media-controls")
   })
 
   it('reports whether more than one video input is available', async () => {
@@ -198,6 +210,42 @@ describe('LIVE camera switch', () => {
       width: 960,
       height: 1280,
     })
+  })
+
+  it('switches the published canvas between portrait 9:16 and landscape 16:9', () => {
+    expect(liveOutputSize('portrait')).toEqual({ width: 720, height: 1280 })
+    expect(liveOutputSize('landscape')).toEqual({ width: 1280, height: 720 })
+    vi.stubGlobal('window', { innerWidth: 844, innerHeight: 390 })
+    expect(currentLiveVideoOrientation()).toBe('landscape')
+  })
+
+  it('stops and resumes microphone/camera tracks without disconnecting the room', async () => {
+    const { room, typedRoom } = fixture()
+    await expect(setHostMicrophoneEnabled(typedRoom, false)).resolves.toBe(false)
+    await expect(setHostCameraEnabled(typedRoom, false, 'user', 'portrait')).resolves.toBe(false)
+    expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(false)
+    expect(room.localParticipant.setCameraEnabled).toHaveBeenCalledWith(false)
+    expect(room.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('restarts only the camera track with a 30fps landscape preset after rotation', async () => {
+    const { track, room, typedRoom } = fixture()
+    await expect(restartHostCameraForOrientation(typedRoom, 'user', 'landscape')).resolves.toBe(true)
+    expect(track.restartTrack).toHaveBeenCalledWith({
+      resolution: LANDSCAPE_LIVE_CAPTURE,
+      facingMode: 'user',
+    })
+    expect(LANDSCAPE_LIVE_CAPTURE).toMatchObject({ width: 1280, height: 720, frameRate: 30, aspectRatio: 16 / 9 })
+    expect(room.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('provides accessible media controls and privacy stops on backgrounding', () => {
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    expect(screen).toContain('aria-label={microphoneEnabled ? \'マイクを停止\' : \'マイクを再開\'}')
+    expect(screen).toContain('aria-label={cameraEnabled ? \'カメラを停止\' : \'カメラを再開\'}')
+    expect(screen).toContain("document.addEventListener('visibilitychange', handleVisibility)")
+    expect(screen).toContain("window.addEventListener('pagehide', stopTracksForPrivacy)")
+    expect(screen).toContain('Date.now() - hiddenAt >= 60_000')
   })
 
   it('returns optical 1x when supported and otherwise the lowest zoom', () => {
