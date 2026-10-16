@@ -1,5 +1,7 @@
-/** Platform fee in basis points (1000 = 10%) */
-export const PLATFORM_FEE_BPS = 1000
+import { TIP_SYSTEM_FEE_BPS, systemFeeYen } from '../../../shared/fees'
+
+/** @deprecated Client must not price checkout. Display-only fallback = tip system-use bps. */
+export const PLATFORM_FEE_BPS = TIP_SYSTEM_FEE_BPS
 
 export const TIP_PRESETS_JPY = [300, 500, 1000, 3000] as const
 
@@ -10,8 +12,8 @@ export const TIP_PRESET_LABELS_JA: Record<(typeof TIP_PRESETS_JPY)[number], { la
   3000: { label: '👑 LEGEND' },
 }
 
-export function calcPlatformFee(amountCents: number): number {
-  return Math.floor((amountCents * PLATFORM_FEE_BPS) / 10000)
+export function calcPlatformFee(amountCents: number, feeBps = PLATFORM_FEE_BPS): number {
+  return systemFeeYen(amountCents, feeBps)
 }
 
 export function formatYen(centsOrYen: number): string {

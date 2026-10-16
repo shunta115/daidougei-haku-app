@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { EVENTS_PATH, FESTIVAL_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
+import { EVENTS_PATH, FESTIVAL_PATH, MAP_PATH, PASSWORD_RESET_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
 import { useAuth } from './lib/auth'
+import { hasPasswordRecoveryParams } from './lib/authCallback'
 import { LanguageToggle, useLang } from '../i18n/LangProvider'
 import { BottomNav } from './components/BottomNav'
 import { PlatformBackground } from './components/PlatformBackground'
+import { PullToRefresh } from './components/PullToRefresh'
+import { RefreshButton } from './components/RefreshButton'
 import { AuthScreen } from './screens/AuthScreen'
 import { FanHomeScreen } from './screens/FanHomeScreen'
 import { SearchScreen } from './screens/SearchScreen'
 import { MapScheduleScreen } from './screens/MapScheduleScreen'
 import { PerformerPublicScreen } from './screens/PerformerPublicScreen'
 import { PerformerHomeScreen } from './screens/PerformerHomeScreen'
+import { PerformerPreviewApp } from './screens/PerformerPreviewApp'
 import { PerformerEditScreen } from './screens/PerformerEditScreen'
 import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
@@ -32,10 +36,53 @@ import { AdminVoteDeskScreen } from './screens/AdminVoteDeskScreen'
 import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
+import { useTipConfirmation } from './lib/useTipConfirmation'
 import { PERFORMER_REGISTER_PATH } from './lib/onboarding'
 import './platform.css'
 import './screens/registration.css'
 import './experience.css'
+
+export type NavigationSnapshot = {
+  screen: PlatformScreen
+  performerId: string | null
+  merchProductId: string | null
+  eventSlug: string | null
+}
+
+export function savedNavigationSnapshot(): NavigationSnapshot | null {
+  const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
+  return saved && REFRESHABLE_SCREENS.has(saved.screen) ? saved : null
+}
+
+export function reloadPreservingNavigation(snapshot: NavigationSnapshot, reload = () => window.location.reload()) {
+  const state = (window.history.state as HakuHistoryState | null) ?? {}
+  window.history.replaceState({ ...state, hakuSnapshot: snapshot }, '', window.location.href)
+  reload()
+}
+
+type HakuHistoryState = {
+  hakuSnapshot?: NavigationSnapshot
+  hakuHasBack?: boolean
+}
+
+const REFRESHABLE_SCREENS = new Set<PlatformScreen>([
+  'fan-home',
+  'search',
+  'merch-list',
+  'merch-detail',
+  'live-list',
+  'map-schedule',
+  'event-list',
+  'event-detail',
+  'event-vote',
+  'profile',
+  'notifications',
+  'performer-home',
+  'performer-schedule',
+  'performer-earnings',
+  'performer-history',
+  'organizer-home',
+])
 
 function SetupScreen() {
   const { t } = useLang()
@@ -70,9 +117,9 @@ function WelcomeScreen({ onAuth }: { onAuth: () => void }) {
       <button type="button" className="pl-btn pl-btn--block" onClick={onAuth}>
         {t('start')}
       </button>
-      <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+      <a className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} href={`${PLATFORM_PATH}?merch=1`}>
         {t('navGoods')}
-      </button>
+      </a>
       <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" style={{ marginTop: 12 }} onClick={() => spaGo(FESTIVAL_PATH)}>
         {t('seeEvent')}
       </button>
@@ -111,15 +158,34 @@ const PERFORMER_DESK_SCREENS = new Set<PlatformScreen>([
   'performer-history',
 ])
 
-function initialGuestScreen(): PlatformScreen {
+function merchandiseEntry(): NavigationSnapshot | null {
+  if (window.location.pathname === PASSWORD_RESET_PATH) return null
+  const params = new URLSearchParams(window.location.search)
+  const productId = params.get('merchProduct')
+  if (!productId && params.get('merch') !== '1') return null
+  return {
+    screen: productId ? 'merch-detail' : 'merch-list',
+    performerId: null,
+    merchProductId: productId,
+    eventSlug: null,
+  }
+}
+
+export function initialGuestScreen(): PlatformScreen {
   try {
+    if (window.location.pathname === PASSWORD_RESET_PATH) return 'auth'
+    // Explicit merchandise deep links take precedence over a previously saved screen.
+    const merchEntry = merchandiseEntry()
+    if (merchEntry) return merchEntry.screen
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.screen
     if (window.location.pathname === PERFORMER_REGISTER_PATH) return 'auth'
     if (parsePerformerPath(window.location.pathname)) return 'profile'
     if (window.location.pathname === EVENTS_PATH) return 'event-list'
     const eventRoute = parseEventsPath(window.location.pathname)
     if (eventRoute?.kind === 'vote') return 'event-vote'
     if (eventRoute?.kind === 'detail') return 'event-detail'
-    if (window.location.pathname === FESTIVAL_PATH) return 'map-schedule'
+    if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
     if (q.get('watch')) return 'live-watch'
     if (q.get('profile')) return 'profile'
@@ -128,7 +194,7 @@ function initialGuestScreen(): PlatformScreen {
     if (q.get('live') === '1') return 'live-list'
     if (q.get('merch') === '1') return 'merch-list'
     if (q.get('account') === '1') return 'auth'
-    if (q.get('auth') === '1' || q.get('stripe')) return 'auth'
+    if (q.get('auth') === '1') return 'auth'
   } catch {
     /* ignore */
   }
@@ -147,6 +213,8 @@ function PlatformShell() {
   })
   const routedUser = useRef<string | null>(null)
   const [performerId, setPerformerId] = useState<string | null>(() => {
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.performerId
     const performerRoute = parsePerformerPath(window.location.pathname)
     if (performerRoute) return performerRoute.id
     try {
@@ -155,21 +223,49 @@ function PlatformShell() {
       return null
     }
   })
-  const [merchProductId, setMerchProductId] = useState<string | null>(null)
+  const [merchProductId, setMerchProductId] = useState<string | null>(() =>
+    (merchandiseEntry() ?? savedNavigationSnapshot())?.merchProductId ?? null,
+  )
   const [eventSlug, setEventSlug] = useState<string | null>(() => {
+    const saved = savedNavigationSnapshot()
+    if (saved) return saved.eventSlug
     const eventRoute = parseEventsPath(window.location.pathname)
     return eventRoute && eventRoute.kind !== 'list' ? eventRoute.slug : null
   })
-  const [tipFlash, setTipFlash] = useState<string | null>(null)
-  const [tipFollowId, setTipFollowId] = useState<string | null>(null)
+  const [checkoutFlash, setTipFlash] = useState<string | null>(null)
+  const tipConfirmation = useTipConfirmation()
+  const tipFlash = tipConfirmation.message ?? checkoutFlash
+  const tipFollowId = tipConfirmation.performerId
   const [tipReturn, setTipReturn] = useState<PlatformScreen>('fan-home')
   const [showSplash, setShowSplash] = useState(() => {
+    if (hasPasswordRecoveryParams()) return false
     if (window.location.pathname !== '/' || window.location.search) return false
     try { return window.localStorage.getItem('pl-master-splash-seen-v3') !== '1' } catch { return false }
   })
 
   useEffect(() => {
     const syncEventRoute = () => {
+      const merchEntry = merchandiseEntry()
+      if (merchEntry) {
+        setPerformerId(null)
+        setMerchProductId(merchEntry.merchProductId)
+        setEventSlug(null)
+        setScreen(merchEntry.screen)
+        // Consume the entry query so Back can restore a later detail snapshot.
+        const url = new URL(window.location.href)
+        url.searchParams.delete('merch')
+        url.searchParams.delete('merchProduct')
+        window.history.replaceState({ hakuSnapshot: merchEntry }, '', url.pathname + url.search + url.hash)
+        return
+      }
+      const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
+      if (saved) {
+        setPerformerId(saved.performerId)
+        setMerchProductId(saved.merchProductId)
+        setEventSlug(saved.eventSlug)
+        setScreen(saved.screen)
+        return
+      }
       const performerRoute = parsePerformerPath(window.location.pathname)
       if (performerRoute) {
         setPerformerId(performerRoute.id)
@@ -178,7 +274,9 @@ function PlatformShell() {
       }
       const eventRoute = parseEventsPath(window.location.pathname)
       if (!eventRoute) {
-        if (window.location.pathname === FESTIVAL_PATH) setScreen('map-schedule')
+        if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) setScreen('map-schedule')
+        else if (window.location.pathname === EVENTS_PATH) setScreen('event-list')
+        else if (window.location.pathname === '/' || window.location.pathname === PLATFORM_PATH) setScreen('fan-home')
         return
       }
       if (eventRoute.kind === 'list') {
@@ -198,6 +296,7 @@ function PlatformShell() {
   }, [screen])
 
   useEffect(() => {
+    const entrySnapshot = merchandiseEntry()
     const url = new URL(window.location.href)
     const tip = url.searchParams.get('tip')
     const sessionId = url.searchParams.get('session_id')
@@ -226,6 +325,10 @@ function PlatformShell() {
       setScreen('profile')
       window.history.replaceState({}, '', performerPath(publicProfile))
     }
+    if (url.searchParams.get('hakuPreview') === 'performer' && pid) {
+      setPerformerId(pid)
+      setScreen('profile')
+    }
     if (tipTo) {
       setPerformerId(tipTo)
       window.sessionStorage.setItem('pl-tip-to', tipTo)
@@ -245,7 +348,7 @@ function PlatformShell() {
     if (stripe === 'return' || stripe === 'refresh') {
       window.sessionStorage.setItem('pl-stripe-connect', stripe)
     }
-    if (auth === '1' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct || account === '1') {
+    if (auth === '1' || auth === 'recovery' || watch || tipTo || stripe || liveList === '1' || merch === '1' || merchProduct || account === '1') {
       if (watch) setScreen('live-watch')
       else if (tipTo) {
         setTipReturn('welcome')
@@ -254,33 +357,27 @@ function PlatformShell() {
       else if (merchProduct) setScreen('merch-detail')
       else if (merch === '1') setScreen('merch-list')
       else if (account === '1') setScreen('auth')
-      else setScreen('auth')
+      else if (!stripe) setScreen('auth')
       url.searchParams.delete('auth')
     }
     if (tip === 'success') {
-      setTipFlash('tipSuccess')
-      setTipFollowId(pid)
-      trackProductEvent('tip_complete', { performerId: pid })
-      if (sessionId) window.sessionStorage.setItem('pl-tip-confirm', sessionId)
+      // Success is displayed only after the signed webhook has finalized the tip.
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     } else if (tip === 'cancel') {
       setTipFlash('tipCancelled')
-      setTipFollowId(null)
       if (ret === 'live' && pid) {
         window.sessionStorage.setItem('pl-tip-return', JSON.stringify({ screen: 'live-watch', performerId: pid }))
       }
     }
     if (merch === 'success') {
       setTipFlash('merchSuccess')
-      setTipFollowId(null)
       trackProductEvent('merch_purchase', { performerId: pid, props: { product_id: merchProductResultId } })
       if (sessionId) window.sessionStorage.setItem('pl-merch-confirm', sessionId)
       setScreen('merch-list')
     } else if (merch === 'cancel') {
       setTipFlash('merchCancelled')
-      setTipFollowId(null)
       setScreen('merch-list')
     }
     if (tip || watch || auth || tipTo || stripe || liveList || merch || merchProduct || account) {
@@ -294,24 +391,11 @@ function PlatformShell() {
       url.searchParams.delete('account')
       url.searchParams.delete('productId')
       url.searchParams.delete('role')
-      window.history.replaceState({}, '', url.pathname + url.search)
+      // Supabase must consume recovery tokens before the app cleans the URL.
+      // Preserve the callback hash; the auth client removes it after session recovery.
+      window.history.replaceState(entrySnapshot ? { hakuSnapshot: entrySnapshot } : {}, '', url.pathname + url.search + url.hash)
     }
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    const sessionId = window.sessionStorage.getItem('pl-tip-confirm')
-    if (!sessionId) return
-    window.sessionStorage.removeItem('pl-tip-confirm')
-    void (async () => {
-      const headers = await supabaseAuthHeaders()
-      await fetch('/api/stripe/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ sessionId }),
-      }).catch(() => undefined)
-    })()
-  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -332,6 +416,11 @@ function PlatformShell() {
     if (!ready) return
     if (!configured) {
       if (!showSplash) setScreen('setup')
+      return
+    }
+    if (passwordRecovery) {
+      setShowSplash(false)
+      setScreen('auth')
       return
     }
     if (!user) {
@@ -357,10 +446,6 @@ function PlatformShell() {
       return
     }
     if (!profile) return
-    if (passwordRecovery) {
-      setScreen('auth')
-      return
-    }
     const firstVisit = routedUser.current !== user.id
     routedUser.current = user.id
     if (profile?.status === 'suspended' || profile?.status === 'deleted') {
@@ -446,7 +531,7 @@ function PlatformShell() {
     })
   }, [ready, configured, user, profile, passwordRecovery, registrationEntry, showSplash])
 
-  if (showSplash && screen === 'fan-home') {
+  if (showSplash) {
     return <div className="pl-app"><SplashScreen onStart={() => {
       try { window.localStorage.setItem('pl-master-splash-seen-v3', '1') } catch { /* continue without persistence */ }
       setShowSplash(false)
@@ -502,14 +587,42 @@ function PlatformShell() {
   }
 
   const role = profile?.role ?? 'fan'
-  const navRole = role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
+  const preview = role === 'admin' ? new URLSearchParams(window.location.search).get('hakuPreview') : null
+  const previewOn = preview === 'fan' || preview === 'performer'
+  if (preview === 'performer') return <PerformerPreviewApp />
+  const navRole = previewOn ? (preview === 'performer' ? 'performer' : 'fan') : role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
   const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
+  const currentSnapshot = (): NavigationSnapshot => ({ screen, performerId, merchProductId, eventSlug })
+  const refreshCurrentScreen = () => reloadPreservingNavigation(currentSnapshot())
+
+  const pushDetail = (next: NavigationSnapshot, url?: string) => {
+    const currentState = (window.history.state as HakuHistoryState | null) ?? {}
+    window.history.replaceState({ ...currentState, hakuSnapshot: currentSnapshot() }, '', window.location.href)
+    window.history.pushState({ hakuSnapshot: next, hakuHasBack: true } satisfies HakuHistoryState, '', url ?? window.location.href)
+  }
+
+  const backOr = (fallback: () => void) => {
+    const state = (window.history.state as HakuHistoryState | null) ?? {}
+    if (state.hakuHasBack) {
+      window.history.back()
+      return
+    }
+    fallback()
+  }
+
+  const openChildScreen = (nextScreen: PlatformScreen) => {
+    pushDetail({ screen: nextScreen, performerId: null, merchProductId: null, eventSlug })
+    setPerformerId(null)
+    setMerchProductId(null)
+    setScreen(nextScreen)
+  }
+
   const openPerformer = (id: string) => {
+    pushDetail({ screen: 'profile', performerId: id, merchProductId: null, eventSlug }, performerPath(id))
     setPerformerId(id)
-    const next = performerPath(id)
-    if (window.location.pathname !== next) window.history.pushState({}, '', next)
+    setMerchProductId(null)
     setScreen('profile')
   }
 
@@ -518,11 +631,13 @@ function PlatformShell() {
   }
 
   const openWatch = (id: string) => {
+    pushDetail({ screen: 'live-watch', performerId: id, merchProductId: null, eventSlug })
     setPerformerId(id)
     setScreen('live-watch')
   }
 
   const openMerchProduct = (id: string) => {
+    pushDetail({ screen: 'merch-detail', performerId: null, merchProductId: id, eventSlug })
     setMerchProductId(id)
     setScreen('merch-detail')
   }
@@ -534,15 +649,20 @@ function PlatformShell() {
   }
 
   const openEvent = (slug: string) => {
+    pushDetail({ screen: 'event-detail', performerId: null, merchProductId: null, eventSlug: slug }, eventPath(slug))
     setEventSlug(slug)
-    window.history.pushState({}, '', eventPath(slug))
     setScreen('event-detail')
   }
 
   const openEventVote = (slug: string) => {
+    pushDetail({ screen: 'event-vote', performerId: null, merchProductId: null, eventSlug: slug }, eventVotePath(slug))
     setEventSlug(slug)
-    window.history.pushState({}, '', eventVotePath(slug))
     setScreen('event-vote')
+  }
+
+  const openMap = () => {
+    window.history.pushState({}, '', MAP_PATH)
+    setScreen('map-schedule')
   }
 
   if (!user) {
@@ -555,9 +675,10 @@ function PlatformShell() {
           onWatchLive={openWatch}
           onOpenSearch={() => setScreen('search')}
           onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
-            onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('auth')}
+          onOpenMap={openMap}
+          onOpenEvent={openEvent}
+          onOpenNotifications={() => setScreen('auth')}
+          onOpenTitle={() => setShowSplash(true)}
           onTip={(id) => {
             trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'guest_home' } })
             setPerformerId(id)
@@ -571,8 +692,10 @@ function PlatformShell() {
         <LiveWatchScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            setScreen('live-list')
+            backOr(() => {
+              setPerformerId(null)
+              setScreen('live-list')
+            })
           }}
           onTip={() => {
             trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_live' } })
@@ -597,9 +720,11 @@ function PlatformShell() {
         <PerformerPublicScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            leavePerformerUrl()
-            setScreen('search')
+            backOr(() => {
+              setPerformerId(null)
+              leavePerformerUrl()
+              setScreen('fan-home')
+            })
           }}
           onTip={() => {
             trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_profile' } })
@@ -619,23 +744,25 @@ function PlatformShell() {
     } else if (screen === 'event-list') {
       guestBody = <EventListScreen onOpen={openEvent} />
     } else if (screen === 'event-detail' && eventSlug) {
-      guestBody = <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
+      guestBody = <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={openMap} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} />
     } else if (screen === 'event-vote' && eventSlug) {
-      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} />
+      guestBody = <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={openMap} />
     } else if (screen === 'merch-list') {
       guestBody = <MerchListScreen onOpenProduct={openMerchProduct} onOpenSearch={() => setScreen('search')} />
     } else if (screen === 'merch-detail' && merchProductId) {
-      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
+      guestBody = <MerchDetailScreen productId={merchProductId} onBack={() => backOr(() => setScreen('merch-list'))} onRequireAuth={() => setScreen('auth')} />
     }
 
     if (guestBody) {
       const guestShowNav = !['tip', 'live-watch'].includes(screen)
       return (
         <div className="pl-app">
+          {REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
           <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
             {tipFlash ? (
               <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
-                {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+                {tipConfirmation.message ? t(tipConfirmation.message) : tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+                {tipConfirmation.canRetry ? <button type="button" className="pl-btn pl-btn--ghost" onClick={tipConfirmation.retry}>{t('tipConfirmationRetry')}</button> : null}
                 {tipFlash === 'tipSuccess' && tipFollowId ? (
                   <button
                     type="button"
@@ -665,6 +792,7 @@ function PlatformShell() {
                   setScreen('auth')
                   return
                 }
+                if (key === 'map-schedule') { openMap(); return }
                 setScreen(key as PlatformScreen)
               }}
             />
@@ -690,9 +818,12 @@ function PlatformShell() {
     body = (
       <LiveWatchScreen
         performerId={performerId}
+        allowPublicTest={previewOn && role === 'admin'}
         onBack={() => {
-          setPerformerId(null)
-          setScreen(homeForRole(role))
+          backOr(() => {
+            setPerformerId(null)
+            setScreen(homeForRole(role))
+          })
         }}
         onTip={() => {
           trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live' } })
@@ -720,9 +851,11 @@ function PlatformShell() {
         <PerformerPublicScreen
           performerId={performerId}
           onBack={() => {
-            setPerformerId(null)
-            leavePerformerUrl()
-            setScreen(homeForRole(role))
+            backOr(() => {
+              setPerformerId(null)
+              leavePerformerUrl()
+              setScreen(homeForRole(role))
+            })
           }}
         onTip={() => {
           trackProductEvent('tip_cta_click', { performerId, props: { surface: 'profile' } })
@@ -734,7 +867,7 @@ function PlatformShell() {
       />
     )
   } else if (merchProductId && screen === 'merch-detail') {
-    body = <MerchDetailScreen productId={merchProductId} onBack={() => setScreen('merch-list')} onRequireAuth={() => setScreen('auth')} />
+    body = <MerchDetailScreen productId={merchProductId} onBack={() => backOr(() => setScreen('merch-list'))} onRequireAuth={() => setScreen('auth')} />
   } else {
     switch (screen) {
       case 'fan-home':
@@ -744,9 +877,10 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
+            onOpenMap={openMap}
             onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
             onPerformerLive={role === 'performer' ? () => setScreen('performer-live') : undefined}
             onPerformerSchedule={role === 'performer' ? () => setScreen('performer-schedule') : undefined}
             onPerformerDesk={role === 'performer' ? () => setScreen('profile') : undefined}
@@ -774,22 +908,30 @@ function PlatformShell() {
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'map-schedule':
-        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
+        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} includePublicTest={previewOn && role === 'admin'} />
         break
       case 'event-list':
         body = <EventListScreen onOpen={openEvent} />
         break
       case 'event-detail':
-        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={openEventList} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={() => setScreen('map-schedule')} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventDetailScreen slug={eventSlug} onBack={() => backOr(openEventList)} onOpenPerformer={openPerformer} onWatchLive={openWatch} onTip={(id) => { setPerformerId(id); setTipReturn('event-detail'); setScreen('tip') }} onOpenMap={openMap} onOpenVote={() => openEventVote(eventSlug)} onRequireAuth={() => setScreen('auth')} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'event-vote':
-        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => openEvent(eventSlug)} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={() => setScreen('map-schedule')} /> : <EventListScreen onOpen={openEvent} />
+        body = eventSlug ? <EventVoteScreen slug={eventSlug} onBack={() => backOr(() => openEvent(eventSlug))} onOpenPerformer={openPerformer} onOpenSchedule={() => { openEvent(eventSlug); window.setTimeout(() => document.getElementById('event-schedule')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} onOpenMap={openMap} /> : <EventListScreen onOpen={openEvent} />
         break
       case 'notifications':
         body = (
           <NotificationsScreen
             onOpenLive={openWatch}
             onOpenPerformer={openPerformer}
+            onOpenSchedule={(id, appearanceId) => {
+              const url = new URL(window.location.href)
+              url.searchParams.set('profile', id)
+              url.searchParams.set('schedule', appearanceId)
+              window.history.replaceState({}, '', url)
+              openPerformer(id)
+            }}
+            onBack={() => backOr(() => setScreen(role === 'performer' ? 'profile' : 'fan-home'))}
           />
         )
         break
@@ -803,13 +945,15 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
-            onNotifications={() => setScreen('notifications')}
+            onNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         ) : (
           <FanProfileScreen
             onOpenPerformer={openPerformer}
             onOpenProduct={openMerchProduct}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         )
         break
@@ -823,7 +967,8 @@ function PlatformShell() {
             onPreview={() => { if (user) openPerformer(user.id) }}
             onSchedule={() => setScreen('performer-schedule')}
             onEarnings={() => setScreen('performer-earnings')}
-            onNotifications={() => setScreen('notifications')}
+            onNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
           />
         )
         break
@@ -870,9 +1015,10 @@ function PlatformShell() {
             onWatchLive={openWatch}
             onOpenSearch={() => setScreen('search')}
             onOpenLiveList={() => setScreen('live-list')}
-            onOpenMap={() => setScreen('map-schedule')}
+            onOpenMap={openMap}
             onOpenEvent={openEvent}
-            onOpenNotifications={() => setScreen('notifications')}
+            onOpenNotifications={() => openChildScreen('notifications')}
+            onOpenTitle={() => setShowSplash(true)}
             onTip={(id) => {
               trackProductEvent('tip_cta_click', { performerId: id, props: { surface: 'home_fallback' } })
               setPerformerId(id)
@@ -884,13 +1030,33 @@ function PlatformShell() {
     }
   }
 
+  if (previewOn && ['tip', 'merch-detail', 'performer-edit', 'performer-live', 'performer-merch', 'admin', 'admin-event', 'admin-users', 'admin-ops', 'admin-votes'].includes(screen)) {
+    body = (
+      <div className="pl-registration">
+        <p className="pl-brand">PREVIEW</p>
+        <h1 className="pl-h1">読み取り専用プレビュー</h1>
+        <p className="pl-muted">ADMINのまま閲覧しています。投げ銭・購入・LIVE開始・承認などの書き込みはできません。</p>
+        <a className="pl-btn pl-btn--block" href="/haku-admin">HAKU ADMINへ戻る</a>
+      </div>
+    )
+  }
+
   return (
     <div className="pl-app">
+      {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
+      {previewOn ? (
+        <aside className="pl-preview-bar" role="status">
+          <strong>READ ONLY</strong>
+          <span>{preview === 'fan' ? 'お客様表示' : 'パフォーマー表示'}を確認中</span>
+          <a href="/haku-admin">管理画面へ戻る</a>
+        </aside>
+      ) : null}
       <div className={`pl-shell${liveShell ? ' pl-shell--live' : ''}`}>
         {showNav && screen !== 'fan-home' && navRole !== 'fan' && navRole !== 'performer' ? <PlatformTopBar accountLabel={t('account')} onAccount={() => { setPerformerId(null); setScreen(role === 'fan' || role === 'performer' ? 'profile' : homeForRole(role)) }} /> : null}
         {tipFlash ? (
           <div className={`pl-tip-flash${tipFlash === 'tipSuccess' || tipFlash === 'merchSuccess' ? ' pl-tip-flash--ok' : ''}`} role="status">
-            {tipFlash === 'tipSuccess' || tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+            {tipConfirmation.message ? t(tipConfirmation.message) : tipFlash === 'tipCancelled' || tipFlash === 'merchSuccess' || tipFlash === 'merchCancelled' ? t(tipFlash) : tipFlash}
+            {tipConfirmation.canRetry ? <button type="button" className="pl-btn pl-btn--ghost" onClick={tipConfirmation.retry}>{t('tipConfirmationRetry')}</button> : null}
             {tipFlash === 'tipSuccess' && tipFollowId ? (
               <button
                 type="button"
@@ -905,9 +1071,14 @@ function PlatformShell() {
             ) : null}
           </div>
         ) : null}
-        {body}
+        <div
+          className={previewOn ? 'pl-preview-readonly' : undefined}
+          aria-disabled={previewOn || undefined}
+          onClickCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
+          onSubmitCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
+        >{body}</div>
       </div>
-      {showNav ? (
+      {showNav && !previewOn ? (
         <BottomNav
           role={navRole}
           active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}
@@ -916,6 +1087,7 @@ function PlatformShell() {
             setMerchProductId(null)
             leavePerformerUrl()
             if (key === 'event-list') { openEventList(); return }
+            if (key === 'map-schedule') { openMap(); return }
             setScreen(key as PlatformScreen)
           }}
         />

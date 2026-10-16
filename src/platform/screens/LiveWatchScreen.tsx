@@ -40,6 +40,7 @@ type Props = {
   onBack: () => void
   onTip: () => void
   onRequireAuth?: () => void
+  allowPublicTest?: boolean
 }
 
 function formatDuration(sec: number) {
@@ -48,7 +49,7 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: Props) {
+export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
@@ -63,7 +64,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('cover')
+  // Keep the full broadcast visible by default on narrow phones. Viewers can
+  // still opt into the existing crop-to-fill control when they prefer it.
+  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('contain')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
     () =>
@@ -85,10 +88,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const fs = useFullscreen(stageRef)
 
   useEffect(() => {
-    getPerformer(performerId)
+    getPerformer(performerId, allowPublicTest)
       .then(setP)
       .catch(() => setError('LIVE情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
-  }, [performerId])
+  }, [performerId, allowPublicTest])
 
   useEffect(() => {
     return subscribePerformerLive(performerId, (row) => {

@@ -115,7 +115,7 @@ export function AdminDashboardScreen() {
         <Metric label="ライブ中" value={m?.live_now ?? '—'} />
         <Metric label="投げ銭件数" value={m?.tips_today_count ?? '—'} />
         <Metric label="投げ銭総額" value={m ? formatYen(m.tips_today_amount) : '—'} />
-        <Metric label="運営手数料" value={m ? formatYen(m.fees_today) : '—'} />
+        <Metric label="システム利用料" value={m ? formatYen(m.fees_today) : '—'} />
         <Metric label="DAU" value={m?.dau_proxy ?? '—'} />
         <Metric label="MAU" value={m?.mau_proxy ?? '—'} />
       </div>

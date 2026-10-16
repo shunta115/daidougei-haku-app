@@ -94,6 +94,11 @@ export type TipRow = {
   currency: string
   platform_fee_cents: number
   platform_fee_yen?: number | null
+  haku_fee_bps?: number | null
+  haku_fee_yen?: number | null
+  performer_share_yen?: number | null
+  stripe_fee_yen?: number | null
+  settlement_status?: string | null
   status: TipStatus
   stripe_session_id: string | null
   stripe_payment_intent: string | null
@@ -122,6 +127,47 @@ export type NotificationRow = {
   link: string | null
   read_at: string | null
   created_at: string
+  kind?: string | null
+  meta?: Record<string, unknown> | null
+}
+
+export type PerformerAppearanceStatus = 'draft' | 'published' | 'private' | 'cancelled' | 'postponed' | 'archived'
+export type PerformerAppearance = {
+  id: string
+  performer_id: string
+  title: string
+  performance_date: string
+  start_time: string
+  end_time: string | null
+  timezone: string
+  starts_at: string
+  ends_at: string | null
+  venue_name: string
+  venue_address: string
+  region: string
+  country: string
+  description: string
+  admission_type: 'free' | 'paid' | 'tip'
+  admission_details: string
+  image_url: string | null
+  ticket_url: string | null
+  is_live_planned: boolean
+  rain_policy: string
+  organizer_info: string
+  notes: string
+  status: PerformerAppearanceStatus
+  published_at: string | null
+  cancelled_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type NotificationPreference = {
+  user_id: string
+  appearance_in_app_enabled: boolean
+  appearance_push_enabled: boolean
+  locale: 'ja' | 'en' | 'zh-TW'
+  updated_at: string
 }
 
 export type AdminMetrics = {
@@ -145,6 +191,9 @@ export type MerchProduct = {
   image_url: string | null
   price_yen: number
   stock: number
+  pickup_location?: string | null
+  pickup_deadline?: string | null
+  reservation_enabled?: boolean
   status: MerchProductStatus
   created_at: string
   updated_at: string
@@ -169,7 +218,19 @@ export type MerchOrder = {
   gross_amount_yen?: number | null
   currency: string
   platform_fee_yen: number
+  haku_fee_bps?: number | null
+  haku_fee_yen?: number | null
+  performer_share_yen?: number | null
+  stripe_fee_yen?: number | null
+  settlement_status?: string | null
   status: MerchOrderStatus
+  order_kind?: 'cashless' | 'cash_reservation'
+  order_number?: string | null
+  fulfillment_status?: 'awaiting_payment' | 'awaiting_pickup' | 'fulfilled' | 'cancelled' | 'expired'
+  reservation_expires_at?: string | null
+  fulfilled_at?: string | null
+  cancelled_at?: string | null
+  cash_received_at?: string | null
   stripe_session_id: string | null
   stripe_payment_intent: string | null
   stripe_payment_intent_id?: string | null

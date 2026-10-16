@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+import { refundSaleStatus } from '../../shared/payoutMath.js'
 import { publishLiveTipEvent } from './_tipEvents.js'
 
 function stripeId(value: string | { id?: string } | null | undefined): string | null {
@@ -71,6 +72,19 @@ async function claimPaidTip(
     connectedAccountId?: string | null
   },
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
+  const { data: expected, error: expectedError } = await sb
+    .from('tips')
+    .select('id,performer_id,fan_id,amount_cents,gross_amount_yen,stripe_session_id')
+    .eq('id', args.tipId)
+    .maybeSingle()
+  if (expectedError) throw expectedError
+  const expectedAmount = Number(expected?.gross_amount_yen ?? expected?.amount_cents)
+  if (!expected || expected.performer_id !== args.performerId || (expected.fan_id ?? null) !== args.fanId || expectedAmount !== args.amount) {
+    throw new Error('Tip checkout metadata mismatch')
+  }
+  if (expected.stripe_session_id && args.stripeSessionId && expected.stripe_session_id !== args.stripeSessionId) {
+    throw new Error('Tip checkout session mismatch')
+  }
   const oldPatch = {
     status: 'succeeded',
     ...(args.stripeSessionId ? { stripe_session_id: args.stripeSessionId } : {}),
@@ -140,7 +154,7 @@ export async function finalizePaidTip(
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
   const tipId = session.metadata?.tip_id ?? null
   const performerId = session.metadata?.performer_id
-  const fanId = session.metadata?.fan_id ?? null
+  const fanId = session.metadata?.fan_id && session.metadata.fan_id !== 'guest' ? session.metadata.fan_id : null
   const anonymous = session.metadata?.anonymous === '1'
   const amount = session.amount_total ?? 0
 
@@ -165,7 +179,7 @@ export async function finalizePaidTipFromPaymentIntent(
 ): Promise<{ ok: boolean; already: boolean; tipId: string | null; amount: number }> {
   const tipId = paymentIntent.metadata?.tip_id ?? null
   const performerId = paymentIntent.metadata?.performer_id
-  const fanId = paymentIntent.metadata?.fan_id ?? null
+  const fanId = paymentIntent.metadata?.fan_id && paymentIntent.metadata.fan_id !== 'guest' ? paymentIntent.metadata.fan_id : null
   const anonymous = paymentIntent.metadata?.anonymous === '1'
   const amount = paymentIntent.amount_received || paymentIntent.amount || 0
   if (!tipId) return { ok: false, already: false, tipId: null, amount }
@@ -214,15 +228,16 @@ export async function markTipRefunded(sb: SupabaseClient, charge: Stripe.Charge,
   const paymentIntentId = stripeId(charge.payment_intent)
   const refundedAmount = charge.amount_refunded ?? 0
   if (!paymentIntentId && !charge.id) return
+  const status = refundSaleStatus(charge.amount ?? 0, refundedAmount)
 
   const patch = {
-    status: 'refunded',
+    status,
     stripe_charge_id: chargeId(charge),
     stripe_application_fee_id: applicationFeeId(charge),
     connected_account_id: connectedAccountId ?? null,
     refunded_amount_yen: refundedAmount,
   }
-  const oldPatch = { status: 'refunded' }
+  const oldPatch = { status }
   const byCharge = await sb
     .from('tips')
     .update(patch)

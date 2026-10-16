@@ -1,27 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
+import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
+import { AppBackButton } from '../components/AppBackButton'
 import {
   follow,
+  getPerformerProfileStats,
   getPerformer,
   isFollowing,
+  listPerformerAppearances,
   listEventVenues,
   listPerformerEventSlots,
   listSellerMerchProducts,
-  sumLiveViews,
-  tipSummaryForPerformer,
   unfollow,
   type EventVenueRow,
+  type PerformerProfileStats,
   type PerformerEventSlot,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { eventPath, FESTIVAL_PATH, performerPath, PLATFORM_PATH, spaGo } from '../../app/routes'
 import { trackProductEvent, useTrackView } from '../lib/track'
-import type { MerchProduct, Performer } from '../lib/types'
+import type { MerchProduct, Performer, PerformerAppearance } from '../lib/types'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
+import { officialAwpAwards } from '../lib/awpAwards'
+import { displayStageName } from '../lib/stageLabel'
 import './performer-home.css'
 
 type Props = {
@@ -73,31 +77,44 @@ function dateTimeRange(slot: PerformerEventSlot) {
   return `${Number(m)}/${Number(d)}（${wk}） ${start}–${end}`
 }
 
+function venueAndStageLabel(venueName?: string | null, stageName?: string | null) {
+  const venue = displayStageName(venueName)
+  const stage = displayStageName(stageName)
+  if (!venue) return stage
+  if (!stage || venue === stage) return venue
+  return `${venue} · ${stage}`
+}
+
 function compactCount(n: number) {
   if (n >= 10000) return `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}K`
   return String(n)
 }
 
+const emptyStats: PerformerProfileStats = { followers: null, appearances: null, supporters: null, liveViews: null }
+
 export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive, onRequireAuth }: Props) {
   const { user } = useAuth()
-  const { t } = useLang()
+  const { t, lang } = useLang()
   useTrackView('performer_view', { performerId })
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
   const [merch, setMerch] = useState<MerchProduct[]>([])
-  const [supportCount, setSupportCount] = useState(0)
-  const [liveViews, setLiveViews] = useState(0)
+  const [stats, setStats] = useState<PerformerProfileStats>(emptyStats)
   const [slots, setSlots] = useState<PerformerEventSlot[]>([])
+  const [appearances, setAppearances] = useState<PerformerAppearance[]>([])
   const [venues, setVenues] = useState<EventVenueRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [section, setSection] = useState<SectionId>('media')
   const [qrOpen, setQrOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
-
+  const appearanceText = lang === 'en'
+    ? { detail: 'View details', cancelled: 'Cancelled', postponed: 'Postponed', organizer: 'Organizer', free: 'Free', paid: 'Paid', tip: 'Tips', upcoming: 'Upcoming appearances', history: 'Past appearances' }
+    : lang === 'zh-TW'
+      ? { detail: '查看詳情', cancelled: '已取消', postponed: '已延期', organizer: '主辦單位', free: '免費', paid: '付費', tip: '自由贊助', upcoming: '即將舉行', history: '過往演出' }
+      : { detail: '詳細を見る', cancelled: '中止', postponed: '延期', organizer: '主催者', free: '無料', paid: '有料', tip: '投げ銭', upcoming: '今後の出演予定', history: '過去の出演' }
   const canonicalUrl = useMemo(() => {
     const path = performerPath(performerId)
     return typeof window === 'undefined' ? path : `${window.location.origin}${path}`
@@ -111,8 +128,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     listSellerMerchProducts(performerId)
       .then((items) => { if (alive) setMerch(items.filter((item) => item.status === 'active' || item.status === 'sold_out')) })
       .catch(() => { if (alive) setMerch([]) })
-    tipSummaryForPerformer(performerId).then((summary) => { if (alive) setSupportCount(summary.count) }).catch(() => { if (alive) setSupportCount(0) })
-    sumLiveViews(performerId).then((n) => { if (alive) setLiveViews(n) }).catch(() => { if (alive) setLiveViews(0) })
+    getPerformerProfileStats(performerId).then((value) => { if (alive) setStats(value) }).catch(() => { if (alive) setStats(emptyStats) })
     listPerformerEventSlots(performerId)
       .then(async (rows) => {
         if (!alive) return
@@ -123,13 +139,22 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         if (alive) setVenues(venueRows)
       })
       .catch(() => { if (alive) { setSlots([]); setVenues([]) } })
+    listPerformerAppearances(performerId)
+      .then((rows) => { if (alive) setAppearances(rows) })
+      .catch(() => { if (alive) setAppearances([]) })
     const timer = window.setInterval(() => {
       getPerformer(performerId)
-        .then((row) => { if (alive) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
+        .then((row) => { if (alive && row) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
         .catch(() => undefined)
     }, 20000)
     return () => { alive = false; window.clearInterval(timer) }
   }, [performerId, t])
+
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get('schedule')
+    if (!target || appearances.length === 0) return
+    window.setTimeout(() => document.getElementById(`appearance-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+  }, [appearances])
 
   useEffect(() => {
     let alive = true
@@ -154,19 +179,20 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     setBusy(true)
     trackProductEvent('follow_click', { performerId, props: { surface: 'profile' } })
     try {
-      if (following) await unfollow(user.id, performerId)
+      const wasFollowing = following
+      if (wasFollowing) await unfollow(user.id, performerId)
       else await follow(user.id, performerId)
-      setFollowing(!following)
+      setFollowing(!wasFollowing)
+      setStats((current) => ({
+        ...current,
+        followers: current.followers === null ? null : Math.max(0, current.followers + (wasFollowing ? -1 : 1)),
+      }))
+      void getPerformerProfileStats(performerId).then(setStats).catch(() => undefined)
     } catch {
       setError(t('hpFollowFail'))
     } finally {
       setBusy(false)
     }
-  }
-
-  const showToast = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast(null), 2200)
   }
 
   const shareProfile = async () => {
@@ -249,10 +275,13 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     : []
   const goodsPreview = merch.slice(0, 4)
   const later = upcoming.slice(1)
+  const upcomingAppearances = appearances.filter((appearance) => Date.parse(appearance.ends_at ?? appearance.starts_at) >= Date.now())
+  const pastAppearances = appearances.filter((appearance) => Date.parse(appearance.ends_at ?? appearance.starts_at) < Date.now()).reverse()
   const goSection = (id: SectionId) => {
     setSection(id)
     window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+  const metric = (value: number | null) => value === null ? t('hpUncounted') : compactCount(value)
 
   return (
     <article className={`hp-page${p.is_live ? ' hp-page--live' : ''}`}>
@@ -261,9 +290,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         <div className="hp-hero__fade" />
         {p.is_live ? <em className="hp-hero__live">LIVE</em> : null}
         <header className="hp-bar">
-          <button type="button" className="hp-icon" onClick={onBack} aria-label={t('back')}>
-            <ArrowLeft size={16} />
-          </button>
+          <AppBackButton className="hp-icon" iconOnly onClick={onBack} label={t('back')} />
           <div className="hp-bar__actions">
             <button type="button" className="hp-icon" onClick={() => setQrOpen(true)} aria-label={t('hpQr')}>
               <QrCode size={16} />
@@ -302,10 +329,13 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           {p.appearances ? <li>✓ {p.appearances}</li> : p.awards ? <li>✓ {p.awards}</li> : null}
         </ul>
 
+        {officialAwpAwards(p.stage_name).length ? <details className="hp-awards"><summary>主な受賞歴</summary><ul>{officialAwpAwards(p.stage_name).map((award) => <li key={award}>{award}</li>)}</ul></details> : null}
+
         <dl className="hp-metrics">
-          <div><dd>{compactCount(0)}</dd><dt>{t('hpAudience')}</dt></div>
-          <div><dd>{compactCount(supportCount)}</dd><dt>{t('hpSupport')}</dt></div>
-          <div><dd>{compactCount(liveViews)}</dd><dt>{t('hpLiveViews')}</dt></div>
+          <div title={t('hpFollowersDefinition')} aria-label={`${t('hpFollowers')}: ${t('hpFollowersDefinition')}`}><dd data-unavailable={stats.followers === null}>{metric(stats.followers)}</dd><dt>{t('hpFollowers')}</dt></div>
+          <div title={t('hpAppearancesDefinition')} aria-label={`${t('hpAppearances')}: ${t('hpAppearancesDefinition')}`}><dd data-unavailable={stats.appearances === null}>{metric(stats.appearances)}</dd><dt>{t('hpAppearances')}</dt></div>
+          <div title={t('hpSupportDefinition')} aria-label={`${t('hpSupport')}: ${t('hpSupportDefinition')}`}><dd data-unavailable={stats.supporters === null}>{metric(stats.supporters)}</dd><dt>{t('hpSupport')}</dt></div>
+          <div title={t('hpLiveViewsDefinition')} aria-label={`${t('hpLiveViews')}: ${t('hpLiveViewsDefinition')}`}><dd data-unavailable={stats.liveViews === null}>{metric(stats.liveViews)}</dd><dt>{t('hpLiveViews')}</dt></div>
         </dl>
 
         {p.is_live ? (
@@ -333,8 +363,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
               <div>
                 <time>{dateTimeRange(next)}</time>
                 <strong>{next.events?.name_ja || t('hpEvent')}</strong>
-                <p>{nextVenue?.name_ja || next.stage_ja}</p>
-                {next.stage_ja ? <p>{next.stage_ja}</p> : null}
+                <p>{venueAndStageLabel(nextVenue?.name_ja, next.stage_ja)}</p>
               </div>
               <MapPin size={16} />
             </div>
@@ -372,9 +401,22 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
 
         <section id="hp-schedule" className="hp-block">
           <h2>{t('hpUpcoming')}</h2>
-          {later.length === 0 && !next ? (
+          {appearances.length === 0 && later.length === 0 && !next ? (
             <p className="hp-empty">{t('hpNoSchedule')}</p>
           ) : (
+            <>
+            {upcomingAppearances.length > 0 ? <><h3>{appearanceText.upcoming}</h3><ul className="hp-slots hp-appearances">
+              {upcomingAppearances.map((appearance) => <li id={`appearance-${appearance.id}`} key={appearance.id} data-cancelled={appearance.status === 'cancelled'}>
+                {appearance.image_url ? <img src={appearance.image_url} alt="" loading="lazy" /> : <span />}
+                <div>
+                  <strong>{new Date(appearance.starts_at).toLocaleString(undefined, { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: appearance.timezone })}</strong>
+                  <p>{appearance.title}</p><p>{appearance.venue_name}{appearance.region ? `・${appearance.region}` : ''}</p>
+                  {appearance.status === 'cancelled' ? <em>{appearanceText.cancelled}</em> : appearance.status === 'postponed' ? <em>{appearanceText.postponed}</em> : null}
+                  <details><summary>{appearanceText.detail}</summary><p>{appearanceText[appearance.admission_type]}{appearance.admission_details ? `・${appearance.admission_details}` : ''}</p>{appearance.description ? <p>{appearance.description}</p> : null}{appearance.organizer_info ? <p>{appearanceText.organizer}：{appearance.organizer_info}</p> : null}{appearance.rain_policy ? <p>{appearance.rain_policy}</p> : null}</details>
+                </div>
+                <div className="hp-appearance-links">{appearance.venue_address ? <a className="hp-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(appearance.venue_address)}`} target="_blank" rel="noopener noreferrer">{t('hpMap')}</a> : null}{appearance.ticket_url ? <a className="hp-link" href={appearance.ticket_url} target="_blank" rel="noopener noreferrer">{t('profileTickets')}</a> : null}</div>
+              </li>)}
+            </ul></> : null}
             <ul className="hp-slots">
               {(later.length ? later : upcoming).map((slot) => {
                 const venue = venues.find((row) => row.id === slot.venue_id)
@@ -384,7 +426,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                     <div>
                       <strong>{dateTimeRange(slot)}</strong>
                       <p>{slot.events?.name_ja}</p>
-                      <p>{venue?.name_ja}{slot.stage_ja ? ` · ${slot.stage_ja}` : ''}</p>
+                      <p>{venueAndStageLabel(venue?.name_ja, slot.stage_ja)}</p>
                     </div>
                     {slot.events?.slug ? (
                       <button type="button" className="hp-link" onClick={() => spaGo(eventPath(slot.events!.slug))}>{t('hpEvent')}</button>
@@ -393,6 +435,13 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
                 )
               })}
             </ul>
+            {pastAppearances.length > 0 ? <><h3>{appearanceText.history}</h3><ul className="hp-slots hp-appearances">
+              {pastAppearances.map((appearance) => <li id={`appearance-${appearance.id}`} key={appearance.id} data-cancelled={appearance.status === 'cancelled'}>
+                {appearance.image_url ? <img src={appearance.image_url} alt="" loading="lazy" /> : <span />}
+                <div><strong>{new Date(appearance.starts_at).toLocaleString(undefined, { month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: appearance.timezone })}</strong><p>{appearance.title}</p><p>{appearance.venue_name}{appearance.region ? `・${appearance.region}` : ''}</p></div>
+              </li>)}
+            </ul></> : null}
+            </>
           )}
         </section>
 
@@ -417,23 +466,22 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           ) : (
             <div className="hp-goods">
               {goodsPreview.map((item) => (
-                <button
+                <a
                   key={item.id}
-                  type="button"
                   className="hp-good"
-                  onClick={() => spaGo(`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`)}
+                  href={`${PLATFORM_PATH}?merchProduct=${encodeURIComponent(item.id)}`}
                 >
                   {item.image_url ? <img src={item.image_url} alt="" loading="lazy" /> : <span className="hp-good__ph" />}
                   <strong>{item.name}</strong>
                   <small>{item.status === 'sold_out' ? t('hpSoldOut') : formatYen(item.price_yen)}</small>
-                </button>
+                </a>
               ))}
             </div>
           )}
           {merch.length > 0 ? (
-            <button type="button" className="hp-more" onClick={() => spaGo(`${PLATFORM_PATH}?merch=1`)}>
+            <a className="hp-more" href={`${PLATFORM_PATH}?merch=1`}>
               {t('hpAllGoods')}
-            </button>
+            </a>
           ) : null}
         </section>
 
@@ -451,7 +499,6 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
       </div>
 
       {error ? <p className="pl-error">{error}</p> : null}
-      {toast ? <p className="hp-toast" role="status">{toast}</p> : null}
 
       {qrOpen ? (
         <div className="hp-qr" role="dialog" aria-modal="true" aria-label={t('hpQr')}>

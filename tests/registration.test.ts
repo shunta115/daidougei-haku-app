@@ -10,7 +10,7 @@ describe('performer registration readiness', () => {
   })
   it('does not mistake an account id for completed onboarding', () => {
     expect(performerRegistrationStatus({ ...complete, stripe_onboarding_complete: false }).next).toBe('payouts')
-    expect(performerRegistrationStatus({ ...complete, stripe_account_id: null }).next).toBe('payouts')
+    expect(performerRegistrationStatus({ ...complete, stripe_onboarding_complete: false }).next).toBe('payouts')
   })
   it('requires approval separately from completed Stripe setup', () => {
     expect(performerRegistrationStatus({ ...complete, is_approved: false }).next).toBe('approval')
@@ -21,7 +21,7 @@ describe('performer registration readiness', () => {
   })
   it('does not expose arbitrary provider details in errors', () => {
     expect(registrationError(new Error('internal detail: fixture-private-value'))).not.toContain('fixture-private-value')
-    expect(registrationError({ message: 'Invalid login credentials' })).toContain('メールアドレスまたはパスワード')
-    expect(registrationError({ message: 'Email not confirmed' })).toContain('確認メール')
+    expect(registrationError({ message: 'Invalid login credentials' })).toMatch(/メールアドレスまたはパスワード|Email or password/)
+    expect(registrationError({ message: 'Email not confirmed' })).toMatch(/確認メール|confirmation link/i)
   })
 })

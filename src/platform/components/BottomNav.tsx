@@ -31,6 +31,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
 
   const items: NavItem[] = role === 'admin'
     ? [
+        { key: 'haku-admin', label: '新運営', href: '/haku-admin', icon: Compass },
         { key: 'event-home', label: labels.event, href: FESTIVAL_PATH, icon: CalendarDays },
         { key: 'admin', label: '登録確認', icon: User },
         { key: 'admin-event', label: '運営', icon: Compass },
@@ -61,7 +62,10 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
               className={`pl-nav__btn${live ? ' pl-nav__btn--live' : ''}`}
               data-active={active === item.key}
               onClick={() => {
-                if (item.href) { spaGo(item.href); return }
+                if (item.href) {
+                  if (item.href === '/haku-admin') { window.location.assign('/haku-admin'); return }
+                  spaGo(item.href); return
+                }
                 onNavigate(item.key)
               }}
             >

@@ -23,7 +23,7 @@ const LangContext = createContext<LangContextValue | null>(null)
 function applyLang(next: Lang, current: Lang) {
   if (next === current) return
   writeLang(next)
-  window.location.reload()
+  listeners.forEach((listener) => listener())
 }
 
 export function LangProvider({ children }: { children: ReactNode }) {
@@ -91,8 +91,8 @@ export function LanguageToggle() {
                 data-on={lang === option.id}
                 aria-pressed={lang === option.id}
                 onClick={() => {
-                  if (option.id === lang) setOpen(false)
-                  else setLang(option.id)
+                  setOpen(false)
+                  if (option.id !== lang) setLang(option.id)
                 }}
               >
                 {option.label}

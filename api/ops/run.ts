@@ -3,8 +3,12 @@ import { getAdminSupabase } from '../stripe/_shared.js'
 import { prevTokyoDay, requireAdmin, tokyoDay } from './_guard.js'
 import { runCeoAgent, runGrowthAgent, buildAlerts } from './_agents.js'
 import { buildDayMetrics, readSnapshot, upsertSnapshot } from './_snapshot.js'
+import deviceVotes from '../../server/deviceVotes.js'
+import awpResults from '../../server/awpResults.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.job === 'votes-device') return deviceVotes(req, res)
+  if (req.query.job === 'awp-results') return awpResults(req, res)
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

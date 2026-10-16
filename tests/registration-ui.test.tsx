@@ -5,11 +5,11 @@ import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
   auth: {} as Record<string, unknown>, signUp: vi.fn(), signIn: vi.fn(), update: vi.fn(),
-  refresh: vi.fn(), queryUpdate: vi.fn(), upload: vi.fn(), resend: vi.fn(),
+  refresh: vi.fn(), queryUpdate: vi.fn(), upload: vi.fn(), resend: vi.fn(), updateName: vi.fn(),
 }))
 vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ ...fake.auth, signUp: fake.signUp, signIn: fake.signIn, refreshProfile: fake.refresh, signOut: vi.fn() }) }))
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
-vi.mock('../src/platform/lib/api', () => ({ updatePerformer: fake.update, uploadAvatar: fake.upload }))
+vi.mock('../src/platform/lib/api', () => ({ updatePerformer: fake.update, uploadAvatar: fake.upload, updateOwnDisplayName: fake.updateName }))
 vi.mock('../src/platform/lib/supabase', () => ({
   supabaseAuthHeaders: async () => ({}),
   requireSupabase: () => ({ auth: { resend: fake.resend }, from: () => ({ update: fake.queryUpdate }) }),
@@ -25,10 +25,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('localStorage', new JSDOM('', { url: 'http://localhost' }).window.localStorage)
   localStorage.clear()
+  localStorage.setItem('daidougei-lang', 'ja')
   fake.auth = { performer, profile: { id: performer.id, role: 'performer', status: 'pending' } }
   fake.signUp.mockResolvedValue(null)
   fake.signIn.mockResolvedValue(null)
   fake.update.mockResolvedValue(undefined)
+  fake.updateName.mockResolvedValue('登録テスト')
   fake.refresh.mockResolvedValue(undefined)
   fake.queryUpdate.mockReturnValue({ eq: async () => ({ error: null }) })
 })
@@ -37,9 +39,26 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('smartphone performer registration', () => {
   it('does not offer office privileges during public signup', () => {
     render(<AuthScreen onDone={vi.fn()} />)
-    expect(screen.getByRole('radio', { name: 'ファン' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'パフォーマー' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '初めての方は新規登録' }))
+    expect(screen.getByRole('heading', { name: 'アカウント作成' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'パフォーマー登録はこちら' })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: '主催者' })).toBeNull()
+  })
+
+  it('shows the review-only notice on performer signup before the stage name field', () => {
+    const { container } = render(<AuthScreen performerEntry initialRole="performer" onDone={vi.fn()} />)
+    const note = screen.getByRole('note')
+    expect(note.textContent).toContain('審査制')
+    expect(note.textContent).toContain('運営による審査を通過した方のみ登録を承認')
+    const guest = container.querySelector('.pl-registration__guest-note')
+    const stage = screen.getByLabelText('芸名（公開されます）')
+    expect(guest?.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(note.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('does not show the performer review notice on fan signup', () => {
+    render(<AuthScreen onDone={vi.fn()} />)
+    expect(screen.queryByRole('note')).toBeNull()
   })
 
   it('submits a performer account from the dedicated entry, never fan', async () => {
@@ -76,6 +95,8 @@ describe('smartphone performer registration', () => {
     expect(patch).not.toHaveProperty('is_approved')
     expect(patch).not.toHaveProperty('stripe_account_id')
     expect(patch).not.toHaveProperty('real_name')
+    expect(patch).not.toHaveProperty('stage_name')
+    expect(fake.updateName).toHaveBeenCalledWith('登録テスト')
     expect(localStorage.getItem('pl-profile-draft:performer-fixture')).toBeNull()
   })
   it('stores a ticket sales link with the existing public link data', async () => {

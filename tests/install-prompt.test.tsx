@@ -43,7 +43,7 @@ describe('iPhone home screen install guidance', () => {
   it('shows the short CTA and the three Safari steps on iPhone', () => {
     prepare()
     render(<InstallPrompt />)
-    fireEvent.click(screen.getByRole('button', { name: '10秒で追加する' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ホーム画面に追加する' }))
     expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByRole('heading', { name: /HAKUを/ })).toBeTruthy()
     expect(screen.getByText('共有ボタンを押す')).toBeTruthy()
@@ -57,7 +57,7 @@ describe('iPhone home screen install guidance', () => {
     prepare()
     render(<InstallPrompt />)
     expect(document.body.classList.contains('pl-install-guide-open')).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: '10秒で追加する' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ホーム画面に追加する' }))
     expect(document.body.classList.contains('pl-install-guide-open')).toBe(true)
     fireEvent.click(screen.getAllByRole('button', { name: '閉じる' }).at(-1) as HTMLElement)
     expect(document.body.classList.contains('pl-install-guide-open')).toBe(false)

@@ -6,19 +6,58 @@ import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
 
 const STALE_SECONDS = 90
 
+function present(value: string | undefined) {
+  if (!value) return false
+  const normalized = value.trim().replace(/^['"]|['"]$/g, '')
+  return Boolean(normalized) && normalized !== '[SENSITIVE]'
+}
+
+function readiness(res: VercelResponse) {
+  const hasUrl = present(process.env.LIVEKIT_URL) || present(process.env.VITE_LIVEKIT_URL)
+  const hasKey = present(process.env.LIVEKIT_API_KEY)
+  const hasSecret = present(process.env.LIVEKIT_API_SECRET)
+  res.setHeader('Cache-Control', 'no-store')
+  res.status(200).json({ configured: hasUrl && hasKey && hasSecret, hasUrl, hasKey, hasSecret })
+}
+
 async function expireStaleSessions() {
   const sb = getAdminSupabase()
   const cutoff = new Date(Date.now() - STALE_SECONDS * 1000).toISOString()
   const { data: stale, error } = await sb
     .from('live_sessions')
-    .select('id, performer_id')
+    .select('id, performer_id, started_at, heartbeat_at')
     .is('ended_at', null)
-    .lt('heartbeat_at', cutoff)
+    .or(`heartbeat_at.lt.${cutoff},and(heartbeat_at.is.null,started_at.lt.${cutoff})`)
   if (error) throw error
   if (!stale?.length) return 0
 
-  const ids = stale.map((row) => row.id)
-  const performerIds = [...new Set(stale.map((row) => row.performer_id))]
+  let roomService: RoomServiceClient | null = null
+  try {
+    const { url, apiKey, apiSecret } = getLiveKitConfig()
+    roomService = new RoomServiceClient(url, apiKey, apiSecret)
+  } catch {
+    // If configuration is unavailable, heartbeat age remains authoritative.
+  }
+
+  const trulyStale: typeof stale = []
+  for (const row of stale) {
+    try {
+      const participants = roomService ? await roomService.listParticipants(roomNameForPerformer(row.performer_id)) : []
+      const hostConnected = participants.some((participant) => participant.identity === row.performer_id)
+      if (hostConnected) {
+        await sb.from('live_sessions').update({ heartbeat_at: new Date().toISOString() }).eq('id', row.id).is('ended_at', null)
+        continue
+      }
+    } catch {
+      // Fail safe during a LiveKit API outage: do not terminate a possibly healthy broadcast.
+      if (roomService) continue
+    }
+    trulyStale.push(row)
+  }
+  if (!trulyStale.length) return 0
+
+  const ids = trulyStale.map((row) => row.id)
+  const performerIds = [...new Set(trulyStale.map((row) => row.performer_id))]
   const endedAt = new Date().toISOString()
   const { error: endError } = await sb
     .from('live_sessions')
@@ -32,8 +71,7 @@ async function expireStaleSessions() {
     if (!count) {
       await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', performerId)
       try {
-        const { url, apiKey, apiSecret } = getLiveKitConfig()
-        await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(performerId))
+        if (roomService) await roomService.deleteRoom(roomNameForPerformer(performerId))
       } catch {
         // Stale database cleanup must still succeed if LiveKit is temporarily unavailable.
       }
@@ -77,6 +115,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
+  if (req.method === 'GET' && req.query.mode === 'status') {
+    readiness(res)
+    return
+  }
   try {
     const expired = await expireStaleSessions()
     if (req.method === 'GET') {
@@ -99,6 +141,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sb = getAdminSupabase()
+    const [{ data: performer }, { data: profile }] = await Promise.all([
+      sb.from('performers').select('is_approved').eq('id', performerId).maybeSingle(),
+      sb.from('profiles').select('role,status').eq('id', performerId).maybeSingle(),
+    ])
+    if (!performer?.is_approved || profile?.role !== 'performer' || profile?.status !== 'active') {
+      res.status(403).json({ error: 'Approved active performer required' })
+      return
+    }
     const heartbeatAt = new Date().toISOString()
     const { data, error } = await sb
       .from('live_sessions')

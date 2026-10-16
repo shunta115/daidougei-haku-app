@@ -16,7 +16,7 @@ export function profileMissingFields(performer: Partial<Performer>): string[] {
 export function performerRegistrationStatus(performer: Partial<Performer>) {
   const missing = profileMissingFields(performer)
   const profileComplete = missing.length === 0
-  const payoutsComplete = Boolean(performer.stripe_account_id && performer.stripe_onboarding_complete)
+  const payoutsComplete = Boolean(performer.stripe_onboarding_complete)
   const approved = Boolean(performer.is_approved)
   return {
     missing, profileComplete, payoutsComplete, approved,

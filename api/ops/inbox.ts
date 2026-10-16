@@ -2,9 +2,18 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase } from '../stripe/_shared.js'
 import { prevTokyoDay, requireAdmin, tokyoDay } from './_guard.js'
 import { buildAlerts } from './_agents.js'
+import hakuAdminHandler from './_hakuAdmin.js'
 import { readSnapshot, type OpsMetrics } from './_snapshot.js'
+import { handlePublicPerformerStats } from './_performerStats.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET' && req.query.resource === 'performer-stats') {
+    return handlePublicPerformerStats(req, res)
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
+  if (req.method === 'POST' && (body.resource || body.action)) {
+    return hakuAdminHandler(req, res)
+  }
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' })
     return

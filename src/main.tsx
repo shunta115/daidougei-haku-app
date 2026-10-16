@@ -10,9 +10,15 @@ createRoot(document.getElementById('root')!).render(
 )
 
 if ('serviceWorker' in navigator) {
+  let reloadingForUpdate = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForUpdate) return
+    reloadingForUpdate = true
+    window.location.reload()
+  })
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {
-      /* ignore SW registration failures in unsupported contexts */
+    void navigator.serviceWorker.register('/sw.js').then((registration) => registration.update()).catch(() => {
+      /* ignore SW registration/update failures in unsupported contexts */
     })
   })
 }

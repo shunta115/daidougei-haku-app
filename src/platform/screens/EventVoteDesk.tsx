@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, CircleDollarSign, Heart, MapPin, User, Vote } from 'lucide-react'
 import {
   castAnonEventVote,
   getAnonVoteState,
   getEventBySlug,
   getEventVoteRule,
-  listEventLineupPerformers,
+  listVotingEligibleEventLineupPerformers,
   type FeaturedEvent,
 } from '../lib/api'
-import { canCastAnonVote, readOrCreateAnonVoterId } from '../lib/anonVoter'
+import { canCastAnonVote } from '../lib/anonVoter'
 import { useLang } from '../../i18n/LangProvider'
+import { GlobalMessageBar } from '../components/GlobalMessageBar'
+import { AppBackButton } from '../components/AppBackButton'
 import type { Performer } from '../lib/types'
 import './event.css'
 
@@ -20,13 +22,12 @@ function AwpVoteTitle({ text }: { text: string }) {
 
 export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; onOpenVote: () => void }) {
   const { t } = useLang()
-  const voterId = useMemo(() => readOrCreateAnonVoterId(), [])
   const [remaining, setRemaining] = useState<number | null>(null)
   const [maxVotes, setMaxVotes] = useState(3)
 
   useEffect(() => {
     let active = true
-    void getAnonVoteState(eventId, voterId)
+    void getAnonVoteState(eventId)
       .then((state) => {
         if (!active) return
         setMaxVotes(state.max_votes)
@@ -36,7 +37,7 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
         if (active) setRemaining(null)
       })
     return () => { active = false }
-  }, [eventId, voterId])
+  }, [eventId])
 
   const left = remaining ?? maxVotes
   const used = remaining == null ? 0 : Math.max(0, maxVotes - remaining)
@@ -78,6 +79,9 @@ export function AwpHeroVoteLaunch({ eventId, onOpenVote }: { eventId: string; on
 }
 
 type DeskProps = {
+  // Share the authoritative device ballot with the event's SUPPORT section.
+  // null means unavailable, rather than an empty ballot.
+  onVotedChange?: (voted: string[] | null) => void
   event: FeaturedEvent
   performers: Performer[]
   onOpenPerformer: (id: string) => void
@@ -86,16 +90,15 @@ type DeskProps = {
 }
 
 function voteErrorKey(message: string): 'eventVoteShut' | 'eventVoteDup' | 'eventVoteLimit' | 'eventVoteSlow' | 'eventVoteFail' {
-  if (message.includes('voting_closed') || message.includes('voting_not_started') || message.includes('voting_ended')) return 'eventVoteShut'
+  if (message.includes('voting_disabled') || message.includes('voting_closed') || message.includes('voting_not_started') || message.includes('voting_ended')) return 'eventVoteShut'
   if (message.includes('already_voted_for_performer')) return 'eventVoteDup'
-  if (message.includes('voter_ballot_limit_reached') || message.includes('daily_vote_limit')) return 'eventVoteLimit'
+  if (message.includes('device_vote_limit_reached') || message.includes('voter_ballot_limit_reached') || message.includes('daily_vote_limit')) return 'eventVoteLimit'
   if (message.includes('vote_rate_limited')) return 'eventVoteSlow'
   return 'eventVoteFail'
 }
 
-export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedule, onOpenMap }: DeskProps) {
+export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedule, onOpenMap, onVotedChange }: DeskProps) {
   const { t } = useLang()
-  const voterId = useMemo(() => readOrCreateAnonVoterId(), [])
   const [voted, setVoted] = useState<string[]>([])
   const [remaining, setRemaining] = useState(3)
   const [maxVotes, setMaxVotes] = useState(3)
@@ -104,16 +107,27 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
   const [error, setError] = useState<string | null>(null)
   const [lastName, setLastName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [eligiblePerformerIds, setEligiblePerformerIds] = useState<string[]>([])
 
+  const refreshVersion = useRef(0)
   const refresh = async () => {
-    const [state, rule] = await Promise.all([
-      getAnonVoteState(event.id, voterId),
-      getEventVoteRule(event.id).catch(() => null),
-    ])
-    setVoted(state.voted)
-    setRemaining(state.remaining)
-    setMaxVotes(state.max_votes)
-    setOpen(state.voting_open && Boolean(rule?.allow_anonymous !== false))
+    const version = ++refreshVersion.current
+    try {
+      const [state, rule] = await Promise.all([
+        getAnonVoteState(event.id),
+        getEventVoteRule(event.id).catch(() => null),
+      ])
+      if (version !== refreshVersion.current) return
+      setVoted(state.voted)
+      setRemaining(state.remaining)
+      setMaxVotes(state.max_votes)
+      setOpen(state.voting_open && Boolean(rule?.voting_enabled))
+      setEligiblePerformerIds(state.eligible_performers.map((performer) => performer.id))
+      onVotedChange?.(state.voted)
+    } catch (error) {
+      if (version === refreshVersion.current) onVotedChange?.(null)
+      throw error
+    }
   }
 
   useEffect(() => {
@@ -121,11 +135,16 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
     void refresh()
       .catch(() => { if (active) setError(t('eventVoteFail')) })
       .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [event.id, voterId, t])
+    return () => { active = false; refreshVersion.current += 1 }
+  // The vote state is keyed only by the event. Depending on a translated
+  // callback here can refetch forever in standalone/test renderers where the
+  // fallback translator is recreated on each render.
+  }, [event.id])
 
   const used = maxVotes - remaining
   const lastPerformer = lastName
+  const eligibleIdSet = new Set(eligiblePerformerIds)
+  const visiblePerformers = performers.filter((performer) => eligibleIdSet.has(performer.id))
 
   const cast = async (performer: Performer) => {
     const gate = canCastAnonVote({ votingOpen: open, votedIds: voted, performerId: performer.id, maxVotes })
@@ -137,7 +156,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
     setBusy(true)
     setError(null)
     try {
-      await castAnonEventVote(event.id, performer.id, voterId)
+      await castAnonEventVote(event.id, performer.id)
       await refresh()
       setLastName(performer.stage_name)
     } catch (e) {
@@ -190,7 +209,7 @@ export function EventVoteDesk({ event, performers, onOpenPerformer, onOpenSchedu
 
       {loading ? <p role="status">{t('processing')}</p> : (
         <div className="pl-event-vote__grid">
-          {performers.map((performer) => {
+          {visiblePerformers.map((performer) => {
             const already = voted.includes(performer.id)
             const disabled = busy || !open || already || remaining <= 0
             return (
@@ -240,7 +259,7 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
       try {
         const next = await getEventBySlug(slug)
         if (!next) throw new Error('not-found')
-        const lineup = await listEventLineupPerformers(next.id)
+        const lineup = await listVotingEligibleEventLineupPerformers(next.id)
         if (!active) return
         setEvent(next)
         setPerformers(lineup)
@@ -249,14 +268,15 @@ export function EventVoteScreen({ slug, onBack, onOpenPerformer, onOpenSchedule,
       }
     })()
     return () => { active = false }
-  }, [slug, t])
+  }, [slug])
 
-  if (error) return <main className="pl-event-detail"><button className="pl-event-back" type="button" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button><p className="pl-error">{error}</p></main>
+  if (error) return <main className="pl-event-detail"><AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} /><p className="pl-error">{error}</p></main>
   if (!event) return <p role="status">{t('eventPreparing')}</p>
 
   return (
     <main className="pl-event-detail pl-event-vote-page">
-      <button className="pl-event-back" type="button" onClick={onBack}><ArrowLeft size={18} />{t('eventBack')}</button>
+      <AppBackButton className="pl-event-back" onClick={onBack} label={t('eventBack')} />
+      <GlobalMessageBar />
       <EventVoteDesk event={event} performers={performers} onOpenPerformer={onOpenPerformer} onOpenSchedule={onOpenSchedule} onOpenMap={onOpenMap} />
     </main>
   )
