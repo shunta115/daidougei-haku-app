@@ -3,21 +3,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Track, type Room } from 'livekit-client'
 import {
   canSwitchHostCamera,
+  naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
+  preferNaturalCameraFieldOfView,
   switchHostCamera,
   trackVideoOrientation,
 } from '../src/platform/lib/liveCamera'
 
-function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2) {
-  let settings: MediaTrackSettings = { facingMode: facing, deviceId: facing, width: 720, height: 1280, frameRate: 30 }
+function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
+  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 720, height: 1280, frameRate: 30, zoom }
   const track = {
     isMuted: false,
     mediaStreamTrack: {
       getSettings: () => settings,
+      getCapabilities: vi.fn(() => zoom == null ? {} : { zoom: { min: 1, max: 5, step: 0.1 } }),
+      getConstraints: vi.fn(() => ({ width: { ideal: 720 }, height: { ideal: 1280 } })),
       applyConstraints: vi.fn(async (constraints: MediaTrackConstraints) => {
         const width = typeof constraints.width === 'object' ? constraints.width.ideal : constraints.width
         const height = typeof constraints.height === 'object' ? constraints.height.ideal : constraints.height
-        settings = { ...settings, width: Number(width), height: Number(height), aspectRatio: Number(width) / Number(height) }
+        const requestedZoom = (constraints.advanced?.at(-1) as MediaTrackConstraintSet & { zoom?: number })?.zoom
+        settings = {
+          ...settings,
+          ...(width && height ? { width: Number(width), height: Number(height), aspectRatio: Number(width) / Number(height) } : {}),
+          ...(requestedZoom == null ? {} : { zoom: requestedZoom }),
+        }
       }),
     },
     restartTrack: vi.fn(async (options) => {
@@ -41,6 +50,7 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2) {
   }
   vi.stubGlobal('navigator', { mediaDevices: {
     enumerateDevices: vi.fn(async () => Array.from({ length: cameraCount }, (_, i) => ({ kind: 'videoinput', deviceId: String(i) }))),
+    getSupportedConstraints: vi.fn(() => ({ zoom: zoom != null })),
   } })
   return { track, room, typedRoom: room as unknown as Room }
 }
@@ -126,9 +136,33 @@ describe('LIVE camera switch', () => {
     expect(trackVideoOrientation({})).toBe('unknown')
   })
 
-  it('locks the phone portrait stage for both host and viewer while retaining cover', () => {
+  it('locks the phone portrait stage without forcing crop-to-fill', () => {
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
-    expect(css).toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
+    expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
+    expect(screen).toContain("'--video-fit': 'contain'")
+  })
+
+  it('returns optical 1x when supported and otherwise the lowest zoom', () => {
+    expect(naturalZoomForRange({ min: 0.5, max: 5 })).toBe(1)
+    expect(naturalZoomForRange({ min: 2, max: 5 })).toBe(2)
+  })
+
+  it('resets an unwanted supported digital zoom without replacing the track', async () => {
+    const { track } = fixture('user', 2, 2)
+    await expect(preferNaturalCameraFieldOfView(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toBe(true)
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
+      advanced: [{ zoom: 1 }],
+    }))
+    expect(track.mediaStreamTrack.getSettings().zoom).toBe(1)
+  })
+
+  it('leaves zoom untouched when the browser does not expose zoom capability', async () => {
+    const { track } = fixture()
+    await expect(preferNaturalCameraFieldOfView(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toBe(false)
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalled()
   })
 })

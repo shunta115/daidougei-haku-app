@@ -11,12 +11,54 @@ export const PORTRAIT_LIVE_CAPTURE = {
 
 export type TrackVideoOrientation = 'portrait' | 'landscape' | 'unknown'
 
+type ZoomRange = { min: number; max: number; step?: number }
+type ZoomCapableTrack = MediaStreamTrack & {
+  getCapabilities(): MediaTrackCapabilities & { zoom?: ZoomRange }
+  getSettings(): MediaTrackSettings & { zoom?: number }
+}
+
 export function trackVideoOrientation(settings: MediaTrackSettings): TrackVideoOrientation {
   const ratio = settings.aspectRatio ?? (
     settings.width && settings.height ? settings.width / settings.height : undefined
   )
   if (!ratio) return 'unknown'
   return ratio > 1.05 ? 'landscape' : 'portrait'
+}
+
+export function naturalZoomForRange(range: ZoomRange) {
+  return range.min <= 1 && range.max >= 1 ? 1 : range.min
+}
+
+/** Prefer optical 1x (or the lowest supported zoom) without failing camera use. */
+export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrack) {
+  const supported = navigator.mediaDevices?.getSupportedConstraints?.() as
+    | (MediaTrackSupportedConstraints & { zoom?: boolean })
+    | undefined
+  if (!supported?.zoom || typeof mediaTrack.getCapabilities !== 'function') return false
+
+  try {
+    const track = mediaTrack as ZoomCapableTrack
+    const capabilities = track.getCapabilities() as MediaTrackCapabilities & { zoom?: ZoomRange }
+    const zoom = capabilities.zoom
+    if (!zoom || !Number.isFinite(zoom.min) || !Number.isFinite(zoom.max)) return false
+
+    const target = naturalZoomForRange(zoom)
+    const current = track.getSettings().zoom
+    if (current != null && Math.abs(current - target) < 0.001) return false
+
+    const constraints = track.getConstraints()
+    await track.applyConstraints({
+      ...constraints,
+      advanced: [
+        ...(constraints.advanced ?? []),
+        { zoom: target } as MediaTrackConstraintSet,
+      ],
+    })
+    return true
+  } catch {
+    // Zoom is an optional enhancement and must never break a working camera.
+    return false
+  }
 }
 
 export function hostCameraTrack(room: Room) {
@@ -67,9 +109,12 @@ export async function switchHostCamera(room: Room, current: CameraFacing): Promi
       selected = track.mediaStreamTrack.getSettings()
     }
 
+    await preferNaturalCameraFieldOfView(track.mediaStreamTrack)
+    selected = track.mediaStreamTrack.getSettings()
+
     // Read width/height/aspectRatio after every switch. Some Safari versions
-    // retain sensor-native settings even though the rendered frames are rotated;
-    // the portrait stage uses cover as a final display guard in that case.
+    // retain sensor-native settings even though the rendered frames are rotated.
+    // Keep the diagnostic, but never crop the preview merely to hide it.
     if (trackVideoOrientation(selected) === 'landscape') {
       console.warn('[HAKU LIVE] Camera retained landscape settings after portrait constraints', {
         width: selected.width,

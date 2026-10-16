@@ -371,7 +371,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
       data-layout={mode}
       style={{
         '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
-        '--video-fit': deviceOrient === 'portrait' ? 'cover' : 'contain',
+        '--video-fit': 'contain',
       } as CSSProperties}
     >
       <div className="pl-live__stage">
