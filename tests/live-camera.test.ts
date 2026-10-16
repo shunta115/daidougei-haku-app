@@ -10,15 +10,21 @@ import {
   switchHostCamera,
   trackVideoOrientation,
 } from '../src/platform/lib/liveCamera'
+import {
+  containedRect,
+  coveredRect,
+  LIVE_OUTPUT_HEIGHT,
+  LIVE_OUTPUT_WIDTH,
+} from '../src/platform/lib/livePortraitProcessor'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
-  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 720, height: 1280, frameRate: 30, zoom }
+  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, frameRate: 30, zoom }
   const track = {
     isMuted: false,
     mediaStreamTrack: {
       getSettings: () => settings,
       getCapabilities: vi.fn(() => zoom == null ? {} : { zoom: { min: 1, max: 5, step: 0.1 } }),
-      getConstraints: vi.fn(() => ({ width: { ideal: 720 }, height: { ideal: 1280 } })),
+      getConstraints: vi.fn(() => ({ width: { ideal: 960, max: 960 }, height: { ideal: 1280, max: 1280 }, aspectRatio: { exact: 3 / 4 } })),
       applyConstraints: vi.fn(async (constraints: MediaTrackConstraints) => {
         const width = typeof constraints.width === 'object' ? constraints.width.ideal : constraints.width
         const height = typeof constraints.height === 'object' ? constraints.height.ideal : constraints.height
@@ -125,10 +131,10 @@ describe('LIVE camera switch', () => {
 
     await expect(switchHostCamera(typedRoom, 'user')).resolves.toBe('environment')
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 720 },
-      height: { ideal: 1280 },
-      aspectRatio: { exact: 9 / 16 },
-      resizeMode: 'crop-and-scale',
+      width: { ideal: 960, max: 960 },
+      height: { ideal: 1280, max: 1280 },
+      aspectRatio: { exact: 3 / 4 },
+      resizeMode: 'none',
     }))
   })
 
@@ -138,32 +144,60 @@ describe('LIVE camera switch', () => {
     expect(trackVideoOrientation({})).toBe('unknown')
   })
 
-  it('locks the phone portrait stage and crops only as a landscape fallback', () => {
+  it('locks the phone portrait stage without a crop-to-fill fallback', () => {
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
     expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
-    expect(screen).toContain("deviceOrient === 'portrait' && videoOrient === 'landscape' ? 'cover' : 'contain'")
-    expect(viewer).toContain("mode === 'phone-portrait' && videoOrient === 'landscape' ? 'cover' : objectFit")
+    expect(screen).toContain("'--video-fit': 'contain'")
+    expect(viewer).toContain("'--video-fit': objectFit")
+    expect(screen).not.toContain("? 'cover' : 'contain'")
+    expect(viewer).not.toContain("videoOrient === 'landscape' ? 'cover'")
   })
 
-  it('requires a real 9:16 track when Safari initially returns landscape', async () => {
+  it('prefers an uncropped natural portrait camera mode when Safari initially returns landscape', async () => {
     const { track } = fixture()
     const settings = track.mediaStreamTrack.getSettings()
     Object.assign(settings, { width: 1920, height: 1080, aspectRatio: 16 / 9 })
 
     await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
-      width: 720,
+      width: 960,
       height: 1280,
-      aspectRatio: 9 / 16,
+      aspectRatio: 3 / 4,
     })
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 720 },
-      height: { ideal: 1280 },
-      aspectRatio: { exact: 9 / 16 },
-      resizeMode: 'crop-and-scale',
+      width: { ideal: 960, max: 960 },
+      height: { ideal: 1280, max: 1280 },
+      aspectRatio: { exact: 3 / 4 },
+      resizeMode: 'none',
     }))
+  })
+
+  it('composes the complete camera frame inside a 9:16 sender track without stretching', () => {
+    const liveKit = readFileSync('src/platform/lib/livekit.ts', 'utf8')
+    const camera = readFileSync('src/platform/lib/liveCamera.ts', 'utf8')
+    expect([LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT]).toEqual([720, 1280])
+    expect(liveKit).toContain('setProcessor(new PortraitContainProcessor(), true)')
+    expect(camera).not.toMatch(/resizeMode\s*=\s*['"]crop-and-scale['"]/)
+    expect(containedRect(960, 1280, LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT)).toEqual({
+      x: 0,
+      y: 160,
+      width: 720,
+      height: 960,
+    })
+    expect(containedRect(1920, 1080, LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT)).toEqual({
+      x: 0,
+      y: 437.5,
+      width: 720,
+      height: 405,
+    })
+    expect(coveredRect(960, 1280, LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT)).toEqual({
+      x: -120,
+      y: 0,
+      width: 960,
+      height: 1280,
+    })
   })
 
   it('returns optical 1x when supported and otherwise the lowest zoom', () => {
@@ -175,8 +209,9 @@ describe('LIVE camera switch', () => {
     const { track } = fixture('user', 2, 2)
     await expect(preferNaturalCameraFieldOfView(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toBe(true)
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 720 },
-      height: { ideal: 1280 },
+      width: { ideal: 960, max: 960 },
+      height: { ideal: 1280, max: 1280 },
+      aspectRatio: { exact: 3 / 4 },
       advanced: [{ zoom: 1 }],
     }))
     expect(track.mediaStreamTrack.getSettings().zoom).toBe(1)
