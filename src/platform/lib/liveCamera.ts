@@ -61,6 +61,35 @@ export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrac
   }
 }
 
+/** Ask WebKit for a real portrait track and return the effective settings. */
+export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
+  let settings = mediaTrack.getSettings()
+  if (trackVideoOrientation(settings) === 'portrait') return settings
+
+  const supported = navigator.mediaDevices?.getSupportedConstraints?.() as
+    | (MediaTrackSupportedConstraints & { resizeMode?: boolean })
+    | undefined
+  const constraints: MediaTrackConstraints = {
+    ...mediaTrack.getConstraints(),
+    width: { ideal: PORTRAIT_LIVE_CAPTURE.width },
+    height: { ideal: PORTRAIT_LIVE_CAPTURE.height },
+    aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
+    frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
+  }
+  if (supported?.resizeMode) {
+    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'crop-and-scale'
+  }
+
+  try {
+    await mediaTrack.applyConstraints(constraints)
+    settings = mediaTrack.getSettings()
+  } catch {
+    // Some iOS versions cannot crop the selected hardware mode to 9:16.
+    // The caller keeps the working LiveKit track and uses a display fallback.
+  }
+  return settings
+}
+
 export function hostCameraTrack(room: Room) {
   return room.localParticipant.getTrackPublication(Track.Source.Camera)?.track as LocalVideoTrack | undefined
 }
@@ -99,15 +128,7 @@ export async function switchHostCamera(room: Room, current: CameraFacing): Promi
     // Constraints are preferences in WebKit. Ask the selected source once more
     // when its effective settings are still landscape, without replacing the
     // LiveKit publication or touching the microphone/Room.
-    if (trackVideoOrientation(selected) === 'landscape') {
-      await track.mediaStreamTrack.applyConstraints({
-        width: { ideal: PORTRAIT_LIVE_CAPTURE.width },
-        height: { ideal: PORTRAIT_LIVE_CAPTURE.height },
-        aspectRatio: { ideal: PORTRAIT_LIVE_CAPTURE.aspectRatio },
-        frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
-      })
-      selected = track.mediaStreamTrack.getSettings()
-    }
+    selected = await ensurePortraitCameraTrack(track.mediaStreamTrack)
 
     await preferNaturalCameraFieldOfView(track.mediaStreamTrack)
     selected = track.mediaStreamTrack.getSettings()

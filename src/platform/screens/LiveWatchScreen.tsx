@@ -86,6 +86,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
   const fs = useFullscreen(stageRef)
+  const effectiveObjectFit = mode === 'phone-portrait' && videoOrient === 'landscape' ? 'cover' : objectFit
 
   useEffect(() => {
     getPerformer(performerId, allowPublicTest)
@@ -264,7 +265,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       style={
         {
           '--video-aspect': String(ratio),
-          '--video-fit': objectFit,
+          '--video-fit': effectiveObjectFit,
         } as CSSProperties
       }
     >

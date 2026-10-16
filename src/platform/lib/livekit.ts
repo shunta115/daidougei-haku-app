@@ -12,7 +12,12 @@ import {
   type VideoCodec,
 } from 'livekit-client'
 import { supabase } from './supabase'
-import { hostCameraTrack, PORTRAIT_LIVE_CAPTURE, preferNaturalCameraFieldOfView } from './liveCamera'
+import {
+  ensurePortraitCameraTrack,
+  hostCameraTrack,
+  PORTRAIT_LIVE_CAPTURE,
+  preferNaturalCameraFieldOfView,
+} from './liveCamera'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -201,7 +206,10 @@ export async function connectAsHost(url: string, token: string) {
       facingMode: 'user',
     })
     const cameraTrack = hostCameraTrack(room)
-    if (cameraTrack) await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+    if (cameraTrack) {
+      await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+      await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+    }
   } catch (e) {
     try {
       await room.disconnect()

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Track, type Room } from 'livekit-client'
 import {
   canSwitchHostCamera,
+  ensurePortraitCameraTrack,
   naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
@@ -50,7 +51,7 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?
   }
   vi.stubGlobal('navigator', { mediaDevices: {
     enumerateDevices: vi.fn(async () => Array.from({ length: cameraCount }, (_, i) => ({ kind: 'videoinput', deviceId: String(i) }))),
-    getSupportedConstraints: vi.fn(() => ({ zoom: zoom != null })),
+    getSupportedConstraints: vi.fn(() => ({ zoom: zoom != null, resizeMode: true })),
   } })
   return { track, room, typedRoom: room as unknown as Room }
 }
@@ -126,7 +127,8 @@ describe('LIVE camera switch', () => {
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
       width: { ideal: 720 },
       height: { ideal: 1280 },
-      aspectRatio: { ideal: 9 / 16 },
+      aspectRatio: { exact: 9 / 16 },
+      resizeMode: 'crop-and-scale',
     }))
   })
 
@@ -136,12 +138,32 @@ describe('LIVE camera switch', () => {
     expect(trackVideoOrientation({})).toBe('unknown')
   })
 
-  it('locks the phone portrait stage without forcing crop-to-fill', () => {
+  it('locks the phone portrait stage and crops only as a landscape fallback', () => {
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
     expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
-    expect(screen).toContain("'--video-fit': 'contain'")
+    expect(screen).toContain("deviceOrient === 'portrait' && videoOrient === 'landscape' ? 'cover' : 'contain'")
+    expect(viewer).toContain("mode === 'phone-portrait' && videoOrient === 'landscape' ? 'cover' : objectFit")
+  })
+
+  it('requires a real 9:16 track when Safari initially returns landscape', async () => {
+    const { track } = fixture()
+    const settings = track.mediaStreamTrack.getSettings()
+    Object.assign(settings, { width: 1920, height: 1080, aspectRatio: 16 / 9 })
+
+    await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
+      width: 720,
+      height: 1280,
+      aspectRatio: 9 / 16,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
+      aspectRatio: { exact: 9 / 16 },
+      resizeMode: 'crop-and-scale',
+    }))
   })
 
   it('returns optical 1x when supported and otherwise the lowest zoom', () => {
