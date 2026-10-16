@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
+import { SwitchCamera } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   endLive,
@@ -389,6 +390,19 @@ export function PerformerLiveScreen({ onBack }: Props) {
             </div>
           ) : null}
         </div>
+        {phase === 'live' ? (
+          <button
+            type="button"
+            className="pl-live__camera-switch"
+            aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
+            title={cameraSwitchAvailable ? '前面・背面カメラを切り替える' : '利用できるカメラが1台のみです'}
+            disabled={!roomRef.current || busy || switchingCamera || !cameraSwitchAvailable}
+            onClick={() => void switchCamera()}
+          >
+            <SwitchCamera aria-hidden="true" size={24} />
+            <span>{switchingCamera ? '切替中' : 'カメラ'}</span>
+          </button>
+        ) : null}
       </div>
 
       {phase === 'ready' ? (
@@ -445,16 +459,6 @@ export function PerformerLiveScreen({ onBack }: Props) {
             </button>
           </div>
           <div className="pl-live__prefs">
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost"
-              aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
-              title={cameraSwitchAvailable ? undefined : '利用できるカメラが1台のみです'}
-              disabled={!roomRef.current || busy || switchingCamera || !cameraSwitchAvailable}
-              onClick={() => void switchCamera()}
-            >
-              {switchingCamera ? 'カメラ切替中…' : 'カメラ切替'}
-            </button>
             <label>
               <input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />
               MAP位置共有

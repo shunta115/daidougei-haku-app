@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Track, type Room } from 'livekit-client'
 import { canSwitchHostCamera, switchHostCamera } from '../src/platform/lib/liveCamera'
@@ -28,6 +29,15 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('LIVE camera switch', () => {
+  it('renders a persistent in-video control with a mobile touch target', () => {
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    expect(screen).toContain('className="pl-live__camera-switch"')
+    expect(screen).toContain("phase === 'live'")
+    expect(css).toMatch(/\.pl-live__camera-switch\s*\{[\s\S]*position: absolute[\s\S]*width: 58px[\s\S]*height: 58px/)
+    expect(css).toContain(".pl-live[data-layout='phone-landscape'] .pl-live__camera-switch")
+  })
+
   it('reports whether more than one video input is available', async () => {
     fixture('user', 2)
     await expect(canSwitchHostCamera()).resolves.toBe(true)

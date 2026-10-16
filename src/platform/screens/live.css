@@ -90,6 +90,48 @@
   font-size: 12px;
 }
 
+.pl-live__camera-switch {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  width: 58px;
+  min-width: 58px;
+  height: 58px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 50%;
+  background: rgba(8, 10, 15, 0.72);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  touch-action: manipulation;
+}
+
+.pl-live__camera-switch span {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pl-live__camera-switch:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.pl-live__camera-switch:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.pl-live[data-layout='phone-landscape'] .pl-live__camera-switch {
+  right: max(18px, env(safe-area-inset-right, 0px));
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
+}
+
 .pl-live__stats {
   display: flex;
   flex-wrap: wrap;
