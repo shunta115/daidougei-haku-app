@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>HAKU LIVE layout regression</title>
+    <link rel="stylesheet" href="../../src/platform/styles.css">
+    <link rel="stylesheet" href="../../src/platform/screens/live.css">
+    <style>
+      html, body { margin: 0; background: #050608; color: white; }
+      .pl-live__video { background: linear-gradient(135deg, #17345c, #181b2b 50%, #53254c); }
+    </style>
+  </head>
+  <body data-status="running">
+    <main class="pl-live pl-live--performer pl-live--immersive" data-phase="live">
+      <section class="pl-live__stage">
+        <video class="pl-live__video" aria-label="camera"></video>
+        <header class="pl-live__hud-top"><button class="pl-btn pl-live__chip">戻る</button><div class="pl-live__stats">LIVE中　0:42　👁 2</div></header>
+        <div class="pl-live__media-controls">
+          <button class="pl-live__media-control">切替</button>
+          <button class="pl-live__media-control">マイク</button>
+          <button class="pl-live__media-control">カメラ</button>
+        </div>
+      </section>
+      <section class="pl-live__panel pl-live__panel--live">
+        <div class="pl-live__comments"><div class="pl-live__comment"><strong>視聴者</strong>映像がきれいです</div></div>
+        <div class="pl-live__composer"><input class="pl-input" value="コメント"><button class="pl-btn">送信</button></div>
+        <div class="pl-live__prefs">MAP位置共有　ギフト音</div>
+        <button class="pl-btn pl-btn--block pl-btn--danger pl-live__end-live">ライブ終了</button>
+      </section>
+    </main>
+    <output id="result" hidden></output>
+    <script>
+      const portrait = matchMedia('(orientation: portrait)').matches
+      const root = document.querySelector('.pl-live')
+      root.dataset.layout = portrait ? 'phone-portrait' : 'phone-landscape'
+      root.style.setProperty('--video-aspect', portrait ? String(9 / 16) : String(16 / 9))
+      root.style.setProperty('--video-fit', 'contain')
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const stage = document.querySelector('.pl-live__stage').getBoundingClientRect()
+        const controls = document.querySelector('.pl-live__media-controls').getBoundingClientRect()
+        const panel = document.querySelector('.pl-live__panel').getBoundingClientRect()
+        const end = document.querySelector('.pl-live__end-live').getBoundingClientRect()
+        const overlaps = !(controls.right <= panel.left || controls.left >= panel.right || controls.bottom <= panel.top || controls.top >= panel.bottom)
+        const ratio = stage.width / stage.height
+        const ratioOk = portrait ? Math.abs(ratio - 9 / 16) < 0.02 : stage.width === innerWidth && stage.height === innerHeight
+        const endAccessible = portrait
+          ? end.bottom <= document.documentElement.scrollHeight + 1
+          : end.top >= 0 && end.bottom <= innerHeight
+        const passed = ratioOk && !overlaps && endAccessible
+        document.body.dataset.status = passed ? 'passed' : 'failed'
+        document.querySelector('#result').textContent = JSON.stringify({ passed, portrait, ratio, overlaps, endAccessible, endBottom: end.bottom, viewport: [innerWidth, innerHeight] })
+      }))
+    </script>
+  </body>
+</html>

@@ -24,13 +24,6 @@ export function containedRect(sourceWidth: number, sourceHeight: number, targetW
   return { x: (targetWidth - width) / 2, y: (targetHeight - height) / 2, width, height }
 }
 
-export function coveredRect(sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number): DrawRect {
-  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight)
-  const width = sourceWidth * scale
-  const height = sourceHeight * scale
-  return { x: (targetWidth - width) / 2, y: (targetHeight - height) / 2, width, height }
-}
-
 type FrameVideo = Pick<HTMLVideoElement, 'currentTime' | 'play' | 'readyState'> & {
   requestVideoFrameCallback?: (callback: VideoFrameRequestCallback) => number
   cancelVideoFrameCallback?: (handle: number) => void
@@ -99,7 +92,7 @@ export function waitForVideoFrameAdvance(video: FrameVideo, minimumFrames = 2, t
 
 /**
  * Produces a fixed 9:16 or 16:9 LiveKit sender track while preserving the
- * complete camera frame. Safari does not reliably update captureStream track
+ * complete camera frame once, over a solid neutral background. Safari does not reliably update captureStream track
  * dimensions after resizing a canvas, so orientation is immutable per instance.
  */
 export class PortraitContainProcessor implements TrackProcessor<Track.Kind.Video, VideoProcessorOptions> {
@@ -199,11 +192,6 @@ export class PortraitContainProcessor implements TrackProcessor<Track.Kind.Video
     context.fillRect(0, 0, canvas.width, canvas.height)
 
     if (sourceWidth > 0 && sourceHeight > 0 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      const background = coveredRect(sourceWidth, sourceHeight, canvas.width, canvas.height)
-      context.save()
-      context.globalAlpha = 0.2
-      context.drawImage(video, background.x, background.y, background.width, background.height)
-      context.restore()
       const foreground = containedRect(sourceWidth, sourceHeight, canvas.width, canvas.height)
       context.drawImage(video, foreground.x, foreground.y, foreground.width, foreground.height)
       this.renderedFrames += 1
