@@ -335,12 +335,27 @@ export async function listLiveHistory(performerId: string): Promise<LiveSession[
   return (data as LiveSession[]) ?? []
 }
 
-export async function listLiveComments(performerId: string): Promise<LiveComment[]> {
+export async function getActiveLiveSessionId(performerId: string): Promise<string | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_sessions')
+    .select('id')
+    .eq('performer_id', performerId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.id as string | undefined) ?? null
+}
+
+export async function listLiveComments(performerId: string, liveSessionId: string): Promise<LiveComment[]> {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('live_comments')
     .select('*')
     .eq('performer_id', performerId)
+    .eq('live_session_id', liveSessionId)
     .order('created_at', { ascending: false })
     .limit(80)
   if (error) throw error
@@ -367,7 +382,11 @@ export async function postLiveComment(input: {
   if (error) throw error
 }
 
-export function subscribeLiveComments(performerId: string, onInsert: (row: LiveComment) => void) {
+export function subscribeLiveComments(
+  performerId: string,
+  liveSessionId: string,
+  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void },
+) {
   const sb = requireSupabase()
   const channel = sb
     .channel(`live-comments-${performerId}`)
@@ -375,13 +394,58 @@ export function subscribeLiveComments(performerId: string, onInsert: (row: LiveC
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
       (payload) => {
-        onInsert(payload.new as LiveComment)
+        const row = payload.new as LiveComment
+        if (row.live_session_id === liveSessionId) handlers.onInsert(row)
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'live_comments' },
+      (payload) => {
+        const row = payload.old as Partial<LiveComment>
+        // Supabase may expose only the primary key for DELETE under RLS even
+        // with REPLICA IDENTITY FULL. Removing a non-present UUID is harmless.
+        if (row.id && (!row.live_session_id || row.live_session_id === liveSessionId)) handlers.onDelete(row.id)
       },
     )
     .subscribe()
   return () => {
     void sb.removeChannel(channel)
   }
+}
+
+export async function deleteLiveComment(commentId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_comments').delete().eq('id', commentId)
+  if (error) throw error
+}
+
+export async function canModerateLiveComments(liveSessionId: string, userId: string) {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_comment_moderators')
+    .select('user_id')
+    .eq('live_session_id', liveSessionId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) return false
+  return Boolean(data)
+}
+
+export async function muteLiveCommentUser(input: {
+  liveSessionId: string
+  userId: string
+  mutedBy: string
+  expiresAt?: string | null
+}) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_comment_mutes').upsert({
+    live_session_id: input.liveSessionId,
+    user_id: input.userId,
+    muted_by: input.mutedBy,
+    expires_at: input.expiresAt ?? null,
+  }, { onConflict: 'live_session_id,user_id' })
+  if (error) throw error
 }
 
 export function subscribePerformerLive(performerId: string, onChange: (row: Partial<Performer>) => void) {

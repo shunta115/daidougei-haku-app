@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
-import { Mic, MicOff, SwitchCamera, Video, VideoOff } from 'lucide-react'
+import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
   endLive,
+  deleteLiveComment,
+  getActiveLiveSessionId,
   listLiveComments,
+  muteLiveCommentUser,
   postLiveComment,
   startLive,
   subscribeLiveComments,
@@ -26,6 +29,7 @@ import {
   setHostMicrophoneEnabled,
 } from '../lib/livekit'
 import { useLiveLayout } from '../lib/useLiveLayout'
+import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import type { LiveComment } from '../lib/types'
@@ -46,6 +50,7 @@ function formatDuration(sec: number) {
 
 export function PerformerLiveScreen({ onBack }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
+  const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [title, setTitle] = useState(performer?.live_title ?? '')
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
@@ -65,6 +70,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
@@ -84,6 +90,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const locationWriteAtRef = useRef(0)
   const appliedOrientationRef = useRef(deviceOrient)
   const hiddenAtRef = useRef<number | null>(null)
+  const commentScroll = useLiveCommentScroll(comments.length)
 
   useEffect(() => {
     if (performer?.is_live) {
@@ -226,12 +233,22 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }, [phase, performer])
 
   useEffect(() => {
-    if (!performer || phase !== 'live') return
-    listLiveComments(performer.id).then(setComments).catch(() => undefined)
-    return subscribeLiveComments(performer.id, (row) => {
-      setComments((prev) => [...prev.slice(-79), row])
+    if (!performerId || phase !== 'live' || liveSessionId) return
+    let active = true
+    void getActiveLiveSessionId(performerId)
+      .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [liveSessionId, performerId, phase])
+
+  useEffect(() => {
+    if (!performerId || phase !== 'live' || !liveSessionId) return
+    listLiveComments(performerId, liveSessionId).then(setComments).catch(() => undefined)
+    return subscribeLiveComments(performerId, liveSessionId, {
+      onInsert: (row) => setComments((prev) => appendLiveComment(prev, row)),
+      onDelete: (commentId) => setComments((prev) => removeLiveComment(prev, commentId)),
     })
-  }, [performer, phase])
+  }, [liveSessionId, performerId, phase])
 
   const attachLocalPreview = (room: Room) => {
     const pub = [...room.localParticipant.trackPublications.values()].find((p) => p.kind === 'video')
@@ -350,7 +367,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
         attachLocalPreview(roomRef.current)
       }
 
-      await startLive(performer.id, title)
+      const sessionId = await startLive(performer.id, title)
+      setLiveSessionId(sessionId)
       if (!performer.is_live) {
         startedAtRef.current = Date.now()
         peakRef.current = 0
@@ -402,6 +420,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setPreviewState('ended')
       setElapsed(0)
       setViewers(0)
+      setLiveSessionId(null)
+      setComments([])
       peakRef.current = 0
       reconnectAttempted.current = false
     } catch (e) {
@@ -494,17 +514,38 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }
 
   const sendComment = async () => {
-    if (!draft.trim()) return
+    if (!draft.trim() || !liveSessionId) return
     try {
       await postLiveComment({
         performerId: performer.id,
         userId: profile.id,
         displayName: profile.display_name || performer.stage_name,
         body: draft,
+        liveSessionId,
       })
       setDraft('')
     } catch (e) {
       setError('コメントを送信できませんでした。通信を確認して、もう一度お試しください。')
+    }
+  }
+
+  const removeComment = async (commentId: string) => {
+    try {
+      await deleteLiveComment(commentId)
+      setComments((prev) => removeLiveComment(prev, commentId))
+    } catch {
+      setError('コメントを削除できませんでした。権限と通信を確認してください。')
+    }
+  }
+
+  const muteCommenter = async (comment: LiveComment) => {
+    if (!liveSessionId || comment.user_id === profile.id) return
+    try {
+      await muteLiveCommentUser({ liveSessionId, userId: comment.user_id, mutedBy: profile.id })
+      await deleteLiveComment(comment.id)
+      setComments((prev) => removeLiveComment(prev, comment.id))
+    } catch {
+      setError('このLIVEでユーザーをミュートできませんでした。権限と通信を確認してください。')
     }
   }
 
@@ -616,12 +657,19 @@ export function PerformerLiveScreen({ onBack }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
-          <div className="pl-live__comments">
-            {comments.map((c) => (
-              <div key={c.id} className="pl-live__comment">
-                <strong>{c.display_name}</strong> {c.body}
-              </div>
-            ))}
+          <div className="pl-live__comments-wrap">
+            <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
+              {comments.map((c) => (
+                <div key={c.id} className="pl-live__comment">
+                  <span><strong>{c.display_name}</strong> {c.body}</span>
+                  <span className="pl-live__comment-actions">
+                    {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
+                    <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
+                  </span>
+                </div>
+              ))}
+            </div>
+            {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
           </div>
           <div className="pl-live__composer">
             <input
