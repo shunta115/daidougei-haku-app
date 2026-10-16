@@ -6,6 +6,8 @@
 - [ ] Previewの `/api/stripe/connect?probe=preview-readiness` が `stripeMode: "test"` と `safeForStripeOnboardingTest: true` を返す（秘密値は表示しない）
 - [ ] Stripe Webhook secretもテスト用エンドポイントのものである
 - [ ] Supabase project refが本番と異なり、`haku-merch-validation` と一致する
+- [ ] Supabase AuthのSite URLとRedirect URLsが、削除され得るDeployment URLではなくPRブランチAliasを指す
+- [ ] Vercel Previewビルドの`VERCEL_BRANCH_URL`とSupabase許可URLのホストが一致する
 - [ ] テスト用メールアドレス・テスト用パフォーマーだけを使う
 
 ## iPhone Safari想定

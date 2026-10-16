@@ -14,6 +14,7 @@ import type { Performer, Profile } from './types'
 import { registrationError } from './onboarding'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 import { hasPasswordRecoveryParams } from './authCallback'
+import { authRedirectUrl, sanitizedAuthCallbackUrl } from './authRedirect'
 import { PASSWORD_RESET_PATH } from '../../app/routes'
 
 type AuthState = {
@@ -101,6 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(next)
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
       if (event === 'SIGNED_OUT') setPasswordRecovery(false)
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
+        const sanitized = sanitizedAuthCallbackUrl(window.location)
+        if (sanitized) window.history.replaceState(window.history.state, '', sanitized)
+      }
       setAuthRevision((revision) => revision + 1)
       if (changed || !next) {
         setProfile(null)
@@ -143,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: { role, display_name: displayName },
-          emailRedirectTo: `${window.location.origin}/live`,
+          emailRedirectTo: authRedirectUrl('/live'),
         },
       })
       if (error) return registrationError(error)
@@ -168,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${PASSWORD_RESET_PATH}`,
+        redirectTo: authRedirectUrl(PASSWORD_RESET_PATH),
       })
       return error ? registrationError(error) : null
     } catch (e) {
