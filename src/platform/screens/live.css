@@ -348,8 +348,13 @@
 .pl-live[data-layout='phone-portrait'] .pl-live__stage {
   width: calc(100% + 20px);
   margin: -10px -10px 0;
-  max-height: min(72dvh, 620px);
+  aspect-ratio: 9 / 16;
+  max-height: none;
   border-radius: 0 0 24px 24px;
+}
+
+.pl-live[data-layout='phone-portrait'] .pl-live__video {
+  object-fit: cover;
 }
 
 .pl-live[data-layout='phone-portrait'] .pl-live__comments {

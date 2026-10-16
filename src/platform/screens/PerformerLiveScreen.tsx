@@ -65,7 +65,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   )
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
-  const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
+  const { ratio } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
   )
@@ -369,7 +369,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
     <div
       className={`pl-live${isOverlayChrome ? ' pl-live--immersive' : ''}`}
       data-layout={mode}
-      style={{ '--video-aspect': String(ratio), '--video-fit': 'contain' } as CSSProperties}
+      style={{
+        '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
+        '--video-fit': deviceOrient === 'portrait' ? 'cover' : 'contain',
+      } as CSSProperties}
     >
       <div className="pl-live__stage">
         <video ref={videoRef} className="pl-live__video" style={{ transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none' }} playsInline muted autoPlay />
@@ -386,7 +389,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
               <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
-              <span>{videoOrient === 'landscape' || deviceOrient === 'landscape' ? '横向き配信中' : '縦向き配信中'}</span>
+              <span>{deviceOrient === 'landscape' ? '横向き配信中' : '縦向き配信中'}</span>
             </div>
           ) : null}
         </div>
