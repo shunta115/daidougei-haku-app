@@ -1,15 +1,34 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Track, type Room } from 'livekit-client'
-import { canSwitchHostCamera, switchHostCamera } from '../src/platform/lib/liveCamera'
+import {
+  canSwitchHostCamera,
+  PORTRAIT_LIVE_CAPTURE,
+  switchHostCamera,
+  trackVideoOrientation,
+} from '../src/platform/lib/liveCamera'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2) {
   let settings: MediaTrackSettings = { facingMode: facing, deviceId: facing, width: 720, height: 1280, frameRate: 30 }
   const track = {
     isMuted: false,
-    mediaStreamTrack: { getSettings: () => settings },
+    mediaStreamTrack: {
+      getSettings: () => settings,
+      applyConstraints: vi.fn(async (constraints: MediaTrackConstraints) => {
+        const width = typeof constraints.width === 'object' ? constraints.width.ideal : constraints.width
+        const height = typeof constraints.height === 'object' ? constraints.height.ideal : constraints.height
+        settings = { ...settings, width: Number(width), height: Number(height), aspectRatio: Number(width) / Number(height) }
+      }),
+    },
     restartTrack: vi.fn(async (options) => {
-      settings = { ...settings, facingMode: options.facingMode, deviceId: options.facingMode }
+      settings = {
+        ...settings,
+        facingMode: options.facingMode,
+        deviceId: options.facingMode,
+        width: options.resolution?.width,
+        height: options.resolution?.height,
+        aspectRatio: options.resolution?.aspectRatio,
+      }
     }),
   }
   const room = {
@@ -52,6 +71,7 @@ describe('LIVE camera switch', () => {
     expect(await switchHostCamera(typedRoom, 'user')).toBe('environment')
     expect(await switchHostCamera(typedRoom, 'environment')).toBe('user')
     expect(track.restartTrack.mock.calls.map(([options]) => options.facingMode)).toEqual(['environment', 'user'])
+    expect(track.restartTrack.mock.calls.every(([options]) => options.resolution === PORTRAIT_LIVE_CAPTURE)).toBe(true)
     expect(room.disconnect).not.toHaveBeenCalled()
     expect(room.localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled()
     expect(room.localParticipant.unpublishTrack).not.toHaveBeenCalled()
@@ -77,5 +97,38 @@ describe('LIVE camera switch', () => {
     track.restartTrack.mockImplementationOnce(async () => {})
     await expect(switchHostCamera(typedRoom, 'user')).rejects.toThrow('元のカメラで配信を継続')
     expect(track.restartTrack).toHaveBeenCalledTimes(2)
+  })
+
+  it('reapplies portrait constraints when iPhone rear camera reports landscape settings', async () => {
+    const { track, typedRoom } = fixture()
+    track.restartTrack.mockImplementationOnce(async (options) => {
+      const settings = track.mediaStreamTrack.getSettings()
+      Object.assign(settings, {
+        facingMode: options.facingMode,
+        deviceId: options.facingMode,
+        width: 1920,
+        height: 1080,
+        aspectRatio: 16 / 9,
+      })
+    })
+
+    await expect(switchHostCamera(typedRoom, 'user')).resolves.toBe('environment')
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
+      aspectRatio: { ideal: 9 / 16 },
+    }))
+  })
+
+  it('classifies the effective track orientation from aspect ratio or dimensions', () => {
+    expect(trackVideoOrientation({ width: 720, height: 1280 })).toBe('portrait')
+    expect(trackVideoOrientation({ width: 1920, height: 1080, aspectRatio: 16 / 9 })).toBe('landscape')
+    expect(trackVideoOrientation({})).toBe('unknown')
+  })
+
+  it('locks the phone portrait stage for both host and viewer while retaining cover', () => {
+    const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
+    expect(css).toMatch(/phone-portrait'\] \.pl-live__video\s*\{[\s\S]*object-fit: cover;/)
   })
 })

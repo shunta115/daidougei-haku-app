@@ -12,6 +12,7 @@ import {
   type VideoCodec,
 } from 'livekit-client'
 import { supabase } from './supabase'
+import { PORTRAIT_LIVE_CAPTURE } from './liveCamera'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -49,7 +50,7 @@ export function liveRoomName(performerId: string) {
 /** ~480p 16:9 layer for weak-network simulcast. */
 const VideoPreset480p = new VideoPreset(854, 480, 900_000, 30)
 
-const CAPTURE_1080P30 = {
+const LANDSCAPE_CAPTURE_1080P30 = {
   width: 1920,
   height: 1080,
   frameRate: 30,
@@ -147,7 +148,7 @@ function hostRoomOptions() {
     stopLocalTrackOnUnpublish: true,
     disconnectOnPageLeave: true,
     videoCaptureDefaults: {
-      resolution: CAPTURE_1080P30,
+      resolution: PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user' as const,
     },
     audioCaptureDefaults: {
@@ -195,8 +196,8 @@ export async function connectAsHost(url: string, token: string) {
       typeof window !== 'undefined' && window.innerWidth > window.innerHeight
     await room.localParticipant.setCameraEnabled(true, {
       resolution: landscape
-        ? { width: 1920, height: 1080, frameRate: 30, aspectRatio: 16 / 9 }
-        : CAPTURE_1080P30,
+        ? LANDSCAPE_CAPTURE_1080P30
+        : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user',
     })
   } catch (e) {
