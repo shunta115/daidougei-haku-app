@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { detectLiveVideoOrientation } from './liveOrientation'
 
 export type LiveLayoutMode = 'phone-portrait' | 'phone-landscape' | 'tablet-portrait' | 'tablet-landscape' | 'desktop'
 
@@ -14,13 +15,13 @@ export function useLiveLayout() {
     typeof window === 'undefined' ? 'phone-portrait' : computeMode(window.innerWidth, window.innerHeight),
   )
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(() =>
-    typeof window === 'undefined' || window.innerWidth <= window.innerHeight ? 'portrait' : 'landscape',
+    detectLiveVideoOrientation(),
   )
 
   useEffect(() => {
     const update = () => {
       setMode(computeMode(window.innerWidth, window.innerHeight))
-      setOrientation(window.innerWidth > window.innerHeight ? 'landscape' : 'portrait')
+      setOrientation(detectLiveVideoOrientation())
     }
     update()
     window.addEventListener('resize', update)

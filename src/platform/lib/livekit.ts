@@ -15,10 +15,16 @@ import { supabase } from './supabase'
 import {
   ensurePortraitCameraTrack,
   hostCameraTrack,
+  LANDSCAPE_LIVE_CAPTURE,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
 } from './liveCamera'
-import { canComposePortraitVideo, PortraitContainProcessor } from './livePortraitProcessor'
+import {
+  canComposePortraitVideo,
+  PortraitContainProcessor,
+  type LiveVideoOrientation,
+} from './livePortraitProcessor'
+import { detectLiveVideoOrientation } from './liveOrientation'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -55,13 +61,6 @@ export function liveRoomName(performerId: string) {
 
 /** ~480p 16:9 layer for weak-network simulcast. */
 const VideoPreset480p = new VideoPreset(854, 480, 900_000, 30)
-
-export const LANDSCAPE_LIVE_CAPTURE = {
-  width: 1280,
-  height: 720,
-  frameRate: 30,
-  aspectRatio: 16 / 9,
-} as const
 
 function isMobileUa() {
   if (typeof navigator === 'undefined') return false
@@ -194,13 +193,34 @@ function viewerRoomOptions() {
   }
 }
 
+async function installVideoProcessor(cameraTrack: ReturnType<typeof hostCameraTrack>, orientation: LiveVideoOrientation) {
+  if (!cameraTrack || !canComposePortraitVideo()) return false
+  const processor = new PortraitContainProcessor(orientation)
+  try {
+    await cameraTrack.setProcessor(processor, true)
+    // setProcessor starts the hidden source video asynchronously. Do not call
+    // setup successful until the Canvas has rendered multiple real frames.
+    await processor.waitForFrameAdvance()
+    return true
+  } catch (error) {
+    if (cameraTrack.getProcessor()) {
+      try {
+        await cameraTrack.stopProcessor()
+      } catch {
+        /* keep the working Room even if cleanup is unavailable */
+      }
+    }
+    console.warn('[HAKU LIVE] Video composition unavailable; using the camera track directly.', error)
+    return false
+  }
+}
+
 export async function connectAsHost(url: string, token: string) {
   const room = new Room(hostRoomOptions())
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
-    const landscape =
-      typeof window !== 'undefined' && window.innerWidth > window.innerHeight
+    const landscape = detectLiveVideoOrientation() === 'landscape'
     await room.localParticipant.setCameraEnabled(true, {
       resolution: landscape
         ? LANDSCAPE_LIVE_CAPTURE
@@ -211,15 +231,7 @@ export async function connectAsHost(url: string, token: string) {
     if (cameraTrack) {
       if (!landscape) await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
       await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
-      if (canComposePortraitVideo()) {
-        try {
-          await cameraTrack.setProcessor(new PortraitContainProcessor(), true)
-        } catch (error) {
-          // Composition is an enhancement: never tear down an otherwise
-          // healthy LIVE session if a browser cannot initialize captureStream.
-          console.warn('[HAKU LIVE] Portrait composition unavailable; using the camera track directly.', error)
-        }
-      }
+      await installVideoProcessor(cameraTrack, landscape ? 'landscape' : 'portrait')
     }
   } catch (e) {
     try {
@@ -259,12 +271,12 @@ export async function setHostCameraEnabled(
   if (!cameraTrack) throw new Error('camera_track_unavailable')
   if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
-  if (canComposePortraitVideo() && !cameraTrack.getProcessor()) {
-    try {
-      await cameraTrack.setProcessor(new PortraitContainProcessor(), true)
-    } catch (error) {
-      console.warn('[HAKU LIVE] Video composition unavailable; using the camera track directly.', error)
-    }
+  const processor = cameraTrack.getProcessor()
+  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
+    const installed = await installVideoProcessor(cameraTrack, orientation)
+    if (canComposePortraitVideo() && !installed) throw new Error('camera_video_processor_unavailable')
+  } else {
+    await processor.waitForFrameAdvance()
   }
   return true
 }
@@ -282,6 +294,13 @@ export async function restartHostCameraForOrientation(
   })
   if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+  const processor = cameraTrack.getProcessor()
+  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
+    const installed = await installVideoProcessor(cameraTrack, orientation)
+    if (canComposePortraitVideo() && !installed) throw new Error('orientation_video_processor_unavailable')
+  } else {
+    await processor.waitForFrameAdvance()
+  }
   return true
 }
 

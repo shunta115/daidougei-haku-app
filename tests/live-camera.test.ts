@@ -4,6 +4,7 @@ import { Track, type Room } from 'livekit-client'
 import {
   canSwitchHostCamera,
   ensurePortraitCameraTrack,
+  LANDSCAPE_LIVE_CAPTURE,
   naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
@@ -17,9 +18,9 @@ import {
   LIVE_OUTPUT_HEIGHT,
   LIVE_OUTPUT_WIDTH,
   liveOutputSize,
+  waitForVideoFrameAdvance,
 } from '../src/platform/lib/livePortraitProcessor'
 import {
-  LANDSCAPE_LIVE_CAPTURE,
   restartHostCameraForOrientation,
   setHostCameraEnabled,
   setHostMicrophoneEnabled,
@@ -106,6 +107,26 @@ describe('LIVE camera switch', () => {
     expect(room.localParticipant.unpublishTrack).not.toHaveBeenCalled()
   })
 
+  it('uses landscape capture constraints for both cameras while the phone is horizontal', async () => {
+    const { track, typedRoom } = fixture()
+    await switchHostCamera(typedRoom, 'user', 'landscape')
+    await switchHostCamera(typedRoom, 'environment', 'landscape')
+    expect(track.restartTrack.mock.calls.every(([options]) => options.resolution === LANDSCAPE_LIVE_CAPTURE)).toBe(true)
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalledWith(expect.objectContaining({
+      aspectRatio: { exact: 3 / 4 },
+    }))
+  })
+
+  it('keeps producing the requested camera across ten front/rear switches', async () => {
+    const { track, room, typedRoom } = fixture()
+    let facing: 'user' | 'environment' = 'user'
+    for (let index = 0; index < 10; index += 1) facing = await switchHostCamera(typedRoom, facing)
+    expect(facing).toBe('user')
+    expect(track.restartTrack).toHaveBeenCalledTimes(10)
+    expect(track.mediaStreamTrack.getSettings()).toMatchObject({ facingMode: 'user', width: 960, height: 1280 })
+    expect(room.disconnect).not.toHaveBeenCalled()
+  })
+
   it('rejects a single camera before changing the working video', async () => {
     const { track, typedRoom } = fixture('user', 1)
     await expect(switchHostCamera(typedRoom, 'user')).rejects.toThrow('この端末では')
@@ -190,7 +211,8 @@ describe('LIVE camera switch', () => {
     const liveKit = readFileSync('src/platform/lib/livekit.ts', 'utf8')
     const camera = readFileSync('src/platform/lib/liveCamera.ts', 'utf8')
     expect([LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT]).toEqual([720, 1280])
-    expect(liveKit).toContain('setProcessor(new PortraitContainProcessor(), true)')
+    expect(liveKit).toContain('new PortraitContainProcessor(orientation)')
+    expect(liveKit).toContain('await processor.waitForFrameAdvance()')
     expect(camera).not.toMatch(/resizeMode\s*=\s*['"]crop-and-scale['"]/)
     expect(containedRect(960, 1280, LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT)).toEqual({
       x: 0,
@@ -219,12 +241,42 @@ describe('LIVE camera switch', () => {
     expect(currentLiveVideoOrientation()).toBe('landscape')
   })
 
+  it.each([
+    ['portrait', 'user', 720, 1280],
+    ['portrait', 'environment', 720, 1280],
+    ['landscape', 'user', 1280, 720],
+    ['landscape', 'environment', 1280, 720],
+  ] as const)('keeps %s output for the %s camera', (orientation, _facing, width, height) => {
+    expect(liveOutputSize(orientation)).toEqual({ width, height })
+  })
+
+  it('requires consecutive browser video frames instead of accepting a still image', async () => {
+    const callbacks: VideoFrameRequestCallback[] = []
+    const video = {
+      currentTime: 0,
+      readyState: 4,
+      play: vi.fn(async () => undefined),
+      requestVideoFrameCallback: vi.fn((callback: VideoFrameRequestCallback) => {
+        callbacks.push(callback)
+        return callbacks.length
+      }),
+      cancelVideoFrameCallback: vi.fn(),
+    }
+    const framePromise = waitForVideoFrameAdvance(video, 2, 1_000)
+    callbacks.shift()?.(10, {} as VideoFrameCallbackMetadata)
+    expect(callbacks).toHaveLength(1)
+    callbacks.shift()?.(20, {} as VideoFrameCallbackMetadata)
+    await expect(framePromise).resolves.toBe(2)
+  })
+
   it('stops and resumes microphone/camera tracks without disconnecting the room', async () => {
     const { room, typedRoom } = fixture()
     await expect(setHostMicrophoneEnabled(typedRoom, false)).resolves.toBe(false)
     await expect(setHostCameraEnabled(typedRoom, false, 'user', 'portrait')).resolves.toBe(false)
+    await expect(setHostCameraEnabled(typedRoom, true, 'user', 'portrait')).resolves.toBe(true)
     expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(false)
     expect(room.localParticipant.setCameraEnabled).toHaveBeenCalledWith(false)
+    expect(room.localParticipant.setCameraEnabled).toHaveBeenCalledWith(true, expect.objectContaining({ facingMode: 'user' }))
     expect(room.disconnect).not.toHaveBeenCalled()
   })
 
