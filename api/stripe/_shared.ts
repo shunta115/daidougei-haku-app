@@ -15,10 +15,18 @@ export const MIN_TIP_AMOUNT_YEN = 100
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
+  if (key.startsWith('sk_live_') && process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production') {
+    throw new Error('Live Stripe keys are forbidden outside production')
+  }
   if (key.startsWith('sk_live_') && process.env.STRIPE_ALLOW_LIVE !== 'true') {
     throw new Error('Live Stripe keys are disabled until STRIPE_ALLOW_LIVE=true')
   }
   return new Stripe(key)
+}
+
+export function stripeMode() {
+  const key = process.env.STRIPE_SECRET_KEY ?? ''
+  return key.startsWith('sk_test_') ? 'test' : key.startsWith('sk_live_') ? 'live' : 'unknown'
 }
 
 export function getAdminSupabase() {

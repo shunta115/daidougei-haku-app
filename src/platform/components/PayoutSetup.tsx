@@ -30,14 +30,25 @@ async function connectRequest(performerId: string, action?: 'status') {
     body: JSON.stringify({ performerId, action }),
   })
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { error?: string }
-    throw new Error(response.status === 401 ? 'Invalid session' : body.error || 'Connect unavailable')
+    const body = await response.json().catch(() => ({})) as { error?: string; code?: string }
+    const error = new Error(response.status === 401 ? 'Invalid session' : body.error || 'Connect unavailable') as Error & { code?: string }
+    error.code = body.code
+    throw error
   }
   return response.json()
 }
 
+function connectErrorMessage(error: unknown, fallback: string) {
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+  if (code === 'connect_account_mismatch') return '既存のStripeアカウントとの紐付けを確認できませんでした。売上・送金履歴を保護するため自動作成は行いません。HAKU運営へお問い合わせください。'
+  if (code === 'connect_multiple_accounts') return '複数のStripeアカウント候補があるため、安全のため停止しました。HAKU運営へお問い合わせください。'
+  if (code === 'stripe_connect_error') return 'Stripeとの通信に失敗しました。通信状況を確認してもう一度お試しください。解決しない場合はHAKU運営へお問い合わせください。'
+  return registrationError(error, fallback)
+}
+
 export function PayoutSetup({ performerId, onStatus }: { performerId: string; onStatus: (status: ConnectStatus) => void }) {
   const { t } = useLang()
+  const payoutStatusFail = t('payoutStatusFail')
   const [status, setStatus] = useState<ConnectStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +58,9 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
   const [statusUnavailable, setStatusUnavailable] = useState(false)
   const inFlight = useRef(false)
   const lastChecked = useRef(0)
+  const autoResumeAttempted = useRef(false)
+  const onStatusRef = useRef(onStatus)
+  onStatusRef.current = onStatus
   const guidance = classifyConnectGuidance(status, statusUnavailable, expiredLink)
   const refresh = useCallback(async () => {
     if (inFlight.current) return
@@ -59,13 +73,13 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
       if (typeof next.complete !== 'boolean') throw new Error('Invalid response')
       setStatus(next)
       if (next.complete) setExpiredLink(false)
-      onStatus(next)
+      onStatusRef.current(next)
       lastChecked.current = Date.now()
     } catch (e) {
       setStatusUnavailable(true)
-      setError(registrationError(e, t('payoutStatusFail')))
+      setError(connectErrorMessage(e, payoutStatusFail))
     } finally { setBusy(false); inFlight.current = false }
-  }, [onStatus, performerId, t])
+  }, [payoutStatusFail, performerId])
 
   useEffect(() => {
     // A return from Stripe is not proof of completed onboarding. Recheck the account.
@@ -104,11 +118,17 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
       setOnboardingUrl(url.href)
       window.location.assign(url.href)
     } catch (e) {
-      setError(registrationError(e, t('payoutOpenFail')))
+      setError(connectErrorMessage(e, t('payoutOpenFail')))
       setBusy(false)
       inFlight.current = false
     }
   }
+
+  useEffect(() => {
+    if (!expiredLink || busy || !status?.connected || status.state === 'account_mismatch' || autoResumeAttempted.current) return
+    autoResumeAttempted.current = true
+    void start()
+  }, [busy, expiredLink, status?.connected, status?.state])
 
   return <section className="pl-registration__section" aria-labelledby="payout-heading">
     <h2 id="payout-heading" className="pl-h2">{t('payoutTitle')}</h2>
@@ -116,7 +136,7 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <p className="pl-registration__status" role="status">
       {status?.state === 'account_mismatch' && !statusUnavailable ? '本番用の受取設定が必要です' : status?.state === 'restricted' ? 'Stripeの確認が必要です' : status?.complete ? <><CheckCircle2 size={18} />{t('payoutDone')}</> : status?.needsInformation ? t('payoutNeedMore') : status?.underReview ? t('payoutReview') : status?.connected ? t('payoutContinue') : busy ? t('payoutChecking') : t('payoutRegister')}
     </p>
-    {guidance === 'expired_link' && !busy ? <p className="pl-error" role="alert">Stripeの登録リンクの有効期限が切れたか、すでに使用されています。下の「登録を続ける」を押すと、新しい安全なリンクを発行できます。最初から登録し直す必要はありません。</p> : null}
+    {guidance === 'expired_link' ? <p className="pl-muted" role="status">Stripeの登録リンクを安全に再発行しています。最初から登録し直す必要はありません。</p> : null}
     {returnedFromStripe && !expiredLink && !busy && !error && !status?.complete ? <p className="pl-muted" role="status">Stripeの登録はまだ完了していない可能性があります。下の「登録を続ける」から途中再開できます。確認コードや本人確認が必要な場合はStripeの案内に従ってください。</p> : null}
     {status && !statusUnavailable && !status.complete && status.needsInformation && status.currentlyDueCount === 0 && (status.pastDueCount ?? 0) > 0 ? <p className="pl-error" role="alert">提出期限を過ぎた確認項目があります。「登録を続ける」からStripeの指示に従ってください。</p> : null}
     {status?.complete && !statusUnavailable ? <p className="pl-muted" role="status">Stripeの受取設定は完了しています。実際の入金には残高や振込処理などの条件があります。</p> : null}
@@ -129,9 +149,9 @@ export function PayoutSetup({ performerId, onStatus }: { performerId: string; on
     <SystemFeeExplain compact />
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {status?.state === 'restricted' && !statusUnavailable ? <p className="pl-error" role="alert">Stripe側で利用制限が報告されています。本人確認や追加情報の提出が必要な場合があります。「登録を続ける」からStripeの案内をご確認ください。</p> : null}
-    {status?.state === 'account_mismatch' && !statusUnavailable ? <p className="pl-error" role="alert">以前のテスト用または別環境の登録は本番では利用できません。既存情報を保護したまま、本番用の受取設定を開始してください。</p> : null}
+    {status?.state === 'account_mismatch' && !statusUnavailable ? <p className="pl-error" role="alert">登録済みのStripeアカウントをこの環境で確認できません。売上・送金履歴を保護するため自動で置き換えません。HAKU運営へお問い合わせください。</p> : null}
     {onboardingUrl ? <p className="pl-muted">Stripe画面が開かない場合は、下のリンクを長押ししてSafariなどのブラウザで開いてください。リンクは短時間で期限切れになるため、開けない場合はこの画面からもう一度発行してください。 <a href={onboardingUrl} target="_blank" rel="noopener noreferrer">Stripeの登録画面を開く</a></p> : null}
-    {!status?.complete ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.state === 'account_mismatch' ? '本番用の受取設定を始める' : status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : <p className="pl-muted">{t('salesBankNote')}</p>}
+    {!status?.complete && status?.state !== 'account_mismatch' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void start()}><ExternalLink size={18} />{status?.connected ? t('payoutContinueStripe') : t('payoutSetAccount')}</button> : status?.complete ? <p className="pl-muted">{t('salesBankNote')}</p> : null}
     <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} />{busy ? t('payoutRefreshing') : t('payoutRefresh')}</button>
   </section>
 }

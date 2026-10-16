@@ -238,10 +238,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (event.type === 'account.updated') {
         const account = event.data.object as Stripe.Account
         const ready = isConnectedAccountTransferReady(account)
-        await sb
+        const { error: accountSyncError } = await sb
           .from('performers')
           .update({ stripe_onboarding_complete: ready })
           .eq('stripe_account_id', account.id)
+        if (accountSyncError) throw accountSyncError
       }
 
       await markWebhookEvent(sb, event.id, 'processed')

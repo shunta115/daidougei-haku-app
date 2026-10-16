@@ -98,7 +98,7 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh' }))
+    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh', collection_options: { fields: 'eventually_due' } }))
   })
   it('makes account creation idempotent while retaining the existing Connect controller', async () => {
     fake.performer.stripe_account_id = ''
@@ -178,66 +178,15 @@ describe('Stripe onboarding without payment changes', () => {
     expect(JSON.stringify(res.body)).not.toContain('external_account')
   })
 
-  it('reuses the single exact live metadata match after an explicit onboarding click', async () => {
-    fake.retrieve.mockRejectedValueOnce({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() { yield { ...fake.account, id: 'acct_live_exact', metadata: { performer_id: 'performer-fixture' } } },
-    }))
-    const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(200)
-    expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.stripeUpdate).toHaveBeenCalledWith('acct_live_exact', { metadata: { legacy_test_account_id: 'acct_fixture' } })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_account_id: 'acct_live_exact', stripe_onboarding_complete: false })
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_live_exact' }))
-  })
-
-  it('creates one idempotent live account when no exact match exists', async () => {
+  it('never replaces a stored account after an environment mismatch', async () => {
     fake.retrieve.mockRejectedValueOnce({
       type: 'StripeInvalidRequestError', statusCode: 400,
       raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
     })
     const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(200)
-    expect(fake.create).toHaveBeenCalledWith(expect.objectContaining({ metadata: { performer_id: 'performer-fixture' } }), { idempotencyKey: 'performer-connect:live:v2:performer-fixture' })
-    expect(fake.stripeUpdate).toHaveBeenCalledWith('acct_new_fixture', { metadata: { legacy_test_account_id: 'acct_fixture' } })
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_new_fixture' }))
-  })
-
-  it('recovers without a second account when Stripe succeeded but the first DB save failed', async () => {
-    fake.retrieve.mockRejectedValue({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.saveError = { message: 'temporary DB failure' }
-    expect((await request({ performerId: 'performer-fixture' })).code).toBe(500)
-    expect(fake.create).toHaveBeenCalledTimes(1)
-
-    fake.saveError = null
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() { yield { ...fake.account, id: 'acct_new_fixture', metadata: { performer_id: 'performer-fixture', legacy_test_account_id: 'acct_fixture' } } },
-    }))
-    const retry = await request({ performerId: 'performer-fixture' })
-    expect(retry.code).toBe(200)
-    expect(fake.create).toHaveBeenCalledTimes(1)
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_new_fixture' }))
-  })
-
-  it('stops instead of guessing when multiple live accounts match', async () => {
-    fake.retrieve.mockRejectedValueOnce({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() {
-        yield { ...fake.account, id: 'acct_live_a', metadata: { performer_id: 'performer-fixture' } }
-        yield { ...fake.account, id: 'acct_live_b', metadata: { performer_id: 'performer-fixture' } }
-      },
-    }))
-    const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(500)
+    expect(res.code).toBe(409)
+    expect(res.body).toMatchObject({ code: 'connect_account_mismatch' })
+    expect(fake.list).not.toHaveBeenCalled()
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.update).not.toHaveBeenCalled()
     expect(fake.link).not.toHaveBeenCalled()

@@ -94,7 +94,7 @@ async function findLiveAccountsForPerformer(stripe: ReturnType<typeof getStripe>
   return exactMatches
 }
 
-async function createOrReuseLiveAccount(stripe: ReturnType<typeof getStripe>, performerId: string) {
+async function createOrReuseAccount(stripe: ReturnType<typeof getStripe>, performerId: string) {
   const exactMatches = await findLiveAccountsForPerformer(stripe, performerId)
   if (exactMatches.length > 1) throw new Error('Multiple live Connect accounts match the performer')
   if (exactMatches[0]) return { account: exactMatches[0], reused: true }
@@ -181,7 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stripe = getStripe()
     if (!accountId) {
       stripeStep = 'account_create'
-      const { account } = await createOrReuseLiveAccount(stripe, performerId)
+      const { account } = await createOrReuseAccount(stripe, performerId)
       accountId = account.id
       const { error: saveError } = await sb.from('performers').update({ stripe_account_id: accountId }).eq('id', performerId)
       if (saveError) throw saveError
@@ -207,20 +207,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return
         }
 
-        stripeStep = 'account_recover'
-        const previousAccountId = accountId
-        const recovered = await createOrReuseLiveAccount(stripe, performerId)
-        account = recovered.account
-        if (account.metadata?.legacy_test_account_id !== previousAccountId) {
-          account = await stripe.accounts.update(account.id, { metadata: { legacy_test_account_id: previousAccountId } })
-        }
-        accountId = account.id
-        const { error: saveError } = await sb
-          .from('performers')
-          .update({ stripe_account_id: accountId, stripe_onboarding_complete: false })
-          .eq('id', performerId)
-          .eq('stripe_account_id', previousAccountId)
-        if (saveError) throw saveError
+        // Never replace a stored account automatically. It may still own historic
+        // transfers or payouts in another Stripe mode/account. An operator must
+        // reconcile that relationship before changing the durable mapping.
+        res.status(409).json({
+          error: '登録済みのStripeアカウントをこの環境で確認できません。既存の売上・送金履歴を保護するため、自動で新しいアカウントは作成しません。HAKU運営へお問い合わせください。',
+          code: 'connect_account_mismatch',
+        })
+        return
       }
       const complete = isConnectedAccountTransferReady(account)
       const needsInformation = Boolean(account.requirements?.currently_due?.length || account.requirements?.past_due?.length)
@@ -260,6 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       refresh_url: `${origin}/live?stripe=refresh`,
       return_url: `${origin}/live?stripe=return`,
       type: 'account_onboarding',
+      collection_options: { fields: 'eventually_due' },
     })
 
     res.status(200).json({ url: link.url })
@@ -280,6 +275,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : 'unknown'
     const category = stripeType?.startsWith('Stripe') || stripeCode ? 'stripe' : 'internal'
     console.error('stripe_connect_failed', { category, step: stripeStep, type: stripeType ?? 'unknown', code: stripeCode ?? 'unknown', status: statusCode ?? 'unknown', requestId, reason: category === 'stripe' ? safeStripeFailureReason(error) : 'internal' })
-    res.status(500).json({ error: '受取設定を開始できませんでした。しばらくしてから再度お試しください。', code: category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error' })
+    const accountConflict = error instanceof Error && error.message === 'Multiple live Connect accounts match the performer'
+    res.status(accountConflict ? 409 : 500).json({
+      error: accountConflict
+        ? '複数のStripeアカウント候補が見つかりました。誤った口座への紐付けを防ぐため、HAKU運営へお問い合わせください。'
+        : '受取設定を開始できませんでした。通信状況を確認して再度お試しください。解決しない場合はHAKU運営へお問い合わせください。',
+      code: accountConflict ? 'connect_multiple_accounts' : category === 'stripe' ? 'stripe_connect_error' : 'connect_server_error',
+    })
   }
 }
