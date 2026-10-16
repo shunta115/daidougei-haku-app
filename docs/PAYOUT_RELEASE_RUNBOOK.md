@@ -22,11 +22,13 @@
 
 ## 2. migration
 
-既存migrationがすべて適用済みであることを確認後、次だけを適用する。
+既存migrationがすべて適用済みであることを確認後、次を記載順に適用する。
 
 `supabase/migrations/20261013_payout_reservation_and_audit.sql`
 
-このmigrationは列、制約、監査テーブル、トリガー、service-role限定RPCを追加する。既存売上・残高のUPDATE/DELETE/TRUNCATEは行わない。
+`supabase/migrations/20261016101802_connect_bank_payout_ledger.sql`
+
+1本目は列、制約、監査テーブル、トリガー、service-role限定RPCを追加する。2本目はConnect Transferとは独立した銀行Payout観測台帳を追加する。どちらも既存売上・残高のUPDATE/DELETE/TRUNCATEは行わない。
 
 適用後は同じ読み取り専用検証SQLを再実行する。AWP基準値が不変で、`reserve_performer_payout` の実行権限が `service_role` のみにあること、`payout_audit_events` のRLSが有効であることを確認する。
 
@@ -52,9 +54,10 @@
 
 1. `ENABLE_LIVE_PERFORMER_TRANSFERS=false` を維持し、資金移動を止める。
 2. 直前のVercel production deploymentへrollbackする。
-3. migrationは加算型のため、緊急時にテーブルや列をDROPしない。旧コードは追加列を無視できる。
-4. 状態不明のTransferは予約を解除しない。StripeのTransfer IDと冪等キーを照合してから復旧する。
-5. AWP基準との差異があればDBを自動修正せず、バックアップ・Stripeオブジェクト・監査ログを照合する。
+3. migrationは加算型のため、緊急時にテーブルや列をDROPしない。旧コードは追加列・追加テーブルを無視できる。アプリだけを直前deploymentへ戻す。
+4. スキーマ自体を戻す必要がある例外時は、先にStripe webhookを停止せずアプリを旧版へ戻し、`connected_account_payouts`を暗号化バックアップする。参照がないことを確認し、別途承認された保守時間内に2本目の追加テーブルだけを削除する。1本目の列・監査ログ・予約RPCは資金照合証跡なので削除しない。
+5. 状態不明のTransferは予約を解除しない。StripeのTransfer IDと冪等キーを照合してから復旧する。
+6. AWP基準との差異があればDBを自動修正せず、バックアップ・Stripeオブジェクト・監査ログを照合する。
 
 ## 6. needs_reconciliation の復旧
 
