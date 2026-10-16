@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady, requireAuthUser } from './_shared.js'
+import { getAdminSupabase, getAppUrl, getStripe, isConnectedAccountTransferReady, requireAuthUser, stripeMode } from './_shared.js'
 import { getPerformerPayoutView, requestPerformerPayout } from './_payouts.js'
+import { previewReadiness } from './_previewReadiness.js'
 
 type StripeErrorLike = {
   code?: unknown
@@ -112,6 +113,16 @@ async function createOrReuseAccount(stripe: ReturnType<typeof getStripe>, perfor
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method === 'GET' && req.query.probe === 'preview-readiness') {
+    if (process.env.VERCEL_ENV !== 'preview') {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    const readiness = previewReadiness(stripeMode())
+    res.status(readiness.safeForStripeOnboardingTest ? 200 : 503).json(readiness)
+    return
+  }
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
@@ -150,7 +161,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let accountId = performer.stripe_account_id as string | null
-    res.setHeader('Cache-Control', 'no-store')
     if (action === 'earnings' || action === 'payout') {
       const stripe = getStripe()
       if (action === 'earnings') {

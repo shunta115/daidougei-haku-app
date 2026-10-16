@@ -6,6 +6,7 @@ const fake = vi.hoisted(() => ({
   performer: { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false },
   account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } },
   saveError: null as null | { message: string },
+  stripeMode: 'test' as 'test' | 'live' | 'unknown',
   update: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
 }))
 
@@ -14,6 +15,7 @@ vi.mock('../api/stripe/_shared.js', () => ({
   getAppUrl: () => 'https://app.example.test',
   isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
   getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
+  stripeMode: () => fake.stripeMode,
   getAdminSupabase: () => ({ from: (table: string) => ({
     select: () => ({ eq: () => ({ single: async () => ({ data: table === 'profiles' ? fake.profile : fake.performer, error: null }) }) }),
     update: (patch: unknown) => {
@@ -28,9 +30,9 @@ vi.mock('../api/stripe/_shared.js', () => ({
 import handler from '../api/stripe/connect'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-async function request(body: object, method = 'POST') {
+async function request(body: object, method = 'POST', query: Record<string, string> = {}) {
   const response = { code: 0, body: {} as Record<string, unknown>, status(code: number) { this.code = code; return this }, json(body: Record<string, unknown>) { this.body = body; return this }, setHeader: vi.fn() }
-  await handler({ method, body, headers: {} } as VercelRequest, response as unknown as VercelResponse)
+  await handler({ method, body, query, headers: {} } as VercelRequest, response as unknown as VercelResponse)
   return response
 }
 
@@ -41,6 +43,7 @@ beforeEach(() => {
   fake.performer = { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false }
   fake.account = { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } }
   fake.saveError = null
+  fake.stripeMode = 'test'
   fake.retrieve.mockImplementation(async () => fake.account)
   fake.create.mockImplementation(async () => ({ ...fake.account, id: 'acct_new_fixture', metadata: { performer_id: 'performer-fixture' } }))
   fake.stripeUpdate.mockImplementation(async (id, params) => ({ ...fake.account, id, metadata: { performer_id: 'performer-fixture', ...params.metadata } }))
@@ -51,6 +54,22 @@ beforeEach(() => {
 })
 
 describe('Stripe onboarding without payment changes', () => {
+  it('exposes only safe readiness metadata in Preview and is hidden in Production', async () => {
+    const previousVercel = process.env.VERCEL_ENV
+    const previousSupabase = process.env.SUPABASE_URL
+    process.env.VERCEL_ENV = 'preview'
+    process.env.SUPABASE_URL = 'https://stagingfixture.supabase.co'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({
+      code: 200,
+      body: { stripeMode: 'test', supabaseProjectRef: 'stagingfixture', safeForStripeOnboardingTest: true },
+    })
+    fake.stripeMode = 'live'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({ code: 503, body: { safeForStripeOnboardingTest: false } })
+    process.env.VERCEL_ENV = 'production'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({ code: 404 })
+    process.env.VERCEL_ENV = previousVercel
+    process.env.SUPABASE_URL = previousSupabase
+  })
   it('requires authentication and ownership', async () => {
     fake.user = null
     expect((await request({ performerId: 'performer-fixture', action: 'status' })).code).toBe(401)
