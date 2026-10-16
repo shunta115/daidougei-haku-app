@@ -56,9 +56,9 @@ export function liveRoomName(performerId: string) {
 /** ~480p 16:9 layer for weak-network simulcast. */
 const VideoPreset480p = new VideoPreset(854, 480, 900_000, 30)
 
-const LANDSCAPE_CAPTURE_1080P30 = {
-  width: 1920,
-  height: 1080,
+export const LANDSCAPE_LIVE_CAPTURE = {
+  width: 1280,
+  height: 720,
   frameRate: 30,
   aspectRatio: 16 / 9,
 } as const
@@ -177,7 +177,8 @@ function hostRoomOptions() {
       dtx: true,
       red: true,
       forceStereo: false,
-      stopMicTrackOnMute: false,
+      // Privacy controls stop the physical microphone track while muted.
+      stopMicTrackOnMute: true,
     },
   }
 }
@@ -202,13 +203,13 @@ export async function connectAsHost(url: string, token: string) {
       typeof window !== 'undefined' && window.innerWidth > window.innerHeight
     await room.localParticipant.setCameraEnabled(true, {
       resolution: landscape
-        ? LANDSCAPE_CAPTURE_1080P30
+        ? LANDSCAPE_LIVE_CAPTURE
         : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user',
     })
     const cameraTrack = hostCameraTrack(room)
     if (cameraTrack) {
-      await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+      if (!landscape) await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
       await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
       if (canComposePortraitVideo()) {
         try {
@@ -230,6 +231,58 @@ export async function connectAsHost(url: string, token: string) {
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
   }
   return room
+}
+
+export type HostVideoOrientation = 'portrait' | 'landscape'
+
+export async function setHostMicrophoneEnabled(room: Room, enabled: boolean) {
+  await room.localParticipant.setMicrophoneEnabled(enabled)
+  return enabled
+}
+
+export async function setHostCameraEnabled(
+  room: Room,
+  enabled: boolean,
+  facingMode: 'user' | 'environment',
+  orientation: HostVideoOrientation,
+) {
+  if (!enabled) {
+    await room.localParticipant.setCameraEnabled(false)
+    return false
+  }
+
+  await room.localParticipant.setCameraEnabled(true, {
+    resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
+    facingMode,
+  })
+  const cameraTrack = hostCameraTrack(room)
+  if (!cameraTrack) throw new Error('camera_track_unavailable')
+  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+  if (canComposePortraitVideo() && !cameraTrack.getProcessor()) {
+    try {
+      await cameraTrack.setProcessor(new PortraitContainProcessor(), true)
+    } catch (error) {
+      console.warn('[HAKU LIVE] Video composition unavailable; using the camera track directly.', error)
+    }
+  }
+  return true
+}
+
+export async function restartHostCameraForOrientation(
+  room: Room,
+  facingMode: 'user' | 'environment',
+  orientation: HostVideoOrientation,
+) {
+  const cameraTrack = hostCameraTrack(room)
+  if (!cameraTrack || cameraTrack.isMuted) return false
+  await cameraTrack.restartTrack({
+    resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
+    facingMode,
+  })
+  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+  return true
 }
 
 export async function connectAsViewer(url: string, token: string) {

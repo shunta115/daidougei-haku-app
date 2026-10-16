@@ -3,6 +3,19 @@ import { Track, type TrackProcessor, type VideoProcessorOptions } from 'livekit-
 export const LIVE_OUTPUT_WIDTH = 720
 export const LIVE_OUTPUT_HEIGHT = 1280
 
+export type LiveVideoOrientation = 'portrait' | 'landscape'
+
+export function liveOutputSize(orientation: LiveVideoOrientation) {
+  return orientation === 'portrait'
+    ? { width: LIVE_OUTPUT_WIDTH, height: LIVE_OUTPUT_HEIGHT }
+    : { width: LIVE_OUTPUT_HEIGHT, height: LIVE_OUTPUT_WIDTH }
+}
+
+export function currentLiveVideoOrientation(): LiveVideoOrientation {
+  if (typeof window === 'undefined') return 'portrait'
+  return window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+}
+
 export type DrawRect = { x: number; y: number; width: number; height: number }
 
 export function containedRect(sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number): DrawRect {
@@ -36,8 +49,9 @@ export class PortraitContainProcessor implements TrackProcessor<Track.Kind.Video
   async init(options: VideoProcessorOptions) {
     if (!(options.element instanceof HTMLVideoElement)) throw new Error('video_processor_element_unavailable')
     const canvas = document.createElement('canvas')
-    canvas.width = LIVE_OUTPUT_WIDTH
-    canvas.height = LIVE_OUTPUT_HEIGHT
+    const output = liveOutputSize(currentLiveVideoOrientation())
+    canvas.width = output.width
+    canvas.height = output.height
     const context = canvas.getContext('2d', { alpha: false })
     if (!context || typeof canvas.captureStream !== 'function') throw new Error('canvas_capture_unavailable')
 
@@ -74,6 +88,11 @@ export class PortraitContainProcessor implements TrackProcessor<Track.Kind.Video
 
     const sourceWidth = video.videoWidth
     const sourceHeight = video.videoHeight
+    const output = liveOutputSize(currentLiveVideoOrientation())
+    if (canvas.width !== output.width || canvas.height !== output.height) {
+      canvas.width = output.width
+      canvas.height = output.height
+    }
     context.fillStyle = '#050608'
     context.fillRect(0, 0, canvas.width, canvas.height)
 
