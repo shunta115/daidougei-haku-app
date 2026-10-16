@@ -121,6 +121,16 @@ function userClient(authHeader: string) {
   })
 }
 
+/**
+ * Returns a Supabase client scoped to the caller's JWT. Use this for writes that
+ * should be authorized by row-level security instead of service-role access.
+ */
+export function getAuthenticatedSupabase(req: VercelRequest) {
+  const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
+  if (!authHeader) throw new Error('Authorization required')
+  return userClient(authHeader)
+}
+
 export async function requireAuthUser(
   req: VercelRequest,
   res: VercelResponse,
