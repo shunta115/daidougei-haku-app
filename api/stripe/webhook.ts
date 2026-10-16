@@ -238,10 +238,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (event.type === 'account.updated') {
         const account = event.data.object as Stripe.Account
         const ready = isConnectedAccountTransferReady(account)
-        const { error: accountSyncError } = await sb
+        const { data: performer, error: performerLookupError } = await sb
           .from('performers')
-          .update({ stripe_onboarding_complete: ready })
+          .select('id')
           .eq('stripe_account_id', account.id)
+          .maybeSingle()
+        if (performerLookupError) throw performerLookupError
+        if (!performer?.id) throw new Error('Connected performer not found')
+        const { error: accountSyncError } = await sb.rpc('sync_performer_stripe_connect', {
+          p_performer_id: performer.id,
+          p_onboarding_complete: ready,
+        })
         if (accountSyncError) throw accountSyncError
       }
 

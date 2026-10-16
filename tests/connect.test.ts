@@ -7,13 +7,17 @@ const fake = vi.hoisted(() => ({
   account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } },
   saveError: null as null | { message: string },
   stripeMode: 'test' as 'test' | 'live' | 'unknown',
-  update: vi.fn(), adminClient: vi.fn(), userClient: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
+  update: vi.fn(), rpc: vi.fn(), adminClient: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
 }))
 
-function supabaseClient(kind: 'admin' | 'user') {
-  const marker = kind === 'admin' ? fake.adminClient : fake.userClient
-  marker()
-  return { from: (table: string) => ({
+function supabaseClient() {
+  fake.adminClient()
+  return {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      fake.rpc(name, args)
+      return { error: fake.saveError }
+    },
+    from: (table: string) => ({
     select: () => ({ eq: () => ({ single: async () => ({ data: table === 'profiles' ? fake.profile : fake.performer, error: null }) }) }),
     update: (patch: unknown) => {
       fake.update(table, patch)
@@ -21,7 +25,8 @@ function supabaseClient(kind: 'admin' | 'user') {
       const chain = { eq: vi.fn(() => chain), then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve) }
       return chain
     },
-  }) }
+    }),
+  }
 }
 
 vi.mock('../api/stripe/_shared.js', () => ({
@@ -30,8 +35,7 @@ vi.mock('../api/stripe/_shared.js', () => ({
   isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
   getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
   stripeMode: () => fake.stripeMode,
-  getAdminSupabase: () => supabaseClient('admin'),
-  getAuthenticatedSupabase: () => supabaseClient('user'),
+  getAdminSupabase: () => supabaseClient(),
 }))
 
 import handler from '../api/stripe/connect'
@@ -100,7 +104,7 @@ describe('Stripe onboarding without payment changes', () => {
   it('retrieves Stripe readiness and synchronizes only the existing flag', async () => {
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.body).toMatchObject({ connected: true, complete: true })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: true })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: true })
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('acct_fixture')
@@ -125,8 +129,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh', collection_options: { fields: 'eventually_due' } }))
-    expect(fake.userClient).toHaveBeenCalled()
-    expect(fake.adminClient).not.toHaveBeenCalled()
+    expect(fake.adminClient).toHaveBeenCalled()
   })
   it('makes account creation idempotent while retaining the existing Connect controller', async () => {
     fake.performer.stripe_account_id = ''
@@ -141,7 +144,7 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_account_id: 'acct_live_exact' })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_stripe_account_id: 'acct_live_exact' })
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_live_exact' }))
   })
   it('does not send users to an unpersisted account or expose database errors', async () => {
@@ -151,7 +154,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.code).toBe(500)
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('private database detail')
-    expect(res.body).toMatchObject({ code: 'connect_server_error' })
+    expect(res.body).toMatchObject({ code: 'connect_account_save_error' })
   })
 
   it('returns a safe error when Stripe account retrieval fails', async () => {
@@ -184,7 +187,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.body).toMatchObject({ connected: false, complete: false, state: 'account_mismatch' })
     expect(fake.list).not.toHaveBeenCalled()
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: false })
   })
 
   it('recognizes the exact Stripe testmode-account wording seen in production', async () => {
@@ -195,7 +198,7 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.code).toBe(200)
     expect(res.body).toMatchObject({ connected: false, state: 'account_mismatch' })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: false })
   })
 
   it('reports requirement counts and the Stripe check time without exposing requirement details', async () => {

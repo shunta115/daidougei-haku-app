@@ -42,6 +42,8 @@ function connectErrorMessage(error: unknown, fallback: string) {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
   if (code === 'connect_account_mismatch') return '既存のStripeアカウントとの紐付けを確認できませんでした。売上・送金履歴を保護するため自動作成は行いません。HAKU運営へお問い合わせください。'
   if (code === 'connect_multiple_accounts') return '複数のStripeアカウント候補があるため、安全のため停止しました。HAKU運営へお問い合わせください。'
+  if (code === 'connect_account_save_error') return 'Stripeの受取口座は作成済みです。HAKUとの紐付けを再開するため、少し待ってからもう一度お試しください。同じ口座を安全に再利用します。'
+  if (code === 'connect_link_error') return 'Stripeの登録リンクを発行できませんでした。少し待ってからもう一度お試しください。既存の受取口座はそのまま再利用されます。'
   if (code === 'stripe_connect_error') return 'Stripeとの通信に失敗しました。通信状況を確認してもう一度お試しください。解決しない場合はHAKU運営へお問い合わせください。'
   return registrationError(error, fallback)
 }
