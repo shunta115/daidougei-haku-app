@@ -3,7 +3,7 @@
 実施前に、画面やログへ秘密値を表示せず次を確認する。
 
 - [ ] Vercel環境が Preview である
-- [ ] `STRIPE_SECRET_KEY` のモード判定が `test` である
+- [ ] Previewの `/api/ops/preview-readiness` が `stripeMode: "test"` と `safeForStripeOnboardingTest: true` を返す（秘密値は表示しない）
 - [ ] Stripe Webhook secretもテスト用エンドポイントのものである
 - [ ] Supabase project refが本番と異なり、`haku-merch-validation` と一致する
 - [ ] テスト用メールアドレス・テスト用パフォーマーだけを使う
