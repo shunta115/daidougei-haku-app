@@ -340,6 +340,35 @@ export async function markPerformerPayout(
   connectedAccountId: string | null,
   status: 'paid' | 'failed' | 'canceled',
 ) {
+  // A connected-account bank Payout may contain funds from several Transfers.
+  // Preserve it as an independent observation instead of treating it as proof
+  // that one internal Transfer/allocation row reached the performer's bank.
+  if (connectedAccountId) {
+    const { data: performer, error: performerError } = await sb
+      .from('performers')
+      .select('id')
+      .eq('stripe_account_id', connectedAccountId)
+      .maybeSingle()
+    if (performerError) throw performerError
+
+    const arrivalDate = Number.isInteger(payout.arrival_date)
+      ? new Date(payout.arrival_date * 1000).toISOString()
+      : null
+    const { error: ledgerError } = await sb.from('connected_account_payouts').upsert({
+      connected_account_id: connectedAccountId,
+      performer_id: performer?.id ?? null,
+      stripe_payout_id: payout.id,
+      amount_yen: yenFromStripe(payout.amount),
+      currency: payout.currency,
+      status,
+      arrival_date: arrivalDate,
+      failure_code: status === 'failed' ? payout.failure_code ?? null : null,
+      failure_message: status === 'failed' ? payout.failure_message ?? null : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'connected_account_id,stripe_payout_id' })
+    if (ledgerError) throw ledgerError
+  }
+
   const patch = {
     bank_payout_status: status,
     stripe_payout_id: payout.id,
@@ -347,9 +376,9 @@ export async function markPerformerPayout(
     failure_message: status === 'failed' ? payout.failure_message ?? payout.failure_code ?? 'payout_failed' : null,
     updated_at: new Date().toISOString(),
   }
-  const byStripe = await sb.from('performer_payouts').update(patch).eq('stripe_payout_id', payout.id).select('id').maybeSingle()
-  if (byStripe.error && !missingTable(byStripe.error) && !missingColumn(byStripe.error)) throw byStripe.error
-  if (byStripe.data?.id || !payout.metadata?.payout_row) return
+  // Only update a legacy allocation row when Stripe carries an explicit row
+  // reference. Never infer a 1:1 relationship from account or amount.
+  if (!payout.metadata?.payout_row) return
   const { error } = await sb.from('performer_payouts').update(patch).eq('id', payout.metadata.payout_row)
   if (error && !missingTable(error) && !missingColumn(error)) throw error
 }

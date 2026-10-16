@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const sql = readFileSync(new URL('../supabase/migrations/20261013_payout_reservation_and_audit.sql', import.meta.url), 'utf8')
+const bankPayoutSql = readFileSync(new URL('../supabase/migrations/20261016101802_connect_bank_payout_ledger.sql', import.meta.url), 'utf8')
 
 describe('payout reservation migration', () => {
   it('is additive and preserves existing sales data', () => {
@@ -30,5 +31,13 @@ describe('payout reservation migration', () => {
     expect(sql).toContain('p_gross_yen - p_refunded_yen')
     expect(sql).toContain('refunded_amount_yen')
     expect(sql).toContain('payout_remaining_share_yen(')
+  })
+
+  it('stores bank payouts independently without rewriting Transfer allocations', () => {
+    expect(bankPayoutSql).toContain('create table if not exists public.connected_account_payouts')
+    expect(bankPayoutSql).toContain('unique (connected_account_id, stripe_payout_id)')
+    expect(bankPayoutSql).toContain('enable row level security')
+    expect(bankPayoutSql).not.toMatch(/alter table public\.performer_payouts/i)
+    expect(bankPayoutSql).not.toMatch(/^\s*(delete\s+from|truncate|drop\s+table)\b/im)
   })
 })
