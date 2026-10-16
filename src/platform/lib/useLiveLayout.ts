@@ -3,16 +3,20 @@ import { detectLiveVideoOrientation } from './liveOrientation'
 
 export type LiveLayoutMode = 'phone-portrait' | 'phone-landscape' | 'tablet-portrait' | 'tablet-landscape' | 'desktop'
 
-function computeMode(w: number, h: number): LiveLayoutMode {
-  const landscape = w > h
-  if (w >= 1100) return 'desktop'
-  if (w >= 768) return landscape ? 'tablet-landscape' : 'tablet-portrait'
-  return landscape ? 'phone-landscape' : 'phone-portrait'
+export function computeLiveLayoutMode(w: number, h: number, orientation: 'portrait' | 'landscape'): LiveLayoutMode {
+  const shortEdge = Math.min(w, h)
+  const longEdge = Math.max(w, h)
+  // A rotated iPhone can be wider than 768px while its short edge is still phone-sized.
+  if (shortEdge < 600) return orientation === 'landscape' ? 'phone-landscape' : 'phone-portrait'
+  if (longEdge >= 1100) return 'desktop'
+  return orientation === 'landscape' ? 'tablet-landscape' : 'tablet-portrait'
 }
 
 export function useLiveLayout() {
   const [mode, setMode] = useState<LiveLayoutMode>(() =>
-    typeof window === 'undefined' ? 'phone-portrait' : computeMode(window.innerWidth, window.innerHeight),
+    typeof window === 'undefined'
+      ? 'phone-portrait'
+      : computeLiveLayoutMode(window.innerWidth, window.innerHeight, detectLiveVideoOrientation()),
   )
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(() =>
     detectLiveVideoOrientation(),
@@ -20,8 +24,9 @@ export function useLiveLayout() {
 
   useEffect(() => {
     const update = () => {
-      setMode(computeMode(window.innerWidth, window.innerHeight))
-      setOrientation(detectLiveVideoOrientation())
+      const nextOrientation = detectLiveVideoOrientation()
+      setMode(computeLiveLayoutMode(window.innerWidth, window.innerHeight, nextOrientation))
+      setOrientation(nextOrientation)
     }
     update()
     window.addEventListener('resize', update)

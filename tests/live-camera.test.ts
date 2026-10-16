@@ -14,12 +14,12 @@ import {
 import {
   containedRect,
   currentLiveVideoOrientation,
-  coveredRect,
   LIVE_OUTPUT_HEIGHT,
   LIVE_OUTPUT_WIDTH,
   liveOutputSize,
   waitForVideoFrameAdvance,
 } from '../src/platform/lib/livePortraitProcessor'
+import { computeLiveLayoutMode } from '../src/platform/lib/useLiveLayout'
 import {
   restartHostCameraForOrientation,
   setHostCameraEnabled,
@@ -226,12 +226,26 @@ describe('LIVE camera switch', () => {
       width: 720,
       height: 405,
     })
-    expect(coveredRect(960, 1280, LIVE_OUTPUT_WIDTH, LIVE_OUTPUT_HEIGHT)).toEqual({
-      x: -120,
-      y: 0,
-      width: 960,
-      height: 1280,
-    })
+    const processor = readFileSync('src/platform/lib/livePortraitProcessor.ts', 'utf8')
+    expect(processor).not.toContain('globalAlpha = 0.2')
+    expect(processor.match(/context\.drawImage\(/g)).toHaveLength(1)
+  })
+
+  it('classifies rotated iPhones as phones and keeps tablet/desktop layouts separate', () => {
+    expect(computeLiveLayoutMode(390, 844, 'portrait')).toBe('phone-portrait')
+    expect(computeLiveLayoutMode(844, 390, 'landscape')).toBe('phone-landscape')
+    expect(computeLiveLayoutMode(1024, 768, 'landscape')).toBe('tablet-landscape')
+    expect(computeLiveLayoutMode(1440, 900, 'landscape')).toBe('desktop')
+  })
+
+  it('keeps landscape performer controls, comments, and end button in separate safe areas', () => {
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    expect(screen).toContain('pl-live--performer')
+    expect(screen).toContain('pl-live__end-live')
+    expect(css).toContain(".pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__panel--live")
+    expect(css).toMatch(/phone-landscape'\] \.pl-live__media-controls\s*\{[\s\S]*top:[\s\S]*bottom: auto/)
+    expect(css).toMatch(/phone-landscape'\] \.pl-live__panel\s*\{[\s\S]*right: max\(76px/)
   })
 
   it('switches the published canvas between portrait 9:16 and landscape 16:9', () => {

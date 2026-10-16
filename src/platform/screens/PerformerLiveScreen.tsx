@@ -500,8 +500,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
   return (
     <div
-      className={`pl-live${isOverlayChrome ? ' pl-live--immersive' : ''}`}
+      className={`pl-live pl-live--performer${phase === 'live' && isOverlayChrome ? ' pl-live--immersive' : ''}`}
       data-layout={mode}
+      data-phase={phase}
       style={{
         '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
         '--video-fit': 'contain',
@@ -641,7 +642,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
               演出を抑える
             </label>
           </div>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--danger" disabled={busy || mediaBusy || switchingCamera} onClick={() => void stopLive()}>
+          <button type="button" className="pl-btn pl-btn--block pl-btn--danger pl-live__end-live" disabled={busy || mediaBusy || switchingCamera} onClick={() => void stopLive()}>
             ライブ終了
           </button>
         </div>
