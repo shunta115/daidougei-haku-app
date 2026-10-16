@@ -33,6 +33,8 @@ describe('LIVE camera switch', () => {
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
     expect(screen).toContain('className="pl-live__camera-switch"')
+    expect(screen).toContain('data-camera-facing={cameraFacing}')
+    expect(screen).toContain('data-switch-available={cameraSwitchAvailable}')
     expect(screen).toContain("phase === 'live'")
     expect(css).toMatch(/\.pl-live__camera-switch\s*\{[\s\S]*position: absolute[\s\S]*width: 58px[\s\S]*height: 58px/)
     expect(css).toContain(".pl-live[data-layout='phone-landscape'] .pl-live__camera-switch")
