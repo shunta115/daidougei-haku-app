@@ -73,7 +73,11 @@ it('shows an actionable error instead of silently treating a failed performer lo
   await waitFor(() => expect(screen.getByText(/登録情報を読み込めませんでした/)).toBeTruthy())
 })
 
-it('waits for a verified recovery session before updating the password', async () => {
+it.each([
+  ['iPhone Safari', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'],
+  ['Mac Safari', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15'],
+])('waits for a verified recovery session before updating the password on %s', async (_browser, userAgent) => {
+  vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(userAgent)
   render(<AuthProvider><PasswordProbe /></AuthProvider>)
   screen.getByText('reset').click()
   await waitFor(() => expect(fake.resetPasswordForEmail).toHaveBeenCalledWith('fan@example.com', {
