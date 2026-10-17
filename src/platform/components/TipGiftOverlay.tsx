@@ -10,6 +10,12 @@ type Props = {
   reducedMotion: boolean
 }
 
+export function thankYouMessage(tier: TipGiftTier) {
+  if (tier === 'special') return 'SPECIAL THANK YOU!'
+  if (tier === 'premium') return 'BIG THANK YOU!'
+  return 'THANK YOU!'
+}
+
 function playChime(tier: TipGiftTier) {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -89,6 +95,9 @@ export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion }: Pro
           </div>
         )}
         <div className="pl-gift__text">
+          <span className="pl-gift__thanks" aria-hidden="true">
+            {thankYouMessage(tier)}
+          </span>
           <strong>
             {name}さんが{formatYen(current.amount_cents)}を贈りました！
           </strong>

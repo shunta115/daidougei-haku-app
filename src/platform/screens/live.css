@@ -817,6 +817,26 @@
   min-width: 0;
 }
 
+.pl-gift__thanks {
+  color: #fff4a8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  text-shadow: 0 0 14px rgba(255, 222, 89, 0.55);
+}
+
+.pl-gift--premium .pl-gift__thanks {
+  color: #9effef;
+  text-shadow: 0 0 16px rgba(43, 255, 221, 0.65);
+}
+
+.pl-gift--special .pl-gift__thanks {
+  color: #ffd2f2;
+  font-size: 12px;
+  text-shadow: 0 0 18px rgba(255, 78, 205, 0.75);
+}
+
 .pl-gift__text strong {
   font-size: 14px;
   line-height: 1.3;
