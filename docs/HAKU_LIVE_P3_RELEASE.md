@@ -30,7 +30,7 @@ P3はLIVEコメントをセッション単位に分離し、配信者・登録�
 
 ## 本番DB承認対象
 
-承認対象は`supabase/migrations/20261016142951_live_comment_moderation.sql`の1ファイルだけとする。SHA-256は`0372607d090a66eec0ca0f466e9574d25a1b7f79713295eb9732f6f219cd9990`。承認時はファイル・PR・`supabase db push --dry-run`で照合する。
+承認対象は`supabase/migrations/20261016142951_live_comment_moderation.sql`の1ファイルだけとする。SHA-256は`075502b0adde57e2eb40a91a40a4fd3b3274d1bf8048ed59938206c5ffd741c1`。承認時はファイル・PR・`supabase db push --dry-run`で照合する。
 
 SQLの影響は次に限定される。
 
@@ -39,6 +39,8 @@ SQLの影響は次に限定される。
 - 配信者・登録モデレーター・管理者だけに、担当LIVE内の必要最小限の操作を許可する。
 - `live_comments_insert`を、本人・配信中・セッション/出演者一致・非ミュートの条件へ置換する。
 - `live_comments_moderator_delete`を追加し、配信者・登録モデレーター・管理者だけに削除を許可する。
+- 本番に残っている`live_comments_delete_own`を削除し、一般視聴者による自己コメント削除もモデレーション経由に統一する。
+- `live_comments`のブラウザロール権限を再定義し、RLSが保護しない`TRUNCATE`と不要な`UPDATE`等を`anon`/`authenticated`から除去する。
 - RealtimeのDELETE同期用に`live_comments`を`REPLICA IDENTITY FULL`へ変更する。
 
 既存行を変更または削除する`UPDATE`、`DELETE`、`TRUNCATE`は実行しない。投票、投げ銭、Stripe、Connect、出演者テーブルの定義・ポリシー・データは変更しない。
@@ -74,6 +76,25 @@ drop policy if exists live_comments_insert on public.live_comments;
 create policy live_comments_insert on public.live_comments
   for insert to authenticated
   with check ((select auth.uid()) = user_id);
+commit;
+```
+
+P3モデレーション全体を無効化する場合は、上記の投稿互換性復旧に加え、承認を得て次を実行する。既存コメントと新規テーブルは削除しない。
+
+```sql
+begin;
+drop policy if exists live_comments_moderator_delete on public.live_comments;
+drop policy if exists live_comments_delete_own on public.live_comments;
+create policy live_comments_delete_own on public.live_comments
+  for delete to authenticated
+  using ((select auth.uid()) = user_id);
+
+revoke all on public.live_comment_moderators from anon, authenticated;
+revoke all on public.live_comment_mutes from anon, authenticated;
+revoke all on public.live_comments from anon, authenticated;
+grant select on public.live_comments to anon;
+grant select, insert, delete on public.live_comments to authenticated;
+alter table public.live_comments replica identity default;
 commit;
 ```
 
