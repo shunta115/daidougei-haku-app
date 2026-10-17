@@ -22,6 +22,15 @@ describe('LIVE comment moderation migration', () => {
     }
   }
 
+  const asAnon = async <T = unknown>(sql: string) => {
+    await db.exec('set role anon')
+    try {
+      return await db.query<T>(sql)
+    } finally {
+      await db.exec('reset role')
+    }
+  }
+
   beforeAll(async () => {
     await db.exec(`
       create schema auth;
@@ -54,8 +63,9 @@ describe('LIVE comment moderation migration', () => {
       create policy live_sessions_read on public.live_sessions for select using (true);
       create policy live_comments_read on public.live_comments for select using (true);
       create policy live_comments_insert on public.live_comments for insert with check (auth.uid() = user_id);
+      create policy live_comments_delete_own on public.live_comments for delete using (auth.uid() = user_id);
       grant select on public.live_sessions to authenticated;
-      grant select, insert on public.live_comments to authenticated;
+      grant all on public.live_comments to anon, authenticated;
 
       insert into public.profiles(id) values ('${performer}'), ('${moderator}'), ('${fan}'), ('${stranger}');
       insert into public.performers(id) values ('${performer}');
@@ -84,6 +94,22 @@ describe('LIVE comment moderation migration', () => {
     await expect(asUser(stranger, `insert into public.live_comment_mutes values ('${session}', '${fan}', '${stranger}', null)`)).rejects.toThrow()
     await expect(asUser(moderator, `insert into public.live_comment_mutes values ('${session}', '${fan}', '${moderator}', null)`)).resolves.toBeDefined()
     await expect(asUser(moderator, `delete from public.live_comments where id='${comment.rows[0].id}'`)).resolves.toMatchObject({ affectedRows: 1 })
+  })
+
+  it('removes legacy browser-role privileges and self-delete access', async () => {
+    await expect(asAnon('truncate table public.live_comments')).rejects.toThrow()
+    await expect(asUser(fan, `update public.live_comments set body='tampered' where user_id='${fan}'`)).rejects.toThrow()
+    await expect(asUser(fan, `delete from public.live_comments where user_id='${fan}'`)).resolves.toMatchObject({ affectedRows: 0 })
+  })
+
+  it('protects the performer and moderators from moderator actions', async () => {
+    await expect(asUser(moderator, `insert into public.live_comment_mutes values ('${session}', '${performer}', '${moderator}', null)`)).rejects.toThrow()
+    await expect(asUser(moderator, `insert into public.live_comment_mutes values ('${session}', '${moderator}', '${moderator}', null)`)).rejects.toThrow()
+
+    await expect(asUser(performer, `insert into public.live_comments(performer_id,live_session_id,user_id,display_name,body) values ('${performer}','${session}','${performer}','Host','host')`)).resolves.toBeDefined()
+    await expect(asUser(moderator, `insert into public.live_comments(performer_id,live_session_id,user_id,display_name,body) values ('${performer}','${session}','${moderator}','Mod','moderator')`)).resolves.toBeDefined()
+    await expect(asUser(moderator, `delete from public.live_comments where body in ('host','moderator')`)).resolves.toMatchObject({ affectedRows: 0 })
+    await expect(asUser(performer, `delete from public.live_comments where body in ('host','moderator')`)).resolves.toMatchObject({ affectedRows: 2 })
   })
 
   it('blocks a muted user only in the muted LIVE session', async () => {
