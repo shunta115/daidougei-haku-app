@@ -81,7 +81,8 @@ Validation endpoint (test mode only):
 - subscribed event: `account.updated`
 - store the returned signing secret as Preview-only
   `STRIPE_CONNECT_WEBHOOK_SECRET`
-- redeploy only the PR Preview and verify `/api/stripe/readiness` reports test
+- redeploy only the PR Preview and verify
+  `/api/stripe/connect?probe=preview-readiness` reports test
   mode and Supabase project `aeqskxxykzapgaudbeqa`
 
 Production must use a distinct live-mode connected-account endpoint and a
