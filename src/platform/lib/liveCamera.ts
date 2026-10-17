@@ -1,15 +1,35 @@
 import { Track, type LocalVideoTrack, type Room, type VideoCaptureOptions } from 'livekit-client'
+import type { LiveVideoOrientation } from './liveOrientation'
 
 export type CameraFacing = 'user' | 'environment'
 
 export const PORTRAIT_LIVE_CAPTURE = {
-  width: 720,
+  width: 960,
   height: 1280,
   frameRate: 30,
-  aspectRatio: 9 / 16,
+  aspectRatio: 3 / 4,
+} as const
+
+export const LANDSCAPE_LIVE_CAPTURE = {
+  width: 1280,
+  height: 720,
+  frameRate: 30,
+  aspectRatio: 16 / 9,
 } as const
 
 export type TrackVideoOrientation = 'portrait' | 'landscape' | 'unknown'
+
+export type LiveCameraSnapshot = {
+  facingMode: string | null
+  width: number | null
+  height: number | null
+  aspectRatio: number | null
+  frameRate: number | null
+  zoom: number | null
+  readyState: MediaStreamTrackState
+  enabled: boolean
+  muted: boolean
+}
 
 type ZoomRange = { min: number; max: number; step?: number }
 type ZoomCapableTrack = MediaStreamTrack & {
@@ -23,6 +43,24 @@ export function trackVideoOrientation(settings: MediaTrackSettings): TrackVideoO
   )
   if (!ratio) return 'unknown'
   return ratio > 1.05 ? 'landscape' : 'portrait'
+}
+
+/** Safe, non-identifying camera diagnostics for support and switch validation. */
+export function liveCameraSnapshot(mediaTrack: MediaStreamTrack): LiveCameraSnapshot {
+  const settings = mediaTrack.getSettings() as MediaTrackSettings & { zoom?: number }
+  return {
+    facingMode: settings.facingMode ?? null,
+    width: settings.width ?? null,
+    height: settings.height ?? null,
+    aspectRatio: settings.aspectRatio ?? (
+      settings.width && settings.height ? settings.width / settings.height : null
+    ),
+    frameRate: settings.frameRate ?? null,
+    zoom: settings.zoom ?? null,
+    readyState: mediaTrack.readyState,
+    enabled: mediaTrack.enabled,
+    muted: mediaTrack.muted,
+  }
 }
 
 export function naturalZoomForRange(range: ZoomRange) {
@@ -61,7 +99,7 @@ export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrac
   }
 }
 
-/** Ask WebKit for a real portrait track and return the effective settings. */
+/** Prefer the camera sensor's natural portrait 4:3 mode without crop-and-scale. */
 export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
   let settings = mediaTrack.getSettings()
   if (trackVideoOrientation(settings) === 'portrait') return settings
@@ -71,21 +109,20 @@ export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
     | undefined
   const constraints: MediaTrackConstraints = {
     ...mediaTrack.getConstraints(),
-    width: { ideal: PORTRAIT_LIVE_CAPTURE.width },
-    height: { ideal: PORTRAIT_LIVE_CAPTURE.height },
+    width: { ideal: PORTRAIT_LIVE_CAPTURE.width, max: PORTRAIT_LIVE_CAPTURE.width },
+    height: { ideal: PORTRAIT_LIVE_CAPTURE.height, max: PORTRAIT_LIVE_CAPTURE.height },
     aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
     frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
   }
   if (supported?.resizeMode) {
-    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'crop-and-scale'
+    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'none'
   }
 
   try {
     await mediaTrack.applyConstraints(constraints)
     settings = mediaTrack.getSettings()
   } catch {
-    // Some iOS versions cannot crop the selected hardware mode to 9:16.
-    // The caller keeps the working LiveKit track and uses a display fallback.
+    // The 9:16 output processor can safely contain a landscape source too.
   }
   return settings
 }
@@ -100,7 +137,11 @@ export async function canSwitchHostCamera() {
   return devices.filter((device) => device.kind === 'videoinput').length > 1
 }
 
-export async function switchHostCamera(room: Room, current: CameraFacing): Promise<CameraFacing> {
+export async function switchHostCamera(
+  room: Room,
+  current: CameraFacing,
+  orientation: LiveVideoOrientation = 'portrait',
+): Promise<CameraFacing> {
   const track = hostCameraTrack(room)
   if (!track || track.isMuted) throw new Error('カメラをONにしてから切り替えてください。')
   if (!await canSwitchHostCamera()) {
@@ -108,11 +149,14 @@ export async function switchHostCamera(room: Room, current: CameraFacing): Promi
   }
 
   const previous = track.mediaStreamTrack.getSettings()
+  const previousSnapshot = liveCameraSnapshot(track.mediaStreamTrack)
   const next = current === 'user' ? 'environment' : 'user'
   // Do not inherit the previous camera's sensor dimensions. On iPhone Safari,
   // the rear camera commonly reports a native landscape size even while the
   // phone is upright. Reusing it makes LiveKit publish a landscape track.
-  const capture: VideoCaptureOptions = { resolution: PORTRAIT_LIVE_CAPTURE }
+  const capture: VideoCaptureOptions = {
+    resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
+  }
 
   try {
     // LiveKit updates the existing publication/sender. Audio and the Room remain intact.
@@ -128,15 +172,21 @@ export async function switchHostCamera(room: Room, current: CameraFacing): Promi
     // Constraints are preferences in WebKit. Ask the selected source once more
     // when its effective settings are still landscape, without replacing the
     // LiveKit publication or touching the microphone/Room.
-    selected = await ensurePortraitCameraTrack(track.mediaStreamTrack)
+    if (orientation === 'portrait') selected = await ensurePortraitCameraTrack(track.mediaStreamTrack)
 
     await preferNaturalCameraFieldOfView(track.mediaStreamTrack)
     selected = track.mediaStreamTrack.getSettings()
 
+    console.info('[HAKU LIVE] Camera switch ready', {
+      orientation,
+      previous: previousSnapshot,
+      current: liveCameraSnapshot(track.mediaStreamTrack),
+    })
+
     // Read width/height/aspectRatio after every switch. Some Safari versions
     // retain sensor-native settings even though the rendered frames are rotated.
     // Keep the diagnostic, but never crop the preview merely to hide it.
-    if (trackVideoOrientation(selected) === 'landscape') {
+    if (orientation === 'portrait' && trackVideoOrientation(selected) === 'landscape') {
       console.warn('[HAKU LIVE] Camera retained landscape settings after portrait constraints', {
         width: selected.width,
         height: selected.height,
@@ -145,12 +195,21 @@ export async function switchHostCamera(room: Room, current: CameraFacing): Promi
       })
     }
     return next
-  } catch {
+  } catch (error) {
+    console.warn('[HAKU LIVE] Camera switch failed; restoring previous camera', {
+      orientation,
+      previous: previousSnapshot,
+      failure: error instanceof Error ? error.name : 'unknown',
+    })
     try {
       await track.restartTrack({
         ...capture,
         facingMode: current,
         ...(previous.deviceId ? { deviceId: { exact: previous.deviceId } } : {}),
+      })
+      console.info('[HAKU LIVE] Previous camera restored', {
+        orientation,
+        current: liveCameraSnapshot(track.mediaStreamTrack),
       })
     } catch {
       throw new Error('カメラを切り替えられず、元の映像も復元できませんでした。カメラの許可を確認してください。音声と配信ルームは維持しています。')
