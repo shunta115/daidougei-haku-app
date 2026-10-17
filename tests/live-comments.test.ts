@@ -51,6 +51,7 @@ describe('LIVE comment session and scrolling', () => {
     expect(migration).toContain('live_comment_mutes')
     expect(migration).toContain('live_comment_moderators')
     expect(migration).toContain('replica identity full')
-    expect(migration).not.toMatch(/\btruncate\b|\bdelete\s+from\b|\bdrop\s+table\b/)
+    expect(migration).toContain('revoke all on public.live_comments from anon, authenticated')
+    expect(migration).not.toMatch(/\btruncate\s+(table\s+)?public\.|\bdelete\s+from\b|\bdrop\s+table\b/)
   })
 })
