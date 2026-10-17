@@ -35,6 +35,12 @@ describe('HAKU system-use fees', () => {
     expect(tip.hakuFeeYen).toBe(144)
     expect(tip.performerShareYen).toBe(820)
     expect(tip.hakuFeeYen).not.toBe(150)
+    expect(tip.hakuFeeYen + tip.performerShareYen + tip.stripeFeeYen).toBe(1000)
+    expect(settleSale(10_000, 360, TIP_SYSTEM_FEE_BPS)).toMatchObject({
+      netYen: 9640,
+      hakuFeeYen: 1446,
+      performerShareYen: 8194,
+    })
 
     const merch = settleSale(1000, 36, MERCH_SYSTEM_FEE_BPS)
     expect(merch.hakuFeeYen).toBe(77)
