@@ -6,6 +6,8 @@ describe('HAKU LIVE release gate', () => {
     const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
     const gate = pkg.scripts['test:live']
     expect(gate).toContain('live-camera.test.ts')
+    expect(gate).toContain('live-comments.test.ts')
+    expect(gate).toContain('live-comment-moderation-migration.test.ts')
     expect(gate).toContain('p0-readiness.test.ts')
     expect(gate).toContain('live-end-location.test.ts')
     expect(gate).toContain('payment-safety.test.ts')
