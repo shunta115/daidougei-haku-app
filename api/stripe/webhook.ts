@@ -47,6 +47,12 @@ function eventObjectId(event: Stripe.Event) {
   return obj.id ?? null
 }
 
+// Stripe retries for up to three days. A process can stop after inserting the
+// ledger row but before recording success or failure, so allow a later delivery
+// to take over a stale claim. The conditional update is the lease: only one
+// concurrent delivery can reclaim it.
+const WEBHOOK_PROCESSING_LEASE_MS = 5 * 60 * 1000
+
 function constructWebhookEvent(stripe: Stripe, raw: Buffer, sig: string) {
   const secrets = [
     { source: 'platform', value: process.env.STRIPE_WEBHOOK_SECRET },
@@ -87,17 +93,31 @@ async function claimWebhookEvent(
   if (missingTable(error)) throw new Error('Webhook idempotency ledger unavailable')
   if (!duplicateKey(error)) throw error
 
-  const { data: existing } = await sb
+  const { data: existing, error: existingError } = await sb
     .from('stripe_webhook_events')
-    .select('status')
+    .select('status, received_at')
     .eq('event_id', event.id)
     .maybeSingle()
+  if (existingError) throw existingError
   if (existing?.status === 'failed') {
     const { data: reclaimed, error: reclaimError } = await sb
       .from('stripe_webhook_events')
       .update({ status: 'processing', error: null })
       .eq('event_id', event.id)
       .eq('status', 'failed')
+      .select('event_id')
+      .maybeSingle()
+    if (reclaimError) throw reclaimError
+    return Boolean(reclaimed?.event_id)
+  }
+  if (existing?.status === 'processing' && existing.received_at) {
+    const leaseExpiredBefore = new Date(Date.now() - WEBHOOK_PROCESSING_LEASE_MS).toISOString()
+    const { data: reclaimed, error: reclaimError } = await sb
+      .from('stripe_webhook_events')
+      .update({ status: 'processing', error: null, received_at: new Date().toISOString() })
+      .eq('event_id', event.id)
+      .eq('status', 'processing')
+      .lte('received_at', leaseExpiredBefore)
       .select('event_id')
       .maybeSingle()
     if (reclaimError) throw reclaimError
