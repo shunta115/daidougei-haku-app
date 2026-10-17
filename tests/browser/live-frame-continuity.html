@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>HAKU LIVE frame continuity</title></head>
+  <body data-status="running">
+    <output id="result">running</output>
+    <script type="module">
+      import {
+        PortraitContainProcessor,
+        waitForVideoFrameAdvance,
+      } from '../../src/platform/lib/livePortraitProcessor.ts'
+
+      const result = document.querySelector('#result')
+      const paintSource = (color) => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 640
+        canvas.height = 480
+        const context = canvas.getContext('2d')
+        let frame = 0
+        const timer = setInterval(() => {
+          context.fillStyle = color
+          context.fillRect(0, 0, canvas.width, canvas.height)
+          context.fillStyle = '#fff'
+          context.fillRect(frame % canvas.width, 20, 24, 24)
+          frame += 7
+        }, 33)
+        return { stream: canvas.captureStream(30), stop: () => clearInterval(timer) }
+      }
+
+      try {
+        const first = paintSource('#146ef5')
+        const input = document.createElement('video')
+        input.muted = true
+        input.playsInline = true
+        input.srcObject = first.stream
+        await input.play()
+
+        const processor = new PortraitContainProcessor('portrait')
+        await processor.init({ kind: 'video', track: first.stream.getVideoTracks()[0], element: input })
+        await processor.waitForFrameAdvance(3)
+
+        const output = document.createElement('video')
+        output.muted = true
+        output.playsInline = true
+        output.srcObject = new MediaStream([processor.processedTrack])
+        await output.play()
+        await waitForVideoFrameAdvance(output, 3)
+
+        const second = paintSource('#e13a59')
+        input.srcObject = second.stream
+        await processor.restart({ kind: 'video', track: second.stream.getVideoTracks()[0], element: input })
+        await processor.waitForFrameAdvance(3)
+        await waitForVideoFrameAdvance(output, 3)
+
+        const settings = processor.processedTrack.getSettings()
+        if (settings.width !== 720 || settings.height !== 1280 || processor.processedTrack.readyState !== 'live') {
+          throw new Error(`unexpected_output:${settings.width}x${settings.height}:${processor.processedTrack.readyState}`)
+        }
+
+        first.stop()
+        second.stop()
+        await processor.destroy()
+        document.body.dataset.status = 'passed'
+        result.textContent = 'passed: initial and replacement streams produced continuous 720x1280 frames'
+      } catch (error) {
+        document.body.dataset.status = 'failed'
+        result.textContent = `failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    </script>
+  </body>
+</html>

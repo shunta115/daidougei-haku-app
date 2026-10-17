@@ -11,6 +11,7 @@
     "build": "node scripts/guard-production-source.mjs && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts",
     "test:registration": "vitest run"
   },
   "dependencies": {

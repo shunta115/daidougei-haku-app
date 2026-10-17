@@ -21,6 +21,7 @@
 
 .pl-live__stage {
   position: relative;
+  isolation: isolate;
   width: 100%;
   aspect-ratio: var(--video-aspect, 9 / 16);
   max-height: min(62dvh, 560px);
@@ -33,6 +34,7 @@
 }
 
 .pl-live__video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: var(--video-fit, contain);
@@ -90,6 +92,82 @@
   font-size: 12px;
 }
 
+.pl-live__media-controls {
+  position: absolute;
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 7;
+  display: grid;
+  gap: 9px;
+}
+
+.pl-live__media-control {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  width: 54px;
+  min-width: 54px;
+  height: 54px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 50%;
+  background: rgba(8, 10, 15, 0.72);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  touch-action: manipulation;
+}
+
+.pl-live__media-control span {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pl-live__media-control[data-active='false'] {
+  background: rgba(145, 28, 48, 0.82);
+  border-color: rgba(255, 172, 184, 0.68);
+}
+
+.pl-live__media-control:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.pl-live__media-control:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.pl-live[data-layout='phone-landscape'] .pl-live__media-controls {
+  right: max(12px, env(safe-area-inset-right, 0px));
+  top: max(64px, calc(env(safe-area-inset-top, 0px) + 54px));
+  bottom: auto;
+}
+
+.pl-live[data-layout='phone-landscape'] .pl-live__media-control {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+}
+
+.pl-live__media-paused {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: radial-gradient(circle at center, rgba(31, 37, 50, 0.96), rgba(5, 6, 8, 0.98));
+}
+
+.pl-live__media-paused strong { font-size: 15px; }
+.pl-live__media-paused span { max-width: 260px; color: rgba(255, 255, 255, 0.68); font-size: 11px; }
+
 .pl-live__stats {
   display: flex;
   flex-wrap: wrap;
@@ -102,6 +180,12 @@
   font-size: 11px;
   font-weight: 700;
   max-width: min(100%, 280px);
+}
+
+.pl-live__stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .pl-live__pill {
@@ -276,14 +360,85 @@
 
 .pl-live__actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 0.8fr));
+  gap: 7px;
+}
+
+.pl-live__actions > button {
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 14px;
+  font-size: 11px;
 }
 
 .pl-live__support-cta {
   min-height: 56px;
   border-radius: 17px;
   background: #d83a45 !important;
+}
+
+.pl-live__react {
+  border: 1px solid var(--xp-line, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  font-weight: 800;
+  transition: transform 0.18s ease;
+}
+
+.pl-live__react span { font-size: 17px; }
+.pl-live__react--on { transform: scale(1.08); background: rgba(244, 198, 109, 0.2); }
+
+.pl-live__composer .pl-input {
+  min-height: 48px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.pl-live__composer .pl-btn {
+  width: 48px;
+  min-width: 48px;
+  padding: 0;
+  border-radius: 15px;
+}
+
+.pl-live__send-label { display: none; }
+
+.pl-live__side-actions {
+  position: absolute;
+  z-index: 7;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(176px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 13px;
+}
+
+.pl-live__side-actions button {
+  width: 48px;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  padding: 6px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(7, 20, 36, 0.58);
+  color: white;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.pl-live__side-actions small {
+  max-width: 44px;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+}
+
+.pl-live__side-actions .pl-live__side-support {
+  background: rgba(255, 59, 137, 0.86);
+  box-shadow: 0 8px 26px rgba(255, 59, 137, 0.25);
 }
 
 .pl-live__prefs {
@@ -304,10 +459,11 @@
 
 /* —— Phone portrait: stacked, full-width video —— */
 .pl-live[data-layout='phone-portrait'] .pl-live__stage {
-  width: calc(100% + 20px);
-  margin: -10px -10px 0;
-  max-height: min(72dvh, 620px);
-  border-radius: 0 0 24px 24px;
+  width: min(100%, 56.25svh);
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  max-height: calc(100svh - max(20px, env(safe-area-inset-top, 0px)));
+  border-radius: 0 0 20px 20px;
 }
 
 .pl-live[data-layout='phone-portrait'] .pl-live__comments {
@@ -316,6 +472,55 @@
 
 .pl-live[data-layout='phone-portrait'] .pl-live__panel--live {
   gap: 8px;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #020813;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__stage {
+  width: 100%;
+  min-height: 100svh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: #020813;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__video {
+  min-height: 100svh;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 76px 72px calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, transparent, rgba(2, 8, 19, 0.78) 34%, rgba(2, 8, 19, 0.96));
+  backdrop-filter: none;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__comments {
+  max-height: 72px;
+  border: 0;
+  background: transparent;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__actions,
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__prefs {
+  display: none;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__composer {
+  grid-template-columns: minmax(0, 1fr) 46px;
 }
 
 /* —— Phone landscape: immersive overlay chrome —— */
@@ -341,10 +546,11 @@
 .pl-live[data-layout='phone-landscape'] .pl-live__panel {
   position: fixed;
   left: max(10px, env(safe-area-inset-left, 0px));
-  right: max(10px, env(safe-area-inset-right, 0px));
+  right: max(76px, calc(env(safe-area-inset-right, 0px) + 66px));
   bottom: max(10px, env(safe-area-inset-bottom, 0px));
   z-index: 52;
-  max-height: 42dvh;
+  max-height: calc(100svh - max(76px, calc(env(safe-area-inset-top, 0px) + 66px)) - max(10px, env(safe-area-inset-bottom, 0px)));
+  overflow-y: auto;
   padding: 8px;
   border-radius: 16px;
   background: rgba(8, 9, 12, 0.55);
@@ -358,16 +564,56 @@
 }
 
 .pl-live[data-layout='phone-landscape'] .pl-live__comments {
-  max-height: 18dvh;
-  background: transparent;
+  max-height: min(20svh, 88px);
+  background: rgba(8, 9, 12, 0.38);
   border: none;
   padding: 0 4px;
+}
+
+.pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__panel--live {
+  width: min(58vw, 520px);
+  right: auto;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__composer {
+  position: static;
+  padding-bottom: 0;
+  background: rgba(8, 9, 12, 0.48);
+  border-radius: 12px;
+}
+
+.pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__prefs {
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(8, 9, 12, 0.48);
+}
+
+.pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__end-live {
+  position: sticky;
+  bottom: 0;
+  min-height: 42px;
+  z-index: 2;
 }
 
 .pl-live[data-layout='phone-landscape'] .pl-live__titlebar {
   bottom: auto;
   top: auto;
   display: none;
+}
+
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions {
+  right: max(12px, env(safe-area-inset-right, 0px));
+  top: max(64px, calc(env(safe-area-inset-top, 0px) + 54px));
+  bottom: auto;
+  gap: 8px;
+}
+
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions button {
+  width: 44px;
+  min-height: 44px;
 }
 
 /* —— Tablet portrait —— */
