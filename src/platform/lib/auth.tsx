@@ -14,6 +14,7 @@ import type { Performer, Profile } from './types'
 import { registrationError } from './onboarding'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 import { hasPasswordRecoveryParams } from './authCallback'
+import { authRedirectUrl, sanitizedAuthCallbackUrl } from './authRedirect'
 import { PASSWORD_RESET_PATH } from '../../app/routes'
 
 type AuthState = {
@@ -25,6 +26,7 @@ type AuthState = {
   configured: boolean
   profileError: string | null
   passwordRecovery: boolean
+  passwordRecoveryReady: boolean
   refreshProfile: () => Promise<void>
   signUp: (email: string, password: string, role: 'fan' | 'performer', displayName: string) => Promise<string | null>
   signIn: (email: string, password: string) => Promise<string | null>
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return false
     return hasPasswordRecoveryParams()
   })
+  const [passwordRecoveryReady, setPasswordRecoveryReady] = useState(false)
   const [authRevision, setAuthRevision] = useState(0)
   const currentUserId = useRef<string | null>(null)
 
@@ -99,8 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const changed = currentUserId.current !== (next?.user.id ?? null)
       currentUserId.current = next?.user.id ?? null
       setSession(next)
-      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
-      if (event === 'SIGNED_OUT') setPasswordRecovery(false)
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true)
+        setPasswordRecoveryReady(Boolean(next))
+      }
+      if (event === 'SIGNED_OUT') {
+        setPasswordRecovery(false)
+        setPasswordRecoveryReady(false)
+      }
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
+        const sanitized = sanitizedAuthCallbackUrl(window.location)
+        if (sanitized) window.history.replaceState(window.history.state, '', sanitized)
+      }
       setAuthRevision((revision) => revision + 1)
       if (changed || !next) {
         setProfile(null)
@@ -143,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: { role, display_name: displayName },
-          emailRedirectTo: `${window.location.origin}/live`,
+          emailRedirectTo: authRedirectUrl('/live'),
         },
       })
       if (error) return registrationError(error)
@@ -168,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${PASSWORD_RESET_PATH}`,
+        redirectTo: authRedirectUrl(PASSWORD_RESET_PATH),
       })
       return error ? registrationError(error) : null
     } catch (e) {
@@ -179,14 +192,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updatePassword = useCallback(async (password: string) => {
     try {
       const sb = requireSupabase()
+      if (!passwordRecoveryReady) return registrationError(new Error('Auth session missing'))
+      const { data, error: sessionError } = await sb.auth.getSession()
+      if (sessionError || !data.session) return registrationError(sessionError ?? new Error('Auth session missing'))
       const { error } = await sb.auth.updateUser({ password })
       if (error) return registrationError(error)
       setPasswordRecovery(false)
+      setPasswordRecoveryReady(false)
       return null
     } catch (e) {
       return registrationError(e)
     }
-  }, [])
+  }, [passwordRecoveryReady])
 
   const signOut = useCallback(async () => {
     if (!supabase) return
@@ -203,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configured: isSupabaseConfigured,
       profileError,
       passwordRecovery,
+      passwordRecoveryReady,
       refreshProfile,
       signUp,
       signIn,
@@ -210,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword,
       signOut,
     }),
-    [ready, session, profile, performer, profileError, passwordRecovery, refreshProfile, signUp, signIn, sendPasswordReset, updatePassword, signOut],
+    [ready, session, profile, performer, profileError, passwordRecovery, passwordRecoveryReady, refreshProfile, signUp, signIn, sendPasswordReset, updatePassword, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

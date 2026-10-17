@@ -6,15 +6,18 @@ const fake = vi.hoisted(() => ({
   performer: { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false },
   account: { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } },
   saveError: null as null | { message: string },
-  update: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
+  stripeMode: 'test' as 'test' | 'live' | 'unknown',
+  update: vi.fn(), rpc: vi.fn(), adminClient: vi.fn(), stripeUpdate: vi.fn(), create: vi.fn(), retrieve: vi.fn(), list: vi.fn(), link: vi.fn(),
 }))
 
-vi.mock('../api/stripe/_shared.js', () => ({
-  requireAuthUser: vi.fn(async (_req, res) => { if (!fake.user) res.status(401).json({ error: 'Authorization required' }); return fake.user }),
-  getAppUrl: () => 'https://app.example.test',
-  isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
-  getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
-  getAdminSupabase: () => ({ from: (table: string) => ({
+function supabaseClient() {
+  fake.adminClient()
+  return {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      fake.rpc(name, args)
+      return { error: fake.saveError }
+    },
+    from: (table: string) => ({
     select: () => ({ eq: () => ({ single: async () => ({ data: table === 'profiles' ? fake.profile : fake.performer, error: null }) }) }),
     update: (patch: unknown) => {
       fake.update(table, patch)
@@ -22,15 +25,25 @@ vi.mock('../api/stripe/_shared.js', () => ({
       const chain = { eq: vi.fn(() => chain), then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve) }
       return chain
     },
-  }) }),
+    }),
+  }
+}
+
+vi.mock('../api/stripe/_shared.js', () => ({
+  requireAuthUser: vi.fn(async (_req, res) => { if (!fake.user) res.status(401).json({ error: 'Authorization required' }); return fake.user }),
+  getAppUrl: () => 'https://app.example.test',
+  isConnectedAccountTransferReady: (account: typeof fake.account) => Boolean(account.capabilities.transfers === 'active' && account.payouts_enabled && account.details_submitted && !account.requirements.disabled_reason && !account.requirements.currently_due.length && !account.requirements.past_due.length && !account.requirements.pending_verification.length),
+  getStripe: () => ({ accounts: { create: fake.create, retrieve: fake.retrieve, list: fake.list, update: fake.stripeUpdate }, accountLinks: { create: fake.link } }),
+  stripeMode: () => fake.stripeMode,
+  getAdminSupabase: () => supabaseClient(),
 }))
 
 import handler from '../api/stripe/connect'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-async function request(body: object, method = 'POST') {
+async function request(body: object, method = 'POST', query: Record<string, string> = {}) {
   const response = { code: 0, body: {} as Record<string, unknown>, status(code: number) { this.code = code; return this }, json(body: Record<string, unknown>) { this.body = body; return this }, setHeader: vi.fn() }
-  await handler({ method, body, headers: {} } as VercelRequest, response as unknown as VercelResponse)
+  await handler({ method, body, query, headers: {} } as VercelRequest, response as unknown as VercelResponse)
   return response
 }
 
@@ -41,6 +54,7 @@ beforeEach(() => {
   fake.performer = { stripe_account_id: 'acct_fixture', stripe_onboarding_complete: false }
   fake.account = { id: 'acct_fixture', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: { transfers: 'active' }, requirements: { disabled_reason: null, currently_due: [], past_due: [], pending_verification: [] } }
   fake.saveError = null
+  fake.stripeMode = 'test'
   fake.retrieve.mockImplementation(async () => fake.account)
   fake.create.mockImplementation(async () => ({ ...fake.account, id: 'acct_new_fixture', metadata: { performer_id: 'performer-fixture' } }))
   fake.stripeUpdate.mockImplementation(async (id, params) => ({ ...fake.account, id, metadata: { performer_id: 'performer-fixture', ...params.metadata } }))
@@ -51,6 +65,22 @@ beforeEach(() => {
 })
 
 describe('Stripe onboarding without payment changes', () => {
+  it('exposes only safe readiness metadata in Preview and is hidden in Production', async () => {
+    const previousVercel = process.env.VERCEL_ENV
+    const previousSupabase = process.env.SUPABASE_URL
+    process.env.VERCEL_ENV = 'preview'
+    process.env.SUPABASE_URL = 'https://stagingfixture.supabase.co'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({
+      code: 200,
+      body: { stripeMode: 'test', supabaseProjectRef: 'stagingfixture', safeForStripeOnboardingTest: true },
+    })
+    fake.stripeMode = 'live'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({ code: 503, body: { safeForStripeOnboardingTest: false } })
+    process.env.VERCEL_ENV = 'production'
+    expect(await request({}, 'GET', { probe: 'preview-readiness' })).toMatchObject({ code: 404 })
+    process.env.VERCEL_ENV = previousVercel
+    process.env.SUPABASE_URL = previousSupabase
+  })
   it('requires authentication and ownership', async () => {
     fake.user = null
     expect((await request({ performerId: 'performer-fixture', action: 'status' })).code).toBe(401)
@@ -74,7 +104,7 @@ describe('Stripe onboarding without payment changes', () => {
   it('retrieves Stripe readiness and synchronizes only the existing flag', async () => {
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.body).toMatchObject({ connected: true, complete: true })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: true })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: true })
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('acct_fixture')
@@ -98,7 +128,21 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh' }))
+    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_fixture', return_url: 'https://app.example.test/live?stripe=return', refresh_url: 'https://app.example.test/live?stripe=refresh', collection_options: { fields: 'eventually_due' } }))
+    expect(fake.adminClient).toHaveBeenCalled()
+  })
+  it('reports Account Link creation separately and keeps the existing account reusable', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    fake.link.mockRejectedValueOnce({ type: 'StripeAPIError', message: 'temporary link failure' })
+    const res = await request({ performerId: 'performer-fixture' })
+    expect(res.code).toBe(500)
+    expect(res.body).toMatchObject({ code: 'connect_link_error' })
+    expect(fake.create).not.toHaveBeenCalled()
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', {
+      p_performer_id: 'performer-fixture',
+      p_onboarding_complete: true,
+    })
+    log.mockRestore()
   })
   it('makes account creation idempotent while retaining the existing Connect controller', async () => {
     fake.performer.stripe_account_id = ''
@@ -113,7 +157,7 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture' })
     expect(res.code).toBe(200)
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_account_id: 'acct_live_exact' })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_stripe_account_id: 'acct_live_exact' })
     expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_live_exact' }))
   })
   it('does not send users to an unpersisted account or expose database errors', async () => {
@@ -123,6 +167,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.code).toBe(500)
     expect(fake.link).not.toHaveBeenCalled()
     expect(JSON.stringify(res.body)).not.toContain('private database detail')
+    expect(res.body).toMatchObject({ code: 'connect_account_save_error' })
   })
 
   it('returns a safe error when Stripe account retrieval fails', async () => {
@@ -155,7 +200,7 @@ describe('Stripe onboarding without payment changes', () => {
     expect(res.body).toMatchObject({ connected: false, complete: false, state: 'account_mismatch' })
     expect(fake.list).not.toHaveBeenCalled()
     expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: false })
   })
 
   it('recognizes the exact Stripe testmode-account wording seen in production', async () => {
@@ -166,7 +211,7 @@ describe('Stripe onboarding without payment changes', () => {
     const res = await request({ performerId: 'performer-fixture', action: 'status' })
     expect(res.code).toBe(200)
     expect(res.body).toMatchObject({ connected: false, state: 'account_mismatch' })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_onboarding_complete: false })
+    expect(fake.rpc).toHaveBeenCalledWith('sync_performer_stripe_connect', { p_performer_id: 'performer-fixture', p_onboarding_complete: false })
   })
 
   it('reports requirement counts and the Stripe check time without exposing requirement details', async () => {
@@ -178,66 +223,15 @@ describe('Stripe onboarding without payment changes', () => {
     expect(JSON.stringify(res.body)).not.toContain('external_account')
   })
 
-  it('reuses the single exact live metadata match after an explicit onboarding click', async () => {
-    fake.retrieve.mockRejectedValueOnce({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() { yield { ...fake.account, id: 'acct_live_exact', metadata: { performer_id: 'performer-fixture' } } },
-    }))
-    const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(200)
-    expect(fake.create).not.toHaveBeenCalled()
-    expect(fake.stripeUpdate).toHaveBeenCalledWith('acct_live_exact', { metadata: { legacy_test_account_id: 'acct_fixture' } })
-    expect(fake.update).toHaveBeenCalledWith('performers', { stripe_account_id: 'acct_live_exact', stripe_onboarding_complete: false })
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_live_exact' }))
-  })
-
-  it('creates one idempotent live account when no exact match exists', async () => {
+  it('never replaces a stored account after an environment mismatch', async () => {
     fake.retrieve.mockRejectedValueOnce({
       type: 'StripeInvalidRequestError', statusCode: 400,
       raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
     })
     const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(200)
-    expect(fake.create).toHaveBeenCalledWith(expect.objectContaining({ metadata: { performer_id: 'performer-fixture' } }), { idempotencyKey: 'performer-connect:live:v2:performer-fixture' })
-    expect(fake.stripeUpdate).toHaveBeenCalledWith('acct_new_fixture', { metadata: { legacy_test_account_id: 'acct_fixture' } })
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_new_fixture' }))
-  })
-
-  it('recovers without a second account when Stripe succeeded but the first DB save failed', async () => {
-    fake.retrieve.mockRejectedValue({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.saveError = { message: 'temporary DB failure' }
-    expect((await request({ performerId: 'performer-fixture' })).code).toBe(500)
-    expect(fake.create).toHaveBeenCalledTimes(1)
-
-    fake.saveError = null
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() { yield { ...fake.account, id: 'acct_new_fixture', metadata: { performer_id: 'performer-fixture', legacy_test_account_id: 'acct_fixture' } } },
-    }))
-    const retry = await request({ performerId: 'performer-fixture' })
-    expect(retry.code).toBe(200)
-    expect(fake.create).toHaveBeenCalledTimes(1)
-    expect(fake.link).toHaveBeenCalledWith(expect.objectContaining({ account: 'acct_new_fixture' }))
-  })
-
-  it('stops instead of guessing when multiple live accounts match', async () => {
-    fake.retrieve.mockRejectedValueOnce({
-      type: 'StripeInvalidRequestError', statusCode: 400,
-      raw: { statusCode: 400, message: "No such account; a similar object exists in test mode, but a live mode key was used." },
-    })
-    fake.list.mockImplementationOnce(() => ({
-      async *[Symbol.asyncIterator]() {
-        yield { ...fake.account, id: 'acct_live_a', metadata: { performer_id: 'performer-fixture' } }
-        yield { ...fake.account, id: 'acct_live_b', metadata: { performer_id: 'performer-fixture' } }
-      },
-    }))
-    const res = await request({ performerId: 'performer-fixture' })
-    expect(res.code).toBe(500)
+    expect(res.code).toBe(409)
+    expect(res.body).toMatchObject({ code: 'connect_account_mismatch' })
+    expect(fake.list).not.toHaveBeenCalled()
     expect(fake.create).not.toHaveBeenCalled()
     expect(fake.update).not.toHaveBeenCalled()
     expect(fake.link).not.toHaveBeenCalled()

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
+import { getAuthenticatedSupabase, requireAuthUser } from '../stripe/_shared.js'
 
 const MAX_LENGTH = 80
 
@@ -17,7 +17,11 @@ export async function handleDisplayNameUpdate(req: VercelRequest, res: VercelRes
   const displayName = validatedDisplayName(req.body?.displayName)
   if (!displayName) return res.status(400).json({ error: `Display name must be 1-${MAX_LENGTH} characters.` })
 
-  const sb = getAdminSupabase()
+  // The authenticated user's JWT must be used for these writes. Preview
+  // deployments intentionally do not need a service-role key for a user to
+  // edit their own profile, and the profiles/performers RLS policies enforce
+  // that the id matches auth.uid().
+  const sb = getAuthenticatedSupabase(req)
   const { data: profile, error: profileError } = await sb
     .from('profiles')
     .select('role,display_name')

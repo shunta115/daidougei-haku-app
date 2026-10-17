@@ -16,7 +16,7 @@ type Props = {
 
 export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false }: Props) {
   const { t } = useLang()
-  const { passwordRecovery, sendPasswordReset, signIn, signUp, updatePassword } = useAuth()
+  const { ready, passwordRecovery, passwordRecoveryReady, sendPasswordReset, signIn, signUp, updatePassword } = useAuth()
   const [mode, setMode] = useState<'in' | 'up' | 'reset' | 'new-password'>(() => passwordRecovery ? 'new-password' : performerEntry ? 'up' : 'in')
   const [role] = useState(initialRole)
   const [name, setName] = useState('')
@@ -46,6 +46,10 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
         return
       }
       if (mode === 'new-password') {
+        if (!ready || !passwordRecoveryReady) {
+          setError(t('authRecoveryExpired'))
+          return
+        }
         const updateError = await updatePassword(password)
         if (updateError) { setError(updateError); return }
         setInfo(t('authPasswordUpdated'))
@@ -110,11 +114,13 @@ export function AuthScreen({ onDone, initialRole = 'fan', performerEntry = false
           <input className="pl-input" name="email" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label> : null}
         {mode !== 'reset' ? <label><span className="pl-label">{mode === 'new-password' ? t('authPasswordNew') : t('password')}{mode === 'up' ? t('authPasswordHint') : ''}</span>
-          <input className="pl-input" name="password" type="password" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} required minLength={mode === 'new-password' ? 8 : 6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input className="pl-input" name="password" type="password" autoComplete={mode === 'in' ? 'current-password' : 'new-password'} required minLength={mode === 'new-password' ? 8 : 6} disabled={mode === 'new-password' && (!ready || !passwordRecoveryReady)} value={password} onChange={(e) => setPassword(e.target.value)} />
         </label> : null}
+        {mode === 'new-password' && !ready ? <p className="pl-registration__notice" role="status">{t('authRecoveryChecking')}</p> : null}
+        {mode === 'new-password' && ready && !passwordRecoveryReady ? <p className="pl-error" role="alert">{t('authRecoveryExpired')}</p> : null}
         {info ? <p className="pl-registration__notice" role="status">{info}</p> : null}
         {error ? <p className="pl-error" role="alert">{error}</p> : null}
-        <button type="submit" className="pl-btn pl-btn--block" disabled={busy}>
+        <button type="submit" className="pl-btn pl-btn--block" disabled={busy || (mode === 'new-password' && (!ready || !passwordRecoveryReady))}>
           {busy ? t('processing') : mode === 'in' ? t('authSubmitLogin') : mode === 'reset' ? t('authSubmitReset') : mode === 'new-password' ? t('authSubmitUpdate') : role === 'performer' ? t('authSubmitPerformer') : t('authSubmitCreate')}
         </button>
       </form>

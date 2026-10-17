@@ -124,4 +124,23 @@ describe('smartphone performer registration', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ performerId: performer.id, action: 'status' })
     expect(onStatus).toHaveBeenCalledWith({ complete: true, connected: true })
   })
+  it('keeps loading when sessionStorage is blocked on a mobile browser', async () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => { throw new DOMException('Blocked', 'SecurityError') },
+      removeItem: () => { throw new DOMException('Blocked', 'SecurityError') },
+      setItem: () => { throw new DOMException('Blocked', 'SecurityError') },
+    })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ complete: false, connected: false, state: 'not_started' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<PayoutSetup performerId={performer.id} onStatus={vi.fn()} />)
+    await screen.findByRole('button', { name: '受取口座を設定する' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+  it('blocks automatic account replacement when Stripe mode or account ownership mismatches', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ complete: false, connected: false, state: 'account_mismatch' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<PayoutSetup performerId={performer.id} onStatus={vi.fn()} />)
+    expect((await screen.findByRole('alert')).textContent).toContain('自動で置き換えません')
+    expect(screen.queryByRole('button', { name: /受取設定を始める|受取口座を設定する/ })).toBeNull()
+  })
 })
