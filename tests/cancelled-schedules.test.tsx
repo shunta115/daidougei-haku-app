@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
 const fake = vi.hoisted(() => ({ slots: vi.fn() }))
 vi.mock('../src/platform/lib/api', () => ({
+  liveReservationsEnabled: false,
   getFeaturedEvent: async () => ({ id: 'e', name_ja: 'AWP' }),
   listEventSlots: fake.slots,
   listApprovedPerformers: async () => [{ id: 'p', stage_name: 'テスト出演者', is_live: true }],
@@ -11,6 +12,11 @@ vi.mock('../src/platform/lib/api', () => ({
   listLiveRanking: async () => [],
   listLivePerformers: async () => [],
   listEventLiveSessions: async () => [],
+  getSignedInUserId: async () => null,
+  listUpcomingLiveSchedules: async () => [],
+  listOwnLiveReservationIds: async () => [],
+  reserveLiveSchedule: async () => undefined,
+  cancelLiveReservation: async () => undefined,
   subscribePerformerMapUpdates: () => () => {},
 }))
 vi.mock('../src/platform/components/GoogleVenueMap', () => ({ GoogleVenueMap: () => null }))
