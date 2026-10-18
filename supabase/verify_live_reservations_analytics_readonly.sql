@@ -17,6 +17,19 @@ where schemaname = 'public'
   and tablename in ('live_schedules', 'live_reservations', 'live_viewer_samples')
 order by tablename, policyname;
 
+-- Both rows must contain the is_private_test=false guard. A missing result or
+-- false value is a release blocker because it can expose private test LIVE data.
+select
+  policyname,
+  coalesce(qual, with_check) like '%is_private_test = false%' as blocks_private_test
+from pg_policies
+where schemaname = 'public'
+  and (
+    (tablename = 'live_schedules' and policyname = 'live_schedules_public_read')
+    or (tablename = 'live_reservations' and policyname = 'live_reservations_own_insert')
+  )
+order by policyname;
+
 -- Expected browser ACL:
 -- anon: live_schedules SELECT only
 -- authenticated: schedules SELECT/INSERT/UPDATE/DELETE;

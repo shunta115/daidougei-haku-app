@@ -6,6 +6,7 @@ const performerScreen = readFileSync('src/platform/screens/PerformerLiveScreen.t
 const viewerScreen = readFileSync('src/platform/screens/LiveListScreen.tsx', 'utf8')
 const presenceApi = readFileSync('api/livekit/presence.ts', 'utf8')
 const verifier = readFileSync('supabase/verify_live_reservations_analytics_readonly.sql', 'utf8')
+const approval = readFileSync('docs/HAKU_LIVE_RESERVATIONS_PRODUCTION_APPROVAL.md', 'utf8')
 
 describe('LIVE reservation and audience analytics migration', () => {
   it('is additive and does not rewrite existing LIVE, payment, vote, or performer data', () => {
@@ -22,6 +23,13 @@ describe('LIVE reservation and audience analytics migration', () => {
     expect(migration).not.toMatch(/grant\s+insert[^;]+live_viewer_samples\s+to\s+(anon|authenticated)/i)
     expect(migration).toContain('user_id = (select auth.uid())')
     expect(migration).toContain('performer_id = (select auth.uid())')
+  })
+
+  it('does not expose or reserve private test performer schedules', () => {
+    const privateGuards = migration.match(/p\.is_private_test = false/g) ?? []
+    expect(privateGuards).toHaveLength(2)
+    expect(migration).toMatch(/create policy live_schedules_public_read[\s\S]+status = 'scheduled'[\s\S]+p\.is_approved = true[\s\S]+p\.is_private_test = false/)
+    expect(migration).toMatch(/create policy live_reservations_own_insert[\s\S]+join public\.performers p[\s\S]+p\.is_private_test = false/)
   })
 
   it('guards the privileged start notification function', () => {
@@ -55,6 +63,15 @@ describe('LIVE reservation and audience analytics migration', () => {
     expect(verifier).toContain("c.relforcerowsecurity as force_rls")
     expect(verifier).toContain("has_function_privilege('anon'")
     expect(verifier).toContain("table_name = 'live_viewer_samples'")
+    expect(verifier).toContain("as blocks_private_test")
     expect(verifier).toContain('(select count(*) from public.live_sessions)')
+  })
+
+  it('pins the production target, migration hash, kill switch, and no-repair rule', () => {
+    expect(approval).toContain('pmmtijwswzwhuriqhlep')
+    expect(approval).toContain('e890cf1a1113d92593f7c83f419f55247e52a3f7408158fa7bdc24c73eb3fabc')
+    expect(approval).toContain('VITE_ENABLE_LIVE_RESERVATIONS')
+    expect(approval).toContain('ENABLE_LIVE_VIEWER_SAMPLES`は今回OFF')
+    expect(approval).toContain('過去履歴へのrepair/INSERT/UPDATE/DELETEは行わない')
   })
 })

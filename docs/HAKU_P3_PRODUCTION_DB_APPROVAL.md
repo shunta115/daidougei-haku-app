@@ -98,7 +98,7 @@ pg_restore \
 
 - 本番`supabase_migrations.schema_migrations`: `20261014065602 performer_appearances_and_notifications_20261014`の1件のみ。
 - リポジトリ: 2026-07-26から2026-10-16まで38ファイル。
-- ローカルの対応ファイル名は`20261014_performer_appearances_and_notifications.sql`であり、本番versionの桁数とも一致しない。
+- 本番履歴をREAD ONLYでfetchし、ローカルの対応ファイルを`20261014065602_performer_appearances_and_notifications_20261014.sql`へ改名して内容とSHA-256を一致させた。本番履歴自体は変更していない。
 - `supabase db push --dry-run`は「remote versionがlocalにない」として安全に停止する。
 
 安全な整合方針:

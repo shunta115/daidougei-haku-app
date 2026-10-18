@@ -53,7 +53,20 @@ grant select on table public.live_viewer_samples to authenticated;
 drop policy if exists live_schedules_public_read on public.live_schedules;
 create policy live_schedules_public_read on public.live_schedules
   for select to anon, authenticated
-  using (status = 'scheduled' or performer_id = (select auth.uid()) or public.is_admin());
+  using (
+    performer_id = (select auth.uid())
+    or public.is_admin()
+    or (
+      status = 'scheduled'
+      and exists (
+        select 1
+        from public.performers p
+        where p.id = live_schedules.performer_id
+          and p.is_approved = true
+          and p.is_private_test = false
+      )
+    )
+  );
 
 drop policy if exists live_schedules_owner_insert on public.live_schedules;
 create policy live_schedules_owner_insert on public.live_schedules
@@ -98,9 +111,12 @@ create policy live_reservations_own_insert on public.live_reservations
     user_id = (select auth.uid())
     and exists (
       select 1 from public.live_schedules s
+      join public.performers p on p.id = s.performer_id
       where s.id = live_reservations.live_schedule_id
         and s.status = 'scheduled'
         and s.scheduled_start_at > now() - interval '15 minutes'
+        and p.is_approved = true
+        and p.is_private_test = false
     )
   );
 

@@ -314,3 +314,4 @@ revoke all on function public.claim_appearance_push_deliveries(uuid, integer) fr
 grant execute on function public.claim_appearance_push_deliveries(uuid, integer) to service_role;
 
 commit;
+;
