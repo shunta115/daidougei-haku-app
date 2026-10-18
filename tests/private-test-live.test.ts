@@ -20,6 +20,7 @@ describe('private Test Performer LIVE', () => {
     expect(token).toMatch(/privateTest && !canAccessPrivateTestLive/)
     expect(token).toMatch(/live_session_viewer_allowlist/)
     expect(token).toMatch(/viewerProfile\?\.role === 'fan'/)
+    expect(token).toMatch(/roomNameForPrivateSession\(performerId, openSession!\.id\)/)
     expect(token).toMatch(/ttl: privateTest \? '15m' : undefined/)
   })
 
@@ -47,6 +48,7 @@ describe('private Test Performer LIVE', () => {
     const presence = read('api/livekit/presence.ts')
     expect(presence).toMatch(/removeParticipant\(room, identity, \{ revokeTokenTs \}\)/)
     expect(presence).toMatch(/deleteRoom\(room\)/)
+    expect(presence).toMatch(/roomNameForPrivateSession\(performerId, sessionId\)/)
     expect(presence).toMatch(/ended_reason: 'private_test_ended'/)
     expect(presence).toMatch(/live_session_viewer_allowlist/)
     expect(presence).toMatch(/private-viewer-\$\{viewer\.viewer_user_id\}/)

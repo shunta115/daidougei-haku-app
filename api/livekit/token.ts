@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createLiveKitToken, getLiveKitConfig, roomNameForPerformer } from './_shared.js'
+import { createLiveKitToken, getLiveKitConfig, roomNameForPerformer, roomNameForPrivateSession } from './_shared.js'
 import { getAdminSupabase } from '../stripe/_shared.js'
 import { canAccessPrivateTestLive } from './_privacy.js'
 
@@ -132,7 +132,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `private-${host ? 'host' : 'viewer'}-${user!.id}`
       : user?.id ?? guestIdentity
     const displayName = profile?.display_name || user?.email || 'Guest'
-    const room = roomNameForPerformer(performerId)
+    // A private room is session-scoped. Tokens from a previous/legacy room can
+    // never be replayed into a later private broadcast.
+    const room = privateTest
+      ? roomNameForPrivateSession(performerId, openSession!.id)
+      : roomNameForPerformer(performerId)
     const token = await createLiveKitToken({
       identity,
       name: host ? performer.stage_name || displayName : displayName,

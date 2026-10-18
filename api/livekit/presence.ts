@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
 import { requireAdmin } from '../ops/_guard.js'
 import { RoomServiceClient } from 'livekit-server-sdk'
-import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
+import { getLiveKitConfig, roomNameForPerformer, roomNameForPrivateSession } from './_shared.js'
 
 const STALE_SECONDS = 90
 
@@ -23,7 +23,7 @@ function sendLiveKitStatus(res: VercelResponse) {
 async function revokePrivateRoomTokensAndDelete(performerId: string) {
   const { url, apiKey, apiSecret } = getLiveKitConfig()
   const client = new RoomServiceClient(url, apiKey, apiSecret)
-  const room = roomNameForPerformer(performerId)
+  const rooms = new Set<string>([roomNameForPerformer(performerId)])
   const identities = new Set<string>([
     `private-host-${performerId}`,
     `private-viewer-${performerId}`,
@@ -33,6 +33,7 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
   // broadcast ended; otherwise an already-issued token could recreate/join the room.
   const { data: sessions } = await sb.from('live_sessions').select('id').eq('performer_id', performerId)
   const sessionIds = (sessions ?? []).map((session) => session.id)
+  for (const sessionId of sessionIds) rooms.add(roomNameForPrivateSession(performerId, sessionId))
   if (sessionIds.length) {
     const { data: allowlisted } = await sb
       .from('live_session_viewer_allowlist')
@@ -40,10 +41,12 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
       .in('session_id', sessionIds)
     for (const viewer of allowlisted ?? []) identities.add(`private-viewer-${viewer.viewer_user_id}`)
   }
-  try {
-    for (const participant of await client.listParticipants(room)) identities.add(participant.identity)
-  } catch {
-    // The room may already be empty. Deterministic identities are still revoked below.
+  for (const room of rooms) {
+    try {
+      for (const participant of await client.listParticipants(room)) identities.add(participant.identity)
+    } catch {
+      // The room may already be empty. Deterministic identities are still revoked below.
+    }
   }
   const { data: admins } = await sb.from('profiles').select('id').eq('role', 'admin').eq('status', 'active')
   for (const admin of admins ?? []) {
@@ -51,18 +54,20 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
     identities.add(`private-viewer-${admin.id}`)
   }
   const revokeTokenTs = BigInt(Math.floor(Date.now() / 1000))
-  for (const identity of identities) {
-    try {
-      await client.removeParticipant(room, identity, { revokeTokenTs })
-    } catch {
-      // LiveKit Cloud still records the explicit revocation cutoff when the
-      // participant already left; older/self-hosted servers may return 404.
+  for (const room of rooms) {
+    for (const identity of identities) {
+      try {
+        await client.removeParticipant(room, identity, { revokeTokenTs })
+      } catch {
+        // LiveKit Cloud still records the explicit revocation cutoff when the
+        // participant already left; older/self-hosted servers may return 404.
+      }
     }
-  }
-  try {
-    await client.deleteRoom(room)
-  } catch {
-    // Already deleted/never created is a successful terminal state.
+    try {
+      await client.deleteRoom(room)
+    } catch {
+      // Already deleted/never created is a successful terminal state.
+    }
   }
 }
 

@@ -23,6 +23,10 @@ export function roomNameForPerformer(performerId: string) {
   return `performer-${performerId}`
 }
 
+export function roomNameForPrivateSession(performerId: string, sessionId: string) {
+  return `private-${performerId}-${sessionId}`
+}
+
 export async function createLiveKitToken(opts: {
   identity: string
   name: string
