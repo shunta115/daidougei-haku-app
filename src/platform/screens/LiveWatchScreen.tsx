@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, UserX, Users } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
+import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
   canModerateLiveComments,
   deleteLiveComment,
@@ -37,6 +38,7 @@ import { useFullscreen } from '../lib/useFullscreen'
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
+import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 
@@ -59,7 +61,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
-  const [reaction, setReaction] = useState(false)
+  const fever = useLiveFever(performerId, p?.live_started_at, Boolean(p?.is_live))
+  const reaction = fever.hearts.length > 0
   useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
@@ -327,7 +330,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       >
         <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay />
         <audio ref={audioRef} autoPlay />
-        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} />
+        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
+        <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} />
 
         <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
@@ -370,7 +374,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         ) : null}
 
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
-          <button type="button" onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="いいね"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
+          <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
           <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
@@ -401,8 +405,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
         </div>
         <div className="pl-live__actions">
-          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="拍手を送る">
-            <span aria-hidden="true">👏</span> リアクション
+          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る">
+            <span aria-hidden="true">♥</span> いいね
           </button>
           <button
             type="button"

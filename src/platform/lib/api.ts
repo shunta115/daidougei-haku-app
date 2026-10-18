@@ -14,6 +14,7 @@ import type {
   TipRow,
   TipSummary,
 } from './types'
+import { isLiveFeverPulse, type LiveFeverPulse } from './liveFever'
 import { supabaseAuthHeaders } from './supabase'
 import { AWP_ENTRANCE_ZONE } from './venueDisplay'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
@@ -508,6 +509,50 @@ export function subscribeLiveTipEvents(performerId: string, onInsert: (row: Live
     .subscribe()
   return () => {
     void sb.removeChannel(channel)
+  }
+}
+
+export function subscribeLiveFever(
+  performerId: string,
+  liveStartedAt: string,
+  onPulse: (pulse: LiveFeverPulse) => void,
+) {
+  const sb = requireSupabase()
+  const seen = new Map<string, number>()
+  const actorWindows = new Map<string, { startedAt: number; count: number }>()
+  let globalWindowStartedAt = Date.now()
+  let globalCount = 0
+  const channel = sb
+    .channel(`live-fever-${performerId}`)
+    .on('broadcast', { event: 'like' }, ({ payload }) => {
+      if (!isLiveFeverPulse(payload) || Date.parse(payload.liveStartedAt) !== Date.parse(liveStartedAt)) return
+      const now = Date.now()
+      if (now - globalWindowStartedAt >= 1_000) {
+        globalWindowStartedAt = now
+        globalCount = 0
+      }
+      const actor = actorWindows.get(payload.actorId) ?? { startedAt: now, count: 0 }
+      if (now - actor.startedAt >= 1_000) {
+        actor.startedAt = now
+        actor.count = 0
+      }
+      if (seen.has(payload.nonce) || actor.count + payload.count > 12 || globalCount + payload.count > 60) return
+      actor.count += payload.count
+      globalCount += payload.count
+      actorWindows.set(payload.actorId, actor)
+      seen.set(payload.nonce, now)
+      for (const [nonce, receivedAt] of seen) if (now - receivedAt > 10_000 || seen.size > 512) seen.delete(nonce)
+      for (const [actorId, window] of actorWindows) if (now - window.startedAt > 10_000 || actorWindows.size > 512) actorWindows.delete(actorId)
+      onPulse(payload)
+    })
+    .subscribe()
+  return {
+    publish(pulse: LiveFeverPulse) {
+      return channel.send({ type: 'broadcast', event: 'like', payload: pulse })
+    },
+    unsubscribe() {
+      void sb.removeChannel(channel)
+    },
   }
 }
 
