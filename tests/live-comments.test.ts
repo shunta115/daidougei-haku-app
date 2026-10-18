@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { appendLiveComment, isNearCommentEnd, removeLiveComment } from '../src/platform/lib/useLiveCommentScroll'
+import {
+  appendLiveComment,
+  hasIncomingLiveComment,
+  isNearCommentEnd,
+  removeLiveComment,
+} from '../src/platform/lib/useLiveCommentScroll'
 import type { LiveComment } from '../src/platform/lib/types'
 
 function comment(id: string): LiveComment {
@@ -20,6 +25,12 @@ describe('LIVE comment session and scrolling', () => {
   it('only treats the comment list as pinned when it is near the latest entry', () => {
     expect(isNearCommentEnd({ scrollHeight: 500, scrollTop: 300, clientHeight: 180 })).toBe(true)
     expect(isNearCommentEnd({ scrollHeight: 500, scrollTop: 120, clientHeight: 180 })).toBe(false)
+  })
+
+  it('shows the latest-comment affordance only for inserts, not realtime deletes', () => {
+    expect(hasIncomingLiveComment(12, 13)).toBe(true)
+    expect(hasIncomingLiveComment(12, 11)).toBe(false)
+    expect(hasIncomingLiveComment(12, 12)).toBe(false)
   })
 
   it('scopes reads, writes, and realtime inserts to the active LIVE session', () => {

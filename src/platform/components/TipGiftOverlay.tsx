@@ -8,6 +8,7 @@ type Props = {
   performerId: string
   soundEnabled: boolean
   reducedMotion: boolean
+  onGift?: (tier: TipGiftTier) => void
 }
 
 export function thankYouMessage(tier: TipGiftTier) {
@@ -37,11 +38,26 @@ function playChime(tier: TipGiftTier) {
   }
 }
 
-export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion }: Props) {
+export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion, onGift }: Props) {
   const [current, setCurrent] = useState<LiveTipEvent | null>(null)
   const queueRef = useRef<LiveTipEvent[]>([])
   const busyRef = useRef(false)
   const seenRef = useRef<Set<string>>(new Set())
+  const onGiftRef = useRef(onGift)
+  onGiftRef.current = onGift
+  const optionsRef = useRef({ soundEnabled, reducedMotion })
+  optionsRef.current = { soundEnabled, reducedMotion }
+  const timersRef = useRef<Set<number>>(new Set())
+  const aliveRef = useRef(false)
+  const pumpRef = useRef<() => void>(() => {})
+
+  const later = (callback: () => void, ms: number) => {
+    const timer = window.setTimeout(() => {
+      timersRef.current.delete(timer)
+      if (aliveRef.current) callback()
+    }, ms)
+    timersRef.current.add(timer)
+  }
 
   const pump = () => {
     if (busyRef.current) return
@@ -52,27 +68,46 @@ export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion }: Pro
     }
     busyRef.current = true
     setCurrent(next)
-    if (soundEnabled && !reducedMotion) playChime(next.tier)
-    const ms = reducedMotion ? 1800 : TIP_GIFT_DURATIONS_MS[next.tier]
-    window.setTimeout(() => {
+    onGiftRef.current?.(next.tier)
+    const options = optionsRef.current
+    if (options.soundEnabled && !options.reducedMotion) playChime(next.tier)
+    const ms = options.reducedMotion ? 1800 : TIP_GIFT_DURATIONS_MS[next.tier]
+    later(() => {
       busyRef.current = false
       setCurrent(null)
-      window.setTimeout(pump, 120)
+      later(() => pumpRef.current(), 120)
     }, ms)
   }
+  pumpRef.current = pump
 
   const enqueue = (row: LiveTipEvent) => {
-    if (seenRef.current.has(row.id) || seenRef.current.has(row.tip_id)) return
+    if (!aliveRef.current || row.performer_id !== performerId || !row.id || !row.tip_id ||
+      !Number.isInteger(row.amount_cents) || row.amount_cents <= 0 ||
+      !['normal', 'premium', 'special'].includes(row.tier) ||
+      seenRef.current.has(row.id) || seenRef.current.has(row.tip_id)) return
     seenRef.current.add(row.id)
     seenRef.current.add(row.tip_id)
-    queueRef.current.push(row)
-    pump()
+    queueRef.current = [...queueRef.current.slice(-59), row]
+    pumpRef.current()
   }
 
   useEffect(() => {
+    aliveRef.current = true
+    seenRef.current.clear()
+    queueRef.current = []
+    busyRef.current = false
+    setCurrent(null)
     // Seed recent events only for display history is in comments; don't replay old gifts on join.
     listRecentLiveTipEvents(performerId, 5).catch(() => undefined)
-    return subscribeLiveTipEvents(performerId, enqueue)
+    const unsubscribe = subscribeLiveTipEvents(performerId, enqueue)
+    return () => {
+      aliveRef.current = false
+      unsubscribe()
+      for (const timer of timersRef.current) window.clearTimeout(timer)
+      timersRef.current.clear()
+      queueRef.current = []
+      busyRef.current = false
+    }
   }, [performerId])
 
   if (!current) return null
