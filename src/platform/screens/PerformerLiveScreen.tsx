@@ -5,11 +5,15 @@ import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
   canModerateLiveComments,
+  createLiveSchedule,
   endLive,
   deleteLiveComment,
   getActiveLiveSessionId,
   listLiveComments,
+  listPerformerLiveSchedules,
+  liveReservationsEnabled,
   muteLiveCommentUser,
+  notifyLiveReservationStarted,
   postLiveComment,
   startLive,
   subscribeLiveComments,
@@ -36,6 +40,7 @@ import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
+import type { LiveSchedule } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import './live.css'
 
@@ -56,6 +61,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [title, setTitle] = useState(performer?.live_title ?? '')
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [schedules, setSchedules] = useState<LiveSchedule[]>([])
+  const [scheduleFeatureAvailable, setScheduleFeatureAvailable] = useState(false)
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [previewState, setPreviewState] = useState<'idle' | 'preparing' | 'ready' | 'denied' | 'ended'>('idle')
@@ -96,6 +104,16 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const hiddenAtRef = useRef<number | null>(null)
   const commentScroll = useLiveCommentScroll(comments.length)
   const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
+
+  useEffect(() => {
+    if (!liveReservationsEnabled || !performerId || phase !== 'ready') {
+      setScheduleFeatureAvailable(false)
+      return
+    }
+    listPerformerLiveSchedules(performerId)
+      .then((rows) => { setSchedules(rows); setScheduleFeatureAvailable(true) })
+      .catch(() => { setSchedules([]); setScheduleFeatureAvailable(false) })
+  }, [performerId, phase])
 
   useEffect(() => {
     if (performer?.is_live) {
@@ -382,6 +400,15 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
       const sessionId = await startLive(performer.id, title)
       setLiveSessionId(sessionId)
+      const matchingSchedule = schedules.find((schedule) =>
+        schedule.title.trim() === title.trim()
+        && Math.abs(new Date(schedule.scheduled_start_at).getTime() - Date.now()) <= 12 * 60 * 60_000,
+      )
+      if (sessionId && matchingSchedule) {
+        void notifyLiveReservationStarted(matchingSchedule.id, sessionId)
+          .then(() => setSchedules((prev) => prev.filter((schedule) => schedule.id !== matchingSchedule.id)))
+          .catch(() => undefined)
+      }
       if (!performer.is_live) {
         startedAtRef.current = Date.now()
         peakRef.current = 0
@@ -417,6 +444,26 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setPreviewState(denied ? 'denied' : 'idle')
       setError(denied ? 'カメラまたはマイクが許可されていません。iPhoneの設定でSafariのカメラ・マイクを許可して、もう一度お試しください。' : e instanceof LiveKitClientError ? e.message : 'カメラを準備できませんでした。通信を確認して、もう一度お試しください。')
     } finally { setBusy(false) }
+  }
+
+  const scheduleLive = async () => {
+    if (!performerId || !title.trim() || !scheduleAt) return
+    const startsAt = new Date(scheduleAt)
+    if (!Number.isFinite(startsAt.getTime()) || startsAt.getTime() < Date.now() + 5 * 60_000) {
+      setError('LIVE予約は5分以上先の日時を指定してください。')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const row = await createLiveSchedule(performerId, title, startsAt.toISOString())
+      setSchedules((prev) => [...prev, row].sort((a, b) => a.scheduled_start_at.localeCompare(b.scheduled_start_at)))
+      setScheduleAt('')
+    } catch {
+      setError('LIVE予約を作成できませんでした。通信状態を確認してください。')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const stopLive = async () => {
@@ -655,6 +702,13 @@ export function PerformerLiveScreen({ onBack }: Props) {
               onChange={(e) => setTitle(e.target.value)}
             />
           </label>
+          {scheduleFeatureAvailable ? <div className="pl-card" aria-label="LIVE予約">
+            <strong>LIVEを予約</strong>
+            <p className="pl-muted">タイトルと開始予定を公開し、ファンが開始通知を予約できます。</p>
+            <input className="pl-input" type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} />
+            <button type="button" className="pl-btn pl-btn--ghost" disabled={busy || !title.trim() || !scheduleAt} onClick={() => void scheduleLive()}>この内容で予約を公開</button>
+            {schedules.slice(0, 3).map((schedule) => <p key={schedule.id} className="pl-muted">{new Date(schedule.scheduled_start_at).toLocaleString('ja-JP')} · {schedule.title}</p>)}
+          </div> : null}
           <label className="pl-live__location-consent">
             <input
               type="checkbox"

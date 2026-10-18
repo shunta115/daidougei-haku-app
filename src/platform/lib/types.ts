@@ -60,6 +60,16 @@ export type LiveSession = {
   ended_reason?: string | null
 }
 
+export type LiveSchedule = {
+  id: string
+  performer_id: string
+  title: string
+  scheduled_start_at: string
+  status: 'scheduled' | 'cancelled' | 'started' | 'completed'
+  created_at: string
+  updated_at: string
+}
+
 export type LiveTipEvent = {
   id: string
   tip_id: string
