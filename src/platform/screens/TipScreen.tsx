@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
@@ -7,6 +7,7 @@ import { supabaseAuthHeaders } from '../lib/supabase'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
 import { trackProductEvent } from '../lib/track'
 import type { Performer } from '../lib/types'
+import { paymentErrorMessage } from '../lib/paymentErrors'
 
 type TipProps = {
   performerId: string
@@ -18,14 +19,19 @@ type TipProps = {
 
 export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: TipProps) {
   const { user } = useAuth()
-  const { t } = useLang()
+  const { t, lang } = useLang()
   const [p, setP] = useState<Performer | null>(null)
   const [amount, setAmount] = useState<number>(TIP_PRESETS_JPY[1])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const checkoutRequestId = useRef('')
+  // Tips are Platform charges. Connected Account onboarding is required only
+  // before a later transfer, not before a guest can support an approved artist.
+  const supportReady = Boolean(p?.is_approved)
 
   const setSafeAmount = (value: number) => {
     setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))
+    checkoutRequestId.current = ''
   }
 
   const selectAmount = (value: number, source: string) => {
@@ -38,10 +44,15 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   }, [performerId])
 
   const pay = async () => {
+    if (!supportReady) {
+      setError(paymentErrorMessage('performer_support_unavailable', lang))
+      return
+    }
     setBusy(true)
     setError(null)
     trackProductEvent('tip_checkout_start', { performerId, props: { amount_yen: amount } })
     try {
+      if (!checkoutRequestId.current) checkoutRequestId.current = crypto.randomUUID()
       const res = await fetch('/api/stripe/tip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
@@ -50,13 +61,14 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
           fanId: user?.id,
           amountYen: amount,
           returnTo: returnToLive ? 'live' : undefined,
+          requestId: checkoutRequestId.current,
         }),
       })
-      const json = (await res.json()) as { url?: string; error?: string }
-      if (!res.ok || !json.url) throw new Error(json.error || 'Checkout failed')
+      const json = (await res.json()) as { url?: string; code?: string }
+      if (!res.ok || !json.url) throw new Error(json.code || 'checkout_failed')
       window.location.href = json.url
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Tip failed')
+      setError(paymentErrorMessage(e instanceof Error ? e.message : 'checkout_failed', lang))
       setBusy(false)
     }
   }
@@ -115,8 +127,9 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
         />
       </label>
 
-      <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100} onClick={() => void pay()}>
-        {busy ? t('processing') : `❤️ ${t('tipSend', { amount: formatYen(amount) })}`}
+      {!supportReady && p ? <p className="pl-registration__notice" role="status">{paymentErrorMessage('performer_support_unavailable', lang)}</p> : null}
+      <button type="button" className="pl-btn pl-btn--block pl-btn--tip" disabled={busy || amount < 100 || !supportReady} onClick={() => void pay()}>
+        {busy ? t('processing') : !supportReady && p ? paymentErrorMessage('performer_support_unavailable', lang) : `❤️ ${t('tipSend', { amount: formatYen(amount) })}`}
       </button>
       {!user ? <p className="pl-tip-guest-note">{t('tipGuest')}</p> : null}
       </section>

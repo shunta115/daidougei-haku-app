@@ -15,6 +15,53 @@ export function systemFeeYen(amountYen: number, feeBps: number): number {
   return Math.floor((amountYen * feeBps) / 10000)
 }
 
+/** N = max(0, G − S). HAKU fee is taken from N, not from G. */
+export function netAfterStripeFee(grossYen: number, stripeFeeYen: number): number {
+  if (!Number.isInteger(grossYen) || grossYen < 0) return 0
+  if (!Number.isInteger(stripeFeeYen) || stripeFeeYen < 0) return 0
+  return Math.max(0, grossYen - stripeFeeYen)
+}
+
+export function settleSale(grossYen: number, stripeFeeYen: number, feeBps: number) {
+  const netYen = netAfterStripeFee(grossYen, stripeFeeYen)
+  const hakuFeeYen = systemFeeYen(netYen, feeBps)
+  return {
+    grossYen: Number.isInteger(grossYen) && grossYen > 0 ? grossYen : 0,
+    stripeFeeYen: Number.isInteger(stripeFeeYen) && stripeFeeYen > 0 ? stripeFeeYen : 0,
+    netYen,
+    hakuFeeYen,
+    performerShareYen: Math.max(0, netYen - hakuFeeYen),
+  }
+}
+
+export function applicationFeeOverageYen(collectedAppFeeYen: number, desiredHakuFeeYen: number): number {
+  if (!Number.isInteger(collectedAppFeeYen) || collectedAppFeeYen < 0) return 0
+  if (!Number.isInteger(desiredHakuFeeYen) || desiredHakuFeeYen < 0) return 0
+  return Math.max(0, collectedAppFeeYen - desiredHakuFeeYen)
+}
+
+/** Apply the same formal settlement equation to the remaining gross after refund. */
+export function settleSaleAfterRefund(
+  grossYen: number,
+  stripeFeeYen: number,
+  refundedYen: number,
+  feeBps: number,
+) {
+  if (!Number.isInteger(grossYen) || grossYen < 0) return settleSale(0, stripeFeeYen, feeBps)
+  const safeRefundedYen = Number.isInteger(refundedYen) && refundedYen > 0 ? Math.min(grossYen, refundedYen) : 0
+  return settleSale(Math.max(0, grossYen - safeRefundedYen), stripeFeeYen, feeBps)
+}
+
+export function applicationFeeRefundDueYen(
+  collectedAppFeeYen: number,
+  alreadyRefundedYen: number,
+  remainingHakuFeeYen: number,
+): number {
+  const desiredRefundedYen = applicationFeeOverageYen(collectedAppFeeYen, remainingHakuFeeYen)
+  if (!Number.isInteger(alreadyRefundedYen) || alreadyRefundedYen < 0) return 0
+  return Math.max(0, desiredRefundedYen - alreadyRefundedYen)
+}
+
 export function bpsToPercentLabel(bps: number): string {
   const n = bps / 100
   return Number.isInteger(n) ? String(n) : n.toFixed(1)

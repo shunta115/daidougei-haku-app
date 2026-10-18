@@ -163,46 +163,6 @@ create policy live_tip_events_read on public.live_tip_events for select using (
   end
 );
 
-drop policy if exists live_reaction_totals_read on public.live_reaction_totals;
-create policy live_reaction_totals_read on public.live_reaction_totals for select using (
-  public.can_view_live_performer(performer_id)
-);
-
--- Both reaction RPCs are SECURITY DEFINER, so they need an explicit privacy check.
-create or replace function public.add_live_reactions(target_performer_id uuid, actor_key uuid, reaction_count integer)
-returns bigint language plpgsql security definer set search_path = public as $$
-declare new_total bigint; actor_window public.live_reaction_actor_windows%rowtype; session_start timestamptz;
-begin
-  if not public.can_view_live_performer(target_performer_id) then raise exception 'live is not available' using errcode = '42501'; end if;
-  if actor_key is null or reaction_count is null or reaction_count < 1 or reaction_count > 30 then raise exception 'invalid reaction batch'; end if;
-  select live_started_at into session_start from public.performers where id = target_performer_id and is_approved = true and is_live = true for share;
-  if not found or session_start is null then raise exception 'live is not active'; end if;
-  insert into public.live_reaction_actor_windows(performer_id, actor_key, window_count)
-  values(target_performer_id, actor_key, reaction_count)
-  on conflict on constraint live_reaction_actor_windows_pkey do update set
-    window_started_at = case when live_reaction_actor_windows.window_started_at < now() - interval '1 second' then now() else live_reaction_actor_windows.window_started_at end,
-    window_count = case when live_reaction_actor_windows.window_started_at < now() - interval '1 second' then excluded.window_count else live_reaction_actor_windows.window_count + excluded.window_count end
-  returning * into actor_window;
-  if actor_window.window_count > 60 then raise exception 'reaction rate exceeded'; end if;
-  insert into public.live_reaction_totals(performer_id, total, live_started_at) values(target_performer_id, reaction_count, session_start)
-  on conflict(performer_id) do update set total = case when live_reaction_totals.live_started_at = excluded.live_started_at then live_reaction_totals.total + excluded.total else excluded.total end,
-    live_started_at = excluded.live_started_at, updated_at = now()
-  returning total into new_total;
-  return new_total;
-end;
-$$;
-
-create or replace function public.add_live_session_reactions(target_performer_id uuid, actor_key uuid, reaction_count integer, expected_started_at timestamptz)
-returns bigint language plpgsql security definer set search_path = public as $$
-declare session_start timestamptz;
-begin
-  if not public.can_view_live_performer(target_performer_id) then raise exception 'live is not available' using errcode = '42501'; end if;
-  select live_started_at into session_start from public.performers where id = target_performer_id and is_approved = true and is_live = true for share;
-  if not found or expected_started_at is null or session_start is distinct from expected_started_at then raise exception 'live session changed'; end if;
-  return public.add_live_reactions(target_performer_id, actor_key, reaction_count);
-end;
-$$;
-
 -- Defense in depth: direct RPC calls cannot create notifications for private LIVE.
 create or replace function public.notify_followers_live_start(p_performer_id uuid, p_stage_name text, p_title text default null)
 returns void language plpgsql security definer set search_path = public as $$

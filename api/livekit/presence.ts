@@ -6,16 +6,26 @@ import { getLiveKitConfig, roomNameForPerformer, roomNameForPrivateSession } fro
 
 const STALE_SECONDS = 90
 
-function hasConfiguredValue(value: string | undefined) {
-  if (!value) return false
-  const cleaned = value.trim().replace(/^['"]|['"]$/g, '')
-  return Boolean(cleaned) && cleaned !== '[SENSITIVE]'
+type LiveKitParticipant = { identity: string }
+
+/** The host is connected to the same room and must never inflate audience data. */
+export function countAudienceParticipants(participants: LiveKitParticipant[], performerId: string) {
+  return participants.filter((participant) => (
+    participant.identity !== performerId
+    && participant.identity !== `private-host-${performerId}`
+  )).length
 }
 
-function sendLiveKitStatus(res: VercelResponse) {
-  const hasUrl = hasConfiguredValue(process.env.LIVEKIT_URL) || hasConfiguredValue(process.env.VITE_LIVEKIT_URL)
-  const hasKey = hasConfiguredValue(process.env.LIVEKIT_API_KEY)
-  const hasSecret = hasConfiguredValue(process.env.LIVEKIT_API_SECRET)
+function present(value: string | undefined) {
+  if (!value) return false
+  const normalized = value.trim().replace(/^['"]|['"]$/g, '')
+  return Boolean(normalized) && normalized !== '[SENSITIVE]'
+}
+
+function readiness(res: VercelResponse) {
+  const hasUrl = present(process.env.LIVEKIT_URL) || present(process.env.VITE_LIVEKIT_URL)
+  const hasKey = present(process.env.LIVEKIT_API_KEY)
+  const hasSecret = present(process.env.LIVEKIT_API_SECRET)
   res.setHeader('Cache-Control', 'no-store')
   res.status(200).json({ configured: hasUrl && hasKey && hasSecret, hasUrl, hasKey, hasSecret })
 }
@@ -29,8 +39,6 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
     `private-viewer-${performerId}`,
   ])
   const sb = getAdminSupabase()
-  // Revoke deterministic identities even when a viewer disconnected before the
-  // broadcast ended; otherwise an already-issued token could recreate/join the room.
   const { data: sessions } = await sb.from('live_sessions').select('id').eq('performer_id', performerId)
   const sessionIds = (sessions ?? []).map((session) => session.id)
   for (const sessionId of sessionIds) rooms.add(roomNameForPrivateSession(performerId, sessionId))
@@ -45,7 +53,7 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
     try {
       for (const participant of await client.listParticipants(room)) identities.add(participant.identity)
     } catch {
-      // The room may already be empty. Deterministic identities are still revoked below.
+      // A room that never existed or is already empty has no connected peers.
     }
   }
   const { data: admins } = await sb.from('profiles').select('id').eq('role', 'admin').eq('status', 'active')
@@ -59,8 +67,7 @@ async function revokePrivateRoomTokensAndDelete(performerId: string) {
       try {
         await client.removeParticipant(room, identity, { revokeTokenTs })
       } catch {
-        // LiveKit Cloud still records the explicit revocation cutoff when the
-        // participant already left; older/self-hosted servers may return 404.
+        // Older/self-hosted servers can return 404 for a disconnected identity.
       }
     }
     try {
@@ -118,14 +125,54 @@ async function expireStaleSessions() {
   const cutoff = new Date(Date.now() - STALE_SECONDS * 1000).toISOString()
   const { data: stale, error } = await sb
     .from('live_sessions')
-    .select('id, performer_id')
+    .select('id, performer_id, started_at, heartbeat_at')
     .is('ended_at', null)
-    .lt('heartbeat_at', cutoff)
+    .or(`heartbeat_at.lt.${cutoff},and(heartbeat_at.is.null,started_at.lt.${cutoff})`)
   if (error) throw error
   if (!stale?.length) return 0
 
-  const ids = stale.map((row) => row.id)
-  const performerIds = [...new Set(stale.map((row) => row.performer_id))]
+  const stalePerformerIds = [...new Set(stale.map((row) => row.performer_id))]
+  const { data: stalePerformers } = await sb
+    .from('performers')
+    .select('id,is_private_test')
+    .in('id', stalePerformerIds)
+  const privatePerformerIds = new Set(
+    (stalePerformers ?? []).filter((row) => row.is_private_test).map((row) => row.id),
+  )
+
+  let roomService: RoomServiceClient | null = null
+  try {
+    const { url, apiKey, apiSecret } = getLiveKitConfig()
+    roomService = new RoomServiceClient(url, apiKey, apiSecret)
+  } catch {
+    // If configuration is unavailable, heartbeat age remains authoritative.
+  }
+
+  const trulyStale: typeof stale = []
+  for (const row of stale) {
+    try {
+      const room = privatePerformerIds.has(row.performer_id)
+        ? roomNameForPrivateSession(row.performer_id, row.id)
+        : roomNameForPerformer(row.performer_id)
+      const participants = roomService ? await roomService.listParticipants(room) : []
+      const hostConnected = participants.some((participant) => (
+        participant.identity === row.performer_id
+        || participant.identity === `private-host-${row.performer_id}`
+      ))
+      if (hostConnected) {
+        await sb.from('live_sessions').update({ heartbeat_at: new Date().toISOString() }).eq('id', row.id).is('ended_at', null)
+        continue
+      }
+    } catch {
+      // Fail safe during a LiveKit API outage: do not terminate a possibly healthy broadcast.
+      if (roomService) continue
+    }
+    trulyStale.push(row)
+  }
+  if (!trulyStale.length) return 0
+
+  const ids = trulyStale.map((row) => row.id)
+  const performerIds = [...new Set(trulyStale.map((row) => row.performer_id))]
   const endedAt = new Date().toISOString()
   const { error: endError } = await sb
     .from('live_sessions')
@@ -142,9 +189,8 @@ async function expireStaleSessions() {
         const { data: performer } = await sb.from('performers').select('is_private_test').eq('id', performerId).maybeSingle()
         if (performer?.is_private_test) {
           await revokePrivateRoomTokensAndDelete(performerId)
-        } else {
-          const { url, apiKey, apiSecret } = getLiveKitConfig()
-          await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(performerId))
+        } else if (roomService) {
+          await roomService.deleteRoom(roomNameForPerformer(performerId))
         }
       } catch {
         // Stale database cleanup must still succeed if LiveKit is temporarily unavailable.
@@ -194,11 +240,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
+  if (req.method === 'GET' && req.query.mode === 'status') {
+    readiness(res)
+    return
+  }
   try {
-    if (req.method === 'GET' && req.query.mode === 'status') {
-      sendLiveKitStatus(res)
-      return
-    }
     const expired = await expireStaleSessions()
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store')
@@ -224,6 +270,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sb = getAdminSupabase()
+    const [{ data: performer }, { data: profile }] = await Promise.all([
+      sb.from('performers').select('is_approved,is_private_test').eq('id', performerId).maybeSingle(),
+      sb.from('profiles').select('role,status').eq('id', performerId).maybeSingle(),
+    ])
+    if (!performer?.is_approved || profile?.role !== 'performer' || profile?.status !== 'active') {
+      res.status(403).json({ error: 'Approved active performer required' })
+      return
+    }
     const heartbeatAt = new Date().toISOString()
     const { data, error } = await sb
       .from('live_sessions')
@@ -236,7 +290,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(409).json({ error: 'No active live session' })
       return
     }
-    res.status(200).json({ ok: true, heartbeatAt })
+    let viewerCount: number | null = null
+    try {
+      const { url, apiKey, apiSecret } = getLiveKitConfig()
+      const room = performer.is_private_test
+        ? roomNameForPrivateSession(performerId, data[0].id)
+        : roomNameForPerformer(performerId)
+      const participants = await new RoomServiceClient(url, apiKey, apiSecret).listParticipants(room)
+      viewerCount = countAudienceParticipants(participants, performerId)
+    } catch {
+      // A LiveKit management API outage must not prevent the host heartbeat.
+    }
+    if (viewerCount != null) {
+      // The predicate makes competing host tabs monotonic: a stale lower count
+      // cannot overwrite a higher peak recorded by another heartbeat.
+      await sb
+        .from('live_sessions')
+        .update({ viewer_peak: viewerCount })
+        .eq('id', data[0].id)
+        .lt('viewer_peak', viewerCount)
+    }
+    res.status(200).json({ ok: true, heartbeatAt, viewerCount })
   } catch {
     res.status(503).json({ error: 'Live presence is temporarily unavailable' })
   }

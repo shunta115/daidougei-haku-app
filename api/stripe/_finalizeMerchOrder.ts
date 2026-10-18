@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
+import { refundSaleStatus } from '../../shared/payoutMath.js'
 
 function stripeId(value: string | { id?: string } | null | undefined): string | null {
   return typeof value === 'string' ? value : value?.id ?? null
@@ -20,6 +21,25 @@ function applicationFeeId(charge: Stripe.Charge): string | null {
 function missingColumn(error: unknown) {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
   return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
+}
+
+async function validatePaidOrder(
+  sb: SupabaseClient,
+  args: { orderId: string; amount: number; sellerId?: string; buyerId?: string; productId?: string; sessionId?: string },
+) {
+  const { data, error } = await sb
+    .from('merch_orders')
+    .select('id,seller_id,buyer_id,product_id,amount_yen,gross_amount_yen,stripe_session_id')
+    .eq('id', args.orderId)
+    .maybeSingle()
+  if (error) throw error
+  const expectedAmount = Number(data?.gross_amount_yen ?? data?.amount_yen)
+  if (!data || expectedAmount !== args.amount || (args.sellerId && data.seller_id !== args.sellerId) || (args.buyerId && data.buyer_id !== args.buyerId) || (args.productId && data.product_id !== args.productId)) {
+    throw new Error('Merch checkout metadata mismatch')
+  }
+  if (data.stripe_session_id && args.sessionId && data.stripe_session_id !== args.sessionId) {
+    throw new Error('Merch checkout session mismatch')
+  }
 }
 
 async function updateOrderWithFallback(
@@ -59,6 +79,14 @@ export async function finalizePaidMerchOrder(
   const orderId = session.metadata?.order_id ?? null
   const amount = session.amount_total ?? 0
   if (!orderId) return { ok: false, already: false, orderId: null, amount }
+  await validatePaidOrder(sb, {
+    orderId,
+    amount,
+    sellerId: session.metadata?.seller_id,
+    buyerId: session.metadata?.buyer_id,
+    productId: session.metadata?.product_id,
+    sessionId: session.id,
+  })
 
   const oldPatch = {
     status: 'succeeded',
@@ -74,6 +102,7 @@ export async function finalizePaidMerchOrder(
     connected_account_id: connectedAccountId ?? session.metadata?.connected_account_id ?? null,
     gross_amount_yen: amount,
     paid_at: new Date().toISOString(),
+    fulfillment_status: 'awaiting_pickup',
   }
   const claimed = await updateOrderWithFallback(sb, orderId, patch, oldPatch, ['pending'])
 
@@ -92,6 +121,13 @@ export async function finalizePaidMerchOrderFromPaymentIntent(
   const orderId = paymentIntent.metadata?.order_id ?? null
   const amount = paymentIntent.amount_received || paymentIntent.amount || 0
   if (!orderId) return { ok: false, already: false, orderId: null, amount }
+  await validatePaidOrder(sb, {
+    orderId,
+    amount,
+    sellerId: paymentIntent.metadata?.seller_id,
+    buyerId: paymentIntent.metadata?.buyer_id,
+    productId: paymentIntent.metadata?.product_id,
+  })
   const oldPatch = {
     status: 'succeeded',
     stripe_payment_intent: paymentIntent.id,
@@ -103,6 +139,7 @@ export async function finalizePaidMerchOrderFromPaymentIntent(
     connected_account_id: connectedAccountId ?? paymentIntent.metadata?.connected_account_id ?? null,
     gross_amount_yen: amount,
     paid_at: new Date().toISOString(),
+    fulfillment_status: 'awaiting_pickup',
   }
   const claimed = await updateOrderWithFallback(sb, orderId, patch, oldPatch, ['pending'])
   if (!claimed?.id) return { ok: true, already: true, orderId, amount }
@@ -183,29 +220,66 @@ export async function failMerchOrderReservation(sb: SupabaseClient, paymentInten
 export async function markMerchOrderRefunded(sb: SupabaseClient, charge: Stripe.Charge, connectedAccountId?: string | null) {
   const paymentIntentId = stripeId(charge.payment_intent)
   const refundedAmount = charge.amount_refunded ?? 0
+  const status = refundSaleStatus(charge.amount ?? 0, refundedAmount)
   const patch = {
-    status: 'refunded',
+    status,
     stripe_charge_id: charge.id,
     stripe_application_fee_id: applicationFeeId(charge),
-    connected_account_id: connectedAccountId ?? null,
+    ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
     refunded_amount_yen: refundedAmount,
   }
-  const oldPatch = { status: 'refunded' }
+  const oldPatch = { status }
   const byCharge = await sb
     .from('merch_orders')
     .update(patch)
     .eq('stripe_charge_id', charge.id)
-    .select('id')
+    .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+    .select('id, product_id, quantity')
     .maybeSingle()
   if (byCharge.error && !missingColumn(byCharge.error)) throw byCharge.error
-  if (byCharge.data?.id || !paymentIntentId) return
+  let claimed = byCharge.data
 
-  const { error } = await sb
-    .from('merch_orders')
-    .update(patch)
-    .or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`)
-  if (error && missingColumn(error)) await sb.from('merch_orders').update(oldPatch).eq('stripe_payment_intent', paymentIntentId)
-  else if (error) throw error
+  if (!claimed?.id && paymentIntentId) {
+    const fallback = await sb
+      .from('merch_orders')
+      .update(patch)
+      .or(`stripe_payment_intent_id.eq.${paymentIntentId},stripe_payment_intent.eq.${paymentIntentId}`)
+      .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+      .select('id, product_id, quantity')
+      .maybeSingle()
+    if (fallback.error && missingColumn(fallback.error)) {
+      const legacy = await sb
+        .from('merch_orders')
+        .update(oldPatch)
+        .eq('stripe_payment_intent', paymentIntentId)
+        .neq('status', status === 'refunded' ? 'refunded' : '__never__')
+        .select('id, product_id, quantity')
+        .maybeSingle()
+      if (legacy.error) throw legacy.error
+      claimed = legacy.data
+    } else if (fallback.error) {
+      throw fallback.error
+    } else {
+      claimed = fallback.data
+    }
+  }
+
+  // Restore inventory once, only when the order first reaches a full-refund state.
+  // Duplicate charge.refunded deliveries cannot claim the already-refunded row.
+  if (status !== 'refunded' || !claimed?.product_id) return
+  const { data: product, error: productError } = await sb
+    .from('merch_products')
+    .select('stock, status')
+    .eq('id', claimed.product_id)
+    .maybeSingle()
+  if (productError) throw productError
+  if (!product) return
+  const stock = Math.max(0, (product.stock ?? 0) + (claimed.quantity ?? 0))
+  const { error: restoreError } = await sb
+    .from('merch_products')
+    .update({ stock, status: product.status === 'sold_out' && stock > 0 ? 'active' : product.status })
+    .eq('id', claimed.product_id)
+  if (restoreError) throw restoreError
 }
 
 export async function markMerchOrderDispute(

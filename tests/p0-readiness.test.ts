@@ -72,6 +72,14 @@ describe('P0 migration safety', () => {
     expect(presence).toMatch(/heartbeat_timeout/)
     expect(presence).toMatch(/requireAdmin/)
     expect(presence).toMatch(/admin_forced/)
+    expect(presence).toMatch(/countAudienceParticipants/)
+    expect(presence).toMatch(/\.lt\('viewer_peak', viewerCount\)/)
+  })
+
+  it('shows the complete LIVE frame by default on narrow phones', () => {
+    const viewer = read('src/platform/screens/LiveWatchScreen.tsx')
+    expect(viewer).toMatch(/useState<'contain' \| 'cover'>\('contain'\)/)
+    expect(viewer).toMatch(/setObjectFit\(\(f\) => \(f === 'contain' \? 'cover' : 'contain'\)\)/)
   })
 
   it('keeps guest tips server-priced and preserves Direct Charges', () => {
@@ -79,9 +87,11 @@ describe('P0 migration safety', () => {
     const screen = read('src/platform/screens/TipScreen.tsx')
     expect(tip).toMatch(/getOptionalAuthUser/)
     expect(tip).toMatch(/fan_id: payerId/)
-    expect(tip).toMatch(/application_fee_amount: fee/)
-    expect(tip).toMatch(/stripeAccount: connectedAccountId/)
-    expect(screen).toMatch(/登録なしでStripeの安全な決済へ進めます/)
+    expect(tip).toContain("charge_type: 'platform_separate'")
+    expect(tip).not.toMatch(/application_fee_amount: fee/)
+    expect(tip).not.toMatch(/stripeAccount: connectedAccountId/)
+    expect(screen).toMatch(/t\('tipGuest'\)/)
+    expect(read('src/i18n/extra.ts')).toMatch(/登録なしでStripeの安全な決済へ進めます/)
     expect(screen).not.toMatch(/if \(!user\) \{\s*window\.sessionStorage\.setItem\('pl-tip-to'/)
   })
 
@@ -92,5 +102,17 @@ describe('P0 migration safety', () => {
     expect(nav).toMatch(/key: 'map-schedule'.*MapPinned/)
     expect(fanNav).not.toMatch(/key: 'search', label: labels\.discover, icon: Search/)
     expect(app).toMatch(/onOpenSearch=\{\(\) => setScreen\('search'\)\}/)
+  })
+
+  it('keeps the AWP event-day UX data-driven and device-local without schema writes', () => {
+    const screen = read('src/platform/screens/EventScreens.tsx')
+    expect(screen).toMatch(/listEventSlots\(nextEvent\.id\)/)
+    expect(screen).toMatch(/setInterval\(\(\) => setClock\(nowJst\(\)\), 30_000\)/)
+    expect(screen).toMatch(/haku:wanted-slots:/)
+    expect(screen).toMatch(/official-venue-map\.webp/)
+    expect(screen).toMatch(/AWP_HERO_SRC = '\/events\/award-winning-performers-2026\/hero-performer\.jpg'/)
+    expect(screen).toMatch(/AWP_FLYER_SRC = '\/events\/award-winning-performers-2026\/official-flyer-2026\.webp'/)
+    expect(screen).toMatch(/rule\?\.voting_open/)
+    expect(screen).not.toMatch(/navigator\.geolocation/)
   })
 })

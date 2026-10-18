@@ -12,6 +12,9 @@ import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, requireSupabase, supabase } from './supabase'
 import type { Performer, Profile } from './types'
 import { registrationError } from './onboarding'
+import { PERFORMER_CLIENT_SELECT } from './performerColumns'
+import { hasPasswordRecoveryParams } from './authCallback'
+import { PASSWORD_RESET_PATH } from '../../app/routes'
 
 type AuthState = {
   ready: boolean
@@ -39,22 +42,22 @@ async function loadProfile(userId: string): Promise<{ profile: Profile | null; p
   if (!profile) throw new Error('Profile unavailable')
   let performer: Performer | null = null
   if (profile?.role === 'performer') {
-    const { data, error } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
+    const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).maybeSingle()
     if (error) throw error
-    performer = (data as Performer) ?? null
+    performer = (data as unknown as Performer) ?? null
     if (!performer) {
       const stageName = profile.display_name?.trim() || 'Performer'
       const { error: insertError } = await sb
         .from('performers')
         .insert({ id: userId, stage_name: stageName, is_approved: false })
       if (insertError && insertError.code !== '23505') throw insertError
-      const { data: inserted, error: reloadError } = await sb.from('performers').select('*').eq('id', userId).single()
+      const { data: inserted, error: reloadError } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).single()
       if (reloadError) throw reloadError
-      performer = (inserted as Performer) ?? null
+      performer = (inserted as unknown as Performer) ?? null
     }
   } else if (profile?.role === 'admin') {
-    const { data } = await sb.from('performers').select('*').eq('id', userId).maybeSingle()
-    performer = (data as Performer) ?? null
+    const { data } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', userId).maybeSingle()
+    performer = (data as unknown as Performer) ?? null
   }
   return { profile: (profile as Profile) ?? null, performer }
 }
@@ -65,7 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [performer, setPerformer] = useState<Performer | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
-  const [passwordRecovery, setPasswordRecovery] = useState(false)
+  const [passwordRecovery, setPasswordRecovery] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return hasPasswordRecoveryParams()
+  })
   const [authRevision, setAuthRevision] = useState(0)
   const currentUserId = useRef<string | null>(null)
 
@@ -162,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase()
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/live?auth=1`,
+        redirectTo: `${window.location.origin}${PASSWORD_RESET_PATH}`,
       })
       return error ? registrationError(error) : null
     } catch (e) {

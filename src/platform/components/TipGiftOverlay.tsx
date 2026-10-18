@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { subscribeLiveTipEvents } from '../lib/api'
+import { listRecentLiveTipEvents, subscribeLiveTipEvents } from '../lib/api'
 import { formatYen } from '../lib/money'
 import { TIP_GIFT_DURATIONS_MS, type TipGiftTier } from '../lib/tipGifts'
 import type { LiveTipEvent } from '../lib/types'
 
 type Props = {
   performerId: string
-  liveSessionId: string
   soundEnabled: boolean
   reducedMotion: boolean
+  onGift?: (tier: TipGiftTier) => void
+}
+
+export function thankYouMessage(tier: TipGiftTier) {
+  if (tier === 'special') return 'SPECIAL THANK YOU!'
+  if (tier === 'premium') return 'BIG THANK YOU!'
+  return 'THANK YOU!'
 }
 
 function playChime(tier: TipGiftTier) {
@@ -32,16 +38,19 @@ function playChime(tier: TipGiftTier) {
   }
 }
 
-export function TipGiftOverlay({ performerId, liveSessionId, soundEnabled, reducedMotion }: Props) {
+export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion, onGift }: Props) {
   const [current, setCurrent] = useState<LiveTipEvent | null>(null)
   const queueRef = useRef<LiveTipEvent[]>([])
   const busyRef = useRef(false)
   const seenRef = useRef<Set<string>>(new Set())
+  const onGiftRef = useRef(onGift)
+  onGiftRef.current = onGift
   const optionsRef = useRef({ soundEnabled, reducedMotion })
   optionsRef.current = { soundEnabled, reducedMotion }
   const timersRef = useRef<Set<number>>(new Set())
   const aliveRef = useRef(false)
   const pumpRef = useRef<() => void>(() => {})
+
   const later = (callback: () => void, ms: number) => {
     const timer = window.setTimeout(() => {
       timersRef.current.delete(timer)
@@ -59,6 +68,7 @@ export function TipGiftOverlay({ performerId, liveSessionId, soundEnabled, reduc
     }
     busyRef.current = true
     setCurrent(next)
+    onGiftRef.current?.(next.tier)
     const options = optionsRef.current
     if (options.soundEnabled && !options.reducedMotion) playChime(next.tier)
     const ms = options.reducedMotion ? 1800 : TIP_GIFT_DURATIONS_MS[next.tier]
@@ -71,7 +81,7 @@ export function TipGiftOverlay({ performerId, liveSessionId, soundEnabled, reduc
   pumpRef.current = pump
 
   const enqueue = (row: LiveTipEvent) => {
-    if (!aliveRef.current || row.performer_id !== performerId || row.live_session_id !== liveSessionId || !row.tip_id ||
+    if (!aliveRef.current || row.performer_id !== performerId || !row.id || !row.tip_id ||
       !Number.isInteger(row.amount_cents) || row.amount_cents <= 0 ||
       !['normal', 'premium', 'special'].includes(row.tier) ||
       seenRef.current.has(row.id) || seenRef.current.has(row.tip_id)) return
@@ -83,15 +93,22 @@ export function TipGiftOverlay({ performerId, liveSessionId, soundEnabled, reduc
 
   useEffect(() => {
     aliveRef.current = true
-    seenRef.current.clear(); queueRef.current = []; busyRef.current = false; setCurrent(null)
-    // Subscribe only to server-verified INSERTs; joining/reconnecting never replays history.
-    const unsubscribe = subscribeLiveTipEvents(performerId, liveSessionId, enqueue)
+    seenRef.current.clear()
+    queueRef.current = []
+    busyRef.current = false
+    setCurrent(null)
+    // Seed recent events only for display history is in comments; don't replay old gifts on join.
+    listRecentLiveTipEvents(performerId, 5).catch(() => undefined)
+    const unsubscribe = subscribeLiveTipEvents(performerId, enqueue)
     return () => {
-      aliveRef.current = false; unsubscribe()
+      aliveRef.current = false
+      unsubscribe()
       for (const timer of timersRef.current) window.clearTimeout(timer)
-      timersRef.current.clear(); queueRef.current = []; busyRef.current = false
+      timersRef.current.clear()
+      queueRef.current = []
+      busyRef.current = false
     }
-  }, [performerId, liveSessionId])
+  }, [performerId])
 
   if (!current) return null
 
@@ -113,6 +130,9 @@ export function TipGiftOverlay({ performerId, liveSessionId, soundEnabled, reduc
           </div>
         )}
         <div className="pl-gift__text">
+          <span className="pl-gift__thanks" aria-hidden="true">
+            {thankYouMessage(tier)}
+          </span>
           <strong>
             {name}さんが{formatYen(current.amount_cents)}を贈りました！
           </strong>

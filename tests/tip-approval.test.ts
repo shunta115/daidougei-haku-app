@@ -9,11 +9,10 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('../api/stripe/_shared.js', () => ({
   MIN_TIP_AMOUNT_YEN: 100,
-  PLATFORM_FEE_BPS: 1000,
-  calcPlatformFee: (amount: number) => Math.floor(amount * 0.1),
+  PLATFORM_FEE_BPS: 1500,
+  calcPlatformFee: (amount: number) => Math.floor(amount * 0.15),
   getOptionalAuthUser: vi.fn(async () => null),
   getAppUrl: () => 'https://app.example.test',
-  getBpsSetting: vi.fn(async () => 1000),
   getIntSetting: vi.fn(async () => 100),
   requireConnectedAccountChargeReady: vi.fn(async () => ({ id: 'acct_fixture' })),
   getStripe: () => ({ checkout: { sessions: { create: fake.checkout } } }),
@@ -59,12 +58,26 @@ beforeEach(() => {
   fake.status = 'pending'
   fake.stripeAccount = 'acct_fixture'
   fake.checkout.mockReset()
+  fake.checkout.mockResolvedValue({ id: 'cs_test_fixture1234567890', url: 'https://checkout.stripe.test/session' })
+})
+
+it('allows an approved active performer to receive a Platform tip before Connect onboarding', async () => {
+  fake.approved = true
+  fake.status = 'active'
+  fake.stripeAccount = null
+  const response = await request()
+  expect(response.code).toBe(200)
+  expect(response.body.url).toBe('https://checkout.stripe.test/session')
+  expect(fake.checkout).toHaveBeenCalledTimes(1)
+  const session = fake.checkout.mock.calls[0][0]
+  expect(session.payment_intent_data.metadata).toMatchObject({ kind: 'tip', performer_id: 'performer-1', funding_model: 'platform_separate' })
+  expect(session.payment_intent_data).not.toHaveProperty('application_fee_amount')
 })
 
 it('rejects a new tip checkout for an unapproved performer', async () => {
   const response = await request()
   expect(response.code).toBe(403)
-  expect(response.body.error).toBe('Performer is not approved yet')
+  expect(response.body.code).toBe('performer_support_unavailable')
   expect(fake.checkout).not.toHaveBeenCalled()
 })
 
@@ -73,6 +86,6 @@ it('rejects a new tip checkout when the performer account is not active', async 
   fake.status = 'pending'
   const response = await request()
   expect(response.code).toBe(403)
-  expect(response.body.error).toBe('Performer is not approved yet')
+  expect(response.body.code).toBe('performer_support_unavailable')
   expect(fake.checkout).not.toHaveBeenCalled()
 })

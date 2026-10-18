@@ -2,15 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   MIN_TIP_AMOUNT_YEN,
   PLATFORM_FEE_BPS,
-  calcPlatformFee,
   getAdminSupabase,
   getAppUrl,
-  getBpsSetting,
   getIntSetting,
   getOptionalAuthUser,
   getStripe,
-  requireConnectedAccountChargeReady,
 } from './_shared.js'
+import { handleDisplayNameUpdate } from '../profile/_displayName.js'
 
 function missingColumn(error: unknown) {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : ''
@@ -18,6 +16,8 @@ function missingColumn(error: unknown) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const action = req.query ? req.query.action : undefined
+  if (action === 'display-name') return handleDisplayNameUpdate(req, res)
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
@@ -26,52 +26,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const user = await getOptionalAuthUser(req)
 
-    const { performerId, fanId, amountYen, returnTo, anonymous } = req.body as {
+    const { performerId, fanId, amountYen, returnTo, anonymous, requestId } = req.body as {
       performerId?: string
       fanId?: string
       amountYen?: number
       returnTo?: string
       anonymous?: boolean
+      requestId?: string
     }
 
     if (fanId && fanId !== user?.id) {
-      res.status(403).json({ error: 'fanId must match the signed-in user' })
+      res.status(403).json({ code: 'invalid_payment_request' })
       return
     }
 
     const payerId = user?.id ?? null
+    const checkoutId = typeof requestId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)
+      ? requestId
+      : crypto.randomUUID()
     const sb = getAdminSupabase()
+    if (payerId) {
+      const { data: payerAccount } = await sb.from('profiles').select('status').eq('id', payerId).maybeSingle()
+      if (payerAccount && (payerAccount.status === 'suspended' || payerAccount.status === 'deleted')) {
+        res.status(403).json({ code: 'invalid_payment_request' })
+        return
+      }
+    }
     const minTipAmount = await getIntSetting(sb, 'tip_min_amount_yen', MIN_TIP_AMOUNT_YEN, 100, 100000)
     if (!performerId || !Number.isInteger(amountYen) || amountYen < minTipAmount || amountYen > 100000) {
-      res.status(400).json({ error: `performerId and amountYen (${minTipAmount}-100000 JPY) required` })
+      res.status(400).json({ code: 'invalid_payment_request' })
       return
     }
 
     const { data: performer, error } = await sb.from('performers').select('*').eq('id', performerId).single()
     if (error || !performer) {
-      res.status(404).json({ error: 'Performer not found' })
+      res.status(404).json({ code: 'performer_support_unavailable' })
       return
     }
     const { data: performerAccount } = await sb.from('profiles').select('status').eq('id', performerId).maybeSingle()
     if (!performer.is_approved || performerAccount?.status !== 'active') {
-      res.status(403).json({ error: 'Performer is not approved yet' })
+      res.status(403).json({ code: 'performer_support_unavailable' })
       return
     }
-    if (!performer.stripe_account_id) {
-      res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
-      return
-    }
-
     const stripe = getStripe()
-    const account = await requireConnectedAccountChargeReady(stripe, performer.stripe_account_id)
-    if (!account) {
-      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', performerId)
-      res.status(400).json({ error: 'Performer has not finished Stripe onboarding yet' })
-      return
-    }
-    if (!performer.stripe_onboarding_complete) {
-      await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', performerId)
-    }
 
     const origin = getAppUrl(req)
     const safeReturn = returnTo === 'live'
@@ -83,28 +80,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `${origin}/live?tip=cancel&return=live&${performerParam}`
       : `${origin}/live?tip=cancel&${performerParam}`
 
-    const feeBps = await getBpsSetting(sb, 'tip_fee_bps', PLATFORM_FEE_BPS)
-    const fee = calcPlatformFee(amountYen, feeBps)
-    const { data: tip, error: tipErr } = await sb
+    // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
+    const feeBps = PLATFORM_FEE_BPS
+    let { data: tip, error: tipErr } = await sb
       .from('tips')
       .insert({
+        id: checkoutId,
         fan_id: payerId,
         performer_id: performerId,
         amount_cents: amountYen,
         currency: 'jpy',
-        platform_fee_cents: fee,
+        platform_fee_cents: 0,
         status: 'pending',
       })
       .select('id')
       .single()
+    if (tipErr && tipErr.code === '23505') {
+      const { data: existing, error: existingError } = await sb
+        .from('tips')
+        .select('id,fan_id,performer_id,amount_cents,status,stripe_session_id,connected_account_id,stripe_checkout_mode')
+        .eq('id', checkoutId)
+        .maybeSingle()
+      if (existingError) throw existingError
+      if (!existing || (existing.fan_id ?? null) !== payerId || existing.performer_id !== performerId || Number(existing.amount_cents) !== amountYen) {
+        res.status(409).json({ code: 'invalid_payment_request' })
+        return
+      }
+      if (existing.stripe_session_id) {
+        const existingSession = existing.stripe_checkout_mode === 'platform_separate'
+          ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
+          : performer.stripe_account_id
+            ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: performer.stripe_account_id })
+            : await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
+        if (existingSession.url && existing.status === 'pending') {
+          res.status(200).json({ url: existingSession.url })
+          return
+        }
+        res.status(409).json({ code: 'invalid_payment_request' })
+        return
+      }
+      tip = { id: existing.id }
+      tipErr = null
+    }
     if (tipErr || !tip) throw tipErr || new Error('Tip insert failed')
 
-    const connectedAccountId = performer.stripe_account_id as string
+    const connectedAccountId = (performer.stripe_account_id as string | null) ?? null
     const tipMetaPatch = {
       gross_amount_yen: amountYen,
-      platform_fee_yen: fee,
+      platform_fee_yen: 0,
       connected_account_id: connectedAccountId,
-      stripe_checkout_mode: 'direct',
+      stripe_checkout_mode: 'platform_separate',
+      funding_model: 'platform_separate',
+      transfer_status: 'pending_onboarding',
     }
     const { error: tipMetaErr } = await sb.from('tips').update(tipMetaPatch).eq('id', tip.id)
     if (tipMetaErr && !missingColumn(tipMetaErr)) throw tipMetaErr
@@ -115,10 +142,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       performer_id: performerId,
       fan_id: payerId ?? 'guest',
       anonymous: anonymous ? '1' : '0',
-      connected_account_id: connectedAccountId,
-      charge_type: 'direct',
+      charge_type: 'platform_separate',
+      funding_model: 'platform_separate',
       platform_fee_bps: String(feeBps),
-      platform_fee_yen: String(fee),
     }
 
     const session = await stripe.checkout.sessions.create(
@@ -133,25 +159,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               currency: 'jpy',
               unit_amount: amountYen,
               product_data: {
-                name: `Tip for ${performer.stage_name}`,
+                name: `${performer.stage_name}への応援`,
+                description: 'HAKU 投げ銭',
               },
             },
           },
         ],
-        payment_intent_data: {
-          ...(fee > 0 ? { application_fee_amount: fee } : {}),
-          metadata: paymentIntentMetadata,
+        payment_intent_data: { metadata: paymentIntentMetadata },
+        branding_settings: { display_name: 'HAKU' },
+        locale: 'ja',
+        custom_text: {
+          submit: { message: 'HAKUを通じてパフォーマーの活動を応援します。' },
         },
         metadata: {
           ...paymentIntentMetadata,
         },
       },
-      { idempotencyKey: `tip-checkout-${tip.id}`, stripeAccount: connectedAccountId },
+      { idempotencyKey: `tip-checkout-${tip.id}` },
     )
 
     await sb.from('tips').update({ stripe_session_id: session.id }).eq('id', tip.id)
     res.status(200).json({ url: session.url })
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Tip checkout failed' })
+    console.error('tip checkout failed', e)
+    res.status(500).json({ code: 'checkout_failed' })
   }
 }

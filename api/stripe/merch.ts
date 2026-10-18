@@ -1,13 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
-  PLATFORM_FEE_BPS,
-  calcPlatformFee,
+  MERCH_SYSTEM_FEE_BPS_DEFAULT,
   getAdminSupabase,
   getAppUrl,
-  getBpsSetting,
   getStripe,
   requireAuthUser,
-  requireConnectedAccountChargeReady,
 } from './_shared.js'
 
 function missingColumn(error: unknown) {
@@ -15,8 +12,12 @@ function missingColumn(error: unknown) {
   return /column .* does not exist|Could not find .* column|schema cache/i.test(message)
 }
 
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
+  const listOrders = req.method === 'GET' && req.query.action === 'orders'
+  if (req.method !== 'POST' && !listOrders) {
+    res.setHeader('Allow', 'GET, POST')
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
@@ -24,34 +25,110 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const user = await requireAuthUser(req, res)
     if (!user) return
+    const sb = getAdminSupabase()
 
-    const { productId, quantity } = req.body as { productId?: string; quantity?: number }
-    const qty = Math.floor(Number(quantity) || 1)
-    if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20) {
-      res.status(400).json({ error: 'productId and quantity (1-20) required' })
+    if (listOrders || req.body?.action === 'reserve' || req.body?.action === 'order_action') {
+      const { error: expiryError } = await sb.rpc('expire_due_merch_reservations')
+      if (expiryError) throw expiryError
+    }
+
+    if (listOrders) {
+      const scope = req.query.scope === 'seller' ? 'seller' : 'buyer'
+      const column = scope === 'seller' ? 'seller_id' : 'buyer_id'
+      const { data, error } = await sb
+        .from('merch_orders')
+        .select('*')
+        .eq(column, user.id)
+        .order('created_at', { ascending: false })
+        .limit(scope === 'seller' ? 100 : 50)
+      if (error) throw error
+      res.status(200).json({ orders: data ?? [] })
       return
     }
 
-    const sb = getAdminSupabase()
+    if (req.body?.action === 'reserve') {
+      const { productId, quantity, requestId } = req.body as Record<string, unknown>
+      const qty = Math.floor(Number(quantity) || 0)
+      if (typeof productId !== 'string' || typeof requestId !== 'string' || !UUID_V4.test(requestId) || qty < 1 || qty > 20) {
+        res.status(400).json({ code: 'invalid_reservation_request' })
+        return
+      }
+      const { data, error } = await sb.rpc('create_merch_cash_reservation', {
+        p_order_id: requestId,
+        p_buyer_id: user.id,
+        p_product_id: productId,
+        p_quantity: qty,
+      })
+      if (error) {
+        if (/product_unavailable|seller_unavailable/.test(error.message)) {
+          res.status(409).json({ code: 'product_unavailable' })
+          return
+        }
+        throw error
+      }
+      const reservation = Array.isArray(data) ? data[0] : data
+      res.status(200).json({ orderId: reservation?.order_id, orderNumber: reservation?.order_number })
+      return
+    }
+
+    if (req.body?.action === 'order_action') {
+      const orderId = typeof req.body.orderId === 'string' ? req.body.orderId : ''
+      const handoffAction = typeof req.body.handoffAction === 'string' ? req.body.handoffAction : ''
+      if (!orderId || !['fulfill', 'cancel', 'expire'].includes(handoffAction)) {
+        res.status(400).json({ code: 'invalid_order_action' })
+        return
+      }
+      const { data, error } = await sb.rpc('update_merch_handoff', {
+        p_order_id: orderId,
+        p_actor_id: user.id,
+        p_action: handoffAction,
+      })
+      if (error) {
+        if (/not_authorized/.test(error.message)) {
+          res.status(403).json({ code: 'not_authorized' })
+          return
+        }
+        if (/payment_not_confirmed|not_ready_for_handoff/.test(error.message)) {
+          res.status(409).json({ code: 'payment_not_confirmed' })
+          return
+        }
+        throw error
+      }
+      const order = Array.isArray(data) ? data[0] : data
+      res.status(200).json({ ok: true, fulfillmentStatus: order?.fulfillment_status })
+      return
+    }
+
+    const { productId, quantity, requestId } = req.body as { productId?: string; quantity?: number; requestId?: string }
+    const qty = Math.floor(Number(quantity) || 1)
+    if (!productId || !Number.isInteger(qty) || qty < 1 || qty > 20 || !requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+      res.status(400).json({ code: 'invalid_payment_request' })
+      return
+    }
+
     const { data: product, error: productErr } = await sb
       .from('merch_products')
       .select('*')
       .eq('id', productId)
       .maybeSingle()
     if (productErr || !product) {
-      res.status(404).json({ error: 'Product not found' })
+      res.status(404).json({ code: 'product_unavailable' })
       return
     }
     if (product.status !== 'active' || product.stock < qty) {
-      res.status(409).json({ error: 'Product is not available' })
+      res.status(409).json({ code: 'product_unavailable' })
       return
     }
 
     const { data: buyer } = await sb
       .from('profiles')
-      .select('display_name, email')
+      .select('display_name, email, status')
       .eq('id', user.id)
       .maybeSingle()
+    if (buyer?.status === 'suspended' || buyer?.status === 'deleted') {
+      res.status(403).json({ code: 'invalid_payment_request' })
+      return
+    }
     const buyerDisplayName = String(buyer?.display_name || user.email?.split('@')[0] || 'User').trim().slice(0, 120)
     const buyerEmail = typeof buyer?.email === 'string' ? buyer.email : user.email ?? null
 
@@ -61,35 +138,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('id', product.seller_id)
       .maybeSingle()
     if (sellerErr || !seller) {
-      res.status(404).json({ error: 'Seller not found' })
+      res.status(404).json({ code: 'seller_checkout_unavailable' })
       return
     }
     if (!seller.is_approved) {
-      res.status(403).json({ error: 'Seller is not approved yet' })
+      res.status(403).json({ code: 'seller_checkout_unavailable' })
       return
     }
-    if (!seller.stripe_account_id) {
-      res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
-      return
-    }
-
     const stripe = getStripe()
-    const account = await requireConnectedAccountChargeReady(stripe, seller.stripe_account_id)
-    if (!account) {
-      await sb.from('performers').update({ stripe_onboarding_complete: false }).eq('id', seller.id)
-      res.status(400).json({ error: 'Seller has not finished Stripe onboarding yet' })
-      return
-    }
-    if (!seller.stripe_onboarding_complete) {
-      await sb.from('performers').update({ stripe_onboarding_complete: true }).eq('id', seller.id)
-    }
 
     const amount = product.price_yen * qty
-    const feeBps = await getBpsSetting(sb, 'merch_fee_bps', PLATFORM_FEE_BPS)
-    const fee = calcPlatformFee(amount, feeBps)
+    const orderNumber = `P-${requestId.replaceAll('-', '').slice(0, 12).toUpperCase()}`
+    // Financial policy is server-authoritative. Never accept a client or mutable DB rate.
+    const feeBps = MERCH_SYSTEM_FEE_BPS_DEFAULT
     const { data: order, error: orderErr } = await sb
       .from('merch_orders')
       .insert({
+        id: requestId,
         buyer_id: user.id,
         seller_id: product.seller_id,
         product_id: product.id,
@@ -101,18 +166,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         quantity: qty,
         amount_yen: amount,
         currency: 'jpy',
-        platform_fee_yen: fee,
+        platform_fee_yen: 0,
         status: 'pending',
+        order_kind: 'cashless',
+        order_number: orderNumber,
+        fulfillment_status: 'awaiting_payment',
       })
       .select('id')
       .single()
+    if (orderErr?.code === '23505') {
+      const { data: existing, error: existingErr } = await sb
+        .from('merch_orders')
+        .select('id, buyer_id, seller_id, product_id, quantity, amount_yen, status, stripe_session_id, stripe_checkout_mode')
+        .eq('id', requestId)
+        .maybeSingle()
+      if (existingErr || !existing) throw existingErr || new Error('Order retry lookup failed')
+      const sameRequest =
+        existing.buyer_id === user.id &&
+        existing.seller_id === product.seller_id &&
+        existing.product_id === product.id &&
+        Number(existing.quantity) === qty &&
+        Number(existing.amount_yen) === amount
+      if (!sameRequest) {
+        res.status(409).json({ code: 'invalid_payment_request' })
+        return
+      }
+      if (existing.status === 'pending' && existing.stripe_session_id) {
+        const session = existing.stripe_checkout_mode === 'platform_separate'
+          ? await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
+          : await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, { stripeAccount: seller.stripe_account_id })
+        if (session.url) {
+          res.status(200).json({ url: session.url })
+          return
+        }
+      }
+      res.status(409).json({ code: 'checkout_failed' })
+      return
+    }
     if (orderErr || !order) throw orderErr || new Error('Order insert failed')
 
-    const connectedAccountId = seller.stripe_account_id as string
+    // HAKU collects the platform charge now and transfers the settled seller
+    // share only after the performer finishes Connect onboarding.
+    const connectedAccountId = (seller.stripe_account_id as string | null) ?? null
     const orderMetaPatch = {
       gross_amount_yen: amount,
       connected_account_id: connectedAccountId,
-      stripe_checkout_mode: 'direct',
+      stripe_checkout_mode: 'platform_separate',
       seller_responsibility: 'seller',
     }
     const { error: orderMetaErr } = await sb.from('merch_orders').update(orderMetaPatch).eq('id', order.id)
@@ -128,7 +227,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (reserveErr || !reserved?.id) {
       await sb.from('merch_orders').update({ status: 'failed' }).eq('id', order.id)
-      res.status(409).json({ error: 'Product stock changed. Please try again.' })
+      res.status(409).json({ code: 'product_unavailable' })
       return
     }
 
@@ -139,10 +238,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         product_id: product.id,
         seller_id: product.seller_id,
         buyer_id: user.id,
-        connected_account_id: connectedAccountId,
-        charge_type: 'direct',
+        ...(connectedAccountId ? { connected_account_id: connectedAccountId } : {}),
+        charge_type: 'platform_separate',
         platform_fee_bps: String(feeBps),
-        platform_fee_yen: String(fee),
         seller_responsibility: 'seller',
       }
       const origin = getAppUrl(req)
@@ -170,16 +268,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
             },
           ],
-          payment_intent_data: {
-            ...(fee > 0 ? { application_fee_amount: fee } : {}),
-            metadata: paymentIntentMetadata,
+          payment_intent_data: { metadata: paymentIntentMetadata },
+          branding_settings: { display_name: 'HAKU' },
+          locale: 'ja',
+          custom_text: {
+            submit: { message: '会場受取の商品です。送料はかかりません。決済後、パフォーマーから直接お受け取りください。' },
           },
           metadata: {
             ...paymentIntentMetadata,
           },
           expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         },
-        { idempotencyKey: `merch-checkout-${order.id}`, stripeAccount: connectedAccountId },
+        { idempotencyKey: `merch-checkout-${order.id}` },
       )
 
       if (!session.url) throw new Error('Checkout URL missing')
@@ -198,6 +298,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw e
     }
   } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Merch checkout failed' })
+    console.error('merch checkout failed', e)
+    res.status(500).json({ code: 'checkout_failed' })
   }
 }

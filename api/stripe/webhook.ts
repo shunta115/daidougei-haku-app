@@ -16,7 +16,9 @@ import {
   markMerchOrderDispute,
   markMerchOrderRefunded,
 } from './_finalizeMerchOrder.js'
-import { getAdminSupabase, getStripe } from './_shared.js'
+import { markPerformerPayout, markPerformerTransfer } from './_payouts.js'
+import { settleCheckoutPayment, settleSaleByCharge } from './_settlement.js'
+import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from './_shared.js'
 
 export const config = {
   api: { bodyParser: false },
@@ -81,7 +83,8 @@ async function claimWebhookEvent(
   }
   const { data, error } = await sb.from('stripe_webhook_events').insert(row).select('event_id').maybeSingle()
   if (!error) return Boolean(data?.event_id)
-  if (missingTable(error)) return true
+  // Financial webhooks must fail closed when the idempotency ledger is absent.
+  if (missingTable(error)) throw new Error('Webhook idempotency ledger unavailable')
   if (!duplicateKey(error)) throw error
 
   const { data: existing } = await sb
@@ -90,11 +93,15 @@ async function claimWebhookEvent(
     .eq('event_id', event.id)
     .maybeSingle()
   if (existing?.status === 'failed') {
-    await sb
+    const { data: reclaimed, error: reclaimError } = await sb
       .from('stripe_webhook_events')
       .update({ status: 'processing', error: null })
       .eq('event_id', event.id)
-    return true
+      .eq('status', 'failed')
+      .select('event_id')
+      .maybeSingle()
+    if (reclaimError) throw reclaimError
+    return Boolean(reclaimed?.event_id)
   }
   return false
 }
@@ -144,11 +151,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session
         if (session.payment_status === 'paid') {
+          const saleConnectedAccountId = connectedAccountId ?? session.metadata?.connected_account_id ?? null
           if (session.metadata?.kind === 'merch') {
-            await finalizePaidMerchOrder(sb, session, connectedAccountId)
+            await finalizePaidMerchOrder(sb, session, saleConnectedAccountId)
           } else {
-            await finalizePaidTip(sb, session, connectedAccountId)
+            await finalizePaidTip(sb, session, saleConnectedAccountId)
           }
+          // Platform-held Checkout sessions don't emit Connect-scoped
+          // payment_intent events. Settle from the paid Checkout event so the
+          // actual Stripe fee and server-authoritative split are always saved.
+          await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)
         }
       }
 
@@ -168,6 +180,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else if (paymentIntent.metadata?.kind === 'tip' || paymentIntent.metadata?.tip_id) {
           await finalizePaidTipFromPaymentIntent(sb, paymentIntent, connectedAccountId)
         }
+        const chargeId = typeof paymentIntent.latest_charge === 'string' ? paymentIntent.latest_charge : paymentIntent.latest_charge?.id
+        if (chargeId) {
+          await settleSaleByCharge(sb, stripe, { id: chargeId, payment_intent: paymentIntent.id } as Stripe.Charge, connectedAccountId)
+        }
       }
 
       if (event.type === 'payment_intent.payment_failed') {
@@ -183,6 +199,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const charge = event.data.object as Stripe.Charge
         await markTipRefunded(sb, charge, connectedAccountId)
         await markMerchOrderRefunded(sb, charge, connectedAccountId)
+        await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+      }
+
+      // Stripe can emit a later charge.refund.updated event after the initial
+      // charge.refunded delivery. Processing it is safe and idempotent, and it
+      // lets a delayed endpoint subscription reconcile the authoritative
+      // charge without creating another refund.
+      if (event.type === 'charge.refund.updated') {
+        const refund = event.data.object as Stripe.Refund
+        const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge?.id
+        if (chargeId) {
+          const charge = connectedAccountId
+            ? await stripe.charges.retrieve(chargeId, {}, { stripeAccount: connectedAccountId })
+            : await stripe.charges.retrieve(chargeId)
+          await markTipRefunded(sb, charge, connectedAccountId)
+          await markMerchOrderRefunded(sb, charge, connectedAccountId)
+          await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+        }
       }
 
       if (event.type === 'charge.dispute.created' || event.type === 'charge.dispute.closed') {
@@ -191,14 +225,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await markMerchOrderDispute(sb, dispute, connectedAccountId)
       }
 
+      if (event.type === 'payout.paid' || event.type === 'payout.failed' || event.type === 'payout.canceled') {
+        const payout = event.data.object as Stripe.Payout
+        const payoutStatus = event.type === 'payout.paid' ? 'paid' : event.type === 'payout.canceled' ? 'canceled' : 'failed'
+        await markPerformerPayout(sb, payout, connectedAccountId, payoutStatus)
+      }
+
+      if (event.type === 'transfer.created' || event.type === 'transfer.reversed') {
+        await markPerformerTransfer(sb, event.data.object as Stripe.Transfer)
+      }
+
       if (event.type === 'account.updated') {
         const account = event.data.object as Stripe.Account
-        const ready = Boolean(
-          account.charges_enabled &&
-            account.payouts_enabled &&
-            account.details_submitted &&
-            !account.requirements?.disabled_reason,
-        )
+        const ready = isConnectedAccountTransferReady(account)
         await sb
           .from('performers')
           .update({ stripe_onboarding_complete: ready })
@@ -213,6 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({ received: true })
   } catch (e) {
-    res.status(400).json({ error: e instanceof Error ? e.message : 'Webhook error' })
+    console.error('stripe webhook failed', e)
+    res.status(400).json({ error: 'Webhook processing failed' })
   }
 }

@@ -5,9 +5,12 @@ import { LangProvider } from './i18n/LangProvider'
 import { PlatformApp } from './platform/PlatformApp'
 import './platform/platform.css'
 import { AuthProvider } from './platform/lib/auth'
+import { OfficialSite } from './official/OfficialSite'
+
+const OFFICIAL_PATHS = new Set(['/official', '/daidougeihaku'])
 
 function isKnownPath(pathname: string) {
-  return pathname === FESTIVAL_PATH || isPlatformPath(pathname)
+  return OFFICIAL_PATHS.has(pathname) || pathname === FESTIVAL_PATH || isPlatformPath(pathname)
 }
 
 function NotFoundScreen() {
@@ -40,9 +43,11 @@ export default function App() {
   return (
     <AppErrorBoundary>
       <LangProvider>
-        <AuthProvider>
-          {!isKnownPath(path) ? <NotFoundScreen /> : <PlatformApp />}
-        </AuthProvider>
+        {OFFICIAL_PATHS.has(path) ? <OfficialSite /> : (
+          <AuthProvider>
+            {!isKnownPath(path) ? <NotFoundScreen /> : <PlatformApp />}
+          </AuthProvider>
+        )}
       </LangProvider>
     </AppErrorBoundary>
   )
