@@ -826,6 +826,82 @@
   text-shadow: 0 0 14px rgba(255, 222, 89, 0.55);
 }
 
+.pl-fever {
+  position: absolute;
+  z-index: 8;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: min(230px, calc(100% - 92px));
+  pointer-events: none;
+}
+
+.pl-fever__meter {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 214, 117, 0.48);
+  border-radius: 14px;
+  background: rgba(8, 8, 12, 0.72);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.pl-fever__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: #fff7d1;
+  font-size: 10px;
+}
+
+.pl-fever__label strong { color: #ffd675; letter-spacing: .12em; }
+.pl-fever__label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pl-fever__track {
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pl-fever__track > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff4e83, #ffd659);
+  box-shadow: 0 0 12px rgba(255, 98, 130, 0.75);
+  transition: width .16s linear;
+}
+
+.pl-fever__hearts { position: absolute; right: 18px; bottom: 38px; }
+.pl-fever__hearts > span {
+  position: absolute;
+  color: #ff527c;
+  font-size: 22px;
+  text-shadow: 0 0 12px rgba(255, 50, 110, .75);
+  transform: translateX(var(--fever-offset, 0));
+  animation: pl-fever-heart 1.5s ease-out forwards;
+}
+
+.pl-fever--calm .pl-fever__hearts > span { animation-duration: .35s; }
+.pl-fever--calm .pl-fever__track > span { transition: none; }
+
+@keyframes pl-fever-heart {
+  from { opacity: 0; transform: translate(var(--fever-offset, 0), 6px) scale(.7); }
+  20% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--fever-offset, 0), -84px) scale(1.2); }
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .pl-fever { bottom: max(8px, env(safe-area-inset-bottom)); width: min(210px, 35vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-fever__hearts > span { animation-duration: .35s; }
+  .pl-fever__track > span { transition: none; }
+}
+
 .pl-gift--premium .pl-gift__thanks {
   color: #9effef;
   text-shadow: 0 0 16px rgba(43, 255, 221, 0.65);
@@ -842,7 +918,7 @@
   line-height: 1.3;
 }
 
-.pl-gift__text span {
+.pl-gift__text > span:not(.pl-gift__thanks) {
   font-size: 12px;
   color: var(--neon, #2bffdd);
 }

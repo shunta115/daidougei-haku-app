@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
+import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
   canModerateLiveComments,
   endLive,
@@ -33,6 +34,7 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
+import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import './live.css'
@@ -93,6 +95,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const appliedOrientationRef = useRef(deviceOrient)
   const hiddenAtRef = useRef<number | null>(null)
   const commentScroll = useLiveCommentScroll(comments.length)
+  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
 
   useEffect(() => {
     if (performer?.is_live) {
@@ -579,8 +582,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
           </div>
         ) : null}
         {phase === 'live' && performer ? (
-          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} />
+          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
         ) : null}
+        {phase === 'live' ? <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} /> : null}
         {phase === 'ready' && previewState !== 'ready' ? <div className="pl-live__placeholder">{previewState === 'preparing' ? 'カメラ・マイクの許可を待っています…' : previewState === 'denied' ? 'カメラ・マイクを許可してください' : previewState === 'ended' ? 'LIVE配信を終了しました' : 'ここにカメラ映像が表示されます'}</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
