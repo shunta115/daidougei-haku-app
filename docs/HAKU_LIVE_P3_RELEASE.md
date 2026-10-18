@@ -47,6 +47,10 @@ SQLの影響は次に限定される。
 
 ## バックアップと事前検証
 
+完全バックアップ、整合性検証、隔離復元、migration履歴不整合の扱いは
+[`HAKU_P3_PRODUCTION_DB_APPROVAL.md`](./HAKU_P3_PRODUCTION_DB_APPROVAL.md)を正本とする。
+以下のpublic schema dumpは内容確認用の補助バックアップであり、完全バックアップの代替にはしない。
+
 本番project refを二者で照合してから、アクセス制限された一時ディレクトリへschemaとdataを取得する。バックアップ先はリポジトリへ追加しない。
 
 ```sh
