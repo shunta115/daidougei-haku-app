@@ -5,6 +5,7 @@ const migration = readFileSync('supabase/migrations/20261018092439_live_reservat
 const performerScreen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
 const viewerScreen = readFileSync('src/platform/screens/LiveListScreen.tsx', 'utf8')
 const presenceApi = readFileSync('api/livekit/presence.ts', 'utf8')
+const verifier = readFileSync('supabase/verify_live_reservations_analytics_readonly.sql', 'utf8')
 
 describe('LIVE reservation and audience analytics migration', () => {
   it('is additive and does not rewrite existing LIVE, payment, vote, or performer data', () => {
@@ -47,5 +48,13 @@ describe('LIVE reservation and audience analytics migration', () => {
     expect(performerScreen).toContain('setScheduleFeatureAvailable(false)')
     expect(viewerScreen).toContain('liveReservationsEnabled ? listUpcomingLiveSchedules()')
     expect(viewerScreen).toContain('liveReservationsEnabled && liveSchedules.length > 0')
+  })
+
+  it('ships a read-only post-apply verifier for RLS, ACL, function, and row-count checks', () => {
+    expect(verifier).not.toMatch(/\b(insert|update|delete|truncate|alter|create|drop|grant|revoke)\b\s+(into|table|function|on|from|public\.)/i)
+    expect(verifier).toContain("c.relforcerowsecurity as force_rls")
+    expect(verifier).toContain("has_function_privilege('anon'")
+    expect(verifier).toContain("table_name = 'live_viewer_samples'")
+    expect(verifier).toContain('(select count(*) from public.live_sessions)')
   })
 })
