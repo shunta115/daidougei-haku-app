@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import type { NotificationRow } from '../lib/types'
 import { AppBackButton } from '../components/AppBackButton'
 import { useLang } from '../../i18n/LangProvider'
+import { startNotificationRefresh } from '../lib/notificationRefresh'
 
 type Props = {
   onOpenLive?: (performerId: string) => void
@@ -43,11 +44,9 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
       setRows(next)
       setError(null)
     }
-    load().catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
-    const timer = window.setInterval(() => {
-      load().catch(() => undefined)
-    }, 5000)
-    return () => window.clearInterval(timer)
+    return startNotificationRefresh(() => load().catch((e) => {
+      setError(e instanceof Error ? e.message : 'Failed')
+    }))
   }, [user])
 
   useEffect(() => {

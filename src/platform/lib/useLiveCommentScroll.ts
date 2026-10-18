@@ -14,9 +14,14 @@ export function isNearCommentEnd(element: Pick<HTMLElement, 'scrollHeight' | 'sc
   return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold
 }
 
+export function hasIncomingLiveComment(previousCount: number, currentCount: number) {
+  return currentCount > previousCount
+}
+
 export function useLiveCommentScroll(commentCount: number) {
   const listRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
+  const previousCountRef = useRef(commentCount)
   const [hasNewComments, setHasNewComments] = useState(false)
 
   const scrollToLatest = (behavior: ScrollBehavior = 'smooth') => {
@@ -29,9 +34,11 @@ export function useLiveCommentScroll(commentCount: number) {
 
   useLayoutEffect(() => {
     const list = listRef.current
+    const previousCount = previousCountRef.current
+    previousCountRef.current = commentCount
     if (!list) return
     if (pinnedRef.current) scrollToLatest('auto')
-    else if (commentCount > 0) setHasNewComments(true)
+    else if (hasIncomingLiveComment(previousCount, commentCount)) setHasNewComments(true)
     // commentCount is the event that drives the scroll; scrollToLatest is intentionally local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentCount])
