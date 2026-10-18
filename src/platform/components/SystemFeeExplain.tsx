@@ -12,6 +12,7 @@ export function SystemFeeExplain({ compact = false }: { compact?: boolean }) {
         <li>{t('feeTipLine', { n: TIP_SYSTEM_FEE_PERCENT })}</li>
         <li>{t('feeMerchLine', { n: MERCH_SYSTEM_FEE_PERCENT })}</li>
         <li>{t('feeStripeLine')}</li>
+        <li>投げ銭の分配対象額（Stripe決済手数料控除後）：HAKU 15%・パフォーマー 85%</li>
       </ul>
       {!compact ? (
         <>
