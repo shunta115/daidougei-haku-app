@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { canAccessPrivateTestLive } from '../api/livekit/_privacy'
+import {
+  canAccessPrivateTestLive,
+  canAccessPrivateTestMap,
+  VERIFIED_PRIVATE_VIEWER_ID,
+  VERIFIED_TEST_PERFORMER_ID,
+} from '../api/livekit/_privacy'
 
 const read = (path: string) => readFileSync(path, 'utf8')
 
@@ -12,6 +17,15 @@ describe('private Test Performer LIVE', () => {
     expect(canAccessPrivateTestLive('test-performer', 'test-performer', false, false)).toBe(true)
     expect(canAccessPrivateTestLive('admin', 'test-performer', true, false)).toBe(true)
     expect(canAccessPrivateTestLive('approved-fan', 'test-performer', false, true)).toBe(true)
+  })
+
+  it('shows private MAP data only to s.s, the owner, or an admin', () => {
+    expect(canAccessPrivateTestMap(null, VERIFIED_TEST_PERFORMER_ID)).toBe(false)
+    expect(canAccessPrivateTestMap('another-user', VERIFIED_TEST_PERFORMER_ID)).toBe(false)
+    expect(canAccessPrivateTestMap(VERIFIED_PRIVATE_VIEWER_ID, VERIFIED_TEST_PERFORMER_ID)).toBe(true)
+    expect(canAccessPrivateTestMap(VERIFIED_PRIVATE_VIEWER_ID, 'another-private-performer')).toBe(false)
+    expect(canAccessPrivateTestMap(VERIFIED_TEST_PERFORMER_ID, VERIFIED_TEST_PERFORMER_ID)).toBe(true)
+    expect(canAccessPrivateTestMap('admin', VERIFIED_TEST_PERFORMER_ID, true)).toBe(true)
   })
 
   it('keeps ordinary approved LIVE guest viewing unchanged', () => {
@@ -33,6 +47,21 @@ describe('private Test Performer LIVE', () => {
     expect(sql).toMatch(/1c21f421-5561-4213-8759-962873accfa0/i)
     expect(sql).toMatch(/29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1/i)
     expect(sql).toMatch(/can_view_live_session/i)
+    expect(sql).toMatch(/pf\.id = '29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1'::uuid[\s\S]*auth\.uid\(\) = '1c21f421-5561-4213-8759-962873accfa0'::uuid/i)
+    expect(sql).toMatch(/viewer\.role = 'fan' and viewer\.status = 'active'/i)
+  })
+
+  it('applies the same UUID authorization to MAP appearances and future notifications', () => {
+    const sql = read('supabase/migrations/20261018102007_private_live_viewer_allowlist.sql')
+    const api = read('src/platform/lib/api.ts')
+    const map = read('src/platform/screens/MapScheduleScreen.tsx')
+    expect(sql).toMatch(/create policy performer_appearances_read[\s\S]*can_view_live_performer\(performer_id\)/i)
+    expect(sql).toMatch(/notifications_filter_private_test_appearance/i)
+    expect(sql).toMatch(/push_deliveries_filter_private_test_appearance/i)
+    expect(api).toMatch(/includePublicTest \|\| p\.is_private_test === true \|\| !isPrivateTestPerformer\(p\)/)
+    expect(map).toMatch(/row\.is_private_test !== true/)
+    expect(map).toMatch(/listPerformerAppearances\(performer\.id\)/)
+    expect(map).toMatch(/appearance\.venue_name/)
   })
 
   it('uses an explicit DB flag and protects it with RLS', () => {

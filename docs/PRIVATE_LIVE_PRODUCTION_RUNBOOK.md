@@ -16,6 +16,8 @@ Apply these migrations in order:
    - adds the session-scoped allowlist, with no Data API grants for `anon` or `authenticated`;
    - automatically allowlists only the verified s.s UUID for Test Performer sessions;
    - extends performer/session/comment/tip-event RLS to the active allowlisted session;
+   - exposes Test Performer MAP coordinates and published appearance rows only to the verified active s.s fan UUID;
+   - filters future private appearance in-app and push deliveries to that same UUID;
    - suppresses follower notifications for private LIVE at the database boundary.
 
 Neither migration changes Stripe, Connect, tips, payouts, or historical payment rows.
@@ -62,7 +64,8 @@ Apply only through the repository migration workflow after reviewing the generat
 After apply, verify with three disposable sessions/tokens:
 
 - anonymous and an unrelated active fan receive no Test Performer row/session and token issuance returns `403`;
-- s.s sees the live card, receives a viewer-only token for `private-<performer UUID>-<session UUID>`, and can subscribe to audio/video;
+- anonymous and an unrelated active fan receive no Test Performer MAP coordinates or appearance rows;
+- s.s sees the live card and private MAP/appearance card, receives a viewer-only token for `private-<performer UUID>-<session UUID>`, and can subscribe to audio/video;
 - Test Performer receives a publish token for that same session room;
 - a normal public LIVE remains visible and viewable by a guest;
 - no private notification, map marker, public event placement, or public Realtime fever broadcast appears;

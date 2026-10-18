@@ -1398,7 +1398,11 @@ export async function listApprovedPerformers(includePublicTest = false): Promise
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return ((data as unknown as Performer[]) ?? []).filter((p) => includePublicTest || !isPrivateTestPerformer(p))
+  // A flagged private row can only arrive for an RLS-authorized viewer. Keep
+  // the legacy name-only preview hidden from ordinary users.
+  return ((data as unknown as Performer[]) ?? []).filter((p) => (
+    includePublicTest || p.is_private_test === true || !isPrivateTestPerformer(p)
+  ))
 }
 
 function resolveEventVenue(row: EventVenueRow): EventVenueRow {

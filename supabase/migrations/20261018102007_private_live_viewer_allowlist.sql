@@ -88,6 +88,15 @@ as $$
         (pf.is_approved is true and pf.is_private_test is false)
         or pf.id = auth.uid()
         or public.is_admin()
+        or (
+          pf.id = '29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1'::uuid
+          and auth.uid() = '1c21f421-5561-4213-8759-962873accfa0'::uuid
+          and exists (
+            select 1 from public.profiles viewer
+            where viewer.id = auth.uid()
+              and viewer.role = 'fan' and viewer.status = 'active'
+          )
+        )
         or exists (
           select 1 from public.live_sessions ls
           join public.live_session_viewer_allowlist a on a.session_id = ls.id
@@ -139,6 +148,23 @@ alter policy performers_public_read on public.performers
 alter policy live_sessions_read on public.live_sessions
   using (public.can_view_live_session(id));
 
+-- Published appearance rows for the private performer must not bypass the
+-- performer privacy rule. The verified s.s UUID can read them even while the
+-- performer is not live so MAP can show the next appearance safely.
+drop policy if exists performer_appearances_read on public.performer_appearances;
+create policy performer_appearances_read on public.performer_appearances
+  for select using (
+    performer_id = auth.uid()
+    or public.is_admin()
+    or (
+      public.can_view_live_performer(performer_id)
+      and (
+        status = 'published'
+        or (status in ('cancelled','postponed') and published_at is not null)
+      )
+    )
+  );
+
 drop policy if exists live_comments_read on public.live_comments;
 create policy live_comments_read on public.live_comments for select using (
   case when live_session_id is null
@@ -162,6 +188,42 @@ create policy live_tip_events_read on public.live_tip_events for select using (
     else public.can_view_live_session(live_session_id)
   end
 );
+
+-- Existing appearance notification code fans out to every follower. Filter
+-- future private-performer notification and push rows at the table boundary,
+-- allowing only the verified s.s Auth UUID.
+create or replace function public.filter_private_test_appearance_delivery()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.notification_event_id is not null
+    and new.user_id <> '1c21f421-5561-4213-8759-962873accfa0'::uuid
+    and exists (
+      select 1
+      from public.appearance_notification_events ev
+      where ev.id = new.notification_event_id
+        and ev.performer_id = '29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1'::uuid
+    )
+  then
+    return null;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.filter_private_test_appearance_delivery() from public, anon, authenticated;
+
+drop trigger if exists notifications_filter_private_test_appearance on public.notifications;
+create trigger notifications_filter_private_test_appearance
+  before insert on public.notifications
+  for each row execute function public.filter_private_test_appearance_delivery();
+
+drop trigger if exists push_deliveries_filter_private_test_appearance on public.push_notification_deliveries;
+create trigger push_deliveries_filter_private_test_appearance
+  before insert on public.push_notification_deliveries
+  for each row execute function public.filter_private_test_appearance_delivery();
 
 -- Defense in depth: direct RPC calls cannot create notifications for private LIVE.
 create or replace function public.notify_followers_live_start(p_performer_id uuid, p_stage_name text, p_title text default null)
