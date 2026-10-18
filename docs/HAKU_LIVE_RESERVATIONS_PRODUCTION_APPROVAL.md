@@ -6,7 +6,7 @@
 
 - Supabase project ref: `pmmtijwswzwhuriqhlep`
 - migration: `supabase/migrations/20261018092439_live_reservations_and_viewer_analytics.sql`
-- SHA-256: `e890cf1a1113d92593f7c83f419f55247e52a3f7408158fa7bdc24c73eb3fabc`
+- SHA-256: `2e1e4dad9d3b22cae48030fb8fcd6ba1028a9350952a5756790da8cbb5281b93`
 - PR: #66
 
 本承認にStripe、Connect、投げ銭、投票、既存出演者データの更新は含めない。
@@ -17,7 +17,7 @@
 - `performers.is_private_test`が存在し、Test Performerは`true`で運用されている。
 - `live_sessions`の既存SELECT RLSも、一般公開を`is_approved=true and is_private_test=false`に限定している。
 - `live_schedules`、`live_reservations`、`live_viewer_samples`、`notify_live_reservations_started`は未作成。
-- PR #66の予定SELECTと予約INSERTは、既存LIVEと同じ公開条件に修正済み。非公開テスト予定は本人と管理者以外へ返さず、一般ユーザーは直接UUIDを指定しても予約できない。
+- PR #66の予定SELECTと予約INSERTは、既存LIVEと同じ公開条件に修正済み。非公開テスト予定は本人、管理者、`live_navigator_assignments`でAuth UUIDを明示割当された有効な担当者以外へ返さず、一般ユーザーは直接UUIDを指定しても予約できない。
 - 開始通知は、対象予定を所有する配信者が有効な自分のLIVE sessionを指定した場合だけ実行でき、通知先はその予定を予約したユーザーだけである。
 
 ## SQL差分
@@ -69,4 +69,4 @@
 
 ## 明示承認文
 
-`PR #66のe890cf1a... migration 1件を本番project pmmtijwswzwhuriqhlepへ適用し、検証成功後にPRをmergeしてVITE_ENABLE_LIVE_RESERVATIONSをONにすることを承認します。過去migration repairとENABLE_LIVE_VIEWER_SAMPLES有効化は承認対象外です。`
+`PR #66の2e1e4dad... migration 1件を本番project pmmtijwswzwhuriqhlepへ適用し、検証成功後にPRをmergeしてVITE_ENABLE_LIVE_RESERVATIONSをONにすることを承認します。過去migration repairとENABLE_LIVE_VIEWER_SAMPLES有効化は承認対象外です。`

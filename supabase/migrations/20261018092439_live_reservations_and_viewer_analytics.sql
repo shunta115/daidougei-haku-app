@@ -56,6 +56,7 @@ create policy live_schedules_public_read on public.live_schedules
   using (
     performer_id = (select auth.uid())
     or public.is_admin()
+    or public.can_navigate_live(performer_id)
     or (
       status = 'scheduled'
       and exists (
@@ -115,8 +116,10 @@ create policy live_reservations_own_insert on public.live_reservations
       where s.id = live_reservations.live_schedule_id
         and s.status = 'scheduled'
         and s.scheduled_start_at > now() - interval '15 minutes'
-        and p.is_approved = true
-        and p.is_private_test = false
+        and (
+          (p.is_approved = true and p.is_private_test = false)
+          or public.can_navigate_live(s.performer_id)
+        )
     )
   );
 

@@ -17,11 +17,12 @@ where schemaname = 'public'
   and tablename in ('live_schedules', 'live_reservations', 'live_viewer_samples')
 order by tablename, policyname;
 
--- Both rows must contain the is_private_test=false guard. A missing result or
--- false value is a release blocker because it can expose private test LIVE data.
+-- Both rows must contain the private-test guard and UUID-based explicit
+-- navigator permission. A missing/false value is a release blocker.
 select
   policyname,
-  coalesce(qual, with_check) like '%is_private_test = false%' as blocks_private_test
+  coalesce(qual, with_check) like '%is_private_test = false%' as blocks_private_test,
+  coalesce(qual, with_check) like '%can_navigate_live%' as allows_assigned_navigator
 from pg_policies
 where schemaname = 'public'
   and (

@@ -30,6 +30,9 @@ describe('LIVE reservation and audience analytics migration', () => {
     expect(privateGuards).toHaveLength(2)
     expect(migration).toMatch(/create policy live_schedules_public_read[\s\S]+status = 'scheduled'[\s\S]+p\.is_approved = true[\s\S]+p\.is_private_test = false/)
     expect(migration).toMatch(/create policy live_reservations_own_insert[\s\S]+join public\.performers p[\s\S]+p\.is_private_test = false/)
+    expect(migration).toMatch(/create policy live_schedules_public_read[\s\S]+public\.can_navigate_live\(performer_id\)/)
+    expect(migration).toMatch(/create policy live_reservations_own_insert[\s\S]+public\.can_navigate_live\(s\.performer_id\)/)
+    expect(migration).not.toMatch(/stage_name[^;]+live_schedules_public_read/i)
   })
 
   it('guards the privileged start notification function', () => {
@@ -64,12 +67,13 @@ describe('LIVE reservation and audience analytics migration', () => {
     expect(verifier).toContain("has_function_privilege('anon'")
     expect(verifier).toContain("table_name = 'live_viewer_samples'")
     expect(verifier).toContain("as blocks_private_test")
+    expect(verifier).toContain("as allows_assigned_navigator")
     expect(verifier).toContain('(select count(*) from public.live_sessions)')
   })
 
   it('pins the production target, migration hash, kill switch, and no-repair rule', () => {
     expect(approval).toContain('pmmtijwswzwhuriqhlep')
-    expect(approval).toContain('e890cf1a1113d92593f7c83f419f55247e52a3f7408158fa7bdc24c73eb3fabc')
+    expect(approval).toContain('2e1e4dad9d3b22cae48030fb8fcd6ba1028a9350952a5756790da8cbb5281b93')
     expect(approval).toContain('VITE_ENABLE_LIVE_RESERVATIONS')
     expect(approval).toContain('ENABLE_LIVE_VIEWER_SAMPLES`は今回OFF')
     expect(approval).toContain('過去履歴へのrepair/INSERT/UPDATE/DELETEは行わない')
