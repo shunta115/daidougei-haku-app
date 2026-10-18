@@ -1,7 +1,7 @@
 # HAKU LIVE P0 基盤監査
 
-監査日: 2026-10-16  
-対象: `shunta115/daidougei-haku-app` / `livekit-client@2.21.0`  
+監査日: 2026-10-16
+対象: `shunta115/daidougei-haku-app` / `livekit-client@2.21.0`
 基準コミット: `bf58cfdad7126d26da6764d552737edb035b30ad`
 
 ## 1. 結論

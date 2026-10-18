@@ -46,11 +46,23 @@ describe('payment safety boundaries', () => {
     expect(merchApi).toContain('idempotencyKey: `merch-checkout-${order.id}`')
   })
 
-  it('fails closed without the webhook idempotency ledger and claims failed retries atomically', () => {
+  it('fails closed without the webhook ledger and atomically reclaims failed or interrupted deliveries', () => {
     const webhook = read('api/stripe/webhook.ts')
     expect(webhook).toContain('Webhook idempotency ledger unavailable')
     expect(webhook).toMatch(/\.eq\('status', 'failed'\)[\s\S]*\.select\('event_id'\)/)
+    expect(webhook).toContain('WEBHOOK_PROCESSING_LEASE_MS')
+    expect(webhook).toMatch(/\.eq\('status', 'processing'\)[\s\S]*\.lte\('received_at', leaseExpiredBefore\)[\s\S]*\.select\('event_id'\)/)
     expect(webhook).not.toMatch(/if \(missingTable\(error\)\) return true/)
+  })
+
+  it('prevents implicit Stripe account replacement in the privileged sync RPC', () => {
+    const migration = read('supabase/migrations/20261016134735_grant_service_role_performer_updates.sql')
+    expect(migration).toContain('security definer')
+    expect(migration).toContain("set search_path = ''")
+    expect(migration).toContain('for update')
+    expect(migration).toContain('Stripe account replacement is not allowed')
+    expect(migration).toContain('from public, anon, authenticated')
+    expect(migration).toContain('to service_role')
   })
 
   it('settles a platform-held sale from the paid checkout webhook', () => {

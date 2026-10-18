@@ -6,6 +6,7 @@ const fake = vi.hoisted(() => ({
   listener: null as null | ((event: string, session: unknown) => unknown),
   insideCallback: false, from: vi.fn(), signUp: vi.fn(),
   resetPasswordForEmail: vi.fn(), updateUser: vi.fn(),
+  getSession: vi.fn(),
 }))
 vi.mock('../src/platform/lib/supabase', () => {
   const client = {
@@ -14,6 +15,7 @@ vi.mock('../src/platform/lib/supabase', () => {
       signUp: fake.signUp,
       resetPasswordForEmail: fake.resetPasswordForEmail,
       updateUser: fake.updateUser,
+      getSession: fake.getSession,
     },
     from: (...args: unknown[]) => { if (fake.insideCallback) throw new Error('Auth callback must not query DB'); return fake.from(...args) },
   }
@@ -31,9 +33,9 @@ function SignupProbe() {
   const auth = useAuth()
   return <button onClick={() => void auth.signUp('performer@example.com', 'fixture-password', 'performer', '登録芸名')}>signup</button>
 }
-function emit(session: unknown) {
+function emit(session: unknown, event = 'SIGNED_IN') {
   fake.insideCallback = true
-  const returned = fake.listener?.('SIGNED_IN', session)
+  const returned = fake.listener?.(event, session)
   fake.insideCallback = false
   expect(returned).not.toBeInstanceOf(Promise)
 }
@@ -43,6 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   fake.resetPasswordForEmail.mockResolvedValue({ error: null })
   fake.updateUser.mockResolvedValue({ error: null })
+  fake.getSession.mockResolvedValue({ data: { session: { user: { id: 'fixture' } } }, error: null })
   fake.signUp.mockResolvedValue({ data: { session: null }, error: null })
   fake.from.mockImplementation((table) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === 'profiles' ? { id: 'fixture', role: 'performer', display_name: '芸名' } : { id: 'fixture', stage_name: '芸名' }, error: null }) }) }) }))
 })
@@ -70,14 +73,31 @@ it('shows an actionable error instead of silently treating a failed performer lo
   await waitFor(() => expect(screen.getByText(/登録情報を読み込めませんでした/)).toBeTruthy())
 })
 
-it('uses Supabase recovery APIs without exposing password reset details to the database layer', async () => {
+it.each([
+  ['iPhone Safari', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'],
+  ['Mac Safari', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15'],
+])('waits for a verified recovery session before updating the password on %s', async (_browser, userAgent) => {
+  vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(userAgent)
   render(<AuthProvider><PasswordProbe /></AuthProvider>)
   screen.getByText('reset').click()
   await waitFor(() => expect(fake.resetPasswordForEmail).toHaveBeenCalledWith('fan@example.com', {
     redirectTo: `${window.location.origin}/auth/reset-password`,
   }))
   screen.getByText('update').click()
+  await waitFor(() => expect(fake.updateUser).not.toHaveBeenCalled())
+  act(() => emit({ user: { id: 'fixture' } }, 'PASSWORD_RECOVERY'))
+  screen.getByText('update').click()
+  await waitFor(() => expect(fake.getSession).toHaveBeenCalled())
   await waitFor(() => expect(fake.updateUser).toHaveBeenCalledWith({ password: 'new-password' }))
+})
+
+it('does not update a password when the recovery event has no persisted session', async () => {
+  fake.getSession.mockResolvedValue({ data: { session: null }, error: null })
+  render(<AuthProvider><PasswordProbe /></AuthProvider>)
+  act(() => emit({ user: { id: 'fixture' } }, 'PASSWORD_RECOVERY'))
+  screen.getByText('update').click()
+  await waitFor(() => expect(fake.getSession).toHaveBeenCalled())
+  expect(fake.updateUser).not.toHaveBeenCalled()
 })
 
 it('recognizes Supabase recovery callbacks before the auth event arrives', () => {
