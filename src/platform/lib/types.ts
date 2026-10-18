@@ -27,6 +27,7 @@ export type Performer = {
   stripe_account_id: string | null
   stripe_onboarding_complete: boolean
   is_approved: boolean
+  is_private_test?: boolean
   is_live: boolean
   live_started_at: string | null
   live_title: string | null
@@ -145,6 +146,9 @@ export type MerchProduct = {
   image_url: string | null
   price_yen: number
   stock: number
+  pickup_location?: string | null
+  pickup_deadline?: string | null
+  reservation_enabled?: boolean
   status: MerchProductStatus
   created_at: string
   updated_at: string
@@ -170,6 +174,10 @@ export type MerchOrder = {
   currency: string
   platform_fee_yen: number
   status: MerchOrderStatus
+  order_kind?: 'cashless' | 'cash_reservation'
+  order_number?: string | null
+  fulfillment_status?: 'awaiting_payment' | 'awaiting_pickup' | 'fulfilled' | 'cancelled' | 'expired'
+  reservation_expires_at?: string | null
   stripe_session_id: string | null
   stripe_payment_intent: string | null
   stripe_payment_intent_id?: string | null

@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
-import { ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Users } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, Users, VolumeX } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import {
+  deleteLiveComment,
   follow,
+  getOpenLiveSessionId,
   getPerformer,
   isFollowing,
   listLiveComments,
   postLiveComment,
   subscribeLiveComments,
+  subscribeLiveCommentDeletes,
   subscribePerformerLive,
   unfollow,
   updateLiveViewerPeak,
 } from '../lib/api'
+import { useLiveReactions } from '../lib/useLiveReactions'
+import { LiveApplauseMeter, LiveReactionEffects } from '../components/LiveReactionEffects'
 import { useAuth } from '../lib/auth'
 import { useLang } from '../../i18n/LangProvider'
 import { spaGo, PLATFORM_PATH } from '../../app/routes'
@@ -32,6 +37,7 @@ import {
 import { useFullscreen } from '../lib/useFullscreen'
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { useVideoAspect } from '../lib/useVideoAspect'
+import { useVisualKeyboardInset } from '../lib/useVisualKeyboardInset'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 
@@ -49,22 +55,36 @@ function formatDuration(sec: number) {
 }
 
 export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: Props) {
+  useVisualKeyboardInset()
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
-  const [reaction, setReaction] = useState(false)
+  const reactions = useLiveReactions(performerId, p?.live_started_at, Boolean(p?.is_live), {
+    id: user?.id,
+    displayName: profile?.display_name,
+    privateLive: p?.is_private_test === true,
+  })
+  const reaction = reactions.pulses.length > 0
+  const [showReactionHint, setShowReactionHint] = useState(() => localStorage.getItem('pl-live-applause-hint') !== 'seen')
+  const [commentSending, setCommentSending] = useState(false)
+  const commentBusyRef = useRef(false)
+  const commentSentAtRef = useRef(0)
   useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [comments, setComments] = useState<LiveComment[]>([])
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [commentsVisible, setCommentsVisible] = useState(true)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const [mutedCommenters, setMutedCommenters] = useState<Set<string>>(() => new Set())
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [chromeVisible, setChromeVisible] = useState(true)
   const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('cover')
-  const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-live-effect-sound') === '1')
   const [calmMotion, setCalmMotion] = useState(
     () =>
       localStorage.getItem('pl-gift-calm') === '1' ||
@@ -73,6 +93,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const commentsRef = useRef<HTMLDivElement>(null)
 
   const shareLive = () => {
     const url = `${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`
@@ -108,11 +129,56 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   }, [user, performerId])
 
   useEffect(() => {
-    listLiveComments(performerId).then(setComments).catch(() => undefined)
-    return subscribeLiveComments(performerId, (row) => {
-      setComments((prev) => [...prev.slice(-79), row])
+    if (!p?.is_live) {
+      setLiveSessionId(null)
+      setComments([])
+      return
+    }
+    let active = true
+    let retry: number | null = null
+    const resolveSession = async () => {
+      try {
+        const id = await getOpenLiveSessionId(performerId)
+        if (!active) return
+        if (id) setLiveSessionId(id)
+        else retry = window.setTimeout(() => void resolveSession(), 500)
+      } catch {
+        if (active) setError('LIVEセッションを確認できませんでした。通信を確認してください。')
+      }
+    }
+    setComments([])
+    setLiveSessionId(null)
+    void resolveSession()
+    return () => {
+      active = false
+      if (retry != null) window.clearTimeout(retry)
+    }
+  }, [performerId, p?.is_live, p?.live_started_at])
+
+  useEffect(() => {
+    if (!liveSessionId) return
+    let active = true
+    listLiveComments(performerId, liveSessionId).then((rows) => { if (active) setComments(rows) }).catch(() => {
+      if (active) setError('コメントを読み込めませんでした。通信を確認してください。')
     })
-  }, [performerId])
+    const unsubscribeInsert = subscribeLiveComments(performerId, liveSessionId, (row) => {
+      setComments((prev) => prev.some((comment) => comment.id === row.id) ? prev : [...prev.slice(-79), row])
+    })
+    const unsubscribeDelete = subscribeLiveCommentDeletes(performerId, liveSessionId, (id) => {
+      setComments((prev) => prev.filter((comment) => comment.id !== id))
+    })
+    return () => {
+      active = false
+      unsubscribeInsert()
+      unsubscribeDelete()
+    }
+  }, [performerId, liveSessionId])
+
+  useEffect(() => {
+    if (!commentsVisible || !autoScroll) return
+    const node = commentsRef.current
+    if (node) node.scrollTop = node.scrollHeight
+  }, [comments, commentsVisible, autoScroll])
 
   useEffect(() => {
     if (!p?.is_live) return
@@ -185,7 +251,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   }, [p?.live_started_at, p?.is_live])
 
   useEffect(() => {
-    localStorage.setItem('pl-gift-sound', soundOn ? '1' : '0')
+    localStorage.setItem('pl-live-effect-sound', soundOn ? '1' : '0')
   }, [soundOn])
   useEffect(() => {
     localStorage.setItem('pl-gift-calm', calmMotion ? '1' : '0')
@@ -231,18 +297,28 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
   }
 
   const sendComment = async () => {
-    if (!user || !profile || !draft.trim()) return
+    if (!user || !profile || !p?.is_live || !liveSessionId || !draft.trim() || commentBusyRef.current || Date.now() - commentSentAtRef.current < 1000) return
+    commentBusyRef.current = true; setCommentSending(true)
     try {
       await postLiveComment({
         performerId,
         userId: user.id,
         displayName: profile.display_name,
         body: draft,
+        liveSessionId,
       })
       setDraft('')
+      commentSentAtRef.current = Date.now()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'コメント失敗')
+    } finally {
+      commentBusyRef.current = false; setCommentSending(false)
     }
+  }
+
+  const sendReaction = (kind: 'heart' | 'applause') => {
+    reactions.send(kind)
+    if (kind === 'applause') { setShowReactionHint(false); localStorage.setItem('pl-live-applause-hint', 'seen') }
   }
 
   if (!p && !error) return <p className="pl-muted">Loading…</p>
@@ -274,7 +350,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
       >
         <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay />
         <audio ref={audioRef} autoPlay />
-        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} />
+        {liveSessionId ? <TipGiftOverlay performerId={performerId} liveSessionId={liveSessionId} soundEnabled={soundOn} reducedMotion={calmMotion} /> : null}
 
         <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
@@ -316,8 +392,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
           </div>
         ) : null}
 
+        <LiveReactionEffects pulses={reactions.pulses} level={reactions.level} celebrating={reactions.celebrating} reducedMotion={calmMotion} />
+
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
-          <button type="button" onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="いいね"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
+          <button type="button" disabled={!p?.is_live} onClick={() => sendReaction('applause')} aria-label="タップして拍手（無料）"><span aria-hidden="true">👏</span><small>拍手</small></button>
+          <button type="button" disabled={!p?.is_live} onClick={() => sendReaction('heart')} aria-label="ハートを送る（無料）"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>ハート</small></button>
           <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
@@ -325,6 +404,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
       </div>
 
       <div className="pl-live__panel pl-live__panel--live" data-dim={isOverlayChrome && !chromeVisible}>
+        <LiveApplauseMeter total={reactions.total} level={reactions.level} celebrating={reactions.celebrating} />
+        {showReactionHint && p?.is_live ? <p className="pl-live__reaction-hint">👏を押してパフォーマーを応援！</p> : null}
+        {reactions.deliveryError ? <p className="pl-error" role="status">{reactions.deliveryError}</p> : null}
         <div className="pl-live__creator-mini">
           {p?.photo_url ? <img src={p.photo_url} alt="" /> : <span aria-hidden="true">{p?.stage_name?.slice(0, 2) || 'DH'}</span>}
           <div>
@@ -333,16 +415,52 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
           </div>
           {p?.is_live ? <em>LIVE</em> : null}
         </div>
-        <div className="pl-live__comments">
-          {comments.map((c) => (
-            <div key={c.id} className="pl-live__comment">
-              <strong>{c.display_name}</strong> {c.body}
-            </div>
-          ))}
+        <div className="pl-live__comment-tools">
+          <button type="button" onClick={() => setCommentsVisible((visible) => !visible)}>
+            {commentsVisible ? <EyeOff size={14} /> : <Eye size={14} />} {commentsVisible ? 'コメントを隠す' : 'コメントを表示'}
+          </button>
+          {commentsVisible ? (
+            <button type="button" aria-pressed={autoScroll} onClick={() => setAutoScroll((enabled) => !enabled)}>
+              自動スクロール {autoScroll ? 'ON' : 'OFF'}
+            </button>
+          ) : null}
+          {mutedCommenters.size > 0 ? (
+            <button type="button" onClick={() => setMutedCommenters(new Set())}>ミュート解除 ({mutedCommenters.size})</button>
+          ) : null}
         </div>
+        {commentsVisible ? (
+          <div
+            ref={commentsRef}
+            className="pl-live__comments"
+            onScroll={(event) => {
+              const node = event.currentTarget
+              setAutoScroll(node.scrollHeight - node.scrollTop - node.clientHeight < 28)
+            }}
+          >
+            {comments.filter((comment) => !mutedCommenters.has(comment.user_id)).map((c) => (
+              <div key={c.id} className="pl-live__comment">
+                <span><strong>{c.display_name}</strong> {c.body}</span>
+                <span className="pl-live__comment-actions">
+                  {c.user_id === user?.id ? (
+                    <button type="button" aria-label="コメントを削除" onClick={() => void deleteLiveComment(c.id).catch(() => setError('コメントを削除できませんでした。'))}>
+                      <Trash2 size={13} />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label={`${c.display_name}をミュート`}
+                    onClick={() => setMutedCommenters((previous) => new Set(previous).add(c.user_id))}
+                  >
+                    <VolumeX size={13} />
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="pl-live__actions">
-          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} onClick={() => { setReaction(true); window.setTimeout(() => setReaction(false), 700) }} aria-label="拍手を送る">
-            <span aria-hidden="true">👏</span> リアクション
+          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} disabled={!p?.is_live} onClick={() => sendReaction('applause')} aria-label="タップして拍手（無料）">
+            <span aria-hidden="true">👏</span> タップして拍手！
           </button>
           <button
             type="button"
@@ -373,14 +491,15 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth }: P
             style={{ marginBottom: 0 }}
             placeholder={t('commentPlaceholder')}
             value={draft}
-            disabled={!user}
+            disabled={!user || !p?.is_live || !liveSessionId || commentSending}
+            maxLength={200}
             onFocus={bumpChrome}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void sendComment()
             }}
           />
-          <button type="button" className="pl-btn" disabled={!user} onClick={() => void sendComment()}>
+          <button type="button" className="pl-btn" disabled={!user || !p?.is_live || !liveSessionId || commentSending} onClick={() => void sendComment()}>
             <Send size={18} /><span className="pl-live__send-label">{t('send')}</span>
           </button>
         </div>

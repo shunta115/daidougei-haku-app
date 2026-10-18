@@ -8,6 +8,7 @@ const fake = vi.hoisted(() => ({
 vi.mock('../src/platform/lib/supabase', () => ({
   requireSupabase: () => ({
     from: (table: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_private_test: false }, error: null }) }) }),
       update: (patch: Record<string, unknown>) => {
         if (table === 'performers') {
           fake.performerPatch = patch

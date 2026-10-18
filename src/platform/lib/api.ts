@@ -13,6 +13,8 @@ import type {
   TipSummary,
 } from './types'
 import { supabaseAuthHeaders } from './supabase'
+import { MERCH_SYSTEM_FEE_BPS, TIP_SYSTEM_FEE_BPS } from '../../../shared/fees'
+import { PERFORMER_CLIENT_SELECT } from './performerColumns'
 
 export type PerformerSearchFilters = {
   liveOnly?: boolean
@@ -28,23 +30,25 @@ export async function reconcileLivePresence() {
   await fetch('/api/livekit/presence', { cache: 'no-store' }).catch(() => undefined)
 }
 
-function isPublicTestPerformer(p: Performer): boolean {
-  return /^test performer$/i.test(p.stage_name.trim())
+function isPrivateTestPerformer(p: Performer): boolean {
+  // The explicit DB flag is authoritative. The name fallback protects older
+  // preview databases until the additive migration has been applied.
+  return p.is_private_test === true || /^test performer$/i.test(p.stage_name.trim())
 }
 
 export async function searchPerformers(query: string, filters: PerformerSearchFilters = {}): Promise<Performer[]> {
   const sb = requireSupabase()
-  let q = sb.from('performers').select('*').eq('is_approved', true)
+  let q = sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true)
   if (filters.liveOnly) q = q.eq('is_live', true)
   const { data, error } = await q.order('is_live', { ascending: false }).limit(100)
   if (error) throw error
-  const rows = (data as Performer[]) ?? []
+  const rows = (data as unknown as Performer[]) ?? []
   const trimmed = query.trim().toLowerCase()
   const genre = filters.genre?.trim().toLowerCase()
   const country = filters.country?.trim().toLowerCase()
   const japanish = /^(japan|日本|jp|jpn|tokyo|東京)$/i
   return rows.filter((p) => {
-    if (isPublicTestPerformer(p)) return false
+    if (isPrivateTestPerformer(p)) return false
     if (genre && !p.genre.toLowerCase().includes(genre)) return false
     if (country && !(p.country || '').toLowerCase().includes(country) && !(p.city || '').toLowerCase().includes(country)) return false
     if (filters.overseasOnly) {
@@ -60,10 +64,12 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
 
 export async function getPerformer(id: string): Promise<Performer | null> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', id).maybeSingle()
   if (error) throw error
-  const row = (data as Performer) ?? null
-  if (!row || !row.is_approved || isPublicTestPerformer(row)) return null
+  const row = (data as unknown as Performer) ?? null
+  // RLS hides private-test rows from anonymous and ordinary authenticated
+  // users. A visible row here belongs to its owner or an authorized admin.
+  if (!row || !row.is_approved) return null
   return row
 }
 
@@ -71,12 +77,14 @@ export async function listLivePerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('performers')
-    .select('*')
+    .select(PERFORMER_CLIENT_SELECT)
     .eq('is_approved', true)
     .eq('is_live', true)
     .order('live_started_at', { ascending: false })
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
+  // RLS exposes a private performer only while the authenticated viewer has an
+  // allowlist row for its open session. Keep public discovery filters elsewhere.
+  return (data as unknown as Performer[]) ?? []
 }
 
 export type LiveRankRow = {
@@ -191,7 +199,7 @@ export async function startLive(performerId: string, title?: string) {
 
   const { data: performerRow } = await sb
     .from('performers')
-    .select('is_live, stage_name, live_title')
+    .select('is_live, stage_name, live_title, is_private_test')
     .eq('id', performerId)
     .maybeSingle()
 
@@ -257,13 +265,15 @@ export async function startLive(performerId: string, title?: string) {
   if (inserted.error) throw inserted.error
 
   const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
-  const { error: nerr } = await sb.rpc('notify_followers_live_start', {
-    p_performer_id: performerId,
-    p_stage_name: stageName,
-    p_title: liveTitle,
-  })
-  if (nerr) {
-    console.warn('notify_followers_live_start', nerr.message)
+  if (performerRow?.is_private_test !== true) {
+    const { error: nerr } = await sb.rpc('notify_followers_live_start', {
+      p_performer_id: performerId,
+      p_stage_name: stageName,
+      p_title: liveTitle,
+    })
+    if (nerr) {
+      console.warn('notify_followers_live_start', nerr.message)
+    }
   }
 
   return (inserted.data?.id as string) ?? null
@@ -271,6 +281,16 @@ export async function startLive(performerId: string, title?: string) {
 
 export async function endLive(performerId: string) {
   const sb = requireSupabase()
+  const { data: performer } = await sb.from('performers').select('is_private_test').eq('id', performerId).maybeSingle()
+  if (performer?.is_private_test === true) {
+    const response = await fetch('/api/livekit/presence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+      body: JSON.stringify({ action: 'end-private', performerId }),
+    })
+    if (!response.ok) throw new Error('Private test LIVE could not be ended securely')
+    return
+  }
   const now = new Date().toISOString()
   const { error: uerr } = await sb
     .from('performers')
@@ -317,12 +337,27 @@ export async function listLiveHistory(performerId: string): Promise<LiveSession[
   return (data as LiveSession[]) ?? []
 }
 
-export async function listLiveComments(performerId: string): Promise<LiveComment[]> {
+export async function getOpenLiveSessionId(performerId: string): Promise<string | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_sessions')
+    .select('id')
+    .eq('performer_id', performerId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.id as string | undefined) ?? null
+}
+
+export async function listLiveComments(performerId: string, liveSessionId: string): Promise<LiveComment[]> {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('live_comments')
     .select('*')
     .eq('performer_id', performerId)
+    .eq('live_session_id', liveSessionId)
     .order('created_at', { ascending: false })
     .limit(80)
   if (error) throw error
@@ -349,20 +384,135 @@ export async function postLiveComment(input: {
   if (error) throw error
 }
 
-export function subscribeLiveComments(performerId: string, onInsert: (row: LiveComment) => void) {
+export function subscribeLiveComments(performerId: string, liveSessionId: string, onInsert: (row: LiveComment) => void) {
   const sb = requireSupabase()
   const channel = sb
-    .channel(`live-comments-${performerId}`)
+    .channel(`live-comments-${performerId}-${liveSessionId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
       (payload) => {
-        onInsert(payload.new as LiveComment)
+        const row = payload.new as LiveComment
+        if (row.live_session_id === liveSessionId) onInsert(row)
       },
     )
     .subscribe()
   return () => {
     void sb.removeChannel(channel)
+  }
+}
+
+export async function deleteLiveComment(commentId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_comments').delete().eq('id', commentId)
+  if (error) throw error
+}
+
+export function subscribeLiveCommentDeletes(performerId: string, liveSessionId: string, onDelete: (id: string) => void) {
+  const sb = requireSupabase()
+  const channel = sb
+    .channel(`live-comment-deletes-${performerId}-${liveSessionId}`)
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'live_comments' },
+      (payload) => {
+        const row = payload.old as Partial<LiveComment>
+        // DELETE payloads may only contain the primary key when replica
+        // identity is the default, so filter locally when performer_id exists.
+        if (row.id && (!row.performer_id || row.performer_id === performerId) &&
+          (!row.live_session_id || row.live_session_id === liveSessionId)) onDelete(row.id)
+      },
+    )
+    .subscribe()
+  return () => {
+    void sb.removeChannel(channel)
+  }
+}
+
+export type LiveReactionPulse = {
+  actorId: string
+  avatarUrl: string | null
+  displayName: string
+  count: number
+  nonce: string
+  kind?: 'heart' | 'applause'
+  liveStartedAt?: string
+}
+
+export async function getLiveReactionTotal(performerId: string, liveStartedAt?: string | null): Promise<number> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('live_reaction_totals').select('total,live_started_at').eq('performer_id', performerId).maybeSingle()
+  if (error) throw error
+  if (liveStartedAt && Date.parse(data?.live_started_at ?? '') !== Date.parse(liveStartedAt)) return 0
+  return Math.max(0, Number(data?.total ?? 0))
+}
+
+export async function addLiveReactions(performerId: string, actorId: string, count: number, liveStartedAt?: string | null): Promise<number> {
+  const sb = requireSupabase()
+  const safeCount = Math.max(1, Math.min(30, Math.floor(count)))
+  const { data, error } = await sb.rpc(liveStartedAt ? 'add_live_session_reactions' : 'add_live_reactions', {
+    target_performer_id: performerId,
+    actor_key: actorId,
+    reaction_count: safeCount,
+    ...(liveStartedAt ? { expected_started_at: liveStartedAt } : {}),
+  })
+  if (error) throw error
+  return Math.max(0, Number(data ?? 0))
+}
+
+export function subscribeLiveReactions(
+  performerId: string,
+  handlers: { onPulse: (pulse: LiveReactionPulse) => void; onTotal: (total: number) => void; onReady?: () => void; liveStartedAt?: string; broadcastEnabled?: boolean },
+) {
+  const sb = requireSupabase()
+  const seen = new Map<string, number>()
+  const windows = new Map<string, { started: number; count: number }>()
+  let windowStart = Date.now(), received = 0
+  const channel = sb.channel(`live-reactions-${performerId}`)
+  if (handlers.broadcastEnabled !== false) {
+    channel.on('broadcast', { event: 'pulse' }, ({ payload }) => {
+      const value = payload as Partial<LiveReactionPulse>
+      if (
+        typeof value.actorId === 'string' && value.actorId.length <= 64 &&
+        typeof value.nonce === 'string' && value.nonce.length <= 64 &&
+        typeof value.displayName === 'string' && value.displayName.length <= 80 &&
+        (value.avatarUrl == null || (typeof value.avatarUrl === 'string' && value.avatarUrl.length <= 500)) &&
+        typeof value.count === 'number' && Number.isInteger(value.count) && value.count >= 1 && value.count <= 30 &&
+        (value.kind == null || value.kind === 'heart' || value.kind === 'applause') &&
+        (value.liveStartedAt == null || (typeof value.liveStartedAt === 'string' && Number.isFinite(Date.parse(value.liveStartedAt))))
+      ) {
+        const now = Date.now()
+        if (now - windowStart >= 1000) { windowStart = now; received = 0 }
+        const actor = windows.get(value.actorId) ?? { started: now, count: 0 }
+        if (now - actor.started >= 1000) { actor.started = now; actor.count = 0 }
+        if (seen.has(value.nonce) || ++received > 60 || ++actor.count > 4) return
+        windows.set(value.actorId, actor)
+        seen.set(value.nonce, now)
+        for (const [key, time] of seen) if (now - time > 10_000 || seen.size > 512) seen.delete(key)
+        for (const [key, bucket] of windows) if (now - bucket.started > 10_000 || windows.size > 512) windows.delete(key)
+        handlers.onPulse(value as LiveReactionPulse)
+      }
+    })
+  }
+  channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'live_reaction_totals', filter: `performer_id=eq.${performerId}` },
+      (payload) => {
+        const row = payload.new as { total?: number; live_started_at?: string }
+        if (!handlers.liveStartedAt || Date.parse(row.live_started_at ?? '') === Date.parse(handlers.liveStartedAt)) {
+          handlers.onTotal(Math.max(0, Number(row.total ?? 0)))
+        }
+      },
+    )
+    .subscribe((status) => { if (status === 'SUBSCRIBED') handlers.onReady?.() })
+  return {
+    publish(pulse: LiveReactionPulse) {
+      if (handlers.broadcastEnabled === false) return Promise.resolve('ok' as const)
+      return channel.send({ type: 'broadcast', event: 'pulse', payload: pulse })
+    },
+    unsubscribe() {
+      void sb.removeChannel(channel)
+    },
   }
 }
 
@@ -400,15 +550,16 @@ export function subscribePerformerMapUpdates(onChange: (row: Performer) => void)
   }
 }
 
-export function subscribeLiveTipEvents(performerId: string, onInsert: (row: LiveTipEvent) => void) {
+export function subscribeLiveTipEvents(performerId: string, liveSessionId: string, onInsert: (row: LiveTipEvent) => void) {
   const sb = requireSupabase()
   const channel = sb
-    .channel(`live-tips-${performerId}`)
+    .channel(`live-tips-${performerId}-${liveSessionId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_tip_events', filter: `performer_id=eq.${performerId}` },
       (payload) => {
-        onInsert(payload.new as LiveTipEvent)
+        const row = payload.new as LiveTipEvent
+        if (row.live_session_id === liveSessionId) onInsert(row)
       },
     )
     .subscribe()
@@ -504,9 +655,9 @@ export async function listFollowedPerformers(fanId: string): Promise<Performer[]
   if (error) throw error
   const ids = (follows ?? []).map((f) => f.performer_id as string)
   if (ids.length === 0) return []
-  const { data, error: perr } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
-  return (data as Performer[]) ?? []
+  return ((data as unknown as Performer[]) ?? []).filter((p) => !isPrivateTestPerformer(p))
 }
 
 export async function unfollow(fanId: string, performerId: string) {
@@ -541,9 +692,9 @@ export async function fetchAdminMetrics(): Promise<AdminMetrics | null> {
 
 export async function listPendingPerformers(): Promise<Performer[]> {
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('is_approved', false).order('created_at')
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', false).order('created_at')
   if (error) throw error
-  return (data as Performer[]) ?? []
+  return (data as unknown as Performer[]) ?? []
 }
 
 export type PerformerRegistration = Performer & { account_status: string }
@@ -551,13 +702,15 @@ export type PerformerRegistration = Performer & { account_status: string }
 export async function listPerformerRegistrations(): Promise<PerformerRegistration[]> {
   const sb = requireSupabase()
   const [{ data: performers, error }, { data: profiles, error: profileError }] = await Promise.all([
-    sb.from('performers').select('*').order('created_at', { ascending: false }),
+    sb.from('performers').select(PERFORMER_CLIENT_SELECT).order('created_at', { ascending: false }),
     sb.from('profiles').select('id,status').in('role', ['performer', 'admin']),
   ])
   if (error) throw error
   if (profileError) throw profileError
-  const statuses = new Map((profiles ?? []).map((p) => [p.id, p.status]))
-  return (performers ?? []).map((p) => ({ ...p, account_status: statuses.get(p.id) ?? 'unknown' })) as PerformerRegistration[]
+  const profileRows = (profiles ?? []) as unknown as Array<{ id: string; status: string }>
+  const performerRows = (performers ?? []) as unknown as Performer[]
+  const statuses = new Map(profileRows.map((p) => [p.id, p.status]))
+  return performerRows.map((p) => ({ ...p, account_status: statuses.get(p.id) ?? 'unknown' })) as PerformerRegistration[]
 }
 
 export async function approvePerformer(id: string) {
@@ -696,9 +849,9 @@ export async function listOshiPerformers(fanId: string): Promise<Performer[]> {
   if (error) throw error
   const ids = (rows ?? []).map((r) => r.performer_id as string)
   if (ids.length === 0) return []
-  const { data, error: perr } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error: perr } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (perr) throw perr
-  return (data as Performer[]) ?? []
+  return ((data as unknown as Performer[]) ?? []).filter((p) => !isPrivateTestPerformer(p))
 }
 
 export type FeaturedEvent = {
@@ -728,6 +881,7 @@ export type FeaturedEvent = {
 
 export type EventVoteRule = {
   event_id: string
+  voting_enabled?: boolean
   voting_open: boolean
   votes_per_user_per_day: number
   votes_per_voter?: number
@@ -747,6 +901,49 @@ export async function getFeaturedEvent(): Promise<FeaturedEvent | null> {
     .limit(1)
   if (error) throw error
   return ((data?.[0] as FeaturedEvent | undefined) ?? null)
+}
+
+export type OfficialNavigator = {
+  event_id: string
+  event_date: string
+  performer_id: string
+  show_on_home: boolean
+  performer: Performer
+  live_status: 'preparing' | 'live' | 'ended'
+}
+
+async function navigatorLiveStatus(performer: Performer, eventDate: string): Promise<OfficialNavigator['live_status']> {
+  if (performer.is_live) return 'live'
+  const sb = requireSupabase()
+  const dayStart = `${eventDate}T00:00:00+09:00`
+  const next = new Date(dayStart)
+  next.setUTCDate(next.getUTCDate() + 1)
+  const { data } = await sb
+    .from('live_sessions')
+    .select('id')
+    .eq('performer_id', performer.id)
+    .gte('started_at', dayStart)
+    .lt('started_at', next.toISOString())
+    .not('ended_at', 'is', null)
+    .limit(1)
+  return data?.length ? 'ended' : 'preparing'
+}
+
+export async function getTodayOfficialNavigator(eventId: string): Promise<OfficialNavigator | null> {
+  const sb = requireSupabase()
+  const todayJst = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+  const { data, error } = await sb
+    .from('event_official_navigators')
+    .select('event_id,event_date,performer_id,show_on_home')
+    .eq('event_id', eventId)
+    .eq('event_date', todayJst)
+    .eq('show_on_home', true)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const performer = await getPerformer(data.performer_id)
+  if (!performer) return null
+  return { ...data, performer, live_status: await navigatorLiveStatus(performer, data.event_date) } as OfficialNavigator
 }
 
 export async function listPublishedEvents(): Promise<FeaturedEvent[]> {
@@ -792,26 +989,57 @@ export async function getEventVoteRule(eventId: string): Promise<EventVoteRule |
 
 export async function saveEventVoteRule(eventId: string, patch: Partial<EventVoteRule>) {
   const sb = requireSupabase()
-  const { error } = await sb.from('event_vote_rules').upsert({ event_id: eventId, ...patch, updated_at: new Date().toISOString() })
+  const { data, error } = await sb
+    .from('event_vote_rules')
+    .upsert({ event_id: eventId, ...patch, updated_at: new Date().toISOString() })
+    .select('*')
+    .single()
   if (error) throw error
+  for (const [key, expected] of Object.entries(patch)) {
+    if (expected !== undefined && data?.[key] !== expected) {
+      throw new Error(`vote_rule_update_not_persisted:${key}`)
+    }
+  }
+  return data as EventVoteRule
 }
 
 export async function getTipFeeBps(): Promise<number> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'tip_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 1000
-  const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1000
-  return Math.floor(n)
+  return TIP_SYSTEM_FEE_BPS
 }
 
 export async function getMerchFeeBps(): Promise<number> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.from('platform_settings').select('value').eq('key', 'merch_fee_bps').maybeSingle()
-  if (error || data?.value == null) return 1000
-  const n = Number(data.value)
-  if (!Number.isFinite(n) || n < 0 || n > 5000) return 1000
-  return Math.floor(n)
+  return MERCH_SYSTEM_FEE_BPS
+}
+
+export type PerformerPayoutSummary = {
+  confirmedYen: number
+  internalAvailableYen: number
+  stripeAvailableYen: number
+  availableYen: number
+  processingYen: number
+  transferredYen: number
+  paidYen: number
+  minimumYen: number
+  remainingYen: number
+  canPayout: boolean
+}
+
+export async function getPerformerPayoutSummary(): Promise<PerformerPayoutSummary> {
+  const response = await fetch('/api/stripe/payout', { headers: await supabaseAuthHeaders(), cache: 'no-store' })
+  const json = await response.json() as PerformerPayoutSummary & { error?: string }
+  if (!response.ok) throw new Error(json.error || 'Payout summary failed')
+  return json
+}
+
+export async function requestPerformerPayout(requestId: string): Promise<{ id: string; amountYen: number; status: string }> {
+  const response = await fetch('/api/stripe/payout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ requestId }),
+  })
+  const json = await response.json() as { id?: string; amountYen?: number; status?: string; error?: string }
+  if (!response.ok || !json.id || json.amountYen == null || !json.status) throw new Error(json.error || 'Payout request failed')
+  return { id: json.id, amountYen: json.amountYen, status: json.status }
 }
 
 export async function setTipFeeBps(bps: number) {
@@ -837,10 +1065,10 @@ export type AnonVoteState = {
 }
 
 export async function getAnonVoteState(eventId: string, voterId: string): Promise<AnonVoteState> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.rpc('get_anon_vote_state', { p_event_id: eventId, p_voter_id: voterId })
-  if (error) throw error
-  const row = (data ?? {}) as Partial<AnonVoteState>
+  void voterId
+  const response = await fetch(`/api/votes/device?eventId=${encodeURIComponent(eventId)}`, { cache: 'no-store' })
+  const row = await response.json() as Partial<AnonVoteState> & { error?: string }
+  if (!response.ok) throw new Error(row.error || 'vote_service_unavailable')
   const voted = Array.isArray(row.voted) ? row.voted.map(String) : []
   return {
     voting_open: Boolean(row.voting_open),
@@ -852,13 +1080,14 @@ export async function getAnonVoteState(eventId: string, voterId: string): Promis
 }
 
 export async function castAnonEventVote(eventId: string, performerId: string, voterId: string) {
-  const sb = requireSupabase()
-  const { error } = await sb.rpc('cast_anon_event_vote', {
-    p_event_id: eventId,
-    p_performer_id: performerId,
-    p_voter_id: voterId,
+  void voterId
+  const response = await fetch('/api/votes/device', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventId, performerId }),
   })
-  if (error) throw error
+  const body = await response.json() as { error?: string }
+  if (!response.ok) throw new Error(body.error || 'vote_failed')
   trackProductEvent('vote_complete', { performerId, eventId, props: { mode: 'anon' } })
 }
 
@@ -866,27 +1095,17 @@ export type AdminVoteDesk = {
   voting_open: boolean
   allow_anonymous: boolean
   votes_per_voter: number
-  total_votes: number
-  unique_voters: number
-  ranking: Array<{ performer_id: string; votes: number }>
-  hourly: Array<{ hour: string; votes: number }>
-  anomalies: Array<{ voter_prefix: string; votes: number; span_seconds: number; kind: string }>
+  ranking: Array<{ performer_id: string; ranking_position: number }>
 }
 
 export async function getAdminVoteDesk(eventId: string): Promise<AdminVoteDesk> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.rpc('admin_event_vote_desk', { p_event_id: eventId })
-  if (error) throw error
-  const row = (data ?? {}) as Partial<AdminVoteDesk>
+  const [rule, named] = await Promise.all([getEventVoteRule(eventId), listVoteRankingNamed(eventId)])
+  const ranking = named.map((row) => ({ performer_id: row.performer.id, ranking_position: row.ranking_position }))
   return {
-    voting_open: Boolean(row.voting_open),
-    allow_anonymous: Boolean(row.allow_anonymous),
-    votes_per_voter: Number(row.votes_per_voter) || 3,
-    total_votes: Number(row.total_votes) || 0,
-    unique_voters: Number(row.unique_voters) || 0,
-    ranking: Array.isArray(row.ranking) ? row.ranking.map((item) => ({ performer_id: String(item.performer_id), votes: Number(item.votes) || 0 })) : [],
-    hourly: Array.isArray(row.hourly) ? row.hourly.map((item) => ({ hour: String(item.hour), votes: Number(item.votes) || 0 })) : [],
-    anomalies: Array.isArray(row.anomalies) ? row.anomalies : [],
+    voting_open: Boolean(rule?.voting_open && (!rule.voting_ends_at || Date.now() < Date.parse(rule.voting_ends_at))),
+    allow_anonymous: Boolean(rule?.allow_anonymous),
+    votes_per_voter: Number(rule?.votes_per_voter) || 3,
+    ranking,
   }
 }
 
@@ -902,25 +1121,23 @@ export async function getMyVotes(eventId: string, fanId: string): Promise<string
   return (data ?? []).map((row) => row.performer_id as string)
 }
 
-export async function listVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
-  const sb = requireSupabase()
-  const { data, error } = await sb.rpc('get_public_event_results', { p_event_id: eventId })
-  if (error) throw error
-  return ((data ?? []) as Array<{ performer_id: string; votes: number | string }>).map((row) => ({ performer_id: row.performer_id, votes: Number(row.votes) || 0 }))
+export type PublicAwpRanking = {
+  performer_id: string
+  performer_name: string
+  ranking_position: number
+  appearance: { date: string; start_time: string; end_time: string; stage_ja: string }
 }
 
-export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; votes: number }>> {
-  try {
-    const desk = await getAdminVoteDesk(eventId)
-    return desk.ranking
-  } catch {
-    const sb = requireSupabase()
-    const { data, error } = await sb.from('event_ballots').select('performer_id').eq('event_id', eventId)
-    if (error) throw error
-    const counts = new Map<string, number>()
-    for (const row of data ?? []) counts.set(row.performer_id as string, (counts.get(row.performer_id as string) ?? 0) + 1)
-    return [...counts].map(([performer_id, votes]) => ({ performer_id, votes })).sort((a, b) => b.votes - a.votes)
-  }
+export async function listVoteRanking(eventId: string): Promise<PublicAwpRanking[]> {
+  const response = await fetch(`/api/awp-results?eventId=${encodeURIComponent(eventId)}`, { cache: 'no-store' })
+  const body = await response.json() as { ranking?: PublicAwpRanking[] }
+  if (!response.ok) throw new Error('ranking_unavailable')
+  return body.ranking ?? []
+}
+
+export async function listAdminVoteRanking(eventId: string): Promise<Array<{ performer_id: string; ranking_position: number }>> {
+  const named = await listVoteRankingNamed(eventId)
+  return named.map((row) => ({ performer_id: row.performer.id, ranking_position: row.ranking_position }))
 }
 
 export async function createBookingInquiry(organizerId: string, performerId: string, message: string) {
@@ -969,6 +1186,9 @@ export type EventSlotRow = {
   event_id: string
   venue_id: string
   performer_id: string | null
+  performer_name_ja?: string | null
+  source_key?: string | null
+  source_label?: string | null
   date: string
   start_time: string
   end_time: string
@@ -1003,9 +1223,9 @@ export async function listPerformerEventSlots(performerId: string): Promise<Perf
 export async function listApprovedPerformers(): Promise<Performer[]> {
   await reconcileLivePresence()
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').eq('is_approved', true).order('stage_name')
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return ((data as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
+  return ((data as unknown as Performer[]) ?? []).filter((p) => !isPrivateTestPerformer(p))
 }
 
 export async function listEventVenues(eventId: string): Promise<EventVenueRow[]> {
@@ -1077,9 +1297,37 @@ export async function listEventLineupPerformers(eventId: string): Promise<Perfor
   const ids = await listEventLineup(eventId)
   if (ids.length === 0) return []
   const sb = requireSupabase()
-  const { data, error } = await sb.from('performers').select('*').in('id', ids).eq('is_approved', true)
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', ids).eq('is_approved', true)
   if (error) throw error
-  const byId = new Map(((data as Performer[]) ?? []).map((performer) => [performer.id, performer]))
+  const byId = new Map(((data as unknown as Performer[]) ?? [])
+    .filter((performer) => !isPrivateTestPerformer(performer))
+    .map((performer) => [performer.id, performer]))
+  return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
+}
+
+export async function listEventVotingPerformers(eventId: string, voteDate?: string): Promise<Performer[]> {
+  const sb = requireSupabase()
+  const day = voteDate ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date())
+  const { data: slots, error: slotError } = await sb
+    .from('event_slots')
+    .select('performer_id,start_time')
+    .eq('event_id', eventId)
+    .eq('date', day)
+    .eq('performance_type', 'regular')
+    .not('performer_id', 'is', null)
+    .order('start_time')
+  if (slotError) throw slotError
+  const ids = [...new Set((slots ?? []).map((slot) => String(slot.performer_id)).filter(Boolean))]
+  if (ids.length === 0) return []
+  const { data, error } = await sb
+    .from('performers')
+    .select(PERFORMER_CLIENT_SELECT)
+    .in('id', ids)
+    .eq('is_approved', true)
+  if (error) throw error
+  const byId = new Map(((data as unknown as Performer[]) ?? [])
+    .filter((performer) => !isPrivateTestPerformer(performer))
+    .map((performer) => [performer.id, performer]))
   return ids.map((id) => byId.get(id)).filter((performer): performer is Performer => Boolean(performer))
 }
 
@@ -1101,20 +1349,20 @@ export async function notifyEventAppearances(eventId: string) {
   if (error) throw error
 }
 
-export async function listVoteRankingNamed(eventId: string): Promise<Array<{ performer: Performer; votes: number }>> {
+export async function listVoteRankingNamed(eventId: string): Promise<Array<{ performer: Performer; ranking_position: number }>> {
   const ranks = await listVoteRanking(eventId)
   if (ranks.length === 0) return []
   const sb = requireSupabase()
-  const ids = ranks.map((r) => r.performer_id)
-  const { data, error } = await sb.from('performers').select('*').in('id', ids)
+  const names = ranks.map((r) => r.performer_name)
+  const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('stage_name', names)
   if (error) throw error
-  const map = new Map(((data as Performer[]) ?? []).map((p) => [p.id, p]))
+  const map = new Map(((data as unknown as Performer[]) ?? []).map((p) => [p.stage_name, p]))
   return ranks
     .map((r) => {
-      const performer = map.get(r.performer_id)
-      return performer ? { performer, votes: r.votes } : null
+      const performer = map.get(r.performer_name)
+      return performer ? { performer, ranking_position: r.ranking_position } : null
     })
-    .filter((x): x is { performer: Performer; votes: number } => Boolean(x))
+    .filter((x): x is { performer: Performer; ranking_position: number } => Boolean(x))
 }
 
 export async function listActiveMerchProducts(): Promise<MerchProduct[]> {
@@ -1209,4 +1457,15 @@ export async function createMerchCheckout(productId: string, quantity: number): 
   const json = (await res.json()) as { url?: string; error?: string }
   if (!res.ok || !json.url) throw new Error(json.error || 'Checkout failed')
   return json.url
+}
+
+export async function createMerchReservation(productId: string, quantity: number, requestId: string): Promise<{ orderId: string; orderNumber: string }> {
+  const res = await fetch('/api/stripe/merch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ action: 'reserve', productId, quantity, requestId }),
+  })
+  const json = (await res.json()) as { orderId?: string; orderNumber?: string; code?: string }
+  if (!res.ok || !json.orderId || !json.orderNumber) throw new Error(json.code || 'reservation_failed')
+  return { orderId: json.orderId, orderNumber: json.orderNumber }
 }
