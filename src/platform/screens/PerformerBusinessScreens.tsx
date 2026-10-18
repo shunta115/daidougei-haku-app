@@ -108,8 +108,9 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const locale = lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP'
   const available = payout?.availableYen ?? 0
   const canPayout = Boolean(payout?.canPayout)
+  const canReconcile = Boolean(payout?.canReconcile)
   const requestPayout = async () => {
-    if (!performer || busy || !canPayout) return
+    if (!performer || busy || (!canPayout && !canReconcile)) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -132,16 +133,17 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
     {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
     <dl className="pl-registration__totals">
-      <div><dt>{t('salesPaid')}</dt><dd>{formatYen(payout?.confirmedSalesYen ?? gross)}</dd></div>
+      <div><dt>{t('payoutProductionGross')}</dt><dd>{formatYen(payout?.productionGrossYen ?? gross)}</dd></div>
+      <div><dt>{t('payoutPerformerShare')}</dt><dd>{formatYen(payout?.performerShareYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutUntransferred')}</dt><dd>{formatYen(payout?.hakuAvailableYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutFundsPending')}</dt><dd>{formatYen(payout?.fundsPendingYen ?? 0)}</dd></div>
       <div><dt>{t('payoutAvailable')}</dt><dd>{formatYen(available)}</dd></div>
-      <div><dt>{t('payoutPending')}</dt><dd>{formatYen(payout?.pendingYen ?? 0)}</dd></div>
-      <div><dt>保留中</dt><dd>{formatYen(payout?.heldYen ?? 0)}</dd></div>
-      <div><dt>{t('payoutPaidOut')}</dt><dd>{formatYen(payout?.paidOutYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutTransferPaid')}</dt><dd>{formatYen(payout?.paidOutYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutTestPayments')}</dt><dd>{formatYen(payout?.testGrossYen ?? 0)}<small>{t('payoutTestExcluded')}</small></dd></div>
     </dl>
     <section className="pl-registration__section">
       <h2 className="pl-h2">{t('payoutMinLabel')}</h2>
-      <p className="pl-muted">{canPayout ? t('payoutReady') : t('payoutNeedMoreYen', { amount: formatYen(payout?.remainingYen ?? 10000) })}</p>
-      <p className="pl-muted">{t('payoutHakuBalance')} {formatYen(payout?.hakuAvailableYen ?? 0)}</p>
+      <p className="pl-muted">{canPayout ? t('payoutReady') : (payout?.payoutBlockReason ?? t('payoutNeedMoreYen', { amount: formatYen(payout?.remainingYen ?? 10000) }))}</p>
       {confirming ? (
         <div className="pl-registration__notice">
           <p>{t('payoutConfirmTitle')}</p>
@@ -149,6 +151,8 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
           <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void requestPayout()}>{busy ? t('payoutWorking') : t('payoutConfirm')}</button>
           <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => setConfirming(false)}>{t('payoutCancel')}</button>
         </div>
+      ) : canReconcile ? (
+        <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void requestPayout()}>{busy ? t('payoutWorking') : t('payoutReconcile')}</button>
       ) : (
         <button type="button" className="pl-btn pl-btn--block" disabled={!canPayout || busy} onClick={() => setConfirming(true)}>{t('payoutRequest')}</button>
       )}

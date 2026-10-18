@@ -717,7 +717,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tips = tipResult.data
       const orders = orderResult.data
       const performerRows = performerResult.data
-      const { data: payouts, error: payoutError } = await sb.from('performer_payouts').select('id,performer_id,amount_yen,status,stripe_payout_id,created_at,updated_at').order('created_at', { ascending: false }).limit(200)
+      const { data: payouts, error: payoutError } = await sb.from('performer_payouts').select('id,performer_id,connected_account_id,amount_yen,status,transfer_status,bank_payout_status,stripe_transfer_id,stripe_payout_id,failure_message,created_at,updated_at').order('created_at', { ascending: false }).limit(200)
       if (payoutError) throw payoutError
       const stripe = getStripe()
       const stripePerformers = await Promise.all((performerRows ?? []).map(async (performer) => {
@@ -727,8 +727,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           stripeAccountId: accountId,
         })
         const balances = {
+          production_gross_yen: payoutView.productionGrossYen,
+          stripe_fee_yen: payoutView.stripeFeeYen,
+          haku_fee_yen: payoutView.hakuFeeYen,
+          performer_share_yen: payoutView.performerShareYen,
           confirmed_sales_yen: payoutView.confirmedSalesYen,
           available_yen: payoutView.hakuAvailableYen,
+          funds_pending_yen: payoutView.fundsPendingYen,
           payout_eligible_yen: payoutView.availableYen,
           reserved_payout_yen: payoutView.reservedYen,
           processing_payout_yen: payoutView.processingYen,
@@ -747,6 +752,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!accountId) return {
           performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
           state: 'unregistered', charges_enabled: false, payouts_enabled: false, details_submitted: false,
+          bank_account_registered: false,
           needs_information: false, under_review: false, transfers_enabled: false, restricted: false,
           tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
           ...balances,
@@ -760,6 +766,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return {
             performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
             state, charges_enabled: Boolean(account.charges_enabled), payouts_enabled: Boolean(account.payouts_enabled), transfers_enabled: account.capabilities?.transfers === 'active', details_submitted: Boolean(account.details_submitted),
+            bank_account_registered: Boolean(account.external_accounts?.data?.some((item) => item.object === 'bank_account')),
             needs_information: needsInformation, under_review: underReview,
             restricted: Boolean(account.requirements?.disabled_reason),
             currently_due_count: account.requirements?.currently_due?.length ?? 0,
@@ -773,6 +780,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return {
             performer_id: performer.id, stage_name: performer.stage_name, approved: performer.is_approved,
             state: 'check_error', charges_enabled: false, payouts_enabled: false, transfers_enabled: false, details_submitted: false,
+            bank_account_registered: false,
             needs_information: false, under_review: false, restricted: false,
             tip_available: Boolean(performer.is_approved), merch_available: false, checked_at: new Date().toISOString(),
             ...balances,
