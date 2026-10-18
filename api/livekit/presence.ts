@@ -139,8 +139,13 @@ async function expireStaleSessions() {
     if (!count) {
       await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', performerId)
       try {
-        const { url, apiKey, apiSecret } = getLiveKitConfig()
-        await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(performerId))
+        const { data: performer } = await sb.from('performers').select('is_private_test').eq('id', performerId).maybeSingle()
+        if (performer?.is_private_test) {
+          await revokePrivateRoomTokensAndDelete(performerId)
+        } else {
+          const { url, apiKey, apiSecret } = getLiveKitConfig()
+          await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(performerId))
+        }
       } catch {
         // Stale database cleanup must still succeed if LiveKit is temporarily unavailable.
       }
@@ -168,10 +173,15 @@ async function forceEndSession(req: VercelRequest, res: VercelResponse) {
     const endedAt = new Date().toISOString()
     const { error: endError } = await sb.from('live_sessions').update({ ended_at: endedAt, ended_reason: 'admin_forced' }).eq('id', session.id).is('ended_at', null)
     if (endError) throw endError
+    const { data: performer } = await sb.from('performers').select('is_private_test').eq('id', session.performer_id).maybeSingle()
     await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', session.performer_id)
     try {
-      const { url, apiKey, apiSecret } = getLiveKitConfig()
-      await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(session.performer_id))
+      if (performer?.is_private_test) {
+        await revokePrivateRoomTokensAndDelete(session.performer_id)
+      } else {
+        const { url, apiKey, apiSecret } = getLiveKitConfig()
+        await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(session.performer_id))
+      }
     } catch {
       // The database state remains authoritative if the room already disappeared.
     }

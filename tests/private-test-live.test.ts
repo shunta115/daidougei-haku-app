@@ -52,6 +52,7 @@ describe('private Test Performer LIVE', () => {
     expect(presence).toMatch(/ended_reason: 'private_test_ended'/)
     expect(presence).toMatch(/live_session_viewer_allowlist/)
     expect(presence).toMatch(/private-viewer-\$\{viewer\.viewer_user_id\}/)
+    expect(presence.match(/performer\?\.is_private_test[\s\S]{0,120}revokePrivateRoomTokensAndDelete/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
   })
 
   it('filters the explicit flag from every public performer collection', () => {
