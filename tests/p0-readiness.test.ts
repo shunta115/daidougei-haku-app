@@ -72,6 +72,8 @@ describe('P0 migration safety', () => {
     expect(presence).toMatch(/heartbeat_timeout/)
     expect(presence).toMatch(/requireAdmin/)
     expect(presence).toMatch(/admin_forced/)
+    expect(presence).toMatch(/countAudienceParticipants/)
+    expect(presence).toMatch(/\.lt\('viewer_peak', viewerCount\)/)
   })
 
   it('shows the complete LIVE frame by default on narrow phones', () => {
