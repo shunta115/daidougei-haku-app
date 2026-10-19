@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import {
   beginYouTubeOAuth,
+  completeYouTubeOAuth,
   deleteYouTubeDestination,
   disconnectYouTubeOAuth,
+  confirmYouTubeBroadcastState,
   getMultiLiveDestination,
+  getYouTubeBroadcastState,
   saveYouTubeDestination,
   type MultiLiveDestinationStatus,
+  type YouTubeBroadcastState,
 } from '../lib/multiLive'
 
 type Props = {
@@ -25,6 +29,7 @@ export function MultiLivePanel({ status, onStatus }: Props) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [broadcast, setBroadcast] = useState<YouTubeBroadcastState | null>(null)
 
   useEffect(() => {
     let active = true
@@ -37,6 +42,21 @@ export function MultiLivePanel({ status, onStatus }: Props) {
         setEnabled(next.enabled)
       })
       .catch(() => { if (active) onStatus(null) })
+    return () => { active = false }
+  }, [onStatus])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const completionToken = params.get('youtube_oauth_completion')
+    if (!completionToken) return
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    let active = true
+    setBusy(true)
+    void completeYouTubeOAuth(completionToken)
+      .then(() => getMultiLiveDestination())
+      .then((next) => { if (active) onStatus(next) })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'YouTube認証を完了できませんでした。') })
+      .finally(() => { if (active) setBusy(false) })
     return () => { active = false }
   }, [onStatus])
 
@@ -65,6 +85,26 @@ export function MultiLivePanel({ status, onStatus }: Props) {
     finally { setBusy(false) }
   }
 
+  const verifyBroadcast = async (confirm: boolean) => {
+    setBusy(true); setError(null)
+    try {
+      const inspected = confirm && broadcast
+        ? await confirmYouTubeBroadcastState(broadcast.id)
+        : await getYouTubeBroadcastState()
+      setBroadcast(inspected)
+      if (inspected.confirmed) {
+        onStatus(status ? {
+          ...status,
+          actualVisibility: inspected.privacyStatus,
+          broadcastId: inspected.id,
+          visibilityConfirmed: true,
+        } : status)
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'YouTube公開範囲を確認できませんでした。')
+    } finally { setBusy(false) }
+  }
+
   return <section className="pl-card pl-multi-live" aria-labelledby="multi-live-title">
     <div className="pl-multi-live__header">
       <div><strong id="multi-live-title">同時配信先</strong><p className="pl-muted">HAKU LIVEは常に継続し、外部配信の失敗だけを分離します。</p></div>
@@ -80,6 +120,15 @@ export function MultiLivePanel({ status, onStatus }: Props) {
         <button type="button" className="pl-btn pl-btn--ghost" disabled={busy || status.status === 'live'} onClick={() => void remove()}>削除</button>
       </div>
       {status.oauthConnected ? <p className="pl-muted">公式OAuth接続済み。YouTubeコメントとSuper Chatは外部イベントとして表示し、HAKUのStripe投げ銭台帳には記録しません。</p> : null}
+      {status.oauthConnected ? <div className="pl-multi-live__visibility-check">
+        <button type="button" className="pl-btn" disabled={busy} onClick={() => void verifyBroadcast(false)}>YouTubeの実際の公開範囲を確認</button>
+        {broadcast ? <div role="status">
+          <p><strong>{broadcast.title}</strong> · 実際: {broadcast.privacyStatus === 'public' ? '公開' : broadcast.privacyStatus === 'unlisted' ? '限定公開' : '非公開'} · 状態: {broadcast.lifeCycleStatus}</p>
+          {!broadcast.visibilityMatches ? <p className="pl-error">HAKUで選択した公開範囲と一致しません。YouTube Studioで修正して再確認してください。</p> : null}
+          {broadcast.visibilityMatches && !broadcast.confirmed ? <button type="button" className="pl-btn pl-btn--live" disabled={busy} onClick={() => void verifyBroadcast(true)}>このYouTube公開範囲を確認して同時配信を許可</button> : null}
+          {broadcast.confirmed ? <p className="pl-registration__notice">公開範囲を確認済みです。この配信への同時配信を開始できます。</p> : null}
+        </div> : status.visibilityConfirmed ? <p className="pl-registration__notice">YouTube公開範囲を確認済みです。開始時にもサーバーで再検証します。</p> : <p className="pl-muted">同時配信前にYouTube側の実際の公開範囲を確認し、明示的に許可してください。</p>}
+      </div> : null}
     </div> : <div className="pl-multi-live__form">
       <label><span className="pl-label">表示名</span><input className="pl-input" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
       <label><span className="pl-label">YouTubeストリームキー</span><input className="pl-input" type="password" autoComplete="off" value={streamKey} onChange={(event) => setStreamKey(event.target.value)} placeholder="xxxx-xxxx-xxxx-xxxx" /></label>

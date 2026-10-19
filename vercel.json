@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/livekit/presence", "schedule": "* * * * *" }
+  ],
   "rewrites": [
     { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
     { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },

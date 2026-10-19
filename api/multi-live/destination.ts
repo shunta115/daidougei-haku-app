@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { adminSupabase, encryptSecret, getDestination, requirePerformer, safeDestination, validateYouTubeStreamKey } from './_shared.js'
+import { adminSupabase, destinationIsLocked, encryptSecret, getDestination, reconcileDestinationEgress, requirePerformer, safeDestination, validateYouTubeStreamKey } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -19,7 +19,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: '公開範囲を選択してください。' })
         return
       }
-      const current = await getDestination(user.id)
+      let current = await getDestination(user.id)
+      if (current?.egress_id) current = await reconcileDestinationEgress(current)
+      if (current && destinationIsLocked(current)) {
+        res.status(409).json({ error: '同時配信の実行中または開始処理中は配信キーを変更できません。先に停止してください。' })
+        return
+      }
       const { data, error } = await adminSupabase().from('multi_live_destinations').upsert({
         performer_id: user.id,
         provider: 'youtube',
@@ -29,8 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         encrypted_ingest: encryptSecret({ streamKey: streamKey.trim() }),
         encrypted_oauth: current?.encrypted_oauth || null,
         egress_id: null,
+        egress_lease_token: null,
+        egress_lease_expires_at: null,
+        egress_stop_requested: false,
         status: 'ready',
         last_error_code: null,
+        youtube_broadcast_id: null,
+        actual_visibility: null,
+        visibility_confirmed_at: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'performer_id,provider' }).select('*').single()
       if (error) throw error
@@ -38,8 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     if (req.method === 'DELETE') {
-      const current = await getDestination(user.id)
-      if (current?.egress_id) {
+      let current = await getDestination(user.id)
+      if (current?.egress_id) current = await reconcileDestinationEgress(current)
+      if (current && destinationIsLocked(current)) {
         res.status(409).json({ error: '同時配信を停止してから削除してください。' })
         return
       }

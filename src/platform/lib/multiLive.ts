@@ -47,6 +47,20 @@ export type MultiLiveDestinationStatus = SafeDestinationStatus & {
   visibility?: 'public' | 'unlisted' | 'private'
   enabled: boolean
   updatedAt?: string
+  actualVisibility?: 'public' | 'unlisted' | 'private'
+  broadcastId?: string
+  visibilityConfirmed: boolean
+}
+
+export type YouTubeBroadcastState = {
+  id: string
+  title: string
+  privacyStatus: 'public' | 'unlisted' | 'private'
+  lifeCycleStatus: string
+  requestedVisibility: 'public' | 'unlisted' | 'private'
+  visibilityMatches: boolean
+  confirmed: boolean
+  canStart: boolean
 }
 
 export type YouTubeChatItem = {
@@ -108,8 +122,20 @@ export async function beginYouTubeOAuth() {
   window.location.assign(result.authorizationUrl)
 }
 
+export function completeYouTubeOAuth(completionToken: string) {
+  return authJson<{ connected: true }>('/api/multi-live/youtube-oauth', { method: 'POST', body: JSON.stringify({ completionToken }) })
+}
+
 export function disconnectYouTubeOAuth() {
   return authJson<void>('/api/multi-live/youtube-oauth', { method: 'DELETE' })
+}
+
+export function getYouTubeBroadcastState() {
+  return authJson<YouTubeBroadcastState>('/api/multi-live/youtube-broadcast')
+}
+
+export function confirmYouTubeBroadcastState(broadcastId: string) {
+  return authJson<YouTubeBroadcastState>('/api/multi-live/youtube-broadcast', { method: 'POST', body: JSON.stringify({ broadcastId }) })
 }
 
 export function getYouTubeChat(pageToken?: string) {

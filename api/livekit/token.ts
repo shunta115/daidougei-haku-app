@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
-    const { data: performer, error: perr } = await sb.from('performers').select('id, stage_name, is_approved, is_live').eq('id', performerId).maybeSingle()
+    const { data: performer, error: perr } = await sb.from('performers').select('id, stage_name, is_approved, is_live, is_private_test').eq('id', performerId).maybeSingle()
     if (perr || !performer) {
       res.status(404).json({ error: 'Performer not found' })
       return
@@ -61,9 +61,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(403).json({ error: 'Performer is not approved yet' })
         return
       }
-    } else if (!performer.is_approved || !performer.is_live) {
-      res.status(403).json({ error: 'This live stream is not currently available' })
-      return
+    } else {
+      if (!performer.is_approved || !performer.is_live) {
+        res.status(403).json({ error: 'This live stream is not currently available' })
+        return
+      }
+      if (performer.is_private_test) {
+        if (!user) {
+          res.status(403).json({ error: 'This private live stream requires an assigned viewer' })
+          return
+        }
+        const { data: allowed, error: accessError } = await sb.rpc('can_navigate_live', { target_performer_id: performerId })
+        if (accessError || allowed !== true) {
+          res.status(403).json({ error: 'This private live stream is not available to this account' })
+          return
+        }
+      }
     }
 
     const { data: profile } = user

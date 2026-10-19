@@ -1,10 +1,10 @@
 import { createClient, type User } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { EgressClient } from 'livekit-server-sdk'
-import { EgressStatus, StreamOutput, StreamProtocol, type EgressInfo } from '@livekit/protocol'
+import { EgressStatus, StreamInfo_Status, StreamOutput, StreamProtocol, type EgressInfo } from '@livekit/protocol'
 import { getLiveKitConfig, roomNameForPerformer } from '../livekit/_shared.js'
-import { createOAuthState, decryptSecret, encryptSecret, parseOAuthState, safeDestination, validateYouTubeStreamKey, type DestinationRow } from './_security.js'
-export { createOAuthState, decryptSecret, encryptSecret, parseOAuthState, safeDestination, validateYouTubeStreamKey, type DestinationRow } from './_security.js'
+import { decryptSecret, encryptSecret, safeDestination, validateYouTubeStreamKey, type DestinationRow } from './_security.js'
+export { cookieValue, decryptSecret, destinationIsLocked, encryptSecret, hashOpaqueToken, randomOpaqueToken, safeDestination, validateYouTubeStreamKey, youtubeStartSafety, type DestinationRow } from './_security.js'
 
 type OAuthSecret = { accessToken: string; refreshToken?: string; expiresAt: number; scope: string }
 
@@ -66,6 +66,35 @@ export async function updateRuntimeState(performerId: string, values: Partial<Pi
   if (error) throw error
 }
 
+export async function acquireEgressLease(performerId: string, leaseToken: string) {
+  const { data, error } = await adminSupabase().rpc('acquire_multi_live_egress_lease', {
+    p_performer_id: performerId,
+    p_lease_token: leaseToken,
+    p_ttl_seconds: 90,
+  })
+  if (error) throw error
+  return data === true
+}
+
+export async function finalizeEgressLease(performerId: string, leaseToken: string, values: Partial<Pick<DestinationRow, 'egress_id' | 'status' | 'last_error_code'>>) {
+  const { data, error } = await adminSupabase().from('multi_live_destinations').update({
+    ...values,
+    egress_lease_token: null,
+    egress_lease_expires_at: null,
+    egress_stop_requested: false,
+    updated_at: new Date().toISOString(),
+  }).eq('performer_id', performerId).eq('provider', 'youtube').eq('egress_lease_token', leaseToken).select('performer_id').maybeSingle()
+  if (error) throw error
+  return Boolean(data)
+}
+
+export async function reconcileDestinationEgress(row: DestinationRow) {
+  if (!row.egress_id) return row
+  const found = (await egressClient().listEgress({ egressId: row.egress_id }))[0]
+  await updateRuntimeState(row.performer_id, found ? runtimeStateFromEgress(found) : { egress_id: null, status: 'stopped', last_error_code: null })
+  return await getDestination(row.performer_id) || row
+}
+
 export function egressClient() {
   const { url, apiKey, apiSecret } = getLiveKitConfig()
   return new EgressClient(url.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:'), apiKey, apiSecret)
@@ -92,6 +121,9 @@ export function publicErrorCode(error: unknown) {
 }
 
 export function runtimeStateFromEgress(info: EgressInfo) {
+  if (info.streamResults.some((stream) => stream.status === StreamInfo_Status.FAILED)) {
+    return { status: 'failed' as const, egress_id: info.egressId, last_error_code: 'youtube_stream_failed' }
+  }
   switch (info.status) {
     case EgressStatus.EGRESS_STARTING:
       return { status: 'starting' as const, egress_id: info.egressId, last_error_code: null }
@@ -176,4 +208,40 @@ export async function activeYouTubeChat(row: DestinationRow) {
   const item = data.items?.find((candidate) => candidate.snippet?.liveChatId)
   if (!item?.snippet?.liveChatId) throw new Error('No active YouTube live chat')
   return { liveChatId: item.snippet.liveChatId, broadcastId: item.id }
+}
+
+type YouTubePrivacy = 'public' | 'unlisted' | 'private'
+export type YouTubeBroadcastState = {
+  id: string
+  title: string
+  privacyStatus: YouTubePrivacy
+  lifeCycleStatus: string
+}
+
+export async function resolveYouTubeBroadcast(row: DestinationRow): Promise<YouTubeBroadcastState> {
+  const { streamKey } = decryptSecret<{ streamKey: string }>(row.encrypted_ingest)
+  const streams = await youtubeApi<{ items?: Array<{ id?: string; cdn?: { ingestionInfo?: { streamName?: string } } }> }>(row, 'liveStreams?part=id,cdn&mine=true&maxResults=50')
+  const stream = streams.items?.find((item) => item.cdn?.ingestionInfo?.streamName === streamKey)
+  if (!stream?.id) throw new Error('YouTube stream key is not owned by the connected channel')
+  const broadcasts = await youtubeApi<{ items?: Array<{
+    id?: string
+    snippet?: { title?: string }
+    status?: { privacyStatus?: YouTubePrivacy; lifeCycleStatus?: string }
+    contentDetails?: { boundStreamId?: string }
+  }> }>(row, 'liveBroadcasts?part=id,snippet,status,contentDetails&broadcastStatus=all&mine=true&maxResults=50')
+  const candidates = (broadcasts.items || []).filter((item) => item.contentDetails?.boundStreamId === stream.id && item.id && item.status?.privacyStatus)
+  const priority = ['live', 'testing', 'ready', 'created', 'revoked', 'complete']
+  const rank = (status: string | undefined) => {
+    const index = priority.indexOf(status || '')
+    return index === -1 ? priority.length : index
+  }
+  candidates.sort((a, b) => rank(a.status?.lifeCycleStatus) - rank(b.status?.lifeCycleStatus))
+  const selected = candidates[0]
+  if (!selected?.id || !selected.status?.privacyStatus) throw new Error('No YouTube broadcast is bound to this stream key')
+  return {
+    id: selected.id,
+    title: selected.snippet?.title || 'YouTube LIVE',
+    privacyStatus: selected.status.privacyStatus,
+    lifeCycleStatus: selected.status.lifeCycleStatus || 'unknown',
+  }
 }
