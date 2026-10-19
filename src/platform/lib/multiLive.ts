@@ -39,3 +39,84 @@ export type SafeDestinationStatus = {
   status: 'unconfigured' | 'ready' | 'starting' | 'live' | 'failed' | 'stopped'
   lastErrorCode?: string
 }
+
+export type MultiLiveDestinationStatus = SafeDestinationStatus & {
+  configured: boolean
+  oauthConnected: boolean
+  displayName?: string
+  visibility?: 'public' | 'unlisted' | 'private'
+  enabled: boolean
+  updatedAt?: string
+}
+
+export type YouTubeChatItem = {
+  id: string
+  source: 'youtube'
+  type: string
+  displayName: string
+  message: string
+  publishedAt?: string
+  externalRevenue?: {
+    kind: 'super_chat' | 'super_sticker'
+    amountMicros?: string
+    currency?: string
+    displayAmount?: string
+  }
+}
+
+async function authJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const { supabaseAuthHeaders } = await import('./supabase')
+  const headers = await supabaseAuthHeaders()
+  const response = await fetch(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...headers, ...init?.headers },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error || '同時配信サービスに接続できませんでした。')
+  }
+  if (response.status === 204) return undefined as T
+  return await response.json() as T
+}
+
+export function getMultiLiveDestination() {
+  return authJson<MultiLiveDestinationStatus>('/api/multi-live/destination')
+}
+
+export function saveYouTubeDestination(input: { streamKey: string; displayName: string; visibility: 'public' | 'unlisted' | 'private'; enabled: boolean }) {
+  return authJson<MultiLiveDestinationStatus>('/api/multi-live/destination', { method: 'PUT', body: JSON.stringify(input) })
+}
+
+export function deleteYouTubeDestination() {
+  return authJson<void>('/api/multi-live/destination', { method: 'DELETE' })
+}
+
+export function startMultiLiveEgress() {
+  return authJson<MultiLiveDestinationStatus>('/api/multi-live/egress', { method: 'POST' })
+}
+
+export function stopMultiLiveEgress() {
+  return authJson<MultiLiveDestinationStatus>('/api/multi-live/egress', { method: 'DELETE' })
+}
+
+export function getMultiLiveEgressStatus() {
+  return authJson<MultiLiveDestinationStatus>('/api/multi-live/egress')
+}
+
+export async function beginYouTubeOAuth() {
+  const result = await authJson<{ authorizationUrl: string }>('/api/multi-live/youtube-oauth', { method: 'POST' })
+  window.location.assign(result.authorizationUrl)
+}
+
+export function disconnectYouTubeOAuth() {
+  return authJson<void>('/api/multi-live/youtube-oauth', { method: 'DELETE' })
+}
+
+export function getYouTubeChat(pageToken?: string) {
+  const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : ''
+  return authJson<{ source: 'youtube'; items: YouTubeChatItem[]; nextPageToken?: string; pollingIntervalMillis: number }>(`/api/multi-live/youtube-chat${query}`)
+}
+
+export function postYouTubeChat(message: string) {
+  return authJson<{ ok: true }>('/api/multi-live/youtube-chat', { method: 'POST', body: JSON.stringify({ message }) })
+}

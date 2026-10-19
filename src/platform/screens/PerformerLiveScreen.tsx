@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
+import { MultiLivePanel } from '../components/MultiLivePanel'
+import { YouTubeLiveChat } from '../components/YouTubeLiveChat'
 import {
   canModerateLiveComments,
   createLiveSchedule,
@@ -39,6 +41,7 @@ import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../l
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import { useLiveFever } from '../lib/useLiveFever'
+import { getMultiLiveEgressStatus, startMultiLiveEgress, stopMultiLiveEgress, type MultiLiveDestinationStatus } from '../lib/multiLive'
 import type { LiveComment } from '../lib/types'
 import type { LiveSchedule } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -77,6 +80,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [cameraEnabled, setCameraEnabled] = useState(true)
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true)
   const [mediaBusy, setMediaBusy] = useState(false)
+  const [multiLiveStatus, setMultiLiveStatus] = useState<MultiLiveDestinationStatus | null>(null)
+  const setStableMultiLiveStatus = useCallback((next: MultiLiveDestinationStatus | null) => setMultiLiveStatus(next), [])
   const [privacyPaused, setPrivacyPaused] = useState(false)
   const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
@@ -219,7 +224,9 @@ export function PerformerLiveScreen({ onBack }: Props) {
         const room = roomRef.current
         roomRef.current = null
         void room?.disconnect()
-        void endLive(performer.id)
+        void stopMultiLiveEgress()
+          .catch(() => undefined)
+          .then(() => endLive(performer.id))
           .then(refreshProfile)
           .then(() => {
             setPhase('ready')
@@ -254,6 +261,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }, 1000)
     return () => window.clearInterval(t)
   }, [phase, performer])
+
+  useEffect(() => {
+    if (phase !== 'live' || !multiLiveStatus?.configured || !multiLiveStatus.enabled) return
+    const timer = window.setInterval(() => {
+      void getMultiLiveEgressStatus().then(setMultiLiveStatus).catch(() => undefined)
+    }, 10_000)
+    return () => window.clearInterval(timer)
+  }, [multiLiveStatus?.configured, multiLiveStatus?.enabled, phase])
 
   useEffect(() => {
     if (!performerId || phase !== 'live' || liveSessionId) return
@@ -415,6 +430,11 @@ export function PerformerLiveScreen({ onBack }: Props) {
       }
       setPhase('live')
       await refreshProfile()
+      if (multiLiveStatus?.configured && multiLiveStatus.enabled) {
+        void startMultiLiveEgress()
+          .then(setMultiLiveStatus)
+          .catch(() => setMultiLiveStatus((current) => current ? { ...current, status: 'failed', lastErrorCode: 'egress_failed' } : current))
+      }
     } catch (e) {
       const room = roomRef.current
       roomRef.current = null
@@ -471,6 +491,13 @@ export function PerformerLiveScreen({ onBack }: Props) {
     setError(null)
     endingRef.current = true
     try {
+      if (multiLiveStatus?.configured) {
+        try {
+          setMultiLiveStatus(await stopMultiLiveEgress())
+        } catch {
+          setError('YouTube側の停止確認に失敗しました。HAKU LIVEの終了を継続します。外部配信状態を再確認してください。')
+        }
+      }
       const room = roomRef.current
       roomRef.current = null
       if (room) await room.disconnect()
@@ -717,6 +744,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
             />
             <span><strong>現在地を共有してMAPに表示</strong><small>LIVE中だけ現在地を更新します。いつでもOFFにできます。</small></span>
           </label>
+          <MultiLivePanel status={multiLiveStatus} onStatus={setStableMultiLiveStatus} />
           {previewState !== 'ready' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void preparePreview()}>{busy ? 'カメラを準備中…' : 'カメラ・マイクを準備する'}</button> : <p className="pl-registration__notice" role="status">映像の準備ができました。画面を確認してから配信を開始してください。</p>}
           <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy || previewState !== 'ready'} onClick={() => void goLive()}>
             {busy ? 'LIVE開始処理中…' : 'LIVE配信を開始'}
@@ -725,6 +753,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
+          {multiLiveStatus?.configured ? <div className="pl-multi-live__live-state" data-status={multiLiveStatus.status}><strong>HAKU LIVE</strong><span>配信中</span><strong>YouTube</strong><span>{multiLiveStatus.status === 'live' ? '配信中' : multiLiveStatus.status === 'starting' ? '接続中' : multiLiveStatus.status === 'failed' ? '接続失敗（HAKUは継続）' : '停止中'}</span></div> : null}
+          <YouTubeLiveChat enabled={Boolean(multiLiveStatus?.oauthConnected && multiLiveStatus.status === 'live')} />
           <div className="pl-live__comments-wrap">
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
               {comments.map((c) => (
