@@ -31,6 +31,9 @@ grant select, insert, update, delete on table public.multi_live_oauth_sessions t
 create index if not exists multi_live_oauth_sessions_expiry_idx
   on public.multi_live_oauth_sessions (expires_at);
 
+create index if not exists multi_live_oauth_sessions_performer_idx
+  on public.multi_live_oauth_sessions (performer_id);
+
 create or replace function public.acquire_multi_live_egress_lease(
   p_performer_id uuid,
   p_lease_token uuid,

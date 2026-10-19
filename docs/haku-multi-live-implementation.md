@@ -27,7 +27,7 @@
 1. Apply `20261019163855_multi_live_destinations.sql`, then `20261019173329_harden_multi_live_oauth_and_egress.sql` to the TEST environment only.
 2. Generate `MULTI_LIVE_ENCRYPTION_KEY` with `openssl rand -base64 32`; configure it only in the server environment.
 3. Configure `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET`, and the exact `/api/multi-live/youtube-oauth` redirect URI in Google Cloud.
-4. Configure a random `CRON_SECRET` so the scheduled `/api/livekit/presence` stale-session/Egress reaper is authenticated.
+4. Configure a random `CRON_SECRET` in production so the scheduled `/api/livekit/presence` stale-session/Egress reaper is authenticated. The repository uses the Hobby-compatible daily safety sweep; active HAKU clients also invoke reconciliation during normal presence traffic. A more frequent unattended sweep requires an approved scheduler/plan change.
 5. Enable YouTube Data API v3 for the TEST OAuth client; register the exact TEST origin and redirect URI. The requested scope is `youtube.force-ssl`.
 6. Verify LiveKit Cloud Egress entitlement, quota, region, and cost in TEST. Do not enable paid Egress in production without approval.
 7. Run the iPhone/two-viewer-device matrix below before production promotion.

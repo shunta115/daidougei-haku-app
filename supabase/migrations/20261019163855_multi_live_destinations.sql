@@ -1,3 +1,13 @@
+-- Older validation projects predate the private-LIVE marker. Preserve the
+-- existing Test Performer convention before any external destination exists.
+alter table public.performers
+  add column if not exists is_private_test boolean not null default false;
+
+update public.performers
+   set is_private_test = true
+ where lower(btrim(stage_name)) = 'test performer'
+   and is_private_test = false;
+
 create table if not exists public.multi_live_destinations (
   performer_id uuid not null references public.performers(id) on delete cascade,
   provider text not null check (provider in ('youtube')),

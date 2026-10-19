@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/livekit/presence", "schedule": "* * * * *" }
+    { "path": "/api/livekit/presence", "schedule": "0 0 * * *" }
   ],
   "rewrites": [
     { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
