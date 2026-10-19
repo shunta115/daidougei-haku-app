@@ -77,7 +77,7 @@ describe('Multi LIVE server security', () => {
   })
 
   it('keeps private HAKU viewers authenticated and assigned', () => {
-    const tokenApi = readFileSync(new URL('../api/livekit/token.ts', import.meta.url), 'utf8')
+    const tokenApi = readFileSync(new URL('../api/livekit/_token.ts', import.meta.url), 'utf8')
     expect(tokenApi).toContain("select('id, stage_name, is_approved, is_live, is_private_test')")
     expect(tokenApi).toContain('if (!user)')
     expect(tokenApi).toContain("sb.rpc('can_navigate_live'")
@@ -85,7 +85,7 @@ describe('Multi LIVE server security', () => {
   })
 
   it('reaps external Egress after an inactive or force-closed HAKU session', () => {
-    const presenceApi = readFileSync(new URL('../api/livekit/presence.ts', import.meta.url), 'utf8')
+    const presenceApi = readFileSync(new URL('../api/livekit/_presence.ts', import.meta.url), 'utf8')
     expect(presenceApi).toContain('reapInactiveMultiLiveEgresses')
     expect(presenceApi).toContain('await client.stopEgress(target.egress_id)')
     expect(presenceApi).toContain(".eq('is_live', false)")

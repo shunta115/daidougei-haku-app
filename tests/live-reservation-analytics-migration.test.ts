@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 const migration = readFileSync('supabase/migrations/20261018092439_live_reservations_and_viewer_analytics.sql', 'utf8')
 const performerScreen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
 const viewerScreen = readFileSync('src/platform/screens/LiveListScreen.tsx', 'utf8')
-const presenceApi = readFileSync('api/livekit/presence.ts', 'utf8')
+const presenceApi = readFileSync('api/livekit/_presence.ts', 'utf8')
 const verifier = readFileSync('supabase/verify_live_reservations_analytics_readonly.sql', 'utf8')
 const approval = readFileSync('docs/HAKU_LIVE_RESERVATIONS_PRODUCTION_APPROVAL.md', 'utf8')
 
