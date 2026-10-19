@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countAudienceParticipants } from '../api/livekit/presence'
+import { countAudienceParticipants } from '../api/livekit/_presence'
 
 describe('server-authoritative LIVE viewer analytics', () => {
   it('excludes the performer from the audience count', () => {

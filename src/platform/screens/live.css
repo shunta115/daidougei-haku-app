@@ -973,3 +973,16 @@
   padding: 0 !important;
   max-width: none;
 }
+.pl-multi-live { display: grid; gap: 12px; }
+.pl-multi-live__header, .pl-multi-live__actions, .pl-youtube-chat__title { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.pl-multi-live__header p { margin: 4px 0 0; }
+.pl-multi-live__status, .pl-youtube-chat__title span, .pl-youtube-chat__source { border-radius: 999px; padding: 4px 9px; background: rgba(255,255,255,.1); font-size: 12px; }
+.pl-multi-live__status[data-status="live"] { background: #d92d20; color: white; }
+.pl-multi-live__status[data-status="failed"] { background: #7a271a; color: white; }
+.pl-multi-live__summary p, .pl-multi-live__form p { margin: 6px 0; }
+.pl-multi-live__live-state { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,.24); font-size: 13px; }
+.pl-youtube-chat { display: grid; gap: 8px; padding: 12px; border: 1px solid rgba(255,255,255,.13); border-radius: 14px; }
+.pl-youtube-chat__messages { max-height: 220px; overflow: auto; display: grid; gap: 7px; }
+.pl-youtube-chat__message { padding: 7px 9px; border-radius: 9px; background: rgba(255,255,255,.06); }
+.pl-youtube-chat__message[data-paid="true"] { border: 1px solid #f6c344; background: rgba(246,195,68,.12); }
+.pl-youtube-chat__message small { display: block; margin-top: 3px; color: #f6d365; }

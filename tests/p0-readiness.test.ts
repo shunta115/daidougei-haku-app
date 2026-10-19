@@ -64,7 +64,7 @@ describe('P0 migration safety', () => {
 
   it('adds LIVE heartbeat tracking without destructive schema operations', () => {
     const sql = read('supabase/migrations/20260926_live_presence_heartbeat.sql')
-    const presence = read('api/livekit/presence.ts')
+    const presence = read('api/livekit/_presence.ts')
     expect(sql).toMatch(/add column if not exists heartbeat_at timestamptz/i)
     expect(sql).toMatch(/add column if not exists ended_reason text/i)
     expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)

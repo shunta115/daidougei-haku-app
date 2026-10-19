@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
 import { requireAdmin } from '../ops/_guard.js'
-import { RoomServiceClient } from 'livekit-server-sdk'
+import { EgressClient, RoomServiceClient } from 'livekit-server-sdk'
 import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
 
 const STALE_SECONDS = 90
@@ -87,6 +87,39 @@ async function expireStaleSessions() {
   return ids.length
 }
 
+async function reapInactiveMultiLiveEgresses() {
+  const sb = getAdminSupabase()
+  const { data: destinations, error } = await sb
+    .from('multi_live_destinations')
+    .select('performer_id,egress_id')
+    .not('egress_id', 'is', null)
+  // The feature migration may not exist in older/test environments.
+  if (error || !destinations?.length) return 0
+  const performerIds = [...new Set(destinations.map((row) => row.performer_id))]
+  const { data: inactive, error: performerError } = await sb
+    .from('performers')
+    .select('id')
+    .in('id', performerIds)
+    .eq('is_live', false)
+  if (performerError || !inactive?.length) return 0
+  const inactiveIds = new Set(inactive.map((row) => row.id))
+  const targets = destinations.filter((row) => inactiveIds.has(row.performer_id) && row.egress_id)
+  if (!targets.length) return 0
+  const { url, apiKey, apiSecret } = getLiveKitConfig()
+  const client = new EgressClient(url.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:'), apiKey, apiSecret)
+  let stopped = 0
+  for (const target of targets) {
+    try {
+      await client.stopEgress(target.egress_id)
+      await sb.from('multi_live_destinations').update({ egress_id: null, status: 'stopped', last_error_code: null }).eq('performer_id', target.performer_id).eq('provider', 'youtube')
+      stopped += 1
+    } catch {
+      await sb.from('multi_live_destinations').update({ status: 'failed', last_error_code: 'stop_failed' }).eq('performer_id', target.performer_id).eq('provider', 'youtube')
+    }
+  }
+  return stopped
+}
+
 async function forceEndSession(req: VercelRequest, res: VercelResponse) {
   const admin = await requireAdmin(req, res)
   if (!admin) return
@@ -126,11 +159,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     readiness(res)
     return
   }
+  if (req.method === 'GET' && process.env.CRON_SECRET) {
+    const authorization = typeof req.headers.authorization === 'string' ? req.headers.authorization : ''
+    if (authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+      res.status(401).json({ error: 'Cron authorization required' })
+      return
+    }
+  }
   try {
     const expired = await expireStaleSessions()
+    const stoppedExternal = await reapInactiveMultiLiveEgresses()
+    await getAdminSupabase().from('multi_live_oauth_sessions').delete().lt('expires_at', new Date().toISOString()).then(() => undefined, () => undefined)
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store')
-      res.status(200).json({ ok: true, expired })
+      res.status(200).json({ ok: true, expired, stoppedExternal })
       return
     }
 
