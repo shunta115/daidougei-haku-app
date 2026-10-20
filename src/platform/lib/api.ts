@@ -14,6 +14,7 @@ import type {
   TipRow,
   TipSummary,
 } from './types'
+import { isLiveFeverPulse, type LiveFeverPulse } from './liveFever'
 import { supabaseAuthHeaders } from './supabase'
 import { AWP_ENTRANCE_ZONE } from './venueDisplay'
 import { PERFORMER_CLIENT_SELECT } from './performerColumns'
@@ -335,12 +336,27 @@ export async function listLiveHistory(performerId: string): Promise<LiveSession[
   return (data as LiveSession[]) ?? []
 }
 
-export async function listLiveComments(performerId: string): Promise<LiveComment[]> {
+export async function getActiveLiveSessionId(performerId: string): Promise<string | null> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_sessions')
+    .select('id')
+    .eq('performer_id', performerId)
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.id as string | undefined) ?? null
+}
+
+export async function listLiveComments(performerId: string, liveSessionId: string): Promise<LiveComment[]> {
   const sb = requireSupabase()
   const { data, error } = await sb
     .from('live_comments')
     .select('*')
     .eq('performer_id', performerId)
+    .eq('live_session_id', liveSessionId)
     .order('created_at', { ascending: false })
     .limit(80)
   if (error) throw error
@@ -367,7 +383,11 @@ export async function postLiveComment(input: {
   if (error) throw error
 }
 
-export function subscribeLiveComments(performerId: string, onInsert: (row: LiveComment) => void) {
+export function subscribeLiveComments(
+  performerId: string,
+  liveSessionId: string,
+  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void },
+) {
   const sb = requireSupabase()
   const channel = sb
     .channel(`live-comments-${performerId}`)
@@ -375,13 +395,70 @@ export function subscribeLiveComments(performerId: string, onInsert: (row: LiveC
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
       (payload) => {
-        onInsert(payload.new as LiveComment)
+        const row = payload.new as LiveComment
+        if (row.live_session_id === liveSessionId) handlers.onInsert(row)
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'live_comments' },
+      (payload) => {
+        const row = payload.old as Partial<LiveComment>
+        // Supabase may expose only the primary key for DELETE under RLS even
+        // with REPLICA IDENTITY FULL. Removing a non-present UUID is harmless.
+        if (row.id && (!row.live_session_id || row.live_session_id === liveSessionId)) handlers.onDelete(row.id)
       },
     )
     .subscribe()
   return () => {
     void sb.removeChannel(channel)
   }
+}
+
+export async function deleteLiveComment(commentId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_comments').delete().eq('id', commentId)
+  if (error) throw error
+}
+
+export async function canModerateLiveComments(liveSessionId: string, userId: string) {
+  const sb = requireSupabase()
+  // Probe the moderation table first. Before the additive P3 migration is
+  // applied, PostgREST returns an error and the UI keeps privileged controls
+  // hidden while ordinary session-scoped comments continue to work.
+  const { data: moderator, error: moderatorError } = await sb
+    .from('live_comment_moderators')
+    .select('user_id')
+    .eq('live_session_id', liveSessionId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (moderatorError) return false
+  if (moderator) return true
+
+  const { data: session, error: sessionError } = await sb
+    .from('live_sessions')
+    .select('performer_id')
+    .eq('id', liveSessionId)
+    .eq('performer_id', userId)
+    .maybeSingle()
+  if (sessionError) return false
+  return Boolean(session)
+}
+
+export async function muteLiveCommentUser(input: {
+  liveSessionId: string
+  userId: string
+  mutedBy: string
+  expiresAt?: string | null
+}) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_comment_mutes').upsert({
+    live_session_id: input.liveSessionId,
+    user_id: input.userId,
+    muted_by: input.mutedBy,
+    expires_at: input.expiresAt ?? null,
+  }, { onConflict: 'live_session_id,user_id' })
+  if (error) throw error
 }
 
 export function subscribePerformerLive(performerId: string, onChange: (row: Partial<Performer>) => void) {
@@ -432,6 +509,50 @@ export function subscribeLiveTipEvents(performerId: string, onInsert: (row: Live
     .subscribe()
   return () => {
     void sb.removeChannel(channel)
+  }
+}
+
+export function subscribeLiveFever(
+  performerId: string,
+  liveStartedAt: string,
+  onPulse: (pulse: LiveFeverPulse) => void,
+) {
+  const sb = requireSupabase()
+  const seen = new Map<string, number>()
+  const actorWindows = new Map<string, { startedAt: number; count: number }>()
+  let globalWindowStartedAt = Date.now()
+  let globalCount = 0
+  const channel = sb
+    .channel(`live-fever-${performerId}`)
+    .on('broadcast', { event: 'like' }, ({ payload }) => {
+      if (!isLiveFeverPulse(payload) || Date.parse(payload.liveStartedAt) !== Date.parse(liveStartedAt)) return
+      const now = Date.now()
+      if (now - globalWindowStartedAt >= 1_000) {
+        globalWindowStartedAt = now
+        globalCount = 0
+      }
+      const actor = actorWindows.get(payload.actorId) ?? { startedAt: now, count: 0 }
+      if (now - actor.startedAt >= 1_000) {
+        actor.startedAt = now
+        actor.count = 0
+      }
+      if (seen.has(payload.nonce) || actor.count + payload.count > 12 || globalCount + payload.count > 60) return
+      actor.count += payload.count
+      globalCount += payload.count
+      actorWindows.set(payload.actorId, actor)
+      seen.set(payload.nonce, now)
+      for (const [nonce, receivedAt] of seen) if (now - receivedAt > 10_000 || seen.size > 512) seen.delete(nonce)
+      for (const [actorId, window] of actorWindows) if (now - window.startedAt > 10_000 || actorWindows.size > 512) actorWindows.delete(actorId)
+      onPulse(payload)
+    })
+    .subscribe()
+  return {
+    publish(pulse: LiveFeverPulse) {
+      return channel.send({ type: 'broadcast', event: 'like', payload: pulse })
+    },
+    unsubscribe() {
+      void sb.removeChannel(channel)
+    },
   }
 }
 

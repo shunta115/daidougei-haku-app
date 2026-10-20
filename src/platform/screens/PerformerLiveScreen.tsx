@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
-import { SwitchCamera } from 'lucide-react'
+import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
+import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
+  canModerateLiveComments,
   endLive,
+  deleteLiveComment,
+  getActiveLiveSessionId,
   listLiveComments,
+  muteLiveCommentUser,
   postLiveComment,
   startLive,
   subscribeLiveComments,
@@ -20,10 +25,16 @@ import {
   fetchLiveKitToken,
   LiveKitClientError,
   liveKitErrorMessage,
+  liveMediaDeviceErrorMessage,
+  restartHostCameraForOrientation,
+  setHostCameraEnabled,
+  setHostMicrophoneEnabled,
 } from '../lib/livekit'
 import { useLiveLayout } from '../lib/useLiveLayout'
+import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
+import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
 import './live.css'
@@ -42,6 +53,7 @@ function formatDuration(sec: number) {
 
 export function PerformerLiveScreen({ onBack }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
+  const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [title, setTitle] = useState(performer?.live_title ?? '')
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
@@ -54,8 +66,15 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('user')
   const [cameraSwitchAvailable, setCameraSwitchAvailable] = useState(false)
   const [switchingCamera, setSwitchingCamera] = useState(false)
+  const [cameraEnabled, setCameraEnabled] = useState(true)
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(true)
+  const [mediaBusy, setMediaBusy] = useState(false)
+  const [privacyPaused, setPrivacyPaused] = useState(false)
+  const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+  const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
@@ -73,6 +92,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const peakRef = useRef(0)
   const reconnectAttempted = useRef(false)
   const locationWriteAtRef = useRef(0)
+  const appliedOrientationRef = useRef(deviceOrient)
+  const hiddenAtRef = useRef<number | null>(null)
+  const commentScroll = useLiveCommentScroll(comments.length)
+  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
 
   useEffect(() => {
     if (performer?.is_live) {
@@ -142,6 +165,63 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }, [performer, phase])
 
   useEffect(() => {
+    if (phase !== 'live' || !cameraEnabled || appliedOrientationRef.current === deviceOrient) return
+    const room = roomRef.current
+    if (!room) return
+    appliedOrientationRef.current = deviceOrient
+    setMediaBusy(true)
+    void restartHostCameraForOrientation(room, cameraFacing, deviceOrient)
+      .then(() => attachLocalPreview(room))
+      .catch(() => setError('画面方向に合わせたカメラ調整に失敗しました。現在の映像で配信を継続します。'))
+      .finally(() => setMediaBusy(false))
+  }, [cameraEnabled, cameraFacing, deviceOrient, phase])
+
+  useEffect(() => {
+    if (phase !== 'live') return
+    const stopTracksForPrivacy = () => {
+      const room = roomRef.current
+      if (!room) return
+      hiddenAtRef.current ??= Date.now()
+      setPrivacyPaused(true)
+      setCameraEnabled(false)
+      setMicrophoneEnabled(false)
+      void Promise.allSettled([
+        setHostCameraEnabled(room, false, cameraFacing, deviceOrient),
+        setHostMicrophoneEnabled(room, false),
+      ])
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stopTracksForPrivacy()
+        return
+      }
+      const hiddenAt = hiddenAtRef.current
+      hiddenAtRef.current = null
+      if (hiddenAt && Date.now() - hiddenAt >= 60_000 && performer) {
+        const room = roomRef.current
+        roomRef.current = null
+        void room?.disconnect()
+        void endLive(performer.id)
+          .then(refreshProfile)
+          .then(() => {
+            setPhase('ready')
+            setPreviewState('ended')
+            setError('バックグラウンド状態が60秒を超えたため、プライバシー保護のためLIVEを終了しました。')
+          })
+          .catch(() => setError('映像・音声は停止しました。サーバーとの終了同期を確認してください。'))
+      } else if (hiddenAt) {
+        setError('バックグラウンド移行時にカメラとマイクを停止しました。必要なものだけ再開してください。')
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('pagehide', stopTracksForPrivacy)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('pagehide', stopTracksForPrivacy)
+    }
+  }, [cameraFacing, deviceOrient, performer, phase, refreshProfile])
+
+  useEffect(() => {
     if (phase !== 'live') return
     const t = window.setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000))
@@ -158,12 +238,30 @@ export function PerformerLiveScreen({ onBack }: Props) {
   }, [phase, performer])
 
   useEffect(() => {
-    if (!performer || phase !== 'live') return
-    listLiveComments(performer.id).then(setComments).catch(() => undefined)
-    return subscribeLiveComments(performer.id, (row) => {
-      setComments((prev) => [...prev.slice(-79), row])
+    if (!performerId || phase !== 'live' || liveSessionId) return
+    let active = true
+    void getActiveLiveSessionId(performerId)
+      .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [liveSessionId, performerId, phase])
+
+  useEffect(() => {
+    if (!performerId || phase !== 'live' || !liveSessionId) return
+    listLiveComments(performerId, liveSessionId).then(setComments).catch(() => undefined)
+    return subscribeLiveComments(performerId, liveSessionId, {
+      onInsert: (row) => setComments((prev) => appendLiveComment(prev, row)),
+      onDelete: (commentId) => setComments((prev) => removeLiveComment(prev, commentId)),
     })
-  }, [performer, phase])
+  }, [liveSessionId, performerId, phase])
+
+  useEffect(() => {
+    if (!liveSessionId || !profile?.id) {
+      setCanModerate(false)
+      return
+    }
+    canModerateLiveComments(liveSessionId, profile.id).then(setCanModerate).catch(() => setCanModerate(false))
+  }, [liveSessionId, profile?.id])
 
   const attachLocalPreview = (room: Room) => {
     const pub = [...room.localParticipant.trackPublications.values()].find((p) => p.kind === 'video')
@@ -182,7 +280,20 @@ export function PerformerLiveScreen({ onBack }: Props) {
     room.on(RoomEvent.ConnectionQualityChanged, () => {
       applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
     })
+    room.on(RoomEvent.MediaDevicesError, (mediaError) => {
+      if (roomRef.current !== room) return
+      setError(liveMediaDeviceErrorMessage(mediaError))
+      const cameraTrack = hostCameraTrack(room)
+      if (!cameraTrack || cameraTrack.mediaStreamTrack.readyState === 'ended') {
+        setCameraEnabled(false)
+        setCameraRecoveryNeeded(true)
+      }
+    })
     attachLocalPreview(room)
+    setCameraEnabled(true)
+    setMicrophoneEnabled(true)
+    setPrivacyPaused(false)
+    appliedOrientationRef.current = deviceOrient
   }
 
   const connectHostRoom = async () => {
@@ -269,7 +380,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
         attachLocalPreview(roomRef.current)
       }
 
-      await startLive(performer.id, title)
+      const sessionId = await startLive(performer.id, title)
+      setLiveSessionId(sessionId)
       if (!performer.is_live) {
         startedAtRef.current = Date.now()
         peakRef.current = 0
@@ -321,6 +433,8 @@ export function PerformerLiveScreen({ onBack }: Props) {
       setPreviewState('ended')
       setElapsed(0)
       setViewers(0)
+      setLiveSessionId(null)
+      setComments([])
       peakRef.current = 0
       reconnectAttempted.current = false
     } catch (e) {
@@ -333,16 +447,21 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
   const switchCamera = async () => {
     const room = roomRef.current
-    if (!room || !cameraSwitchAvailable || cameraSwitchRef.current || busy) return
+    if (!room || !cameraEnabled || !cameraSwitchAvailable || cameraSwitchRef.current || busy || mediaBusy) return
     cameraSwitchRef.current = true
     setSwitchingCamera(true)
     setError(null)
     try {
-      const facing = await switchHostCamera(room, cameraFacing)
-      if (roomRef.current === room) setCameraFacing(facing)
+      const facing = await switchHostCamera(room, cameraFacing, deviceOrient)
+      if (roomRef.current === room) {
+        setCameraFacing(facing)
+        setCameraRecoveryNeeded(false)
+      }
     } catch (e) {
       if (roomRef.current === room) {
-        setError(e instanceof Error ? e.message : 'カメラを切り替えられませんでした。')
+        const message = e instanceof Error ? e.message : 'カメラを切り替えられませんでした。'
+        setError(message)
+        setCameraRecoveryNeeded(/元の映像も復元|frames_not_advancing|processor_unavailable/.test(message))
       }
     } finally {
       cameraSwitchRef.current = false
@@ -350,14 +469,72 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
   }
 
+  const toggleMicrophone = async () => {
+    const room = roomRef.current
+    if (!room || mediaBusy) return
+    const next = !microphoneEnabled
+    setMediaBusy(true)
+    setError(null)
+    try {
+      await setHostMicrophoneEnabled(room, next)
+      setMicrophoneEnabled(next)
+      if (next) setPrivacyPaused(false)
+    } catch {
+      setError(next ? 'マイクを再開できませんでした。マイク権限を確認してください。' : 'マイクを停止できませんでした。')
+    } finally {
+      setMediaBusy(false)
+    }
+  }
+
+  const toggleCamera = async () => {
+    const room = roomRef.current
+    if (!room || mediaBusy || switchingCamera) return
+    const next = !cameraEnabled
+    setMediaBusy(true)
+    setError(null)
+    try {
+      await setHostCameraEnabled(room, next, cameraFacing, deviceOrient)
+      setCameraEnabled(next)
+      if (next) {
+        attachLocalPreview(room)
+        setPrivacyPaused(false)
+        setCameraRecoveryNeeded(false)
+      }
+    } catch {
+      setError(next ? 'カメラを再開できませんでした。カメラ権限を確認してください。' : 'カメラを停止できませんでした。')
+    } finally {
+      setMediaBusy(false)
+    }
+  }
+
+  const retryCamera = async () => {
+    const room = roomRef.current
+    if (!room || mediaBusy) return
+    setMediaBusy(true)
+    setError(null)
+    try {
+      await setHostCameraEnabled(room, false, cameraFacing, deviceOrient)
+      await setHostCameraEnabled(room, true, cameraFacing, deviceOrient)
+      attachLocalPreview(room)
+      setCameraEnabled(true)
+      setCameraRecoveryNeeded(false)
+    } catch {
+      setCameraEnabled(false)
+      setError('カメラを復旧できませんでした。権限を確認して、もう一度再試行してください。音声とLIVE接続は維持しています。')
+    } finally {
+      setMediaBusy(false)
+    }
+  }
+
   const sendComment = async () => {
-    if (!draft.trim()) return
+    if (!draft.trim() || !liveSessionId) return
     try {
       await postLiveComment({
         performerId: performer.id,
         userId: profile.id,
         displayName: profile.display_name || performer.stage_name,
         body: draft,
+        liveSessionId,
       })
       setDraft('')
     } catch (e) {
@@ -365,10 +542,31 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
   }
 
+  const removeComment = async (commentId: string) => {
+    try {
+      await deleteLiveComment(commentId)
+      setComments((prev) => removeLiveComment(prev, commentId))
+    } catch {
+      setError('コメントを削除できませんでした。権限と通信を確認してください。')
+    }
+  }
+
+  const muteCommenter = async (comment: LiveComment) => {
+    if (!liveSessionId || comment.user_id === profile.id) return
+    try {
+      await muteLiveCommentUser({ liveSessionId, userId: comment.user_id, mutedBy: profile.id })
+      await deleteLiveComment(comment.id)
+      setComments((prev) => removeLiveComment(prev, comment.id))
+    } catch {
+      setError('このLIVEでユーザーをミュートできませんでした。権限と通信を確認してください。')
+    }
+  }
+
   return (
     <div
-      className={`pl-live${isOverlayChrome ? ' pl-live--immersive' : ''}`}
+      className={`pl-live pl-live--performer${phase === 'live' && isOverlayChrome ? ' pl-live--immersive' : ''}`}
       data-layout={mode}
+      data-phase={phase}
       style={{
         '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
         '--video-fit': 'contain',
@@ -376,9 +574,17 @@ export function PerformerLiveScreen({ onBack }: Props) {
     >
       <div className="pl-live__stage">
         <video ref={videoRef} className="pl-live__video" style={{ transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none' }} playsInline muted autoPlay />
-        {phase === 'live' && performer ? (
-          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} />
+        {phase === 'live' && !cameraEnabled ? (
+          <div className="pl-live__media-paused" role="status">
+            <VideoOff aria-hidden="true" size={30} />
+            <strong>{microphoneEnabled ? '音声のみで配信中' : 'カメラ・マイク停止中'}</strong>
+            <span>{privacyPaused ? 'プライバシー保護のため停止しました' : 'LIVEルームの接続は維持しています'}</span>
+          </div>
         ) : null}
+        {phase === 'live' && performer ? (
+          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
+        ) : null}
+        {phase === 'live' ? <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} /> : null}
         {phase === 'ready' && previewState !== 'ready' ? <div className="pl-live__placeholder">{previewState === 'preparing' ? 'カメラ・マイクの許可を待っています…' : previewState === 'denied' ? 'カメラ・マイクを許可してください' : previewState === 'ended' ? 'LIVE配信を終了しました' : 'ここにカメラ映像が表示されます'}</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
@@ -394,19 +600,43 @@ export function PerformerLiveScreen({ onBack }: Props) {
           ) : null}
         </div>
         {phase === 'live' ? (
-          <button
-            type="button"
-            className="pl-live__camera-switch"
-            data-camera-facing={cameraFacing}
-            data-switch-available={cameraSwitchAvailable}
-            aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
-            title={cameraSwitchAvailable ? '前面・背面カメラを切り替える' : '利用できるカメラが1台のみです'}
-            disabled={!roomRef.current || busy || switchingCamera || !cameraSwitchAvailable}
-            onClick={() => void switchCamera()}
-          >
-            <SwitchCamera aria-hidden="true" size={24} />
-            <span>{switchingCamera ? '切替中' : 'カメラ'}</span>
-          </button>
+          <div className="pl-live__media-controls" aria-label="配信メディア操作">
+            <button
+              type="button"
+              className="pl-live__media-control pl-live__camera-switch"
+              data-camera-facing={cameraFacing}
+              data-switch-available={cameraSwitchAvailable}
+              aria-label={`カメラ切替（現在：${cameraFacing === 'user' ? '前面' : '背面'}）`}
+              title={cameraSwitchAvailable ? '前面・背面カメラを切り替える' : '利用できるカメラが1台のみです'}
+              disabled={!roomRef.current || !cameraEnabled || busy || mediaBusy || switchingCamera || !cameraSwitchAvailable}
+              onClick={() => void switchCamera()}
+            >
+              <SwitchCamera aria-hidden="true" size={22} />
+              <span>{switchingCamera ? '切替中' : '切替'}</span>
+            </button>
+            <button
+              type="button"
+              className="pl-live__media-control"
+              data-active={microphoneEnabled}
+              aria-label={microphoneEnabled ? 'マイクを停止' : 'マイクを再開'}
+              disabled={!roomRef.current || mediaBusy}
+              onClick={() => void toggleMicrophone()}
+            >
+              {microphoneEnabled ? <Mic aria-hidden="true" size={22} /> : <MicOff aria-hidden="true" size={22} />}
+              <span>{microphoneEnabled ? 'マイク' : '再開'}</span>
+            </button>
+            <button
+              type="button"
+              className="pl-live__media-control"
+              data-active={cameraEnabled}
+              aria-label={cameraEnabled ? 'カメラを停止' : 'カメラを再開'}
+              disabled={!roomRef.current || mediaBusy || switchingCamera}
+              onClick={() => void toggleCamera()}
+            >
+              {cameraEnabled ? <Video aria-hidden="true" size={22} /> : <VideoOff aria-hidden="true" size={22} />}
+              <span>{cameraEnabled ? 'カメラ' : '再開'}</span>
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -441,12 +671,19 @@ export function PerformerLiveScreen({ onBack }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
-          <div className="pl-live__comments">
-            {comments.map((c) => (
-              <div key={c.id} className="pl-live__comment">
-                <strong>{c.display_name}</strong> {c.body}
-              </div>
-            ))}
+          <div className="pl-live__comments-wrap">
+            <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
+              {comments.map((c) => (
+                <div key={c.id} className="pl-live__comment">
+                  <span><strong>{c.display_name}</strong> {c.body}</span>
+                  {canModerate ? <span className="pl-live__comment-actions">
+                    {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
+                    <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
+                  </span> : null}
+                </div>
+              ))}
+            </div>
+            {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
           </div>
           <div className="pl-live__composer">
             <input
@@ -477,12 +714,17 @@ export function PerformerLiveScreen({ onBack }: Props) {
               演出を抑える
             </label>
           </div>
-          <button type="button" className="pl-btn pl-btn--block pl-btn--danger" disabled={busy || switchingCamera} onClick={() => void stopLive()}>
+          <button type="button" className="pl-btn pl-btn--block pl-btn--danger pl-live__end-live" disabled={busy || mediaBusy || switchingCamera} onClick={() => void stopLive()}>
             ライブ終了
           </button>
         </div>
       )}
       {error ? <p className="pl-error">{error}</p> : null}
+      {cameraRecoveryNeeded ? (
+        <button type="button" className="pl-btn pl-btn--block" disabled={mediaBusy} onClick={() => void retryCamera()}>
+          {mediaBusy ? 'カメラ再試行中…' : 'カメラを再試行'}
+        </button>
+      ) : null}
     </div>
   )
 }

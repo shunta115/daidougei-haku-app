@@ -6,6 +6,13 @@ import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
 
 const STALE_SECONDS = 90
 
+type LiveKitParticipant = { identity: string }
+
+/** The host is connected to the same room and must never inflate audience data. */
+export function countAudienceParticipants(participants: LiveKitParticipant[], performerId: string) {
+  return participants.filter((participant) => participant.identity !== performerId).length
+}
+
 function present(value: string | undefined) {
   if (!value) return false
   const normalized = value.trim().replace(/^['"]|['"]$/g, '')
@@ -150,6 +157,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     const heartbeatAt = new Date().toISOString()
+    let viewerCount: number | null = null
+    try {
+      const { url, apiKey, apiSecret } = getLiveKitConfig()
+      const participants = await new RoomServiceClient(url, apiKey, apiSecret)
+        .listParticipants(roomNameForPerformer(performerId))
+      viewerCount = countAudienceParticipants(participants, performerId)
+    } catch {
+      // A LiveKit management API outage must not prevent the host heartbeat.
+    }
     const { data, error } = await sb
       .from('live_sessions')
       .update({ heartbeat_at: heartbeatAt })
@@ -161,7 +177,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(409).json({ error: 'No active live session' })
       return
     }
-    res.status(200).json({ ok: true, heartbeatAt })
+    if (viewerCount != null) {
+      // The predicate makes competing host tabs monotonic: a stale lower count
+      // cannot overwrite a higher peak recorded by another heartbeat.
+      await sb
+        .from('live_sessions')
+        .update({ viewer_peak: viewerCount })
+        .eq('id', data[0].id)
+        .lt('viewer_peak', viewerCount)
+    }
+    res.status(200).json({ ok: true, heartbeatAt, viewerCount })
   } catch {
     res.status(503).json({ error: 'Live presence is temporarily unavailable' })
   }

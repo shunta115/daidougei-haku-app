@@ -1,5 +1,6 @@
 import {
   ConnectionQuality,
+  MediaDeviceFailure,
   Room,
   RoomEvent,
   Track,
@@ -12,7 +13,19 @@ import {
   type VideoCodec,
 } from 'livekit-client'
 import { supabase } from './supabase'
-import { hostCameraTrack, PORTRAIT_LIVE_CAPTURE, preferNaturalCameraFieldOfView } from './liveCamera'
+import {
+  ensurePortraitCameraTrack,
+  hostCameraTrack,
+  LANDSCAPE_LIVE_CAPTURE,
+  PORTRAIT_LIVE_CAPTURE,
+  preferNaturalCameraFieldOfView,
+} from './liveCamera'
+import {
+  canComposePortraitVideo,
+  PortraitContainProcessor,
+  type LiveVideoOrientation,
+} from './livePortraitProcessor'
+import { detectLiveVideoOrientation } from './liveOrientation'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -22,6 +35,19 @@ export class LiveKitClientError extends Error {
     super(message)
     this.name = 'LiveKitClientError'
     this.kind = kind
+  }
+}
+
+export function liveMediaDeviceErrorMessage(error: unknown) {
+  switch (MediaDeviceFailure.getFailure(error)) {
+    case MediaDeviceFailure.PermissionDenied:
+      return 'カメラまたはマイクの利用が許可されていません。Safariのサイト設定を確認してください。'
+    case MediaDeviceFailure.NotFound:
+      return '利用できるカメラまたはマイクが見つかりません。端末の接続状態を確認してください。'
+    case MediaDeviceFailure.DeviceInUse:
+      return 'カメラまたはマイクを他のアプリが使用しています。他のカメラアプリを閉じて再試行してください。'
+    default:
+      return 'カメラまたはマイクを開始できませんでした。権限と端末の状態を確認してください。'
   }
 }
 
@@ -49,13 +75,6 @@ export function liveRoomName(performerId: string) {
 
 /** ~480p 16:9 layer for weak-network simulcast. */
 const VideoPreset480p = new VideoPreset(854, 480, 900_000, 30)
-
-const LANDSCAPE_CAPTURE_1080P30 = {
-  width: 1920,
-  height: 1080,
-  frameRate: 30,
-  aspectRatio: 16 / 9,
-} as const
 
 function isMobileUa() {
   if (typeof navigator === 'undefined') return false
@@ -171,7 +190,8 @@ function hostRoomOptions() {
       dtx: true,
       red: true,
       forceStereo: false,
-      stopMicTrackOnMute: false,
+      // Privacy controls stop the physical microphone track while muted.
+      stopMicTrackOnMute: true,
     },
   }
 }
@@ -187,21 +207,46 @@ function viewerRoomOptions() {
   }
 }
 
+async function installVideoProcessor(cameraTrack: ReturnType<typeof hostCameraTrack>, orientation: LiveVideoOrientation) {
+  if (!cameraTrack || !canComposePortraitVideo()) return false
+  const processor = new PortraitContainProcessor(orientation)
+  try {
+    await cameraTrack.setProcessor(processor, true)
+    // setProcessor starts the hidden source video asynchronously. Do not call
+    // setup successful until the Canvas has rendered multiple real frames.
+    await processor.waitForFrameAdvance()
+    return true
+  } catch (error) {
+    if (cameraTrack.getProcessor()) {
+      try {
+        await cameraTrack.stopProcessor()
+      } catch {
+        /* keep the working Room even if cleanup is unavailable */
+      }
+    }
+    console.warn('[HAKU LIVE] Video composition unavailable; using the camera track directly.', error)
+    return false
+  }
+}
+
 export async function connectAsHost(url: string, token: string) {
   const room = new Room(hostRoomOptions())
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
-    const landscape =
-      typeof window !== 'undefined' && window.innerWidth > window.innerHeight
+    const landscape = detectLiveVideoOrientation() === 'landscape'
     await room.localParticipant.setCameraEnabled(true, {
       resolution: landscape
-        ? LANDSCAPE_CAPTURE_1080P30
+        ? LANDSCAPE_LIVE_CAPTURE
         : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user',
     })
     const cameraTrack = hostCameraTrack(room)
-    if (cameraTrack) await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+    if (cameraTrack) {
+      if (!landscape) await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+      await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+      await installVideoProcessor(cameraTrack, landscape ? 'landscape' : 'portrait')
+    }
   } catch (e) {
     try {
       await room.disconnect()
@@ -212,6 +257,65 @@ export async function connectAsHost(url: string, token: string) {
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
   }
   return room
+}
+
+export type HostVideoOrientation = 'portrait' | 'landscape'
+
+export async function setHostMicrophoneEnabled(room: Room, enabled: boolean) {
+  await room.localParticipant.setMicrophoneEnabled(enabled)
+  return enabled
+}
+
+export async function setHostCameraEnabled(
+  room: Room,
+  enabled: boolean,
+  facingMode: 'user' | 'environment',
+  orientation: HostVideoOrientation,
+) {
+  if (!enabled) {
+    await room.localParticipant.setCameraEnabled(false)
+    return false
+  }
+
+  await room.localParticipant.setCameraEnabled(true, {
+    resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
+    facingMode,
+  })
+  const cameraTrack = hostCameraTrack(room)
+  if (!cameraTrack) throw new Error('camera_track_unavailable')
+  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+  const processor = cameraTrack.getProcessor()
+  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
+    const installed = await installVideoProcessor(cameraTrack, orientation)
+    if (canComposePortraitVideo() && !installed) throw new Error('camera_video_processor_unavailable')
+  } else {
+    await processor.waitForFrameAdvance()
+  }
+  return true
+}
+
+export async function restartHostCameraForOrientation(
+  room: Room,
+  facingMode: 'user' | 'environment',
+  orientation: HostVideoOrientation,
+) {
+  const cameraTrack = hostCameraTrack(room)
+  if (!cameraTrack || cameraTrack.isMuted) return false
+  await cameraTrack.restartTrack({
+    resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
+    facingMode,
+  })
+  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
+  const processor = cameraTrack.getProcessor()
+  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
+    const installed = await installVideoProcessor(cameraTrack, orientation)
+    if (canComposePortraitVideo() && !installed) throw new Error('orientation_video_processor_unavailable')
+  } else {
+    await processor.waitForFrameAdvance()
+  }
+  return true
 }
 
 export async function connectAsViewer(url: string, token: string) {
