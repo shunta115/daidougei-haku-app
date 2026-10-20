@@ -19,6 +19,8 @@ describe('Stripe external TEST E2E guard', () => {
 
   it('allows only an unexpired Preview + TEST Stripe + TEST Supabase combination', () => {
     expect(stripeTestE2eEnvironmentIsSafe(Date.parse('2026-10-20T14:30:00.000Z'))).toBe(true)
+    process.env.STRIPE_SECRET_KEY = 'rk_test_restricted_fixture'
+    expect(stripeTestE2eEnvironmentIsSafe(Date.parse('2026-10-20T14:30:00.000Z'))).toBe(true)
   })
 
   it.each([

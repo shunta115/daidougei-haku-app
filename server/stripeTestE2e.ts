@@ -21,7 +21,7 @@ export function stripeTestE2eEnvironmentIsSafe(now = Date.now()) {
   const expiresAt = Date.parse(process.env.STRIPE_TEST_E2E_EXPIRES_AT || '')
   try {
     return process.env.VERCEL_ENV === 'preview'
-      && process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_')
+      && /^(?:sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || '')
       && new URL(supabaseUrl).hostname.startsWith(`${TEST_SUPABASE_REF}.`)
       && Boolean(process.env.STRIPE_TEST_CONNECTED_ACCOUNT_ID?.startsWith('acct_'))
       && UUID_PATTERN.test(process.env.STRIPE_TEST_PERFORMER_ID || '')
