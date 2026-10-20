@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const sql = readFileSync(new URL('../supabase/migrations/20261020112849_automatic_performer_transfers.sql', import.meta.url), 'utf8')
+const leaseSql = readFileSync(new URL('../supabase/migrations/20261020114957_harden_payable_claim_lease.sql', import.meta.url), 'utf8')
 
 describe('automatic transfer migration', () => {
   it('removes the HAKU threshold but rejects a zero-value transfer', () => {
@@ -15,6 +16,9 @@ describe('automatic transfer migration', () => {
     expect(sql).toContain('unique (stripe_transfer_id)')
     expect(sql).toContain('for update skip locked')
     expect(sql).toContain('connected account does not belong to performer')
+    expect(leaseSql).toContain("p.claimed_at <= now() - interval '15 minutes'")
+    expect(leaseSql).toContain("hold_reason = 'connect_not_registered'")
+    expect(leaseSql).toContain("state = 'ready'")
   })
 
   it('does not backfill historical/AWP sales', () => {

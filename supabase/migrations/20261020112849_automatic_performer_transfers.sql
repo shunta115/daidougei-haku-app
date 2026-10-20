@@ -178,14 +178,24 @@ begin
     raise exception 'connected account does not belong to performer' using errcode = '23514';
   end if;
 
+  -- A sale created before onboarding remains held. The verified account.updated
+  -- path can atomically attach and release only this performer's rows.
+  update public.performer_transfer_payables set
+    connected_account_id = p_connected_account_id,
+    state = 'ready', hold_reason = null, next_retry_at = now(), updated_at = now()
+  where performer_id = p_performer_id and state = 'held'
+    and hold_reason = 'connect_not_registered' and amount_yen > 0;
+
   return query
   with candidates as (
     select p.id from public.performer_transfer_payables p
     where p.performer_id = p_performer_id
       and p.connected_account_id = p_connected_account_id
       and p.amount_yen > 0
-      and p.state in ('ready','retry','processing')
-      and (p.next_retry_at is null or p.next_retry_at <= now() or p.state = 'processing')
+      and (
+        (p.state in ('ready','retry') and (p.next_retry_at is null or p.next_retry_at <= now()))
+        or (p.state = 'processing' and p.claimed_at <= now() - interval '15 minutes')
+      )
     order by p.created_at
     for update skip locked
     limit greatest(1, least(coalesce(p_limit, 20), 100))
