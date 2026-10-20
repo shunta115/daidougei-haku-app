@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { stripeTestE2eEnvironmentIsSafe } from '../api/ops/stripe-test-e2e'
+import { stripeTestE2eEnvironmentIsSafe } from '../server/stripeTestE2e'
 
 const saved = { ...process.env }
 

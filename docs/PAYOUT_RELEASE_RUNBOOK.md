@@ -51,7 +51,7 @@
 
 1. PreviewだけにTEST用 `STRIPE_SECRET_KEY`、TEST Supabase URL/service role、送金可能なTEST Connected Accountを設定する。
 2. `STRIPE_TEST_E2E_TOKEN`、`STRIPE_TEST_CONNECTED_ACCOUNT_ID`、短時間の `STRIPE_TEST_E2E_EXPIRES_AT` を対象branchのPreviewだけに設定する。
-3. `/api/ops/stripe-test-e2e` を1つのrun UUIDで1回呼び、TEST決済、実手数料、並列claim、Transfer、冪等retry、webhook replay、部分返金、reversal、TEST Payout、台帳を照合する。
+3. `/api/ops/run?job=stripe-test-e2e` を1つのrun UUIDで1回呼び、TEST決済、実手数料、並列claim、Transfer、冪等retry、webhook replay、部分返金、reversal、TEST Payout、台帳を照合する。
 4. 結果のStripe object IDとrun UUIDをリリース証跡へ保存する。秘密値は保存しない。
 5. 3つの一時変数を削除し、削除後のPreviewを再デプロイする。検証器はPreview、TEST key、TEST Supabase、期限、tokenの全条件がそろわない限り403/401で拒否する。
 

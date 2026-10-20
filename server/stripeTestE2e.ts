@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { timingSafeEqual } from 'node:crypto'
-import { TIP_SYSTEM_FEE_BPS } from '../../shared/fees.js'
-import { processPerformerTransfers, syncAutomaticTransferForSale } from '../stripe/_distribution.js'
-import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from '../stripe/_shared.js'
-import { settleSaleByCharge } from '../stripe/_settlement.js'
+import { TIP_SYSTEM_FEE_BPS } from '../shared/fees.js'
+import { processPerformerTransfers, syncAutomaticTransferForSale } from '../api/stripe/_distribution.js'
+import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from '../api/stripe/_shared.js'
+import { settleSaleByCharge } from '../api/stripe/_settlement.js'
 
 const TEST_SUPABASE_REF = 'aeqskxxykzapgaudbeqa'
 const FIXTURE_PREFIX = 'haku-pr77-stripe-e2e'

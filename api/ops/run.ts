@@ -7,6 +7,7 @@ import deviceVotes from '../../server/deviceVotes.js'
 import awpResults from '../../server/awpResults.js'
 import { getStripe } from '../stripe/_shared.js'
 import { retryAutomaticTransfers } from '../stripe/_distribution.js'
+import stripeTestE2e from '../../server/stripeTestE2e.js'
 
 function cronAuthorized(req: VercelRequest) {
   const secret = process.env.CRON_SECRET
@@ -16,6 +17,7 @@ function cronAuthorized(req: VercelRequest) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.query.job === 'votes-device') return deviceVotes(req, res)
   if (req.query.job === 'awp-results') return awpResults(req, res)
+  if (req.query.job === 'stripe-test-e2e') return stripeTestE2e(req, res)
   if (req.query.job === 'stripe-transfer-retry') {
     if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' })
