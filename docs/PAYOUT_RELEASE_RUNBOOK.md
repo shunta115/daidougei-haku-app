@@ -22,13 +22,19 @@
 
 ## 2. migration
 
-既存migrationがすべて適用済みであることを確認後、次を記載順に適用する。
+既存migrationがすべて適用済みであることを確認後、次を記載順に適用する。途中の1本だけを適用した状態でアプリを公開しない。
 
 `supabase/migrations/20261013_payout_reservation_and_audit.sql`
 
 `supabase/migrations/20261016101802_connect_bank_payout_ledger.sql`
 
-1本目は列、制約、監査テーブル、トリガー、service-role限定RPCを追加する。2本目はConnect Transferとは独立した銀行Payout観測台帳を追加する。どちらも既存売上・残高のUPDATE/DELETE/TRUNCATEは行わない。
+`supabase/migrations/20261020112849_automatic_performer_transfers.sql`
+
+`supabase/migrations/20261020114541_fix_payable_refund_amount.sql`
+
+`supabase/migrations/20261020114957_harden_payable_claim_lease.sql`
+
+最初の2本は既存の出金予約と銀行Payout観測台帳、後半3本は販売単位の自動Transfer台帳、返金差額、15分のclaim leaseを追加する。`automatic_transfer_eligible_at` は既存行をbackfillしない。したがってAWP既存11件・未払金8,244円（別途条件付き承認済み5,550円を含む）は、この自動分配から一切送金されない。
 
 適用後は同じ読み取り専用検証SQLを再実行する。AWP基準値が不変で、`reserve_performer_payout` の実行権限が `service_role` のみにあること、`payout_audit_events` のRLSが有効であることを確認する。
 
@@ -40,6 +46,16 @@
 4. 出演者本人でマイページを開き、他人の残高が見えないこと、テスト決済が出金対象外であることを確認する。
 5. Transferフラグを有効にせず、出金申請ボタンから実送金テストを行わない。
 6. 合格した同一deploymentをproductionへpromoteする。preview buildの再ビルドをproductionへ流用しない。
+
+### TEST Stripe外部E2E（本番承認条件）
+
+1. PreviewだけにTEST用 `STRIPE_SECRET_KEY`、TEST Supabase URL/service role、送金可能なTEST Connected Accountを設定する。
+2. `STRIPE_TEST_E2E_TOKEN`、`STRIPE_TEST_CONNECTED_ACCOUNT_ID`、短時間の `STRIPE_TEST_E2E_EXPIRES_AT` を対象branchのPreviewだけに設定する。
+3. `/api/ops/stripe-test-e2e` を1つのrun UUIDで1回呼び、TEST決済、実手数料、並列claim、Transfer、冪等retry、webhook replay、部分返金、reversal、TEST Payout、台帳を照合する。
+4. 結果のStripe object IDとrun UUIDをリリース証跡へ保存する。秘密値は保存しない。
+5. 3つの一時変数を削除し、削除後のPreviewを再デプロイする。検証器はPreview、TEST key、TEST Supabase、期限、tokenの全条件がそろわない限り403/401で拒否する。
+
+本番有効化時は、migrationと読み取り専用AWP監査が成功した後も `ENABLE_LIVE_PERFORMER_TRANSFERS=false` のままデプロイする。追加承認後にだけ `true` にし、AWPではない新規1件で PaymentIntent → Charge → Balance Transaction → Transfer → payable を照合してから段階的に広げる。
 
 ## 4. 公開後確認
 
