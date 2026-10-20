@@ -9,6 +9,7 @@ describe('Stripe external TEST E2E guard', () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_fixture'
     process.env.SUPABASE_URL = 'https://aeqskxxykzapgaudbeqa.supabase.co'
     process.env.STRIPE_TEST_CONNECTED_ACCOUNT_ID = 'acct_test_fixture'
+    process.env.STRIPE_TEST_PERFORMER_ID = 'bf2f55e2-3499-45f9-a440-915b43048f77'
     process.env.STRIPE_TEST_E2E_EXPIRES_AT = '2026-10-20T15:30:00.000Z'
   })
 

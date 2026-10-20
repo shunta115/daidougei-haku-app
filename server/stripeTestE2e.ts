@@ -7,6 +7,7 @@ import { settleSaleByCharge } from '../api/stripe/_settlement.js'
 
 const TEST_SUPABASE_REF = 'aeqskxxykzapgaudbeqa'
 const FIXTURE_PREFIX = 'haku-pr77-stripe-e2e'
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function secretMatches(actual: string | undefined, expected: string | undefined) {
   if (!actual || !expected) return false
@@ -23,6 +24,7 @@ export function stripeTestE2eEnvironmentIsSafe(now = Date.now()) {
       && process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_')
       && new URL(supabaseUrl).hostname.startsWith(`${TEST_SUPABASE_REF}.`)
       && Boolean(process.env.STRIPE_TEST_CONNECTED_ACCOUNT_ID?.startsWith('acct_'))
+      && UUID_PATTERN.test(process.env.STRIPE_TEST_PERFORMER_ID || '')
       && Number.isFinite(expiresAt)
       && now < expiresAt
   } catch {
@@ -45,38 +47,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const sb = getAdminSupabase()
   const stripe = getStripe()
   const connectedAccountId = process.env.STRIPE_TEST_CONNECTED_ACCOUNT_ID as string
-  const fixtureEmail = `${FIXTURE_PREFIX}+${requestedRunId}@example.invalid`
   const metadata = { haku_test: 'true', suite: 'pr77', run_id: requestedRunId }
 
   try {
     const account = await stripe.accounts.retrieve(connectedAccountId)
     if (!isConnectedAccountTransferReady(account)) throw new Error('test_connected_account_not_ready')
-
-    const { data: authData, error: authError } = await sb.auth.admin.createUser({
-      email: fixtureEmail,
-      email_confirm: true,
-      user_metadata: { role: 'performer', test_fixture: FIXTURE_PREFIX },
-    })
-    if (authError || !authData.user) throw authError || new Error('fixture_user_create_failed')
-    const performerId = authData.user.id
-
-    const { error: profileError } = await sb.from('profiles').upsert({
-      id: performerId,
-      role: 'performer',
-      status: 'active',
-      display_name: 'PR77 Stripe E2E',
-      email: fixtureEmail,
-    })
-    if (profileError) throw profileError
-    const { error: performerError } = await sb.from('performers').insert({
-      id: performerId,
-      stage_name: `[E2E] PR77 ${requestedRunId.slice(0, 8)}`,
-      stripe_account_id: connectedAccountId,
-      stripe_onboarding_complete: true,
-      is_approved: true,
-      review_status: 'approved',
-    })
-    if (performerError) throw performerError
+    const performerId = process.env.STRIPE_TEST_PERFORMER_ID as string
+    const { data: fixturePerformer, error: fixturePerformerError } = await sb.from('performers')
+      .select('id,stripe_account_id,stripe_onboarding_complete')
+      .eq('id', performerId)
+      .maybeSingle()
+    if (
+      fixturePerformerError
+      || !fixturePerformer
+      || fixturePerformer.stripe_account_id !== connectedAccountId
+      || !fixturePerformer.stripe_onboarding_complete
+    ) {
+      throw fixturePerformerError || new Error('test_performer_account_mismatch')
+    }
 
     const tipId = crypto.randomUUID()
     const amountYen = 1_000
@@ -235,7 +223,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       historicalSalesTouched: 0,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'stripe_test_e2e_failed'
+    const candidate = error as { message?: unknown; code?: unknown; details?: unknown }
+    const message = error instanceof Error
+      ? error.message
+      : [candidate?.code, candidate?.message, candidate?.details].filter(Boolean).map(String).join(': ') || 'stripe_test_e2e_failed'
     console.error('Stripe TEST E2E failed', message.replace(/sk_(?:live|test)_[A-Za-z0-9_]+/g, 'sk_[redacted]'))
     return res.status(500).json({ ok: false, error: message.slice(0, 300) })
   }
