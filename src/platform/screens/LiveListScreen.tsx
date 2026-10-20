@@ -2,10 +2,10 @@ import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useEffect, useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { LiveBadge } from '../components/LiveBadge'
-import { listLivePerformers, listLiveRanking, getFeaturedEvent, listEventSlots, listEventLiveSessions, listApprovedPerformers, type LiveRankRow, type EventSlotRow } from '../lib/api'
+import { cancelLiveReservation, getSignedInUserId, listLivePerformers, listLiveRanking, getFeaturedEvent, listEventSlots, listEventLiveSessions, listApprovedPerformers, listOwnLiveReservationIds, listUpcomingLiveSchedules, liveReservationsEnabled, reserveLiveSchedule, type LiveRankRow, type EventSlotRow } from '../lib/api'
 import { useLang } from '../../i18n/LangProvider'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
-import type { LiveSession, Performer } from '../lib/types'
+import type { LiveSchedule, LiveSession, Performer } from '../lib/types'
 
 type Props = {
   onWatchLive: (id: string) => void
@@ -26,28 +26,39 @@ function liveDuration(startedAt: string | null) {
 
 export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
   const { t } = useLang()
+  const [userId, setUserId] = useState<string | null>(null)
   const [live, setLive] = useState<Performer[]>([])
   const [rank, setRank] = useState<LiveRankRow[]>([])
   const [scheduled, setScheduled] = useState<EventSlotRow[]>([])
   const [ended, setEnded] = useState<LiveSession[]>([])
   const [acts, setActs] = useState<Performer[]>([])
+  const [liveSchedules, setLiveSchedules] = useState<LiveSchedule[]>([])
+  const [reservedIds, setReservedIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const suggestions = acts.slice(0, 4)
   useEffect(() => {
+    if (!liveReservationsEnabled) return
+    getSignedInUserId().then(setUserId).catch(() => setUserId(null))
+  }, [])
+  useEffect(() => {
     let cancelled = false
     const load = async () => {
       try {
-        const [liveRows, rankRows, featured, approved] = await Promise.all([
+        const [liveRows, rankRows, featured, approved, scheduleRows, reservationIds] = await Promise.all([
           listLivePerformers(),
           listLiveRanking(),
           getFeaturedEvent().catch(() => null),
           listApprovedPerformers().catch(() => [] as Performer[]),
+          liveReservationsEnabled ? listUpcomingLiveSchedules().catch(() => [] as LiveSchedule[]) : Promise.resolve([] as LiveSchedule[]),
+          liveReservationsEnabled && userId ? listOwnLiveReservationIds(userId).catch(() => [] as string[]) : Promise.resolve([] as string[]),
         ])
         if (cancelled) return
         setLive(liveRows)
         setRank(rankRows)
         setActs(approved)
+        setLiveSchedules(scheduleRows)
+        setReservedIds(reservationIds)
         if (featured) {
           const [slots, sessions] = await Promise.all([
             listEventSlots(featured.id).catch(() => [] as EventSlotRow[]),
@@ -77,7 +88,22 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [t])
+  }, [t, userId])
+
+  const toggleReservation = async (scheduleId: string) => {
+    if (!userId) {
+      setError('LIVE予約にはログインが必要です。')
+      return
+    }
+    const reserved = reservedIds.includes(scheduleId)
+    try {
+      if (reserved) await cancelLiveReservation(scheduleId, userId)
+      else await reserveLiveSchedule(scheduleId, userId)
+      setReservedIds((prev) => reserved ? prev.filter((id) => id !== scheduleId) : [...prev, scheduleId])
+    } catch {
+      setError('LIVE予約を更新できませんでした。通信を確認してください。')
+    }
+  }
 
   return (
     <main className="pl-experience pl-live-hub">
@@ -170,6 +196,25 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
           </div>
         ) : live.length === 0 ? (
           <p className="pl-muted">{t('liveFindFromActs')}</p>
+        ) : null}
+        {liveReservationsEnabled && liveSchedules.length > 0 ? (
+          <section aria-label="予約できるLIVE">
+            <h2 className="pl-h1" style={{ fontSize: '1.1rem', marginTop: 20 }}>予約できるLIVE</h2>
+            {liveSchedules.map((schedule) => {
+              const act = acts.find((performer) => performer.id === schedule.performer_id)
+              const reserved = reservedIds.includes(schedule.id)
+              return (
+                <article key={schedule.id} className="pl-card" style={{ marginBottom: 10 }}>
+                  <strong>{schedule.title}</strong>
+                  <p className="pl-muted">{act?.stage_name ?? 'パフォーマー'} · {new Date(schedule.scheduled_start_at).toLocaleString('ja-JP')}</p>
+                  <div className="pl-actions">
+                    <button type="button" className="pl-btn pl-btn--ghost" onClick={() => onOpenPerformer(schedule.performer_id)}>出演者を見る</button>
+                    <button type="button" className="pl-btn" aria-pressed={reserved} onClick={() => void toggleReservation(schedule.id)}>{reserved ? '予約を解除' : '開始通知を予約'}</button>
+                  </div>
+                </article>
+              )
+            })}
+          </section>
         ) : null}
         {ended.some((session) => Boolean(session.stream_url)) ? (
           <details className="pl-live-archive">
