@@ -277,6 +277,7 @@ export type PlatformScreen =
   | 'performer-live'
   | 'performer-history'
   | 'live-watch'
+  | 'tiktok-live'
   | 'tip'
   | 'admin'
   | 'admin-users'
