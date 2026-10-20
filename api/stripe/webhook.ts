@@ -17,6 +17,7 @@ import {
   markMerchOrderRefunded,
 } from './_finalizeMerchOrder.js'
 import { markPerformerPayout, markPerformerTransfer } from './_payouts.js'
+import { processPerformerTransfers, syncAutomaticTransferForSale } from './_distribution.js'
 import { settleCheckoutPayment, settleSaleByCharge } from './_settlement.js'
 import { getAdminSupabase, getStripe, isConnectedAccountTransferReady } from './_shared.js'
 
@@ -160,7 +161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Platform-held Checkout sessions don't emit Connect-scoped
           // payment_intent events. Settle from the paid Checkout event so the
           // actual Stripe fee and server-authoritative split are always saved.
-          await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)
+          const settled = await settleCheckoutPayment(sb, stripe, session, saleConnectedAccountId)
+          for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
         }
       }
 
@@ -182,7 +184,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         const chargeId = typeof paymentIntent.latest_charge === 'string' ? paymentIntent.latest_charge : paymentIntent.latest_charge?.id
         if (chargeId) {
-          await settleSaleByCharge(sb, stripe, { id: chargeId, payment_intent: paymentIntent.id } as Stripe.Charge, connectedAccountId)
+          const settled = await settleSaleByCharge(sb, stripe, { id: chargeId, payment_intent: paymentIntent.id } as Stripe.Charge, connectedAccountId)
+          for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
         }
       }
 
@@ -199,7 +202,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const charge = event.data.object as Stripe.Charge
         await markTipRefunded(sb, charge, connectedAccountId)
         await markMerchOrderRefunded(sb, charge, connectedAccountId)
-        await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+        const settled = await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+        for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
       }
 
       // Stripe can emit a later charge.refund.updated event after the initial
@@ -215,7 +219,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : await stripe.charges.retrieve(chargeId)
           await markTipRefunded(sb, charge, connectedAccountId)
           await markMerchOrderRefunded(sb, charge, connectedAccountId)
-          await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+          const settled = await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+          for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
         }
       }
 
@@ -223,6 +228,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const dispute = event.data.object as Stripe.Dispute
         await markTipDispute(sb, dispute, connectedAccountId)
         await markMerchOrderDispute(sb, dispute, connectedAccountId)
+        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id
+        if (chargeId) {
+          const charge = await stripe.charges.retrieve(chargeId)
+          const settled = await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+          for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
+        }
       }
 
       if (event.type === 'payout.paid' || event.type === 'payout.failed' || event.type === 'payout.canceled') {
@@ -242,6 +253,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('performers')
           .update({ stripe_onboarding_complete: ready })
           .eq('stripe_account_id', account.id)
+        if (ready) {
+          const { data: performer } = await sb.from('performers').select('id,stripe_account_id').eq('stripe_account_id', account.id).maybeSingle()
+          if (performer?.id && performer.stripe_account_id === account.id) {
+            await processPerformerTransfers(sb, stripe, { performerId: performer.id, connectedAccountId: account.id })
+          }
+        }
       }
 
       await markWebhookEvent(sb, event.id, 'processed')

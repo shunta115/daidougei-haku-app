@@ -544,6 +544,15 @@ export function HakuAdminApp() {
             </article>
           ))}
           <h2>出金</h2>
+          <h3>自動Transfer台帳</h3>
+          {((money.automaticTransfers as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>新方式の自動分配記録はありません（過去分は自動移行されません）。</p> : null}
+          {((money.automaticTransfers as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card">
+            <p>{String(row.sale_kind)} · {formatYen(Number(row.amount_yen) || 0)} · 状態 {String(row.state)} · 試行 {String(row.attempt_count ?? 0)}回</p>
+            <p>出演者ID <code>{String(row.performer_id)}</code> · Transfer ID {row.stripe_transfer_id ? <code>{String(row.stripe_transfer_id)}</code> : '未作成'}</p>
+            {row.hold_reason ? <p>保留理由 {String(row.hold_reason)}</p> : null}
+            {row.last_error_code ? <p className="ha-note">要対応 {String(row.last_error_code)} · 次回 {row.next_retry_at ? new Date(String(row.next_retry_at)).toLocaleString('ja-JP') : '自動再試行なし'}</p> : null}
+          </article>)}
+          <h3>旧方式／手動照合台帳</h3>
           {((money.payouts as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>出金記録はありません。</p> : null}
           {((money.payouts as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card">
             <p>{formatYen(Number(row.amount_yen) || 0)} · 内部状態 {String(row.status)} · Transfer {String(row.transfer_status || '未開始')} · 銀行Payout {String(row.bank_payout_status || '未確認')}</p>

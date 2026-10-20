@@ -132,6 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       stripe_checkout_mode: 'platform_separate',
       funding_model: 'platform_separate',
       transfer_status: 'pending_onboarding',
+      automatic_transfer_eligible_at: new Date().toISOString(),
     }
     const { error: tipMetaErr } = await sb.from('tips').update(tipMetaPatch).eq('id', tip.id)
     if (tipMetaErr && !missingColumn(tipMetaErr)) throw tipMetaErr

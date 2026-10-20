@@ -167,8 +167,8 @@ export async function getPerformerPayoutView(
   const hakuNetAvailable = Math.max(0, hakuAvailableYen - pendingYen - paidOutYen)
   const fundedUnallocatedYen = Math.max(0, fundedShareYen - pendingYen - paidOutYen)
   const fundsPendingYen = Math.max(0, hakuNetAvailable - fundedUnallocatedYen)
-  // New sales remain on the platform until the internal payable balance reaches
-  // the threshold, so the relevant Stripe constraint is the platform balance.
+  // HAKU has no withdrawal threshold. The relevant limits are the settled
+  // internal balance and Stripe's actually available platform balance.
   const stripeAvailableYen = await jpyAvailable(stripe).catch(() => 0)
   const availableYen = eligiblePayoutYen(fundedUnallocatedYen, stripeAvailableYen)
   const openPayout = payouts.find((row) => row.status === 'reserved') ?? null
@@ -202,7 +202,7 @@ export async function getPerformerPayoutView(
     : openPayout ? '出金申請を処理中です。'
     : !args.stripeAccountId ? 'Stripeの受取設定が未登録です。'
       : !connectReady ? 'Stripeの本人確認・銀行口座・送金設定を完了してください。'
-        : !thresholdMet ? `確定済みの出金申請可能額が最低出金額${MIN_PAYOUT_YEN.toLocaleString('ja-JP')}円に達していません。`
+        : !thresholdMet ? '確定済みの送金可能額がありません。'
           : null
   return {
     minPayoutYen: MIN_PAYOUT_YEN,
@@ -305,9 +305,7 @@ export async function requestPerformerPayout(
     return {
       status: 400,
       body: {
-        error: view.availableYen < MIN_PAYOUT_YEN
-          ? `最低出金額は${MIN_PAYOUT_YEN.toLocaleString('ja-JP')}円です。`
-          : '出金できる残高がありません。',
+        error: '送金できる確定残高がありません。',
         remainingYen: view.remainingYen,
         availableYen: view.availableYen,
       },
@@ -329,9 +327,10 @@ export async function requestPerformerPayout(
     if (missingTable(insert.error)) return { status: 503, body: { error: '出金台帳の準備中です。' } }
     throw insert.error
   }
-  if (!insert.data?.id) return { status: 500, body: { error: '出金申請を保存できませんでした。' } }
+  const reserved = insert.data as Partial<PayoutRow> | null
+  if (!reserved?.id) return { status: 500, body: { error: '出金申請を保存できませんでした。' } }
 
-  return executeTransfer({ ...insert.data, amount_yen: amountYen, connected_account_id: args.stripeAccountId, idempotency_key: idempotencyKey, stripe_payout_id: null, created_at: new Date().toISOString() } as PayoutRow)
+  return executeTransfer({ ...reserved, amount_yen: amountYen, connected_account_id: args.stripeAccountId, idempotency_key: idempotencyKey, stripe_payout_id: null, created_at: new Date().toISOString() } as PayoutRow)
 }
 
 export async function markPerformerPayout(

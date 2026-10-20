@@ -5,10 +5,27 @@ import { runCeoAgent, runGrowthAgent, buildAlerts } from './_agents.js'
 import { buildDayMetrics, readSnapshot, upsertSnapshot } from './_snapshot.js'
 import deviceVotes from '../../server/deviceVotes.js'
 import awpResults from '../../server/awpResults.js'
+import { getStripe } from '../stripe/_shared.js'
+import { retryAutomaticTransfers } from '../stripe/_distribution.js'
+
+function cronAuthorized(req: VercelRequest) {
+  const secret = process.env.CRON_SECRET
+  return Boolean(secret && req.headers.authorization === `Bearer ${secret}`)
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.query.job === 'votes-device') return deviceVotes(req, res)
   if (req.query.job === 'awp-results') return awpResults(req, res)
+  if (req.query.job === 'stripe-transfer-retry') {
+    if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+    if (!cronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' })
+    try {
+      const result = await retryAutomaticTransfers(getAdminSupabase(), getStripe())
+      return res.status(200).json({ ok: true, ...result })
+    } catch {
+      return res.status(500).json({ error: 'Transfer retry failed' })
+    }
+  }
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

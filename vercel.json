@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 * * * *" }
+  ],
   "rewrites": [
     { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
     { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },

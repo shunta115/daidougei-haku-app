@@ -719,6 +719,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const performerRows = performerResult.data
       const { data: payouts, error: payoutError } = await sb.from('performer_payouts').select('id,performer_id,connected_account_id,amount_yen,status,transfer_status,bank_payout_status,stripe_transfer_id,stripe_payout_id,failure_message,created_at,updated_at').order('created_at', { ascending: false }).limit(200)
       if (payoutError) throw payoutError
+      const { data: automaticTransfers, error: automaticTransferError } = await sb.from('performer_transfer_payables')
+        .select('id,sale_kind,sale_id,performer_id,amount_yen,state,hold_reason,stripe_transfer_id,stripe_transfer_reversal_id,attempt_count,next_retry_at,last_error_code,last_error_message,alert_after,transferred_at,created_at,updated_at')
+        .order('created_at', { ascending: false }).limit(200)
+      if (automaticTransferError && !/does not exist|schema cache/i.test(automaticTransferError.message)) throw automaticTransferError
       const stripe = getStripe()
       const stripePerformers = await Promise.all((performerRows ?? []).map(async (performer) => {
         const accountId = performer.stripe_account_id as string | null
@@ -799,6 +803,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : row),
         stripe_processing_fee: { available: true, source: 'Stripe BalanceTransaction' },
         payouts: payouts ?? [],
+        automaticTransfers: automaticTransfers ?? [],
         stripePerformers,
       })
       return

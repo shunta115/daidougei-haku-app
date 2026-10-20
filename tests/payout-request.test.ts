@@ -137,17 +137,12 @@ describe('requestPerformerPayout', () => {
     expect(view).toMatchObject({ reservedYen: 1_000, processingYen: 2_000, pendingYen: 3_000, paidOutYen: 3_000, failedYen: 4_000, canceledYen: 5_000, hakuAvailableYen: 44_000 })
   })
 
-  it('rejects 9,999 and pays 10,000 once', async () => {
+  it('pays a positive balance below the former 10,000 yen threshold', async () => {
     fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 9999, refunded_amount_yen: 0 }]
-    const blocked = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
-    expect(blocked.status).toBe(400)
-    expect(fake.createTransfer).not.toHaveBeenCalled()
-
-    fake.tips = [{ id: 't1', status: 'succeeded', settlement_status: 'settled', gross_amount_yen: 12000, performer_share_yen: 10000, refunded_amount_yen: 0 }]
     const ok = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
     expect(ok.status).toBe(200)
     expect(fake.createTransfer).toHaveBeenCalledTimes(1)
-    expect(fake.createTransfer.mock.calls[0][0]).toMatchObject({ amount: 10000, destination: 'acct_1' })
+    expect(fake.createTransfer.mock.calls[0][0]).toMatchObject({ amount: 9999, destination: 'acct_1' })
   })
 
   it('retries the exact reserved payout with its existing idempotency key', async () => {
@@ -175,8 +170,8 @@ describe('requestPerformerPayout', () => {
   it('uses the lower Stripe available balance', async () => {
     fake.stripeAvailable = 8000
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
-    expect(res.status).toBe(400)
-    expect(fake.createTransfer).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(fake.createTransfer.mock.calls[0][0]).toMatchObject({ amount: 8000 })
   })
 
   it('does not pay an unfinalized settlement even when a share value exists', async () => {
@@ -193,13 +188,12 @@ describe('requestPerformerPayout', () => {
       performer_share_yen: 9860, refunded_amount_yen: 2000, dispute_status: null,
     }]
     const res = await requestPerformerPayout(sb as never, stripe as never, { performerId: 'p1', stripeAccountId: 'acct_1' })
-    expect(res.status).toBe(400)
-    expect(res.body).toMatchObject({ availableYen: 8160 })
+    expect(res.status).toBe(200)
     expect(fake.selectedColumns.tips).toContain('stripe_fee_yen')
     expect(fake.selectedColumns.tips).toContain('haku_fee_bps')
     expect(fake.selectedColumns.merch_orders).toContain('stripe_fee_yen')
     expect(fake.selectedColumns.merch_orders).toContain('haku_fee_bps')
-    expect(fake.createTransfer).not.toHaveBeenCalled()
+    expect(fake.createTransfer.mock.calls[0][0]).toMatchObject({ amount: 8160 })
   })
 
   it('keeps the reserved row when Stripe transfer status is ambiguous', async () => {

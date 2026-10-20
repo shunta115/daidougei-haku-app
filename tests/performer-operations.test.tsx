@@ -115,21 +115,22 @@ describe('performer operations', () => {
       created_at: '2026-09-25T01:00:00Z', updated_at: '2026-09-25T01:00:00Z',
     }])
     fake.fetchPerformerPayoutView.mockResolvedValue({
-      minPayoutYen: 10000,
+      minPayoutYen: 1,
       confirmedSalesYen: 2460,
       hakuAvailableYen: 2460,
       stripeAvailableYen: 2000,
       availableYen: 2000,
       pendingYen: 0,
       paidOutYen: 0,
-      remainingYen: 8000,
-      canPayout: false,
+      remainingYen: 0,
+      canPayout: true,
       ledgerReady: true,
       openPayout: null,
     })
     render(<PerformerEarningsScreen onBack={vi.fn()} />)
-    await waitFor(() => expect((screen.getByRole('button', { name: '出金を申請' }) as HTMLButtonElement).disabled).toBe(true))
-    expect(screen.getByText(/あと¥8,000で出金できます/)).toBeTruthy()
+    await screen.findByText('自動分配')
+    expect(screen.getByText(/HAKU独自の最低出金額はありません/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '出金を申請' })).toBeNull()
     expect(screen.getAllByText(/Stripe実手数料/).length).toBeGreaterThan(0)
     expect(screen.queryByRole('link', { name: /Stripeで入金を確認/ })).toBeNull()
   })
