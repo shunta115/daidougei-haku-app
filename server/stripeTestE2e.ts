@@ -103,12 +103,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }).eq('id', tipId)
     if (paymentLinkError) throw paymentLinkError
 
-    const settled = await settleSaleByCharge(
-      sb,
-      stripe,
-      { id: chargeId, payment_intent: paymentIntent.id } as never,
-      null,
-    )
+    let settled: Array<{ kind: 'tip' | 'merch'; saleId: string }> = []
+    for (let attempt = 0; attempt < 8 && settled.length === 0; attempt += 1) {
+      const charge = await stripe.charges.retrieve(chargeId)
+      settled = await settleSaleByCharge(sb, stripe, charge, null)
+      if (settled.length === 0) await new Promise((resolve) => setTimeout(resolve, 750))
+    }
     if (settled.length !== 1 || settled[0].saleId !== tipId) throw new Error('test_settlement_not_recorded')
 
     // Two simultaneous deliveries exercise the database claim lease. Exactly
@@ -177,14 +177,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Confirm the remaining connected-account funds can enter Stripe's payout
     // lifecycle. This is a TEST payout only; no real bank movement is possible.
     const payoutAmount = Math.max(1, Number(reversed.amount_yen))
-    const payout = await stripe.payouts.create({
-      amount: payoutAmount,
-      currency: 'jpy',
-      metadata,
-    }, {
-      stripeAccount: connectedAccountId,
-      idempotencyKey: `${FIXTURE_PREFIX}:payout:${requestedRunId}`,
-    })
+    const connectedBalance = await stripe.balance.retrieve({}, { stripeAccount: connectedAccountId })
+    const availableYen = connectedBalance.available
+      .filter((entry) => entry.currency === 'jpy')
+      .reduce((sum, entry) => sum + entry.amount, 0)
+    const pendingYen = connectedBalance.pending
+      .filter((entry) => entry.currency === 'jpy')
+      .reduce((sum, entry) => sum + entry.amount, 0)
+    const payout = availableYen >= payoutAmount
+      ? await stripe.payouts.create({
+          amount: payoutAmount,
+          currency: 'jpy',
+          metadata,
+        }, {
+          stripeAccount: connectedAccountId,
+          idempotencyKey: `${FIXTURE_PREFIX}:payout:${requestedRunId}`,
+        })
+      : null
 
     // Verify the retry worker is harmless after completion.
     const postCompletionRetry = await processPerformerTransfers(sb, stripe, {
@@ -215,7 +224,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       webhookReplay: { eventId, duplicateRejected: duplicateEvent.error?.code === '23505' },
       refund: { id: refund.id, amountYen: refundAmountYen, reversedYen: reversed.reversed_yen },
-      payout: { id: payout.id, amountYen: payout.amount, status: payout.status },
+      payout: payout
+        ? { id: payout.id, amountYen: payout.amount, status: payout.status, availableYen, pendingYen }
+        : { id: null, amountYen: payoutAmount, status: 'pending_funds', availableYen, pendingYen },
       ledger: { payableId: reversed.id, state: reversed.state, attempts: reversed.attempt_count },
       postCompletionRetry,
       historicalSalesTouched: 0,

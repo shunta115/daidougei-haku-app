@@ -34,7 +34,9 @@
 
 `supabase/migrations/20261020114957_harden_payable_claim_lease.sql`
 
-最初の2本は既存の出金予約と銀行Payout観測台帳、後半3本は販売単位の自動Transfer台帳、返金差額、15分のclaim leaseを追加する。`automatic_transfer_eligible_at` は既存行をbackfillしない。したがってAWP既存11件・未払金8,244円（別途条件付き承認済み5,550円を含む）は、この自動分配から一切送金されない。
+`supabase/migrations/20261020130000_grant_transfer_payables_service_role.sql`
+
+最初の2本は既存の出金予約と銀行Payout観測台帳、後半4本は販売単位の自動Transfer台帳、返金差額、15分のclaim lease、service-role限定の台帳照合権限を追加する。`automatic_transfer_eligible_at` は既存行をbackfillしない。したがってAWP既存11件・未払金8,244円（別途条件付き承認済み5,550円を含む）は、この自動分配から一切送金されない。
 
 適用後は同じ読み取り専用検証SQLを再実行する。AWP基準値が不変で、`reserve_performer_payout` の実行権限が `service_role` のみにあること、`payout_audit_events` のRLSが有効であることを確認する。
 

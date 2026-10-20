@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const sql = readFileSync(new URL('../supabase/migrations/20261020112849_automatic_performer_transfers.sql', import.meta.url), 'utf8')
 const leaseSql = readFileSync(new URL('../supabase/migrations/20261020114957_harden_payable_claim_lease.sql', import.meta.url), 'utf8')
+const grantSql = readFileSync(new URL('../supabase/migrations/20261020130000_grant_transfer_payables_service_role.sql', import.meta.url), 'utf8')
 
 describe('automatic transfer migration', () => {
   it('does not make new tip eligibility depend on nonexistent tip columns', () => {
@@ -41,6 +42,12 @@ describe('automatic transfer migration', () => {
     }
     expect(sql).toContain('next_retry_at')
     expect(sql).toContain('alert_after')
+  })
+
+  it('allows only the server role to reconcile the transfer ledger', () => {
+    expect(grantSql).toMatch(/grant select, insert, update, delete[\s\S]*to service_role/i)
+    expect(grantSql).toMatch(/revoke insert, update, delete[\s\S]*from anon, authenticated/i)
+    expect(grantSql).not.toMatch(/grant[\s\S]*to anon|grant[\s\S]*to authenticated/i)
   })
 })
 

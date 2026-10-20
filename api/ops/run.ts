@@ -7,6 +7,8 @@ import deviceVotes from '../../server/deviceVotes.js'
 import awpResults from '../../server/awpResults.js'
 import { getStripe } from '../stripe/_shared.js'
 import { retryAutomaticTransfers } from '../stripe/_distribution.js'
+import { syncAutomaticTransferForSale } from '../stripe/_distribution.js'
+import { retryPendingAutomaticSettlements } from '../stripe/_settlement.js'
 import stripeTestE2e from '../../server/stripeTestE2e.js'
 
 function cronAuthorized(req: VercelRequest) {
@@ -22,8 +24,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' })
     try {
-      const result = await retryAutomaticTransfers(getAdminSupabase(), getStripe())
-      return res.status(200).json({ ok: true, ...result })
+      const sb = getAdminSupabase()
+      const stripe = getStripe()
+      const settled = await retryPendingAutomaticSettlements(sb, stripe)
+      for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
+      const result = await retryAutomaticTransfers(sb, stripe)
+      return res.status(200).json({ ok: true, settlementsRecovered: settled.length, ...result })
     } catch {
       return res.status(500).json({ error: 'Transfer retry failed' })
     }

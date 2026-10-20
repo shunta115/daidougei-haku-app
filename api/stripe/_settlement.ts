@@ -96,6 +96,15 @@ export async function settleCharge(
     ? await stripe.charges.retrieve(args.chargeId, {}, { stripeAccount })
     : await stripe.charges.retrieve(args.chargeId)
   const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
+  if (!bt) {
+    const table = args.kind === 'tip' ? 'tips' : 'merch_orders'
+    const { error } = await sb.from(table).update({
+      stripe_charge_id: charge.id,
+      settlement_status: 'pending_balance_transaction',
+    }).eq('id', args.rowId)
+    if (error && !missingColumn(error)) throw error
+    return null
+  }
   const grossYen = yenFromStripe(charge.amount)
   const stripeFeeYen = yenFromStripe(bt?.fee)
   const refundedYen = yenFromStripe(charge.amount_refunded)
@@ -220,6 +229,32 @@ export async function settleCheckoutPayment(
     { id: chargeId, payment_intent: paymentIntentId } as Stripe.Charge,
     connectedAccountId,
   )
+}
+
+/** Recover charges whose Balance Transaction was not attached when the first
+ * payment webhook arrived. No payable is created until Stripe's real fee is
+ * available, so a performer can never be overpaid from a guessed zero fee. */
+export async function retryPendingAutomaticSettlements(sb: SupabaseClient, stripe: Stripe) {
+  const [tips, merch] = await Promise.all([
+    sb.from('tips').select('id,stripe_charge_id').eq('settlement_status', 'pending_balance_transaction')
+      .not('automatic_transfer_eligible_at', 'is', null).limit(100),
+    sb.from('merch_orders').select('id,stripe_charge_id').eq('settlement_status', 'pending_balance_transaction')
+      .not('automatic_transfer_eligible_at', 'is', null).limit(100),
+  ])
+  if (tips.error && !missingColumn(tips.error) && !missingTable(tips.error)) throw tips.error
+  if (merch.error && !missingColumn(merch.error) && !missingTable(merch.error)) throw merch.error
+
+  const settled: Array<{ kind: 'tip' | 'merch'; saleId: string }> = []
+  for (const row of [...(tips.data ?? []), ...(merch.data ?? [])]) {
+    if (!row.stripe_charge_id) continue
+    settled.push(...await settleSaleByCharge(
+      sb,
+      stripe,
+      { id: row.stripe_charge_id } as Stripe.Charge,
+      null,
+    ))
+  }
+  return settled
 }
 
 export { missingColumn, missingTable, stripeId, yenFromStripe }

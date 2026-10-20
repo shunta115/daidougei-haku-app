@@ -206,6 +206,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
       }
 
+      if (event.type === 'charge.updated') {
+        const charge = event.data.object as Stripe.Charge
+        const settled = await settleSaleByCharge(sb, stripe, charge, connectedAccountId)
+        for (const sale of settled) await syncAutomaticTransferForSale(sb, stripe, sale)
+      }
+
       // Stripe can emit a later charge.refund.updated event after the initial
       // charge.refunded delivery. Processing it is safe and idempotent, and it
       // lets a delayed endpoint subscription reconcile the authoritative
