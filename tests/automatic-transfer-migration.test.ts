@@ -5,6 +5,14 @@ const sql = readFileSync(new URL('../supabase/migrations/20261020112849_automati
 const leaseSql = readFileSync(new URL('../supabase/migrations/20261020114957_harden_payable_claim_lease.sql', import.meta.url), 'utf8')
 
 describe('automatic transfer migration', () => {
+  it('does not make new tip eligibility depend on nonexistent tip columns', () => {
+    const source = readFileSync('api/stripe/tip.ts', 'utf8')
+    const patch = source.match(/const tipMetaPatch = \{([\s\S]*?)\n    \}/)?.[1] ?? ''
+    expect(patch).toContain('automatic_transfer_eligible_at')
+    expect(patch).not.toContain('funding_model')
+    expect(patch).not.toContain('transfer_status')
+  })
+
   it('removes the HAKU threshold but rejects a zero-value transfer', () => {
     expect(sql).toContain('check (amount_yen > 0)')
     expect(sql).toContain("if p_amount_yen <= 0 then raise exception 'zero payout is not allowed'")

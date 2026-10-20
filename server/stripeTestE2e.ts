@@ -79,8 +79,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       platform_fee_yen: 0,
       status: 'pending',
       stripe_checkout_mode: 'platform_separate',
-      funding_model: 'platform_separate',
-      transfer_status: 'pending',
       automatic_transfer_eligible_at: new Date().toISOString(),
     })
     if (tipError) throw tipError
