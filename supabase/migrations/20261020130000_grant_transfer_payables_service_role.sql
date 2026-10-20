@@ -7,8 +7,14 @@ grant select, insert, update, delete
   on table public.performer_transfer_payables
   to service_role;
 
-revoke insert, update, delete
+revoke all privileges
   on table public.performer_transfer_payables
-  from anon, authenticated;
+  from anon;
+revoke all privileges
+  on table public.performer_transfer_payables
+  from authenticated;
+grant select
+  on table public.performer_transfer_payables
+  to authenticated;
 
 commit;

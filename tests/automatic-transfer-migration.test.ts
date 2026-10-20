@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 const sql = readFileSync(new URL('../supabase/migrations/20261020112849_automatic_performer_transfers.sql', import.meta.url), 'utf8')
 const leaseSql = readFileSync(new URL('../supabase/migrations/20261020114957_harden_payable_claim_lease.sql', import.meta.url), 'utf8')
 const grantSql = readFileSync(new URL('../supabase/migrations/20261020130000_grant_transfer_payables_service_role.sql', import.meta.url), 'utf8')
+const privilegeSql = readFileSync(new URL('../supabase/migrations/20261021103000_harden_transfer_ledger_privileges.sql', import.meta.url), 'utf8')
 
 describe('automatic transfer migration', () => {
   it('does not make new tip eligibility depend on nonexistent tip columns', () => {
@@ -46,8 +47,17 @@ describe('automatic transfer migration', () => {
 
   it('allows only the server role to reconcile the transfer ledger', () => {
     expect(grantSql).toMatch(/grant select, insert, update, delete[\s\S]*to service_role/i)
-    expect(grantSql).toMatch(/revoke insert, update, delete[\s\S]*from anon, authenticated/i)
-    expect(grantSql).not.toMatch(/grant[\s\S]*to anon|grant[\s\S]*to authenticated/i)
+    expect(grantSql).toMatch(/revoke all privileges[\s\S]*from anon/i)
+    expect(grantSql).toMatch(/revoke all privileges[\s\S]*from authenticated/i)
+    expect(grantSql).toMatch(/grant select[\s\S]*to authenticated/i)
+  })
+
+  it('removes default elevated privileges from every automatic transfer ledger', () => {
+    expect(privilegeSql).toMatch(/revoke all privileges on table public\.performer_transfer_payables from anon, authenticated/i)
+    expect(privilegeSql).toMatch(/grant select on table public\.performer_transfer_payables to authenticated/i)
+    expect(privilegeSql).toMatch(/revoke all privileges on table public\.payout_audit_events from anon, authenticated/i)
+    expect(privilegeSql).toMatch(/grant select on table public\.payout_audit_events to authenticated/i)
+    expect(privilegeSql).toMatch(/revoke all privileges on table public\.connected_account_payouts from anon, authenticated/i)
   })
 })
 
