@@ -6,7 +6,6 @@ import {
   listPerformerEventSlots,
   listPerformerTipTransactions,
   listSellerMerchOrders,
-  requestPerformerPayout,
   type PerformerEventSlot,
   type PerformerPayoutView,
 } from '../lib/api'
@@ -82,9 +81,6 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const [payout, setPayout] = useState<PerformerPayoutView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (!performer) return
     Promise.all([
@@ -107,51 +103,24 @@ export function PerformerEarningsScreen({ onBack }: { onBack: () => void }) {
   const merchPercent = bpsToPercentLabel(MERCH_SYSTEM_FEE_BPS)
   const locale = lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP'
   const available = payout?.availableYen ?? 0
-  const canPayout = Boolean(payout?.canPayout)
-  const requestPayout = async () => {
-    if (!performer || busy || !canPayout) return
-    setBusy(true)
-    setError(null)
-    setMessage(null)
-    try {
-      await requestPerformerPayout(performer.id)
-      setPayout(await fetchPerformerPayoutView(performer.id))
-      setMessage(t('payoutOk'))
-      setConfirming(false)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('payoutFail'))
-    } finally {
-      setBusy(false)
-    }
-  }
   return <div className="pl-registration">
     <button className="pl-btn pl-btn--ghost" onClick={onBack}><ArrowLeft size={18} />{t('back')}</button>
     <p className="pl-brand">EARNINGS</p><h1 className="pl-h1">{t('earnTitle')}</h1>
     <p className="pl-muted">{t('earnLead')}</p>
     {loading ? <p role="status">{t('earnLoading')}</p> : null}
     {error ? <p className="pl-error" role="alert">{error}</p> : null}
-    {message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
     <dl className="pl-registration__totals">
-      <div><dt>{t('salesPaid')}</dt><dd>{formatYen(payout?.confirmedSalesYen ?? gross)}</dd></div>
+      <div><dt>{t('payoutProductionGross')}</dt><dd>{formatYen(payout?.productionGrossYen ?? gross)}</dd></div>
+      <div><dt>{t('payoutPerformerShare')}</dt><dd>{formatYen(payout?.performerShareYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutUntransferred')}</dt><dd>{formatYen(payout?.hakuAvailableYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutFundsPending')}</dt><dd>{formatYen(payout?.fundsPendingYen ?? 0)}</dd></div>
       <div><dt>{t('payoutAvailable')}</dt><dd>{formatYen(available)}</dd></div>
-      <div><dt>{t('payoutPending')}</dt><dd>{formatYen(payout?.pendingYen ?? 0)}</dd></div>
-      <div><dt>保留中</dt><dd>{formatYen(payout?.heldYen ?? 0)}</dd></div>
-      <div><dt>{t('payoutPaidOut')}</dt><dd>{formatYen(payout?.paidOutYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutTransferPaid')}</dt><dd>{formatYen(payout?.paidOutYen ?? 0)}</dd></div>
+      <div><dt>{t('payoutTestPayments')}</dt><dd>{formatYen(payout?.testGrossYen ?? 0)}<small>{t('payoutTestExcluded')}</small></dd></div>
     </dl>
     <section className="pl-registration__section">
       <h2 className="pl-h2">{t('payoutMinLabel')}</h2>
-      <p className="pl-muted">{canPayout ? t('payoutReady') : t('payoutNeedMoreYen', { amount: formatYen(payout?.remainingYen ?? 10000) })}</p>
-      <p className="pl-muted">{t('payoutHakuBalance')} {formatYen(payout?.hakuAvailableYen ?? 0)}</p>
-      {confirming ? (
-        <div className="pl-registration__notice">
-          <p>{t('payoutConfirmTitle')}</p>
-          <p>{t('payoutConfirmBody', { amount: formatYen(available) })}</p>
-          <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void requestPayout()}>{busy ? t('payoutWorking') : t('payoutConfirm')}</button>
-          <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={busy} onClick={() => setConfirming(false)}>{t('payoutCancel')}</button>
-        </div>
-      ) : (
-        <button type="button" className="pl-btn pl-btn--block" disabled={!canPayout || busy} onClick={() => setConfirming(true)}>{t('payoutRequest')}</button>
-      )}
+      <p className="pl-muted">{payout?.payoutBlockReason ?? t('payoutReady')}</p>
     </section>
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesFlowTitle')}</h2><p className="pl-muted">{t('salesFlow', { tip: tipPercent, merch: merchPercent })}</p><p className="pl-muted">{t('salesBankNote')}</p></section>
     <section className="pl-registration__section"><h2 className="pl-h2">{t('salesExample')}</h2><div className="pl-registration__money-flow"><span>{t('salesFanPays')}<strong>{formatYen(1000)}</strong></span><span>{t('feeStripeAfter')}<strong>—</strong></span><span>{t('salesFeeLine', { tip: tipPercent })}<strong>{t('salesNotFinal')}</strong></span></div></section>

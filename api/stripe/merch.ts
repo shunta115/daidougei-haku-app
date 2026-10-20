@@ -213,6 +213,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       connected_account_id: connectedAccountId,
       stripe_checkout_mode: 'platform_separate',
       seller_responsibility: 'seller',
+      automatic_transfer_eligible_at: new Date().toISOString(),
     }
     const { error: orderMetaErr } = await sb.from('merch_orders').update(orderMetaPatch).eq('id', order.id)
     if (orderMetaErr && !missingColumn(orderMetaErr)) throw orderMetaErr

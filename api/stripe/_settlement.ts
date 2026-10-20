@@ -86,16 +86,25 @@ export async function settleCharge(
     collectedAppFeeYen: number
   },
 ) {
-  if (!args.chargeId) return
+  if (!args.chargeId) return null
   // Platform-held separate charges live on the platform account, so they do
   // not require a connected-account context to retrieve and settle. Direct
   // charges still fail closed without the owning connected account.
-  if (args.chargeType === 'direct' && !args.connectedAccountId) return
+  if (args.chargeType === 'direct' && !args.connectedAccountId) return null
   const stripeAccount = args.chargeType === 'direct' ? args.connectedAccountId : null
   const charge = stripeAccount
     ? await stripe.charges.retrieve(args.chargeId, {}, { stripeAccount })
     : await stripe.charges.retrieve(args.chargeId)
   const bt = await loadBalanceTransaction(stripe, charge, stripeAccount)
+  if (!bt) {
+    const table = args.kind === 'tip' ? 'tips' : 'merch_orders'
+    const { error } = await sb.from(table).update({
+      stripe_charge_id: charge.id,
+      settlement_status: 'pending_balance_transaction',
+    }).eq('id', args.rowId)
+    if (error && !missingColumn(error)) throw error
+    return null
+  }
   const grossYen = yenFromStripe(charge.amount)
   const stripeFeeYen = yenFromStripe(bt?.fee)
   const refundedYen = yenFromStripe(charge.amount_refunded)
@@ -136,6 +145,7 @@ export async function settleCharge(
       if (markError && !missingColumn(markError)) throw markError
     }
   }
+  return { kind: args.kind, saleId: args.rowId } as const
 }
 
 export async function settleSaleByCharge(
@@ -146,7 +156,7 @@ export async function settleSaleByCharge(
 ) {
   const paymentIntentId = stripeId(charge.payment_intent)
   const chargeId = charge.id
-  if (!chargeId && !paymentIntentId) return
+  if (!chargeId && !paymentIntentId) return []
 
   // checkout.session.completed stores the PaymentIntent before the Charge ID.
   // Match either identifier so settlement does not depend on event ordering.
@@ -170,8 +180,9 @@ export async function settleSaleByCharge(
   if (tip.error && !missingColumn(tip.error)) throw tip.error
   if (merch.error && !missingColumn(merch.error)) throw merch.error
 
+  const settledSales: Array<{ kind: 'tip' | 'merch'; saleId: string }> = []
   if (tip.data?.id) {
-    await settleCharge(sb, stripe, {
+    const settled = await settleCharge(sb, stripe, {
       kind: 'tip',
       rowId: tip.data.id,
       chargeId,
@@ -180,9 +191,10 @@ export async function settleSaleByCharge(
       feeBps: TIP_SYSTEM_FEE_BPS,
       collectedAppFeeYen: yenFromStripe(tip.data.platform_fee_yen ?? tip.data.platform_fee_cents),
     })
+    if (settled) settledSales.push(settled)
   }
   if (merch.data?.id) {
-    await settleCharge(sb, stripe, {
+    const settled = await settleCharge(sb, stripe, {
       kind: 'merch',
       rowId: merch.data.id,
       chargeId,
@@ -191,7 +203,9 @@ export async function settleSaleByCharge(
       feeBps: MERCH_SYSTEM_FEE_BPS,
       collectedAppFeeYen: yenFromStripe(merch.data.platform_fee_yen),
     })
+    if (settled) settledSales.push(settled)
   }
+  return settledSales
 }
 
 /** Settlement fallback for the customer return path when webhook delivery is delayed. */
@@ -202,19 +216,45 @@ export async function settleCheckoutPayment(
   connectedAccountId: string | null,
 ) {
   const paymentIntentId = stripeId(session.payment_intent)
-  if (!paymentIntentId) return
+  if (!paymentIntentId) return []
   const platformCharge = session.metadata?.charge_type === 'platform_separate'
   const paymentIntent = !platformCharge && connectedAccountId
     ? await stripe.paymentIntents.retrieve(paymentIntentId, {}, { stripeAccount: connectedAccountId })
     : await stripe.paymentIntents.retrieve(paymentIntentId)
   const chargeId = stripeId(paymentIntent.latest_charge)
-  if (!chargeId) return
-  await settleSaleByCharge(
+  if (!chargeId) return []
+  return settleSaleByCharge(
     sb,
     stripe,
     { id: chargeId, payment_intent: paymentIntentId } as Stripe.Charge,
     connectedAccountId,
   )
+}
+
+/** Recover charges whose Balance Transaction was not attached when the first
+ * payment webhook arrived. No payable is created until Stripe's real fee is
+ * available, so a performer can never be overpaid from a guessed zero fee. */
+export async function retryPendingAutomaticSettlements(sb: SupabaseClient, stripe: Stripe) {
+  const [tips, merch] = await Promise.all([
+    sb.from('tips').select('id,stripe_charge_id').eq('settlement_status', 'pending_balance_transaction')
+      .not('automatic_transfer_eligible_at', 'is', null).limit(100),
+    sb.from('merch_orders').select('id,stripe_charge_id').eq('settlement_status', 'pending_balance_transaction')
+      .not('automatic_transfer_eligible_at', 'is', null).limit(100),
+  ])
+  if (tips.error && !missingColumn(tips.error) && !missingTable(tips.error)) throw tips.error
+  if (merch.error && !missingColumn(merch.error) && !missingTable(merch.error)) throw merch.error
+
+  const settled: Array<{ kind: 'tip' | 'merch'; saleId: string }> = []
+  for (const row of [...(tips.data ?? []), ...(merch.data ?? [])]) {
+    if (!row.stripe_charge_id) continue
+    settled.push(...await settleSaleByCharge(
+      sb,
+      stripe,
+      { id: row.stripe_charge_id } as Stripe.Charge,
+      null,
+    ))
+  }
+  return settled
 }
 
 export { missingColumn, missingTable, stripeId, yenFromStripe }

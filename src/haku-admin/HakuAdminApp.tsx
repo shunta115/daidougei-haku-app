@@ -520,9 +520,11 @@ export function HakuAdminApp() {
             const label = state === 'ready' ? '利用可能' : state === 'unregistered' ? '未設定' : state === 'needs_information' ? '要対応' : state === 'under_review' ? '確認中' : state === 'restricted' ? '制限中' : state === 'onboarding' ? '登録途中' : '確認エラー'
             return <article key={String(row.performer_id)} className="ha-card" data-stripe-state={state}>
               <h3>{String(row.stage_name || '名称未登録')} <small>{label}</small></h3>
+              <p>出演者ID <code>{String(row.performer_id)}</code></p>
               <p>承認 {row.approved ? '済み' : '未承認'} · 投げ銭 {row.tip_available ? '受付可' : '受付不可'} · グッズ {row.merch_available ? '販売可' : '販売不可'}</p>
-              <p>charges_enabled {String(Boolean(row.charges_enabled))} · payouts_enabled {String(Boolean(row.payouts_enabled))} · 登録情報 {row.details_submitted ? '提出済み' : '未完了'}</p>
-              <p>確定売上 {formatYen(Number(row.confirmed_sales_yen) || 0)} · 未Transfer残高 {formatYen(Number(row.available_yen) || 0)} · 現在出金可能 {formatYen(Number(row.payout_eligible_yen) || 0)}</p>
+              <p>charges_enabled {String(Boolean(row.charges_enabled))} · payouts_enabled {String(Boolean(row.payouts_enabled))} · 登録情報 {row.details_submitted ? '提出済み' : '未完了'} · 銀行口座 {row.bank_account_registered ? '登録済み' : '未確認／未登録'}</p>
+              <p>本番売上 {formatYen(Number(row.production_gross_yen) || 0)} · Stripe手数料 {formatYen(Number(row.stripe_fee_yen) || 0)} · HAKU手数料 {formatYen(Number(row.haku_fee_yen) || 0)} · 出演者取り分 {formatYen(Number(row.performer_share_yen) || 0)}</p>
+              <p>未Transfer残高 {formatYen(Number(row.available_yen) || 0)} · 資金確定待ち {formatYen(Number(row.funds_pending_yen) || 0)} · 現在出金可能 {formatYen(Number(row.payout_eligible_yen) || 0)}</p>
               <p>送金予約 {formatYen(Number(row.reserved_payout_yen) || 0)} · Transfer処理中 {formatYen(Number(row.processing_payout_yen) || 0)} · Transfer済み {formatYen(Number(row.paid_out_yen) || 0)} · 失敗 {formatYen(Number(row.failed_payout_yen) || 0)} · 取消 {formatYen(Number(row.canceled_payout_yen) || 0)}</p>
               <p>返金・紛争調整 {formatYen(Number(row.adjustment_yen) || 0)}{row.holding_age_days !== null && row.holding_age_days !== undefined ? ` · 最古の未精算対象 ${String(row.holding_age_days)}日経過` : ''}</p>
               {row.holding_review_required ? <p className="ha-note">資金保有が内部確認基準（{String(row.holding_review_days)}日）を超えています。Stripeとの契約上の期限を別途確認し、運営対応してください。</p> : null}
@@ -542,8 +544,20 @@ export function HakuAdminApp() {
             </article>
           ))}
           <h2>出金</h2>
+          <h3>自動Transfer台帳</h3>
+          {((money.automaticTransfers as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>新方式の自動分配記録はありません（過去分は自動移行されません）。</p> : null}
+          {((money.automaticTransfers as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card">
+            <p>{String(row.sale_kind)} · {formatYen(Number(row.amount_yen) || 0)} · 状態 {String(row.state)} · 試行 {String(row.attempt_count ?? 0)}回</p>
+            <p>出演者ID <code>{String(row.performer_id)}</code> · Transfer ID {row.stripe_transfer_id ? <code>{String(row.stripe_transfer_id)}</code> : '未作成'}</p>
+            {row.hold_reason ? <p>保留理由 {String(row.hold_reason)}</p> : null}
+            {row.last_error_code ? <p className="ha-note">要対応 {String(row.last_error_code)} · 次回 {row.next_retry_at ? new Date(String(row.next_retry_at)).toLocaleString('ja-JP') : '自動再試行なし'}</p> : null}
+          </article>)}
+          <h3>旧方式／手動照合台帳</h3>
           {((money.payouts as Array<Record<string, unknown>>) ?? []).length === 0 ? <p>出金記録はありません。</p> : null}
-          {((money.payouts as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card"><p>{formatYen(Number(row.amount_yen) || 0)} · {String(row.status)} · {String(row.performer_id).slice(0, 8)}…</p></article>)}
+          {((money.payouts as Array<Record<string, unknown>>) ?? []).map((row) => <article key={String(row.id)} className="ha-card">
+            <p>{formatYen(Number(row.amount_yen) || 0)} · 内部状態 {String(row.status)} · Transfer {String(row.transfer_status || '未開始')} · 銀行Payout {String(row.bank_payout_status || '未確認')}</p>
+            <p>出演者ID <code>{String(row.performer_id)}</code>{row.failure_message ? ` · 要対応: ${String(row.failure_message)}` : ''}</p>
+          </article>)}
         </section>
       ) : null}
 
