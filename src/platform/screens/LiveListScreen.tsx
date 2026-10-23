@@ -151,12 +151,16 @@ export function LiveListScreen({ onWatchLive, onOpenPerformer }: Props) {
               <Avatar url={row.performer.photo_url} name={row.performer.stage_name} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="pl-live-row__top">
-                  <LiveBadge />
+                  {row.performer.youtube_live_enabled && !row.performer.is_live
+                    ? <span className="pl-live__pill">YouTube連携</span>
+                    : <LiveBadge />}
                   <span className="pl-muted">{liveDuration(row.performer.live_started_at)}{row.viewer_peak > 0 ? ` · 👁 ${row.viewer_peak}` : ''}</span>
                 </div>
                 <div style={{ fontWeight: 700 }}>{row.performer.stage_name}</div>
                 <div className="pl-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {row.performer.live_title || row.performer.genre || row.performer.city || t('liveNow')}
+                  {row.performer.youtube_live_enabled && !row.performer.is_live
+                    ? `YouTube公式プレーヤー · ${row.performer.live_title || row.performer.genre || row.performer.city || ''}`
+                    : row.performer.live_title || row.performer.genre || row.performer.city || t('liveNow')}
                 </div>
               </div>
             </button>
