@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20261019124837_allow_ss_test_performer_private_access.sql'),
   'utf8',
 )
+const verifier = readFileSync(
+  resolve(process.cwd(), 'supabase/verify_ss_test_performer_private_access_readonly.sql'),
+  'utf8',
+)
 
 describe('s.s private Test Performer access migration', () => {
   it('fails closed unless both verified identities and the active assignment exist', () => {
@@ -46,5 +50,14 @@ describe('s.s private Test Performer access migration', () => {
     expect(migration).toMatch(/set search_path = pg_catalog, public/)
     expect(migration).toMatch(/alter policy live_schedules_public_read[\s\S]*to anon, authenticated/)
     expect(migration).toMatch(/create policy live_schedules_assigned_private_read[\s\S]*to authenticated/)
+  })
+
+  it('ships a rollback-only three-actor production verifier', () => {
+    expect(verifier.match(/begin read only;/g)).toHaveLength(3)
+    expect(verifier.match(/rollback;/g)).toHaveLength(3)
+    expect(verifier).toContain('1c21f421-5561-4213-8759-962873accfa0')
+    expect(verifier).toContain('36ff70ed-c08a-440a-84f8-d3051bec9f68')
+    expect(verifier).toContain('29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1')
+    expect(verifier).not.toMatch(/^\s*(insert|update|delete|alter|create|drop|truncate)\b/im)
   })
 })
