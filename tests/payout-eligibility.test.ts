@@ -9,19 +9,19 @@ import {
 } from '../shared/payoutMath'
 
 describe('performer payout eligibility', () => {
-  it('blocks 9,999 and allows 10,000 and 10,001', () => {
-    expect(MIN_PAYOUT_YEN).toBe(10_000)
-    expect(canRequestPayout(9_999)).toBe(false)
-    expect(canRequestPayout(10_000)).toBe(true)
-    expect(canRequestPayout(10_001)).toBe(true)
-    expect(remainingToMinPayout(6_760)).toBe(3_240)
-    expect(remainingToMinPayout(10_000)).toBe(0)
+  it('has no HAKU threshold while still rejecting a zero-value Transfer', () => {
+    expect(MIN_PAYOUT_YEN).toBe(1)
+    expect(canRequestPayout(0)).toBe(false)
+    expect(canRequestPayout(1)).toBe(true)
+    expect(canRequestPayout(9_999)).toBe(true)
+    expect(remainingToMinPayout(0)).toBe(1)
+    expect(remainingToMinPayout(1)).toBe(0)
   })
 
   it('uses the lower of HAKU available and Stripe available', () => {
     expect(eligiblePayoutYen(12_000, 8_000)).toBe(8_000)
     expect(eligiblePayoutYen(8_000, 12_000)).toBe(8_000)
-    expect(canRequestPayout(eligiblePayoutYen(12_000, 8_000))).toBe(false)
+    expect(canRequestPayout(eligiblePayoutYen(12_000, 8_000))).toBe(true)
     expect(canRequestPayout(eligiblePayoutYen(12_000, 10_000))).toBe(true)
     expect(eligiblePayoutYen(-1, 20_000)).toBe(0)
   })

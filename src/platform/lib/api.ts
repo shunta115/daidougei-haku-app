@@ -4,6 +4,7 @@ import type {
   AdminMetrics,
   LiveComment,
   LiveSession,
+  LiveSchedule,
   LiveTipEvent,
   MerchOrder,
   MerchProduct,
@@ -26,6 +27,13 @@ export type PerformerSearchFilters = {
   genre?: string
   country?: string
   overseasOnly?: boolean
+}
+
+export const liveReservationsEnabled = import.meta.env.VITE_ENABLE_LIVE_RESERVATIONS === 'true'
+
+export async function getSignedInUserId(): Promise<string | null> {
+  const { data } = await requireSupabase().auth.getUser()
+  return data.user?.id ?? null
 }
 
 let lastPresenceReconcile = 0
@@ -167,6 +175,65 @@ export async function updateLiveViewerPeak(performerId: string, viewers: number)
   const current = open.viewer_peak ?? 0
   if (peak <= current) return
   await sb.from('live_sessions').update({ viewer_peak: peak }).eq('id', open.id)
+}
+
+export async function listUpcomingLiveSchedules(): Promise<LiveSchedule[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb
+    .from('live_schedules')
+    .select('*')
+    .eq('status', 'scheduled')
+    .gte('scheduled_start_at', new Date(Date.now() - 15 * 60_000).toISOString())
+    .order('scheduled_start_at')
+    .limit(30)
+  if (error) throw error
+  return (data as LiveSchedule[]) ?? []
+}
+
+export async function listOwnLiveReservationIds(userId: string): Promise<string[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('live_reservations').select('live_schedule_id').eq('user_id', userId)
+  if (error) throw error
+  return (data ?? []).map((row) => String(row.live_schedule_id))
+}
+
+export async function reserveLiveSchedule(scheduleId: string, userId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_reservations').insert({ live_schedule_id: scheduleId, user_id: userId })
+  if (error && error.code !== '23505') throw error
+}
+
+export async function cancelLiveReservation(scheduleId: string, userId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.from('live_reservations').delete().eq('live_schedule_id', scheduleId).eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function createLiveSchedule(performerId: string, title: string, scheduledStartAt: string): Promise<LiveSchedule> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('live_schedules').insert({
+    performer_id: performerId,
+    title: title.trim(),
+    scheduled_start_at: scheduledStartAt,
+  }).select('*').single()
+  if (error) throw error
+  return data as LiveSchedule
+}
+
+export async function listPerformerLiveSchedules(performerId: string): Promise<LiveSchedule[]> {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('live_schedules').select('*').eq('performer_id', performerId).eq('status', 'scheduled').order('scheduled_start_at')
+  if (error) throw error
+  return (data as LiveSchedule[]) ?? []
+}
+
+export async function notifyLiveReservationStarted(scheduleId: string, liveSessionId: string) {
+  const sb = requireSupabase()
+  const { error } = await sb.rpc('notify_live_reservations_started', {
+    p_schedule_id: scheduleId,
+    p_live_session_id: liveSessionId,
+  })
+  if (error) throw error
 }
 
 async function assertApprovedActivePerformer(performerId: string) {
@@ -1172,15 +1239,31 @@ export async function getMerchFeeBps(): Promise<number> {
 
 export type PerformerPayoutView = {
   minPayoutYen: number
+  productionGrossYen: number
+  performerShareYen: number
+  testGrossYen: number
+  stripeFeeYen: number
+  hakuFeeYen: number
   confirmedSalesYen: number
   hakuAvailableYen: number
   stripeAvailableYen: number
+  platformTransferCapacityYen: number
+  fundedUnallocatedYen: number
+  fundsPendingYen: number
   availableYen: number
   heldYen: number
+  reservedYen: number
+  processingYen: number
   pendingYen: number
   paidOutYen: number
+  failedYen: number
+  canceledYen: number
   remainingYen: number
+  connectReady: boolean
+  thresholdMet: boolean
+  payoutBlockReason: string | null
   canPayout: boolean
+  canReconcile: boolean
   ledgerReady: boolean
   openPayout: { id: string; amount_yen: number; status: string } | null
 }

@@ -309,6 +309,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .update({ viewer_peak: viewerCount })
         .eq('id', data[0].id)
         .lt('viewer_peak', viewerCount)
+      if (process.env.ENABLE_LIVE_VIEWER_SAMPLES === 'true') {
+        // This capability is enabled only after the separately approved analytics
+        // migration exists. Sampling failure must never interrupt the host heartbeat.
+        await sb.from('live_viewer_samples').insert({
+          live_session_id: data[0].id,
+          sampled_at: heartbeatAt,
+          viewer_count: viewerCount,
+        }).then(() => undefined, () => undefined)
+      }
     }
     res.status(200).json({ ok: true, heartbeatAt, viewerCount })
   } catch {

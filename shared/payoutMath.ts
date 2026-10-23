@@ -1,4 +1,6 @@
-export const MIN_PAYOUT_YEN = 10_000
+// HAKU has no withdrawal threshold. One yen is the smallest valid JPY
+// transfer amount; zero-value Stripe Transfers are never created.
+export const MIN_PAYOUT_YEN = 1
 
 export function refundKind(grossYen: number, refundedYen: number): 'none' | 'partial' | 'full' {
   if (!Number.isInteger(grossYen) || grossYen <= 0) return refundedYen > 0 ? 'full' : 'none'

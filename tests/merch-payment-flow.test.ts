@@ -90,4 +90,30 @@ describe('merch cashless payment flow', () => {
       settlement_status: 'settled',
     })
   })
+
+  it('holds distribution until Stripe attaches the real Balance Transaction', async () => {
+    let saved: Row | null = null
+    const sb = {
+      from: () => ({
+        update: (patch: Row) => ({
+          eq: async () => { saved = patch; return { error: null } },
+        }),
+      }),
+    }
+    const stripe = {
+      charges: { retrieve: async () => ({ id: 'ch_test_pending', amount: 1000, amount_refunded: 0, balance_transaction: null }) },
+      balanceTransactions: { retrieve: async () => { throw new Error('must not retrieve without an id') } },
+    }
+
+    const result = await settleCharge(sb as never, stripe as never, {
+      kind: 'merch', rowId: 'order-pending', chargeId: 'ch_test_pending', connectedAccountId: null,
+      chargeType: 'platform_separate', feeBps: 800, collectedAppFeeYen: 0,
+    })
+
+    expect(result).toBeNull()
+    expect(saved).toEqual({
+      stripe_charge_id: 'ch_test_pending',
+      settlement_status: 'pending_balance_transaction',
+    })
+  })
 })
