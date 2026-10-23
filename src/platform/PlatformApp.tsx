@@ -985,7 +985,7 @@ function PlatformShell() {
         body = <PerformerMerchScreen onBack={() => setScreen('profile')} />
         break
       case 'performer-live':
-        body = <PerformerLiveScreen onBack={() => setScreen('profile')} />
+        body = <PerformerLiveScreen onBack={() => setScreen('profile')} onPreviewYouTube={() => { if (user) openWatch(user.id) }} />
         break
       case 'performer-history':
         body = <PerformerHistoryScreen onBack={() => setScreen('profile')} />

@@ -3,6 +3,7 @@ import { RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
+import { YouTubeLiveSetup } from '../components/YouTubeLiveSetup'
 import {
   canModerateLiveComments,
   createLiveSchedule,
@@ -46,6 +47,7 @@ import './live.css'
 
 type Props = {
   onBack: () => void
+  onPreviewYouTube: () => void
 }
 
 function formatDuration(sec: number) {
@@ -56,7 +58,7 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function PerformerLiveScreen({ onBack }: Props) {
+export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
@@ -66,6 +68,7 @@ export function PerformerLiveScreen({ onBack }: Props) {
   const [scheduleFeatureAvailable, setScheduleFeatureAvailable] = useState(false)
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
+  const [method, setMethod] = useState<'direct' | 'youtube'>(() => performer?.youtube_live_enabled && !performer?.is_live ? 'youtube' : 'direct')
   const [previewState, setPreviewState] = useState<'idle' | 'preparing' | 'ready' | 'denied' | 'ended'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -609,6 +612,10 @@ export function PerformerLiveScreen({ onBack }: Props) {
     }
   }
 
+  if (phase === 'ready' && method === 'youtube') {
+    return <YouTubeLiveSetup performer={performer} onBack={onBack} onChooseDirect={() => setMethod('direct')} onPreview={onPreviewYouTube} onSaved={refreshProfile} />
+  }
+
   return (
     <div
       className={`pl-live pl-live--performer${phase === 'live' && isOverlayChrome ? ' pl-live--immersive' : ''}`}
@@ -689,6 +696,14 @@ export function PerformerLiveScreen({ onBack }: Props) {
 
       {phase === 'ready' ? (
         <div className="pl-live__panel">
+          <div className="pl-live-methods" role="radiogroup" aria-label="配信方法">
+            <button type="button" role="radio" aria-checked="true" data-selected="true">
+              <Video aria-hidden="true" /><span><strong>HAKU DIRECT LIVE</strong><small>HAKUのカメラ・マイクで直接配信</small></span>
+            </button>
+            <button type="button" role="radio" aria-checked="false" onClick={() => setMethod('youtube')}>
+              <span aria-hidden="true">▶</span><span><strong>YouTube LIVE連携</strong><small>YouTubeのURLを貼ってHAKUで公開</small></span>
+            </button>
+          </div>
           <p className="pl-brand">LIVE FOR YOUR FANS</p><h1 className="pl-h1">会場に来られないファンにも届けよう</h1>
           <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
