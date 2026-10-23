@@ -23,17 +23,22 @@ export function roomNameForPerformer(performerId: string) {
   return `performer-${performerId}`
 }
 
+export function roomNameForPrivateSession(performerId: string, sessionId: string) {
+  return `private-${performerId}-${sessionId}`
+}
+
 export async function createLiveKitToken(opts: {
   identity: string
   name: string
   room: string
   canPublish: boolean
+  ttl?: string
 }) {
   const { apiKey, apiSecret } = getLiveKitConfig()
   const at = new AccessToken(apiKey, apiSecret, {
     identity: opts.identity,
     name: opts.name,
-    ttl: '6h',
+    ttl: opts.ttl ?? '6h',
   })
   at.addGrant({
     roomJoin: true,

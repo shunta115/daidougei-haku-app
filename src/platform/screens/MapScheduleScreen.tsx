@@ -10,6 +10,7 @@ import {
   listEventSlots,
   listEventVenues,
   listLiveRanking,
+  listPerformerAppearances,
   subscribePerformerMapUpdates,
   type EventSlotRow,
   type EventVenueRow,
@@ -18,7 +19,7 @@ import {
 import { distanceKm, formatMapDistance, isFreshLiveLocation, isFreshSharedLocation, walkingMinutes } from '../lib/mapLocation'
 import { useLang } from '../../i18n/LangProvider'
 import type { Lang } from '../../i18n'
-import type { Performer } from '../lib/types'
+import type { Performer, PerformerAppearance } from '../lib/types'
 
 type Props = {
   onOpenPerformer: (id: string) => void
@@ -58,6 +59,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null)
   const [selectedPerformer, setSelectedPerformer] = useState<string | null>(null)
   const [viewerPeaks, setViewerPeaks] = useState<Record<string, number>>({})
+  const [privateAppearances, setPrivateAppearances] = useState<Record<string, PerformerAppearance | undefined>>({})
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +73,12 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     ])
     setPerformers(acts)
     setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
+    const privateRows = acts.filter((performer) => performer.is_private_test === true)
+    const appearances = await Promise.all(privateRows.map(async (performer) => [
+      performer.id,
+      (await listPerformerAppearances(performer.id).catch(() => []))[0],
+    ] as const))
+    setPrivateAppearances(Object.fromEntries(appearances))
     setLocationClock(Date.now())
   }, [includePublicTest])
 
@@ -90,6 +98,13 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         setEvent(featured)
         setPerformers(acts)
         setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
+        const privateRows = acts.filter((performer) => performer.is_private_test === true)
+        const appearances = await Promise.all(privateRows.map(async (performer) => [
+          performer.id,
+          (await listPerformerAppearances(performer.id).catch(() => []))[0],
+        ] as const))
+        if (cancelled) return
+        setPrivateAppearances(Object.fromEntries(appearances))
         setVenues(venueRows)
         setSlots(slotRows)
         setSelectedDate(String(slotRows[0]?.date || '2026-10-10').slice(0, 10))
@@ -111,7 +126,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     try {
       unsubscribe = subscribePerformerMapUpdates((row) => {
         if (!row.is_approved) return
-        if (!includePublicTest && /^test performer$/i.test(row.stage_name.trim())) return
+        if (!includePublicTest && row.is_private_test !== true && /^test performer$/i.test(row.stage_name.trim())) return
         setPerformers((current) => {
           const exists = current.some((item) => item.id === row.id)
           return exists ? current.map((item) => item.id === row.id ? row : item) : [...current, row]
@@ -233,6 +248,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const place = venue?.name_ja || performer.city || ''
             const meta = [performer.genre, place].filter(Boolean).join(' · ')
             const viewers = viewerPeaks[performer.id]
+            const appearance = privateAppearances[performer.id]
             const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${point.lat},${point.lng}&travelmode=walking`
             return (
               <section className="pl-venue-sheet pl-live-map-sheet pl-map-stage__sheet" aria-label={t('mapLiveSheet', { name: performer.stage_name })}>
@@ -244,6 +260,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                   <span><Radio size={14} /> {t('liveNow')}</span>
                   {km != null ? <span><Navigation size={14} /> {t('mapFromHere', { distance: formatMapDistance(km) })}</span> : null}
                   {viewers != null ? <span><UserRound size={14} /> {t('mapViewers', { n: viewers })}</span> : null}
+                  {appearance ? <span><CalendarDays size={14} /> {appearance.performance_date} {timeLabel(appearance.start_time)} · {appearance.venue_name}</span> : null}
                 </div>
                 <div className="pl-venue-sheet__actions">
                   <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> {t('eventWatchLive')}</button>
@@ -254,12 +271,14 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             )
           })() : selectedSharedPerformer ? (() => {
             const performer = selectedSharedPerformer
+            const appearance = privateAppearances[performer.id]
             return (
               <section className="pl-venue-sheet pl-map-stage__sheet" aria-label={performer.stage_name}>
                 <div className="pl-venue-sheet__top">
                   <div><p>🎭 PERFORMER</p><h2>{performer.stage_name}</h2><span>{[performer.genre, performer.city].filter(Boolean).join(' · ')}</span></div>
                   {performer.photo_url ? <img src={performer.photo_url} alt="" /> : null}
                 </div>
+                {appearance ? <div className="pl-live-map-sheet__facts"><span><CalendarDays size={14} /> {appearance.performance_date} {timeLabel(appearance.start_time)} · {appearance.venue_name}</span></div> : null}
                 <div className="pl-venue-sheet__actions">
                   <button type="button" className="pl-action pl-action--primary" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> {t('eventProfile')}</button>
                 </div>

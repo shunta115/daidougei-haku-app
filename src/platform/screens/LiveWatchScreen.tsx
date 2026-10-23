@@ -61,7 +61,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
   const [p, setP] = useState<Performer | null>(null)
-  const fever = useLiveFever(performerId, p?.live_started_at, Boolean(p?.is_live))
+  // The public broadcast channel is intentionally disabled for private LIVE;
+  // otherwise a caller who guesses its topic could observe activity without RLS.
+  const fever = useLiveFever(performerId, p?.live_started_at, Boolean(p?.is_live), p?.is_private_test !== true)
   const reaction = fever.hearts.length > 0
   useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)

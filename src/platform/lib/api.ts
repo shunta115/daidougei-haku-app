@@ -43,8 +43,10 @@ export async function reconcileLivePresence() {
   await fetch('/api/livekit/presence', { cache: 'no-store' }).catch(() => undefined)
 }
 
-function isPublicTestPerformer(p: Performer): boolean {
-  return /^test performer$/i.test(p.stage_name.trim())
+function isPrivateTestPerformer(p: Performer): boolean {
+  // The explicit DB flag is authoritative. The name fallback protects older
+  // preview databases until the additive migration has been applied.
+  return p.is_private_test === true || /^test performer$/i.test(p.stage_name.trim())
 }
 
 export async function searchPerformers(query: string, filters: PerformerSearchFilters = {}): Promise<Performer[]> {
@@ -59,7 +61,7 @@ export async function searchPerformers(query: string, filters: PerformerSearchFi
   const country = filters.country?.trim().toLowerCase()
   const japanish = /^(japan|日本|jp|jpn|tokyo|東京)$/i
   return rows.filter((p) => {
-    if (isPublicTestPerformer(p)) return false
+    if (isPrivateTestPerformer(p)) return false
     if (genre && !p.genre.toLowerCase().includes(genre)) return false
     if (country && !(p.country || '').toLowerCase().includes(country) && !(p.city || '').toLowerCase().includes(country)) return false
     if (filters.overseasOnly) {
@@ -78,7 +80,10 @@ export async function getPerformer(id: string, includePublicTest = false): Promi
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('id', id).maybeSingle()
   if (error) throw error
   const row = (data as unknown as Performer) ?? null
-  if (!row || !row.is_approved || (!includePublicTest && isPublicTestPerformer(row))) return null
+  // RLS hides private rows unless the caller owns the performer, is an active
+  // admin, or is allowlisted for its current open session. Keep the legacy
+  // name-only preview filter for databases that do not yet have the flag.
+  if (!row || !row.is_approved || (!includePublicTest && row.is_private_test !== true && isPrivateTestPerformer(row))) return null
   return row
 }
 
@@ -91,7 +96,9 @@ export async function listLivePerformers(): Promise<Performer[]> {
     .eq('is_live', true)
     .order('live_started_at', { ascending: false })
   if (error) throw error
-  return ((data as unknown as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))
+  // RLS exposes a flagged private performer only to an authorized viewer for
+  // its open session. Continue hiding legacy name-only test rows.
+  return ((data as unknown as Performer[]) ?? []).filter((p) => p.is_private_test === true || !isPrivateTestPerformer(p))
 }
 
 export type LiveRankRow = {
@@ -277,7 +284,7 @@ export async function startLive(performerId: string, title?: string) {
 
   const { data: performerRow } = await sb
     .from('performers')
-    .select('is_live, stage_name, live_title')
+    .select('is_live, stage_name, live_title, is_private_test')
     .eq('id', performerId)
     .maybeSingle()
 
@@ -343,13 +350,15 @@ export async function startLive(performerId: string, title?: string) {
   if (inserted.error) throw inserted.error
 
   const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
-  const { error: nerr } = await sb.rpc('notify_followers_live_start', {
-    p_performer_id: performerId,
-    p_stage_name: stageName,
-    p_title: liveTitle,
-  })
-  if (nerr) {
-    console.warn('notify_followers_live_start', nerr.message)
+  if (performerRow?.is_private_test !== true) {
+    const { error: nerr } = await sb.rpc('notify_followers_live_start', {
+      p_performer_id: performerId,
+      p_stage_name: stageName,
+      p_title: liveTitle,
+    })
+    if (nerr) {
+      console.warn('notify_followers_live_start', nerr.message)
+    }
   }
 
   return (inserted.data?.id as string) ?? null
@@ -357,6 +366,16 @@ export async function startLive(performerId: string, title?: string) {
 
 export async function endLive(performerId: string) {
   const sb = requireSupabase()
+  const { data: performer } = await sb.from('performers').select('is_private_test').eq('id', performerId).maybeSingle()
+  if (performer?.is_private_test === true) {
+    const response = await fetch('/api/livekit/presence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+      body: JSON.stringify({ action: 'end-private', performerId }),
+    })
+    if (!response.ok) throw new Error('Private test LIVE could not be ended securely')
+    return
+  }
   const now = new Date().toISOString()
   const { error: uerr } = await sb
     .from('performers')
@@ -1462,7 +1481,11 @@ export async function listApprovedPerformers(includePublicTest = false): Promise
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).eq('is_approved', true).order('stage_name')
   if (error) throw error
-  return ((data as unknown as Performer[]) ?? []).filter((p) => includePublicTest || !isPublicTestPerformer(p))
+  // A flagged private row can only arrive for an RLS-authorized viewer. Keep
+  // the legacy name-only preview hidden from ordinary users.
+  return ((data as unknown as Performer[]) ?? []).filter((p) => (
+    includePublicTest || p.is_private_test === true || !isPrivateTestPerformer(p)
+  ))
 }
 
 function resolveEventVenue(row: EventVenueRow): EventVenueRow {
@@ -1527,7 +1550,7 @@ export async function listApprovedPerformersByIds(ids: string[]): Promise<Perfor
   const sb = requireSupabase()
   const { data, error } = await sb.from('performers').select(PERFORMER_CLIENT_SELECT).in('id', unique).eq('is_approved', true)
   if (error) throw error
-  return ((data as unknown as Performer[]) ?? []).filter((performer) => !isPublicTestPerformer(performer))
+  return ((data as unknown as Performer[]) ?? []).filter((performer) => !isPrivateTestPerformer(performer))
 }
 
 export async function upsertEventSlot(row: Omit<EventSlotRow, 'id'> & { id?: string }) {
