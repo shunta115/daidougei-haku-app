@@ -10,6 +10,7 @@ import { useLang } from '../../i18n/LangProvider'
 import { profileMissingFields, registrationError } from '../lib/onboarding'
 import { prepareProfilePhoto } from '../lib/profilePhoto'
 import type { Performer } from '../lib/types'
+import { parseYouTubeLiveReference } from '../lib/youtubeLive'
 
 const SNS_FIELDS = ['Instagram', 'X', 'TikTok', 'YouTube', 'Web', 'チケット'] as const
 
@@ -19,6 +20,8 @@ function initialFields(performer: Performer) {
     country: performer.country || '日本', city: performer.city,
     support_blurb: performer.support_blurb, awards: performer.awards ?? '',
     appearances: performer.appearances ?? '', video_url: performer.video_url ?? '',
+    youtube_live_url: performer.youtube_live_url ?? '',
+    youtube_live_enabled: performer.youtube_live_enabled ? 'true' : 'false',
     ...Object.fromEntries(SNS_FIELDS.map((key) => [key, performer.sns_json?.find((s) => s.label === key)?.url ?? ''])),
   } as Record<string, string>
 }
@@ -85,11 +88,21 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
       if (invalidSns || (fields.video_url.trim() && !isValidHttpUrl(fields.video_url.trim()))) {
         setError(t('editBadUrl', { label: invalidSns?.label ?? t('editVideo') })); return
       }
+      const youtube = fields.youtube_live_url.trim() ? parseYouTubeLiveReference(fields.youtube_live_url) : null
+      if (fields.youtube_live_url.trim() && !youtube) {
+        setError('YouTube LIVEのURLまたは11文字の動画IDを入力してください。チャンネルURLや再生リストURLは登録できません。'); return
+      }
+      if (fields.youtube_live_enabled === 'true' && !youtube) {
+        setError('HAKU内で表示するにはYouTube LIVE URLを登録してください。'); return
+      }
       await updatePerformer(performer.id, {
         genre: fields.genre.trim(), bio: fields.bio.trim(),
         country: fields.country.trim(), city: fields.city.trim(), support_blurb: fields.support_blurb.trim(),
         awards: fields.awards.trim(), appearances: fields.appearances.trim(), video_url: fields.video_url.trim() || null,
         sns_json,
+        youtube_live_video_id: youtube?.videoId ?? null,
+        youtube_live_url: youtube?.canonicalUrl ?? null,
+        youtube_live_enabled: fields.youtube_live_enabled === 'true',
       })
       await updateOwnDisplayName(displayName)
       await refreshProfile()
@@ -147,6 +160,16 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
         <details className="pl-registration__details">
           <summary>{t('editSns')}</summary>
           {SNS_FIELDS.map((key) => field(key, key === 'Web' ? t('editSite') : key === 'チケット' ? t('editTicketPage') : key, { url: true }))}
+        </details>
+        <details className="pl-registration__details" open={Boolean(fields.youtube_live_url)}>
+          <summary>YouTube LIVE連携</summary>
+          <p className="pl-muted">ストリームキーは不要です。公開または限定公開で、埋め込みを許可したYouTube LIVEのURLを登録してください。</p>
+          {field('youtube_live_url', 'YouTube LIVE URL / 動画ID', { url: false, max: 500 })}
+          <label className="pl-registration__check">
+            <input type="checkbox" checked={fields.youtube_live_enabled === 'true'} onChange={(e) => change('youtube_live_enabled', e.target.checked ? 'true' : 'false')} />
+            <span>HAKU CONNECT LIVEに表示する</span>
+          </label>
+          {fields.youtube_live_url ? <button type="button" className="pl-btn pl-btn--ghost" onClick={() => { change('youtube_live_url', ''); change('youtube_live_enabled', 'false') }}>YouTube LIVE連携を解除</button> : null}
         </details>
         <details className="pl-registration__details">
           <summary>{t('editMore')}</summary>

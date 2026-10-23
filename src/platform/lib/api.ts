@@ -88,7 +88,7 @@ export async function listLivePerformers(): Promise<Performer[]> {
     .from('performers')
     .select(PERFORMER_CLIENT_SELECT)
     .eq('is_approved', true)
-    .eq('is_live', true)
+    .or('is_live.eq.true,youtube_live_enabled.eq.true')
     .order('live_started_at', { ascending: false })
   if (error) throw error
   return ((data as unknown as Performer[]) ?? []).filter((p) => !isPublicTestPerformer(p))

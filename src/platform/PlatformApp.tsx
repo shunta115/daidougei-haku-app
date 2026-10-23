@@ -21,7 +21,7 @@ import { PerformerLiveScreen } from './screens/PerformerLiveScreen'
 import { PerformerHistoryScreen } from './screens/PerformerHistoryScreen'
 import { PerformerEarningsScreen, PerformerScheduleScreen } from './screens/PerformerBusinessScreens'
 import { NotificationsScreen } from './screens/NotificationsScreen'
-import { LiveWatchScreen } from './screens/LiveWatchScreen'
+import { ConnectedLiveWatchScreen } from './screens/ConnectedLiveWatchScreen'
 import { LiveListScreen } from './screens/LiveListScreen'
 import { TipScreen } from './screens/TipScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
@@ -689,7 +689,7 @@ function PlatformShell() {
       )
     } else if (screen === 'live-watch' && performerId) {
       guestBody = (
-        <LiveWatchScreen
+        <ConnectedLiveWatchScreen
           performerId={performerId}
           onBack={() => {
             backOr(() => {
@@ -816,7 +816,7 @@ function PlatformShell() {
 
   if (screen === 'live-watch' && performerId) {
     body = (
-      <LiveWatchScreen
+      <ConnectedLiveWatchScreen
         performerId={performerId}
         allowPublicTest={previewOn && role === 'admin'}
         onBack={() => {

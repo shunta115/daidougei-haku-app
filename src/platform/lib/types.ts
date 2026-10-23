@@ -31,6 +31,9 @@ export type Performer = {
   live_started_at: string | null
   live_title: string | null
   stream_url: string | null
+  youtube_live_video_id?: string | null
+  youtube_live_url?: string | null
+  youtube_live_enabled?: boolean
   share_location: boolean
   lat: number | null
   lng: number | null
