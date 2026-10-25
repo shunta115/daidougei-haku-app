@@ -3,6 +3,7 @@ import { useEffect, useState, type RefObject } from 'react'
 /** Observe actual video pixel aspect; defaults to 9:16 until metadata loads. */
 export function useVideoAspect(videoRef: RefObject<HTMLVideoElement | null>, fallback = 9 / 16) {
   const [ratio, setRatio] = useState(fallback)
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [orientation, setOrientation] = useState<'portrait' | 'landscape' | 'square'>(
     fallback < 1 ? 'portrait' : fallback > 1 ? 'landscape' : 'square',
   )
@@ -17,6 +18,7 @@ export function useVideoAspect(videoRef: RefObject<HTMLVideoElement | null>, fal
       if (!w || !h) return
       const r = w / h
       setRatio(r)
+      setDimensions((previous) => previous.width === w && previous.height === h ? previous : { width: w, height: h })
       setOrientation(r > 1.05 ? 'landscape' : r < 0.95 ? 'portrait' : 'square')
     }
 
@@ -34,5 +36,5 @@ export function useVideoAspect(videoRef: RefObject<HTMLVideoElement | null>, fal
     }
   }, [videoRef])
 
-  return { ratio, orientation, cssAspect: `${ratio}` }
+  return { ratio, orientation, width: dimensions.width, height: dimensions.height, cssAspect: `${ratio}` }
 }

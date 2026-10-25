@@ -18,6 +18,6 @@ describe('HAKU FEVER safety', () => {
     expect(api).toContain(".channel(`live-fever-${performerId}`)")
     expect(api).not.toContain("from('live_reaction_totals')")
     expect(read('src/platform/screens/LiveWatchScreen.tsx')).toContain('onGift={fever.addGift}')
-    expect(read('src/platform/screens/PerformerLiveScreen.tsx')).toContain('onGift={fever.addGift}')
+    expect(read('src/platform/screens/PerformerLiveScreen.tsx')).toContain('fever.addGift(tier)')
   })
 })

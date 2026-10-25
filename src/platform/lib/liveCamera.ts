@@ -31,6 +31,59 @@ export type LiveCameraSnapshot = {
   muted: boolean
 }
 
+export type LiveFrameDiagnostics = {
+  capture: LiveCameraSnapshot
+  published: { width: number | null; height: number | null; aspectRatio: number | null }
+  preview: { width: number | null; height: number | null; aspectRatio: number | null }
+  actualOrientation: TrackVideoOrientation
+  requestedOrientation: LiveVideoOrientation
+  constrained: boolean
+  publicationMismatch: boolean
+}
+
+/** Compare browser capture, LiveKit publication and rendered preview without device IDs. */
+export function liveFrameDiagnostics(
+  track: MediaStreamTrack,
+  publishedTrack: MediaStreamTrack | undefined,
+  preview: Pick<HTMLVideoElement, 'videoWidth' | 'videoHeight'> | null,
+  requestedOrientation: LiveVideoOrientation,
+): LiveFrameDiagnostics {
+  const capture = liveCameraSnapshot(track)
+  const sent = publishedTrack?.getSettings() ?? track.getSettings()
+  const published = {
+    width: sent.width ?? null,
+    height: sent.height ?? null,
+    aspectRatio: sent.aspectRatio ?? (sent.width && sent.height ? sent.width / sent.height : null),
+  }
+  const previewWidth = preview?.videoWidth || null
+  const previewHeight = preview?.videoHeight || null
+  const displayed = {
+    width: previewWidth,
+    height: previewHeight,
+    aspectRatio: previewWidth && previewHeight ? previewWidth / previewHeight : null,
+  }
+  const actualOrientation = trackVideoOrientation({
+    width: displayed.width ?? published.width ?? capture.width ?? undefined,
+    height: displayed.height ?? published.height ?? capture.height ?? undefined,
+    aspectRatio: displayed.aspectRatio ?? published.aspectRatio ?? capture.aspectRatio ?? undefined,
+  })
+  const actualRatio = displayed.aspectRatio ?? published.aspectRatio ?? capture.aspectRatio
+  const requestedRatio = requestedOrientation === 'portrait' ? 9 / 16 : 16 / 9
+  const publicationMismatch = displayed.aspectRatio != null && published.aspectRatio != null
+    && Math.abs(displayed.aspectRatio - published.aspectRatio) > 0.08
+  return {
+    capture,
+    published,
+    preview: displayed,
+    actualOrientation,
+    requestedOrientation,
+    constrained: publicationMismatch || actualOrientation !== 'unknown' && (
+      actualOrientation !== requestedOrientation || (actualRatio != null && Math.abs(actualRatio - requestedRatio) > 0.08)
+    ),
+    publicationMismatch,
+  }
+}
+
 type ZoomRange = { min: number; max: number; step?: number }
 type ZoomCapableTrack = MediaStreamTrack & {
   getCapabilities(): MediaTrackCapabilities & { zoom?: ZoomRange }
