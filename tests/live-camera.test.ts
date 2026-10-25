@@ -30,7 +30,7 @@ import {
 } from '../src/platform/lib/livekit'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
-  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, frameRate: 30, zoom }
+  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, aspectRatio: 3 / 4, frameRate: 30, zoom }
   const track = {
     isMuted: false,
     mediaStreamTrack: {
@@ -131,7 +131,7 @@ describe('LIVE camera switch', () => {
     for (let index = 0; index < 10; index += 1) facing = await switchHostCamera(typedRoom, facing)
     expect(facing).toBe('user')
     expect(track.restartTrack).toHaveBeenCalledTimes(10)
-    expect(track.mediaStreamTrack.getSettings()).toMatchObject({ facingMode: 'user', width: 960, height: 1280 })
+    expect(track.mediaStreamTrack.getSettings()).toMatchObject({ facingMode: 'user', width: 720, height: 1280 })
     expect(room.disconnect).not.toHaveBeenCalled()
   })
 
@@ -157,7 +157,7 @@ describe('LIVE camera switch', () => {
     expect(track.restartTrack).toHaveBeenCalledTimes(2)
   })
 
-  it('reapplies portrait constraints when iPhone rear camera reports landscape settings', async () => {
+  it('requests an uncropped native 9:16 mode when iPhone rear camera reports landscape settings', async () => {
     const { track, typedRoom } = fixture()
     track.restartTrack.mockImplementationOnce(async (options) => {
       const settings = track.mediaStreamTrack.getSettings()
@@ -172,9 +172,9 @@ describe('LIVE camera switch', () => {
 
     await expect(switchHostCamera(typedRoom, 'user')).resolves.toBe('environment')
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 960, max: 960 },
+      width: { ideal: 720, max: 960 },
       height: { ideal: 1280, max: 1280 },
-      aspectRatio: { exact: 3 / 4 },
+      aspectRatio: { exact: 9 / 16 },
       resizeMode: 'none',
     }))
   })
@@ -222,22 +222,56 @@ describe('LIVE camera switch', () => {
     expect(viewer).not.toContain("videoOrient === 'landscape' ? 'cover'")
   })
 
-  it('prefers an uncropped natural portrait camera mode when Safari initially returns landscape', async () => {
+  it('prefers an uncropped native 9:16 camera mode when Safari initially returns landscape', async () => {
     const { track } = fixture()
     const settings = track.mediaStreamTrack.getSettings()
     Object.assign(settings, { width: 1920, height: 1080, aspectRatio: 16 / 9 })
 
     await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
-      width: 960,
+      width: 720,
       height: 1280,
-      aspectRatio: 3 / 4,
+      aspectRatio: 9 / 16,
     })
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 960, max: 960 },
+      width: { ideal: 720, max: 960 },
       height: { ideal: 1280, max: 1280 },
-      aspectRatio: { exact: 3 / 4 },
+      aspectRatio: { exact: 9 / 16 },
       resizeMode: 'none',
     }))
+  })
+
+  it('falls back to an uncropped native 3:4 source when 9:16 is unavailable', async () => {
+    const { track } = fixture()
+    const settings = track.mediaStreamTrack.getSettings()
+    Object.assign(settings, { width: 1920, height: 1080, aspectRatio: 16 / 9 })
+    track.mediaStreamTrack.applyConstraints.mockRejectedValueOnce(new DOMException('', 'OverconstrainedError'))
+    await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
+      width: 960, height: 1280, aspectRatio: 3 / 4,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledTimes(2)
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenLastCalledWith(expect.objectContaining({
+      aspectRatio: { exact: 3 / 4 }, resizeMode: 'none',
+    }))
+  })
+
+  it('keeps an existing full-frame portrait source when crop control is unavailable', async () => {
+    const { track } = fixture()
+    vi.stubGlobal('navigator', { mediaDevices: { getSupportedConstraints: () => ({ resizeMode: false }) } })
+    await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
+      width: 960, height: 1280, aspectRatio: 3 / 4,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalled()
+  })
+
+  it('does not force a cropped portrait source when the browser cannot disable cropping', async () => {
+    const { track } = fixture()
+    const settings = track.mediaStreamTrack.getSettings()
+    Object.assign(settings, { width: 1920, height: 1080, aspectRatio: 16 / 9 })
+    vi.stubGlobal('navigator', { mediaDevices: { getSupportedConstraints: () => ({ resizeMode: false }) } })
+    await expect(ensurePortraitCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack)).resolves.toMatchObject({
+      width: 1920, height: 1080, aspectRatio: 16 / 9,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalled()
   })
 
   it('publishes the actual camera frame without fixed-ratio canvas bars', () => {
@@ -281,6 +315,22 @@ describe('LIVE camera switch', () => {
       publicationMismatch: true,
       constrained: true,
     })
+  })
+
+  it.each([
+    [720, 1280, 'portrait', false],
+    [1280, 720, 'landscape', false],
+    [960, 1280, 'portrait', true],
+  ] as const)('diagnoses %ix%i source and viewer dimensions without stretching', (width, height, requested, constrained) => {
+    const { track } = fixture()
+    const settings = track.mediaStreamTrack.getSettings()
+    Object.assign(settings, { width, height, aspectRatio: width / height })
+    const result = liveFrameDiagnostics(track.mediaStreamTrack as unknown as MediaStreamTrack, undefined, { videoWidth: width, videoHeight: height }, requested)
+    expect(result.capture.aspectRatio).toBe(width / height)
+    expect(result.published.aspectRatio).toBe(width / height)
+    expect(result.preview.aspectRatio).toBe(width / height)
+    expect(result.publicationMismatch).toBe(false)
+    expect(result.constrained).toBe(constrained)
   })
 
   it('classifies rotated iPhones as phones and keeps tablet/desktop layouts separate', () => {

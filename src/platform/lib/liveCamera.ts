@@ -152,31 +152,42 @@ export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrac
   }
 }
 
-/** Prefer the camera sensor's natural portrait 4:3 mode without crop-and-scale. */
+/** Try a native 9:16 mode first, then a native 3:4 mode, never crop-and-scale. */
 export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
   let settings = mediaTrack.getSettings()
-  if (trackVideoOrientation(settings) === 'portrait') return settings
-
   const supported = navigator.mediaDevices?.getSupportedConstraints?.() as
     | (MediaTrackSupportedConstraints & { resizeMode?: boolean })
     | undefined
+  const actualRatio = settings.aspectRatio ?? ((settings.width ?? 0) / (settings.height || 1))
+  if (trackVideoOrientation(settings) === 'portrait' &&
+    (!supported?.resizeMode || actualRatio <= 9 / 16 + 0.02)) return settings
+  if (!supported?.resizeMode) return settings
   const constraints: MediaTrackConstraints = {
     ...mediaTrack.getConstraints(),
-    width: { ideal: PORTRAIT_LIVE_CAPTURE.width, max: PORTRAIT_LIVE_CAPTURE.width },
-    height: { ideal: PORTRAIT_LIVE_CAPTURE.height, max: PORTRAIT_LIVE_CAPTURE.height },
-    aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
+    width: { ideal: 720, max: PORTRAIT_LIVE_CAPTURE.width },
+    height: { ideal: 1280, max: PORTRAIT_LIVE_CAPTURE.height },
+    aspectRatio: { exact: 9 / 16 },
     frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
   }
   if (supported?.resizeMode) {
     ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'none'
   }
 
-  try {
-    await mediaTrack.applyConstraints(constraints)
-    settings = mediaTrack.getSettings()
-  } catch {
-    // The 9:16 output processor can safely contain a landscape source too.
+  if (supported?.resizeMode) {
+    try {
+      await mediaTrack.applyConstraints(constraints)
+      settings = mediaTrack.getSettings()
+      if (trackVideoOrientation(settings) === 'portrait') return settings
+    } catch { /* The sensor may not have an uncropped 9:16 mode. */ }
   }
+  try {
+    await mediaTrack.applyConstraints({
+      ...constraints,
+      width: { ideal: PORTRAIT_LIVE_CAPTURE.width, max: PORTRAIT_LIVE_CAPTURE.width },
+      aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
+    })
+    settings = mediaTrack.getSettings()
+  } catch { /* Keep the original full frame if neither native mode is available. */ }
   return settings
 }
 
