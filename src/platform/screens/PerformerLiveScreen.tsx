@@ -39,6 +39,7 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
+import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
 import type { LiveSchedule } from '../lib/types'
@@ -62,6 +63,11 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
+  const [orientationMode, setOrientationMode] = useState<LiveOrientationMode>(() =>
+    readLiveOrientationMode(liveOrientationStorage()),
+  )
+  const videoOrientation = resolveLiveOrientation(orientationMode, deviceOrient)
+  const [publishedOrientation, setPublishedOrientation] = useState(videoOrientation)
   const [title, setTitle] = useState(performer?.live_title ?? '')
   const [scheduleAt, setScheduleAt] = useState('')
   const [schedules, setSchedules] = useState<LiveSchedule[]>([])
@@ -78,11 +84,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const [cameraSwitchAvailable, setCameraSwitchAvailable] = useState(false)
   const [switchingCamera, setSwitchingCamera] = useState(false)
   const [cameraEnabled, setCameraEnabled] = useState(true)
+  const displayOrientation = phase === 'live' && cameraEnabled ? publishedOrientation : videoOrientation
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true)
   const [mediaBusy, setMediaBusy] = useState(false)
   const [privacyPaused, setPrivacyPaused] = useState(false)
   const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
+  const orientationSwitchRef = useRef(false)
   const [comments, setComments] = useState<LiveComment[]>([])
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
   const [canModerate, setCanModerate] = useState(false)
@@ -95,7 +103,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   )
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
-  const { ratio } = useVideoAspect(videoRef, deviceOrient === 'landscape' ? 16 / 9 : 9 / 16)
+  useVideoAspect(videoRef, videoOrientation === 'landscape' ? 16 / 9 : 9 / 16)
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
   )
@@ -103,7 +111,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const peakRef = useRef(0)
   const reconnectAttempted = useRef(false)
   const locationWriteAtRef = useRef(0)
-  const appliedOrientationRef = useRef(deviceOrient)
+  const appliedOrientationRef = useRef(videoOrientation)
+  const failedAutoOrientationRef = useRef<string | null>(null)
   const hiddenAtRef = useRef<number | null>(null)
   const commentScroll = useLiveCommentScroll(comments.length)
   const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
@@ -186,16 +195,25 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   }, [performer, phase])
 
   useEffect(() => {
-    if (phase !== 'live' || !cameraEnabled || appliedOrientationRef.current === deviceOrient) return
+    if (orientationMode !== 'auto' || phase !== 'live' || !cameraEnabled || appliedOrientationRef.current === videoOrientation || failedAutoOrientationRef.current === videoOrientation || orientationSwitchRef.current || mediaBusy) return
     const room = roomRef.current
     if (!room) return
-    appliedOrientationRef.current = deviceOrient
+    orientationSwitchRef.current = true
     setMediaBusy(true)
-    void restartHostCameraForOrientation(room, cameraFacing, deviceOrient)
-      .then(() => attachLocalPreview(room))
-      .catch(() => setError('画面方向に合わせたカメラ調整に失敗しました。現在の映像で配信を継続します。'))
-      .finally(() => setMediaBusy(false))
-  }, [cameraEnabled, cameraFacing, deviceOrient, phase])
+    void restartHostCameraForOrientation(room, cameraFacing, videoOrientation)
+      .then((restarted) => {
+        if (!restarted) throw new Error('camera_track_unavailable')
+        appliedOrientationRef.current = videoOrientation
+        setPublishedOrientation(videoOrientation)
+        failedAutoOrientationRef.current = null
+        attachLocalPreview(room)
+      })
+      .catch(() => {
+        failedAutoOrientationRef.current = videoOrientation
+        setError('画面方向に合わせたカメラ調整に失敗しました。現在の映像で配信を継続します。手動で向きを選び直してください。')
+      })
+      .finally(() => { orientationSwitchRef.current = false; setMediaBusy(false) })
+  }, [cameraEnabled, cameraFacing, videoOrientation, orientationMode, mediaBusy, phase])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -207,7 +225,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       setCameraEnabled(false)
       setMicrophoneEnabled(false)
       void Promise.allSettled([
-        setHostCameraEnabled(room, false, cameraFacing, deviceOrient),
+        setHostCameraEnabled(room, false, cameraFacing, videoOrientation),
         setHostMicrophoneEnabled(room, false),
       ])
     }
@@ -240,7 +258,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('pagehide', stopTracksForPrivacy)
     }
-  }, [cameraFacing, deviceOrient, performer, phase, refreshProfile])
+  }, [cameraFacing, videoOrientation, performer, phase, refreshProfile])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -314,7 +332,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setCameraEnabled(true)
     setMicrophoneEnabled(true)
     setPrivacyPaused(false)
-    appliedOrientationRef.current = deviceOrient
+    appliedOrientationRef.current = videoOrientation
+    setPublishedOrientation(videoOrientation)
   }
 
   const connectHostRoom = async () => {
@@ -324,7 +343,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
     }
     const { token, url } = await fetchLiveKitToken(performer.id, true)
-    const room = await connectAsHost(url, token)
+    const room = await connectAsHost(url, token, videoOrientation)
     wireRoom(room)
     return room
   }
@@ -502,7 +521,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setSwitchingCamera(true)
     setError(null)
     try {
-      const facing = await switchHostCamera(room, cameraFacing, deviceOrient)
+      const facing = await switchHostCamera(room, cameraFacing, videoOrientation)
       if (roomRef.current === room) {
         setCameraFacing(facing)
         setCameraRecoveryNeeded(false)
@@ -543,10 +562,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setMediaBusy(true)
     setError(null)
     try {
-      await setHostCameraEnabled(room, next, cameraFacing, deviceOrient)
+      await setHostCameraEnabled(room, next, cameraFacing, videoOrientation)
       setCameraEnabled(next)
       if (next) {
         attachLocalPreview(room)
+        appliedOrientationRef.current = videoOrientation
+        failedAutoOrientationRef.current = null
+        setPublishedOrientation(videoOrientation)
         setPrivacyPaused(false)
         setCameraRecoveryNeeded(false)
       }
@@ -563,9 +585,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setMediaBusy(true)
     setError(null)
     try {
-      await setHostCameraEnabled(room, false, cameraFacing, deviceOrient)
-      await setHostCameraEnabled(room, true, cameraFacing, deviceOrient)
+      await setHostCameraEnabled(room, false, cameraFacing, videoOrientation)
+      await setHostCameraEnabled(room, true, cameraFacing, videoOrientation)
       attachLocalPreview(room)
+      appliedOrientationRef.current = videoOrientation
+      failedAutoOrientationRef.current = null
+      setPublishedOrientation(videoOrientation)
       setCameraEnabled(true)
       setCameraRecoveryNeeded(false)
     } catch {
@@ -575,6 +600,68 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       setMediaBusy(false)
     }
   }
+
+  const selectOrientation = async (nextMode: LiveOrientationMode) => {
+    if (nextMode === orientationMode || busy || mediaBusy || switchingCamera || orientationSwitchRef.current) return
+    const previousMode = orientationMode
+    const previousOrientation = videoOrientation
+    const nextOrientation = resolveLiveOrientation(nextMode, deviceOrient)
+    const room = roomRef.current
+    orientationSwitchRef.current = true
+    setMediaBusy(true)
+    setError(null)
+    try {
+      if (room && cameraEnabled && nextOrientation !== previousOrientation) {
+        const restarted = await restartHostCameraForOrientation(room, cameraFacing, nextOrientation)
+        if (!restarted) throw new Error('camera_track_unavailable')
+        attachLocalPreview(room)
+      }
+      appliedOrientationRef.current = nextOrientation
+      setPublishedOrientation(nextOrientation)
+      failedAutoOrientationRef.current = null
+      setOrientationMode(nextMode)
+      writeLiveOrientationMode(liveOrientationStorage(), nextMode)
+    } catch {
+      // Keep the selected mode and the published frame aligned after a failed restart.
+      if (room && cameraEnabled) {
+        try {
+          const restored = await restartHostCameraForOrientation(room, cameraFacing, previousOrientation)
+          if (!restored) throw new Error('camera_track_unavailable')
+          attachLocalPreview(room)
+          setError('配信方向を切り替えられませんでした。元の向きで配信を継続しています。')
+        } catch {
+          setCameraRecoveryNeeded(true)
+          setError('映像の復旧確認が必要です。音声とLIVE接続は維持しています。「カメラを再試行」を押してください。')
+        }
+      } else {
+        setError('配信方向を切り替えられませんでした。もう一度お試しください。')
+      }
+      setOrientationMode(previousMode)
+    } finally {
+      orientationSwitchRef.current = false
+      setMediaBusy(false)
+    }
+  }
+
+  const orientationPicker = (compact = false) => (
+    <fieldset className={`pl-live__orientation-picker${compact ? ' pl-live__orientation-picker--compact' : ''}`}>
+      <legend>配信方向</legend>
+      <div role="group" aria-label="配信方向を選択">
+        {([
+          ['portrait', '縦型', '9:16'],
+          ['landscape', '横型', '16:9'],
+          ['auto', '自動', '端末に追従'],
+        ] as const).map(([value, label, detail]) => (
+          <button key={value} type="button" aria-pressed={orientationMode === value}
+            data-selected={orientationMode === value} disabled={busy || mediaBusy || switchingCamera}
+            onClick={() => void selectOrientation(value)}>
+            <strong>{label}</strong><small>{detail}</small>
+          </button>
+        ))}
+      </div>
+      {!compact ? <p>初回は縦型です。自動は端末を回転したときだけ映像の向きを切り替えます。</p> : null}
+    </fieldset>
+  )
 
   const sendComment = async () => {
     if (!draft.trim() || !liveSessionId) return
@@ -621,8 +708,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       className={`pl-live pl-live--performer${phase === 'live' && isOverlayChrome ? ' pl-live--immersive' : ''}`}
       data-layout={mode}
       data-phase={phase}
+      data-video-orientation={displayOrientation}
       style={{
-        '--video-aspect': String(deviceOrient === 'portrait' ? 9 / 16 : ratio),
+        '--video-aspect': String(displayOrientation === 'portrait' ? 9 / 16 : 16 / 9),
         '--video-fit': 'contain',
       } as CSSProperties}
     >
@@ -649,7 +737,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
-              <span>{deviceOrient === 'landscape' ? '横向き配信中' : '縦向き配信中'}</span>
+              <span>{displayOrientation === 'landscape' ? '横型 16:9' : '縦型 9:16'}で配信中</span>
             </div>
           ) : null}
         </div>
@@ -706,6 +794,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </div>
           <p className="pl-brand">LIVE FOR YOUR FANS</p><h1 className="pl-h1">会場に来られないファンにも届けよう</h1>
           <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
+          {orientationPicker()}
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
           <label>
             <span className="pl-label">タイトル（任意）</span>
@@ -740,6 +829,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
+          {orientationPicker(true)}
           <div className="pl-live__comments-wrap">
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
               {comments.map((c) => (
