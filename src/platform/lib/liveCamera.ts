@@ -128,6 +128,13 @@ export function liveDisplayCrop(sourceRatio: number | null | undefined, stageRat
   return { percent: Math.max(0, Math.min(100, Math.round((1 - visibleFraction) * 100))), axis }
 }
 
+/** Contain follows the actual frame; cover alone may use the requested stage ratio. */
+export function liveStageAspect(requested: LiveVideoOrientation, actualRatio: number | null | undefined, fit: LiveVideoFit) {
+  const requestedRatio = requested === 'landscape' ? 16 / 9 : 9 / 16
+  return fit === 'contain' && actualRatio != null && Number.isFinite(actualRatio) && actualRatio > 0
+    ? actualRatio : requestedRatio
+}
+
 type ZoomRange = { min: number; max: number; step?: number }
 type ZoomCapableTrack = MediaStreamTrack & {
   getCapabilities(): MediaTrackCapabilities & { zoom?: ZoomRange }

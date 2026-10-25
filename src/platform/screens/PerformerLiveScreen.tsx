@@ -39,7 +39,7 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { waitForVideoFrameAdvance } from '../lib/livePortraitProcessor'
-import { canSwitchHostCamera, hostCameraTrack, liveDisplayCrop, liveFrameDiagnostics, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics, type LiveVideoFit } from '../lib/liveCamera'
+import { canSwitchHostCamera, hostCameraTrack, liveDisplayCrop, liveFrameDiagnostics, liveStageAspect, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics, type LiveVideoFit } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
@@ -119,11 +119,17 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const potentialCrop = liveDisplayCrop(actualAspect, requestedAspect, 'cover')
   // Never silently discard most of a 4:3 iPhone frame to fill a 9:16 stage.
   const videoFit = fitPreference ?? (potentialCrop.percent > 25 ? 'contain' : 'cover')
-  const stageAspect = videoFit === 'cover' ? requestedAspect : actualAspect ?? requestedAspect
+  const stageAspect = liveStageAspect(videoOrientation, actualAspect, videoFit)
   const displayCrop = liveDisplayCrop(actualAspect, stageSize.width && stageSize.height ? stageSize.width / stageSize.height : stageAspect, videoFit)
   const displayOrientation = frameDiagnostics?.actualOrientation !== 'unknown'
     ? frameDiagnostics?.actualOrientation ?? videoOrientation
     : videoOrientation
+  const orientationMismatch = cameraEnabled && actualAspect != null && (
+    displayOrientation !== videoOrientation || !!frameDiagnostics?.constrained && !frameDiagnostics.publicationMismatch
+  )
+  const orientationNotice = orientationMismatch
+    ? `選択：${videoOrientation === 'landscape' ? '横型16:9' : '縦型9:16'}／実映像：${displayOrientation === 'landscape' ? '横型' : '縦型'}（${previewAspect.width || frameDiagnostics?.published.width || frameDiagnostics?.capture.width || '—'}×${previewAspect.height || frameDiagnostics?.published.height || frameDiagnostics?.capture.height || '—'}）。端末が希望の向き・比率を返していません。全画角表示は実映像を回転・変形しません。`
+    : null
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
   )
@@ -784,6 +790,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       data-layout={mode}
       data-phase={phase}
       data-video-orientation={displayOrientation}
+      data-requested-orientation={videoOrientation}
       data-video-fit={videoFit}
       style={{
         '--video-aspect': String(stageAspect),
@@ -813,7 +820,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
-              <span>{displayOrientation === 'landscape' ? '横型' : '縦型'}映像</span>
+              <span>選択{videoOrientation === 'landscape' ? '横型' : '縦型'}／実映像{displayOrientation === 'landscape' ? '横型' : '縦型'}</span>
             </div>
           ) : null}
         </div>
@@ -823,9 +830,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
 
       {phase === 'live' ? (
         <div className="pl-live__panel pl-live__panel--live">
+          {orientationNotice ? <p className="pl-live__capture-notice" role="status">{orientationNotice}</p> : null}
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
           <div className="pl-live__studio-summary" aria-live="polite"><strong>配信スタジオ</strong><span>👁 {viewers}　♥ {fever.likes}　🎁 {giftCount}</span></div>
-          {frameDiagnostics?.constrained && cameraEnabled ? <p className="pl-live__capture-notice" role="status">{frameDiagnostics.publicationMismatch ? '送信映像とプレビューの比率が異なります。視聴端末で映像を確認してください。' : '端末のカメラは希望の比率を出せません。全画角のまま配信中です。'}</p> : null}
+          {frameDiagnostics?.publicationMismatch && cameraEnabled ? <p className="pl-live__capture-notice" role="status">送信映像とプレビューの比率が異なります。視聴端末で映像を確認してください。</p> : null}
           <div className="pl-live__studio-tools">
             <div className="pl-live__media-controls" aria-label="配信メディア操作">
             <button
@@ -901,6 +909,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           {lastResult ? <div className="pl-live__last-result" role="status"><strong>今回この画面で確認した反応</strong><span>最大視聴 {lastResult.viewers}人　♥ {lastResult.likes}　🎁 {lastResult.gifts}</span></div> : null}
           {orientationPicker()}
           {fitPicker()}
+          {previewState === 'ready' && orientationNotice ? <p className="pl-live__capture-notice" role="status">{orientationNotice}</p> : null}
           {previewState === 'ready' ? <p className="pl-live__capture-notice">配信前に全画面／全画角を切り替え、顔・全身・道具の切れ方を確認してください。表示だけの変更で、送信映像は切り取りません。{potentialCrop.percent > 25 && fitPreference === null ? `この映像を全画面にすると約${potentialCrop.percent}%が表示外になるため、最初は全画角で表示しています。` : ''}</p> : null}
           {previewState === 'ready' ? cameraDiagnostics() : null}
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>

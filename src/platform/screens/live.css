@@ -569,7 +569,7 @@
   border-radius: 0 0 20px 20px;
 }
 
-.pl-live--performer[data-layout='phone-portrait'][data-video-orientation='landscape'] .pl-live__stage {
+.pl-live--performer[data-layout='phone-portrait'][data-video-fit='cover'][data-requested-orientation='landscape'] .pl-live__stage {
   width: 100%;
   max-height: none;
   aspect-ratio: 16 / 9;

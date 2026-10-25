@@ -9,6 +9,7 @@ import {
   liveCameraSnapshot,
   liveDisplayCrop,
   liveFrameDiagnostics,
+  liveStageAspect,
   naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
@@ -24,6 +25,7 @@ import {
   waitForVideoFrameAdvance,
 } from '../src/platform/lib/livePortraitProcessor'
 import { computeLiveLayoutMode } from '../src/platform/lib/useLiveLayout'
+import { resolveLiveOrientation } from '../src/platform/lib/liveOrientationPreference'
 import {
   restartHostCameraForOrientation,
   liveMediaDeviceErrorMessage,
@@ -229,6 +231,35 @@ describe('LIVE camera switch', () => {
     expect(liveDisplayCrop(4 / 3, 9 / 16, 'cover')).toEqual({ percent: 58, axis: 'horizontal' })
     expect(liveDisplayCrop(4 / 3, 16 / 9, 'cover')).toEqual({ percent: 25, axis: 'vertical' })
     expect(liveDisplayCrop(4 / 3, 9 / 16, 'contain')).toEqual({ percent: 0, axis: null })
+  })
+
+  it.each([
+    ['portrait', 9 / 16, 'cover', 9 / 16],
+    ['portrait', 9 / 16, 'contain', 9 / 16],
+    ['landscape', 9 / 16, 'cover', 16 / 9],
+    ['landscape', 9 / 16, 'contain', 9 / 16],
+    ['portrait', 16 / 9, 'cover', 9 / 16],
+    ['portrait', 16 / 9, 'contain', 16 / 9],
+  ] as const)('uses the actual frame for contain: requested %s, actual %s, fit %s', (requested, actual, fit, expected) => {
+    expect(liveStageAspect(requested, actual, fit)).toBe(expected)
+  })
+
+  it('keeps contain unrotated and distinguishes requested from actual orientation in the studio', () => {
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    expect(screen).toContain('liveStageAspect(videoOrientation, actualAspect, videoFit)')
+    expect(screen).toContain('選択：')
+    expect(screen).toContain('実映像：')
+    expect(css).toContain("[data-video-fit='cover'][data-requested-orientation='landscape']")
+    expect(css).not.toMatch(/\.pl-live__video\s*\{[^}]*rotate\(/)
+    expect(css).toContain('object-fit: var(--video-fit, contain)')
+  })
+
+  it.each(['portrait', 'landscape'] as const)('keeps auto %s cover and contain tied to the device request but only contains the actual frame', (deviceOrientation) => {
+    const requested = resolveLiveOrientation('auto', deviceOrientation)
+    const actual = deviceOrientation === 'portrait' ? 16 / 9 : 9 / 16
+    expect(liveStageAspect(requested, actual, 'cover')).toBe(deviceOrientation === 'portrait' ? 9 / 16 : 16 / 9)
+    expect(liveStageAspect(requested, actual, 'contain')).toBe(actual)
   })
 
   it('exposes only safe capability ranges, not camera identifiers', () => {
