@@ -25,7 +25,6 @@ import {
   PortraitContainProcessor,
   type LiveVideoOrientation,
 } from './livePortraitProcessor'
-import { detectLiveVideoOrientation } from './liveOrientation'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -158,7 +157,7 @@ export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
   return json as { token: string; url: string; room: string }
 }
 
-function hostRoomOptions() {
+function hostRoomOptions(orientation: LiveVideoOrientation) {
   const mobile = isMobileUa()
   return {
     // SFU selects layers per subscriber; unused layers pause → CPU/battery save on host.
@@ -167,7 +166,7 @@ function hostRoomOptions() {
     stopLocalTrackOnUnpublish: true,
     disconnectOnPageLeave: true,
     videoCaptureDefaults: {
-      resolution: PORTRAIT_LIVE_CAPTURE,
+      resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user' as const,
     },
     audioCaptureDefaults: {
@@ -229,12 +228,12 @@ async function installVideoProcessor(cameraTrack: ReturnType<typeof hostCameraTr
   }
 }
 
-export async function connectAsHost(url: string, token: string) {
-  const room = new Room(hostRoomOptions())
+export async function connectAsHost(url: string, token: string, orientation: LiveVideoOrientation = 'portrait') {
+  const room = new Room(hostRoomOptions(orientation))
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
-    const landscape = detectLiveVideoOrientation() === 'landscape'
+    const landscape = orientation === 'landscape'
     await room.localParticipant.setCameraEnabled(true, {
       resolution: landscape
         ? LANDSCAPE_LIVE_CAPTURE

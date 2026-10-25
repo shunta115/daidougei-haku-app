@@ -244,6 +244,38 @@
 .pl-live__setup-steps li { padding: 10px 12px; border: 1px solid rgba(139,195,255,.18); border-radius: 12px; color: rgba(235,244,255,.7); background: rgba(57,140,255,.06); font-size: 13px; }
 .pl-live__setup-steps li[data-done='true'] { color: #bff1d7; border-color: rgba(104,220,163,.32); }
 
+.pl-live__orientation-picker {
+  min-width: 0;
+  margin: 2px 0 8px;
+  padding: 12px;
+  border: 1px solid rgba(43, 255, 221, .25);
+  border-radius: 16px;
+  background: rgba(8, 16, 24, .68);
+}
+.pl-live__orientation-picker legend { padding: 0 5px; color: #dffefa; font-size: 13px; font-weight: 800; }
+.pl-live__orientation-picker > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.pl-live__orientation-picker button {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 4px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, .08);
+  cursor: pointer;
+}
+.pl-live__orientation-picker button[data-selected='true'] { border-color: #72f7df; color: #071514; background: #72f7df; }
+.pl-live__orientation-picker button:disabled { opacity: .6; cursor: wait; }
+.pl-live__orientation-picker button strong { font-size: 13px; }
+.pl-live__orientation-picker button small { font-size: 9px; }
+.pl-live__orientation-picker > p { margin: 8px 2px 0; color: rgba(235, 244, 255, .7); font-size: 11px; }
+.pl-live__orientation-picker--compact { margin: 0; padding: 7px; background: rgba(8, 9, 12, .6); backdrop-filter: blur(14px); }
+.pl-live__orientation-picker--compact legend { font-size: 10px; }
+.pl-live__orientation-picker--compact button { min-height: 44px; }
+
 .pl-live__location-consent {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -522,6 +554,13 @@
   border-radius: 0 0 20px 20px;
 }
 
+.pl-live--performer[data-layout='phone-portrait'][data-video-orientation='landscape'] .pl-live__stage {
+  width: 100%;
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+}
+
 .pl-live[data-layout='phone-portrait'] .pl-live__comments {
   max-height: min(18dvh, 132px);
 }
@@ -612,6 +651,10 @@
   background: rgba(8, 9, 12, 0.55);
   backdrop-filter: blur(14px);
   transition: opacity 0.28s ease;
+}
+
+.pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__orientation-picker--compact {
+  max-width: min(58vw, 520px);
 }
 
 .pl-live[data-layout='phone-landscape'] .pl-live__panel[data-dim='true'] {
