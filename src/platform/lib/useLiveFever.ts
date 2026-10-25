@@ -15,7 +15,12 @@ export const LIVE_FEVER_CONFIG = {
 
 export type LiveFeverHeart = { id: string; expiresAt: number }
 
-export function useLiveFever(performerId: string | undefined, liveStartedAt: string | null | undefined, active: boolean) {
+export function useLiveFever(
+  performerId: string | undefined,
+  liveStartedAt: string | null | undefined,
+  active: boolean,
+  realtimeEnabled = true,
+) {
   const [level, setLevel] = useState(0)
   const [likes, setLikes] = useState(0)
   const [hearts, setHearts] = useState<LiveFeverHeart[]>([])
@@ -26,7 +31,7 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
     setLevel(0)
     setLikes(0)
     setHearts([])
-    if (!performerId || !liveStartedAt || !active) {
+    if (!performerId || !liveStartedAt || !active || !realtimeEnabled) {
       sendLikeRef.current = () => {}
       addGiftRef.current = () => {}
       return
@@ -103,7 +108,7 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
       window.clearInterval(decayTimer)
       subscription.unsubscribe()
     }
-  }, [performerId, liveStartedAt, active])
+  }, [performerId, liveStartedAt, active, realtimeEnabled])
 
   return {
     level,

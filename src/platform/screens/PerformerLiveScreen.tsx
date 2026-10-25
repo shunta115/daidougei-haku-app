@@ -115,7 +115,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const failedAutoOrientationRef = useRef<string | null>(null)
   const hiddenAtRef = useRef<number | null>(null)
   const commentScroll = useLiveCommentScroll(comments.length)
-  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
+  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live', performer?.is_private_test !== true)
 
   useEffect(() => {
     if (!liveReservationsEnabled || !performerId || phase !== 'ready') {
