@@ -2,6 +2,7 @@ import { Track, type LocalVideoTrack, type Room, type VideoCaptureOptions } from
 import type { LiveVideoOrientation } from './liveOrientation'
 
 export type CameraFacing = 'user' | 'environment'
+export type LiveVideoFit = 'cover' | 'contain'
 
 export const PORTRAIT_LIVE_CAPTURE = {
   width: 960,
@@ -29,10 +30,21 @@ export type LiveCameraSnapshot = {
   readyState: MediaStreamTrackState
   enabled: boolean
   muted: boolean
+  resizeMode: string | null
+}
+
+type NumericRange = { min: number; max: number }
+export type LiveCameraCapabilities = {
+  width: NumericRange | null
+  height: NumericRange | null
+  aspectRatio: NumericRange | null
+  resizeMode: string[]
+  zoom: NumericRange | null
 }
 
 export type LiveFrameDiagnostics = {
   capture: LiveCameraSnapshot
+  capabilities: LiveCameraCapabilities
   published: { width: number | null; height: number | null; aspectRatio: number | null }
   preview: { width: number | null; height: number | null; aspectRatio: number | null }
   actualOrientation: TrackVideoOrientation
@@ -73,6 +85,7 @@ export function liveFrameDiagnostics(
     && Math.abs(displayed.aspectRatio - published.aspectRatio) > 0.08
   return {
     capture,
+    capabilities: liveCameraCapabilities(track),
     published,
     preview: displayed,
     actualOrientation,
@@ -82,6 +95,37 @@ export function liveFrameDiagnostics(
     ),
     publicationMismatch,
   }
+}
+
+/** Capability ranges are not a list of discrete camera modes. Never infer that 9:16 is native solely from the range. */
+export function liveCameraCapabilities(mediaTrack: MediaStreamTrack): LiveCameraCapabilities {
+  const empty: LiveCameraCapabilities = { width: null, height: null, aspectRatio: null, resizeMode: [], zoom: null }
+  if (typeof mediaTrack.getCapabilities !== 'function') return empty
+  try {
+    const values = mediaTrack.getCapabilities() as MediaTrackCapabilities & { zoom?: NumericRange; resizeMode?: string[] }
+    const range = (value: { min?: number; max?: number } | undefined): NumericRange | null =>
+      value && typeof value.min === 'number' && typeof value.max === 'number' && Number.isFinite(value.min) && Number.isFinite(value.max)
+        ? { min: value.min, max: value.max } : null
+    return {
+      width: range(values.width),
+      height: range(values.height),
+      aspectRatio: range(values.aspectRatio),
+      resizeMode: Array.isArray(values.resizeMode) ? values.resizeMode.filter((mode) => mode === 'none' || mode === 'crop-and-scale') : [],
+      zoom: range(values.zoom),
+    }
+  } catch {
+    return empty
+  }
+}
+
+/** Percentage of the source frame hidden by a display-only cover fit. */
+export function liveDisplayCrop(sourceRatio: number | null | undefined, stageRatio: number | null | undefined, fit: LiveVideoFit) {
+  if (fit === 'contain' || !sourceRatio || !stageRatio || sourceRatio <= 0 || stageRatio <= 0) {
+    return { percent: 0, axis: null as 'horizontal' | 'vertical' | null }
+  }
+  const axis = sourceRatio > stageRatio ? 'horizontal' : 'vertical'
+  const visibleFraction = axis === 'horizontal' ? stageRatio / sourceRatio : sourceRatio / stageRatio
+  return { percent: Math.max(0, Math.min(100, Math.round((1 - visibleFraction) * 100))), axis }
 }
 
 type ZoomRange = { min: number; max: number; step?: number }
@@ -100,7 +144,7 @@ export function trackVideoOrientation(settings: MediaTrackSettings): TrackVideoO
 
 /** Safe, non-identifying camera diagnostics for support and switch validation. */
 export function liveCameraSnapshot(mediaTrack: MediaStreamTrack): LiveCameraSnapshot {
-  const settings = mediaTrack.getSettings() as MediaTrackSettings & { zoom?: number }
+  const settings = mediaTrack.getSettings() as MediaTrackSettings & { zoom?: number; resizeMode?: string }
   return {
     facingMode: settings.facingMode ?? null,
     width: settings.width ?? null,
@@ -113,6 +157,7 @@ export function liveCameraSnapshot(mediaTrack: MediaStreamTrack): LiveCameraSnap
     readyState: mediaTrack.readyState,
     enabled: mediaTrack.enabled,
     muted: mediaTrack.muted,
+    resizeMode: settings.resizeMode ?? null,
   }
 }
 

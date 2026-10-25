@@ -39,7 +39,7 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { waitForVideoFrameAdvance } from '../lib/livePortraitProcessor'
-import { canSwitchHostCamera, hostCameraTrack, liveFrameDiagnostics, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics } from '../lib/liveCamera'
+import { canSwitchHostCamera, hostCameraTrack, liveDisplayCrop, liveFrameDiagnostics, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics, type LiveVideoFit } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
@@ -85,6 +85,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const [switchingCamera, setSwitchingCamera] = useState(false)
   const [cameraEnabled, setCameraEnabled] = useState(true)
   const [frameDiagnostics, setFrameDiagnostics] = useState<LiveFrameDiagnostics | null>(null)
+  const [fitPreference, setFitPreference] = useState<LiveVideoFit | null>(null)
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
   const [diagnosticVersion, setDiagnosticVersion] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
@@ -107,12 +109,18 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
   )
   const videoRef = useRef<HTMLVideoElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const roomRef = useRef<Room | null>(null)
   const previewAspect = useVideoAspect(videoRef, videoOrientation === 'landscape' ? 16 / 9 : 9 / 16)
   const actualAspect = previewState !== 'ended' && previewAspect.width && previewAspect.height
     ? previewAspect.ratio
     : frameDiagnostics?.published.aspectRatio ?? frameDiagnostics?.capture.aspectRatio
-  const stageAspect = actualAspect ?? (videoOrientation === 'landscape' ? 16 / 9 : 9 / 16)
+  const requestedAspect = videoOrientation === 'landscape' ? 16 / 9 : 9 / 16
+  const potentialCrop = liveDisplayCrop(actualAspect, requestedAspect, 'cover')
+  // Never silently discard most of a 4:3 iPhone frame to fill a 9:16 stage.
+  const videoFit = fitPreference ?? (potentialCrop.percent > 25 ? 'contain' : 'cover')
+  const stageAspect = videoFit === 'cover' ? requestedAspect : actualAspect ?? requestedAspect
+  const displayCrop = liveDisplayCrop(actualAspect, stageSize.width && stageSize.height ? stageSize.width / stageSize.height : stageAspect, videoFit)
   const displayOrientation = frameDiagnostics?.actualOrientation !== 'unknown'
     ? frameDiagnostics?.actualOrientation ?? videoOrientation
     : videoOrientation
@@ -135,6 +143,17 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     const processed = camera.getProcessor()?.processedTrack
     setFrameDiagnostics(liveFrameDiagnostics(camera.mediaStreamTrack, processed, videoRef.current, videoOrientation))
   }, [cameraEnabled, cameraFacing, diagnosticVersion, previewAspect.width, previewAspect.height, videoOrientation])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const update = () => setStageSize({ width: stage.clientWidth, height: stage.clientHeight })
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [phase, videoFit, videoOrientation])
 
   useEffect(() => {
     if (!liveReservationsEnabled || !performerId || phase !== 'ready') {
@@ -688,6 +707,37 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     </fieldset>
   )
 
+  const fitPicker = () => (
+    <div className="pl-live__fit-picker" role="group" aria-label="プレビューの表示方法">
+      <span>プレビュー表示</span>
+      <button type="button" aria-pressed={videoFit === 'cover'} onClick={() => setFitPreference('cover')}>全画面（cover）</button>
+      <button type="button" aria-pressed={videoFit === 'contain'} onClick={() => setFitPreference('contain')}>全画角（contain）</button>
+    </div>
+  )
+
+  const cameraDiagnostics = () => {
+    const capability = frameDiagnostics?.capabilities
+    const range = (value: { min: number; max: number } | null | undefined) => value ? `${value.min}–${value.max}` : '不明'
+    return <div className="pl-live__diagnostics" role="status">
+      <p>取得 {frameDiagnostics?.capture.width ?? '—'}×{frameDiagnostics?.capture.height ?? '—'} / 送信 {frameDiagnostics?.published.width ?? '—'}×{frameDiagnostics?.published.height ?? '—'} / 表示 {previewAspect.width || '—'}×{previewAspect.height || '—'} / 画面枠 {stageSize.width || '—'}×{stageSize.height || '—'} / 実比率 {frameDiagnostics?.capture.aspectRatio?.toFixed(2) ?? '—'}</p>
+      <p>カメラ {frameDiagnostics?.capture.facingMode === 'environment' ? '背面' : '前面'} / ズーム {frameDiagnostics?.capture.zoom?.toFixed(1) ?? '不明'}（対応 {range(capability?.zoom)}） / 取得方式 {frameDiagnostics?.capture.resizeMode ?? '不明'} / 対応範囲 幅 {range(capability?.width)}・高さ {range(capability?.height)}・比率 {range(capability?.aspectRatio)} / resizeMode {capability?.resizeMode.join(', ') || '不明'}</p>
+      <p>対応範囲は個別の撮影モードを保証しません。実際の映像は上の取得・送信・表示寸法で確認してください。</p>
+    </div>
+  }
+
+  const commentPane = () => <div className="pl-live__comments-wrap">
+    <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
+      {comments.map((c) => <div key={c.id} className="pl-live__comment">
+        <span><strong>{c.display_name}</strong> {c.body}</span>
+        {canModerate ? <span className="pl-live__comment-actions">
+          {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
+          <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
+        </span> : null}
+      </div>)}
+    </div>
+    {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
+  </div>
+
   const sendComment = async () => {
     if (!draft.trim() || !liveSessionId) return
     try {
@@ -734,12 +784,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       data-layout={mode}
       data-phase={phase}
       data-video-orientation={displayOrientation}
+      data-video-fit={videoFit}
       style={{
         '--video-aspect': String(stageAspect),
-        '--video-fit': 'contain',
+        '--video-fit': videoFit,
       } as CSSProperties}
     >
-      <div className="pl-live__stage">
+      <div ref={stageRef} className="pl-live__stage">
         <video ref={videoRef} className="pl-live__video" style={{ transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none' }} playsInline muted autoPlay />
         {phase === 'live' && !cameraEnabled ? (
           <div className="pl-live__media-paused" role="status">
@@ -766,6 +817,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             </div>
           ) : null}
         </div>
+        {cameraEnabled && actualAspect ? <span className="pl-live__fit-badge">{videoFit === 'cover' ? `画面のみ拡大・${displayCrop.axis === 'horizontal' ? '左右' : '上下'}約${displayCrop.percent}%を表示外` : '全画角を表示・送信映像はそのまま'}</span> : null}
+        {phase === 'live' && mode === 'phone-portrait' ? commentPane() : null}
       </div>
 
       {phase === 'live' ? (
@@ -815,27 +868,15 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </div>
           {settingsOpen ? <div className="pl-live__studio-settings">
             {orientationPicker(true)}
-            <p className="pl-live__diagnostics">取得 {frameDiagnostics?.capture.width ?? '—'}×{frameDiagnostics?.capture.height ?? '—'} / 送信 {frameDiagnostics?.published.width ?? '—'}×{frameDiagnostics?.published.height ?? '—'} / 表示 {previewAspect.width || '—'}×{previewAspect.height || '—'} / 比率 {frameDiagnostics?.capture.aspectRatio?.toFixed(2) ?? '—'} / カメラ {frameDiagnostics?.capture.facingMode === 'environment' ? '背面' : '前面'} / ズーム {frameDiagnostics?.capture.zoom?.toFixed(1) ?? '—'}</p>
+            {fitPicker()}
+            {cameraDiagnostics()}
             <div className="pl-live__prefs">
               <label><input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />MAP位置共有</label>
               <label><input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />ギフト音</label>
               <label><input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} />演出を抑える</label>
             </div>
           </div> : null}
-          <div className="pl-live__comments-wrap">
-            <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
-              {comments.map((c) => (
-                <div key={c.id} className="pl-live__comment">
-                  <span><strong>{c.display_name}</strong> {c.body}</span>
-                  {canModerate ? <span className="pl-live__comment-actions">
-                    {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
-                    <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
-                  </span> : null}
-                </div>
-              ))}
-            </div>
-            {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
-          </div>
+          {mode !== 'phone-portrait' ? commentPane() : null}
           <div className="pl-live__composer">
             <input className="pl-input" style={{ marginBottom: 0 }} placeholder="コメント" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void sendComment() }} />
             <button type="button" className="pl-btn" onClick={() => void sendComment()}>送信</button>
@@ -859,6 +900,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
           {lastResult ? <div className="pl-live__last-result" role="status"><strong>今回この画面で確認した反応</strong><span>最大視聴 {lastResult.viewers}人　♥ {lastResult.likes}　🎁 {lastResult.gifts}</span></div> : null}
           {orientationPicker()}
+          {fitPicker()}
+          {previewState === 'ready' ? <p className="pl-live__capture-notice">配信前に全画面／全画角を切り替え、顔・全身・道具の切れ方を確認してください。表示だけの変更で、送信映像は切り取りません。{potentialCrop.percent > 25 && fitPreference === null ? `この映像を全画面にすると約${potentialCrop.percent}%が表示外になるため、最初は全画角で表示しています。` : ''}</p> : null}
+          {previewState === 'ready' ? cameraDiagnostics() : null}
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
           <label>
             <span className="pl-label">タイトル（任意）</span>

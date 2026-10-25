@@ -5,7 +5,9 @@ import {
   canSwitchHostCamera,
   ensurePortraitCameraTrack,
   LANDSCAPE_LIVE_CAPTURE,
+  liveCameraCapabilities,
   liveCameraSnapshot,
+  liveDisplayCrop,
   liveFrameDiagnostics,
   naturalZoomForRange,
   PORTRAIT_LIVE_CAPTURE,
@@ -198,6 +200,7 @@ describe('LIVE camera switch', () => {
       readyState: 'live',
       enabled: true,
       muted: false,
+      resizeMode: null,
     })
     expect(snapshot).not.toHaveProperty('deviceId')
   })
@@ -209,17 +212,36 @@ describe('LIVE camera switch', () => {
     expect(liveMediaDeviceErrorMessage(new Error('unknown'))).toContain('端末の状態')
   })
 
-  it('locks the phone portrait stage without a crop-to-fill fallback', () => {
+  it('offers display-only cover and contain with a crop warning before broadcast', () => {
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toContain(".pl-live--performer[data-layout='phone-portrait'][data-phase='live'] .pl-live__stage")
-    expect(css).toContain('aspect-ratio: var(--video-aspect);')
-    expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[^}]*object-fit: cover;/)
-    expect(screen).toContain("'--video-fit': 'contain'")
+    expect(css).toContain('height: min(72svh, calc(100vw / var(--video-aspect)));')
+    expect(screen).toContain("'--video-fit': videoFit")
+    expect(screen).toContain('配信前に全画面／全画角を切り替え')
+    expect(screen).toContain('送信映像は切り取りません')
     expect(viewer).toContain("'--video-fit': objectFit")
-    expect(screen).not.toContain("? 'cover' : 'contain'")
     expect(viewer).not.toContain("videoOrient === 'landscape' ? 'cover'")
+  })
+
+  it('reports display-only crop correctly for 4:3 camera on portrait and landscape stages', () => {
+    expect(liveDisplayCrop(4 / 3, 9 / 16, 'cover')).toEqual({ percent: 58, axis: 'horizontal' })
+    expect(liveDisplayCrop(4 / 3, 16 / 9, 'cover')).toEqual({ percent: 25, axis: 'vertical' })
+    expect(liveDisplayCrop(4 / 3, 9 / 16, 'contain')).toEqual({ percent: 0, axis: null })
+  })
+
+  it('exposes only safe capability ranges, not camera identifiers', () => {
+    const { track } = fixture()
+    track.mediaStreamTrack.getCapabilities.mockReturnValue({
+      width: { min: 320, max: 1920 }, height: { min: 240, max: 1280 },
+      aspectRatio: { min: 9 / 16, max: 16 / 9 }, resizeMode: ['none', 'crop-and-scale'],
+      deviceId: 'secret-camera-id',
+    } as never)
+    const capabilities = liveCameraCapabilities(track.mediaStreamTrack as unknown as MediaStreamTrack)
+    expect(capabilities.aspectRatio).toEqual({ min: 9 / 16, max: 16 / 9 })
+    expect(capabilities.resizeMode).toEqual(['none', 'crop-and-scale'])
+    expect(JSON.stringify(capabilities)).not.toContain('secret-camera-id')
   })
 
   it('prefers an uncropped native 9:16 camera mode when Safari initially returns landscape', async () => {
