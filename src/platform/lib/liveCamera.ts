@@ -42,8 +42,17 @@ export type LiveCameraCapabilities = {
   zoom: NumericRange | null
 }
 
+export type LiveCameraRequest = {
+  facingMode: string | null
+  width: number | null
+  height: number | null
+  aspectRatio: number | null
+  resizeMode: string | null
+}
+
 export type LiveFrameDiagnostics = {
   capture: LiveCameraSnapshot
+  request: LiveCameraRequest
   capabilities: LiveCameraCapabilities
   published: { width: number | null; height: number | null; aspectRatio: number | null }
   preview: { width: number | null; height: number | null; aspectRatio: number | null }
@@ -85,6 +94,7 @@ export function liveFrameDiagnostics(
     && Math.abs(displayed.aspectRatio - published.aspectRatio) > 0.08
   return {
     capture,
+    request: liveCameraRequest(track),
     capabilities: liveCameraCapabilities(track),
     published,
     preview: displayed,
@@ -94,6 +104,36 @@ export function liveFrameDiagnostics(
       actualOrientation !== requestedOrientation || (actualRatio != null && Math.abs(actualRatio - requestedRatio) > 0.08)
     ),
     publicationMismatch,
+  }
+}
+
+/** Only expose non-identifying constraints; deviceId and groupId stay private. */
+export function liveCameraRequest(mediaTrack: MediaStreamTrack): LiveCameraRequest {
+  const values = mediaTrack.getConstraints() as MediaTrackConstraints & { resizeMode?: unknown }
+  const number = (value: unknown): number | null => {
+    if (typeof value === 'number') return value
+    if (value && typeof value === 'object') {
+      const entry = value as { exact?: unknown; ideal?: unknown }
+      const selected = entry.exact ?? entry.ideal
+      return typeof selected === 'number' ? selected : null
+    }
+    return null
+  }
+  const string = (value: unknown): string | null => {
+    if (typeof value === 'string') return value
+    if (value && typeof value === 'object') {
+      const entry = value as { exact?: unknown; ideal?: unknown }
+      const selected = entry.exact ?? entry.ideal
+      return typeof selected === 'string' ? selected : null
+    }
+    return null
+  }
+  return {
+    facingMode: string(values.facingMode),
+    width: number(values.width),
+    height: number(values.height),
+    aspectRatio: number(values.aspectRatio),
+    resizeMode: string(values.resizeMode),
   }
 }
 
@@ -133,6 +173,14 @@ export function liveStageAspect(requested: LiveVideoOrientation, actualRatio: nu
   const requestedRatio = requested === 'landscape' ? 16 / 9 : 9 / 16
   return fit === 'contain' && actualRatio != null && Number.isFinite(actualRatio) && actualRatio > 0
     ? actualRatio : requestedRatio
+}
+
+export function liveAspectLabel(ratio: number | null | undefined) {
+  if (ratio == null || !Number.isFinite(ratio) || ratio <= 0) return '不明'
+  for (const [label, expected] of [['9:16', 9 / 16], ['3:4', 3 / 4], ['4:3', 4 / 3], ['16:9', 16 / 9]] as const) {
+    if (Math.abs(ratio - expected) <= 0.02) return label
+  }
+  return `${ratio.toFixed(2)}:1`
 }
 
 type ZoomRange = { min: number; max: number; step?: number }
@@ -204,43 +252,51 @@ export async function preferNaturalCameraFieldOfView(mediaTrack: MediaStreamTrac
   }
 }
 
-/** Try a native 9:16 mode first, then a native 3:4 mode, never crop-and-scale. */
-export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
-  let settings = mediaTrack.getSettings()
+/** Probe uncropped camera modes on the current LiveKit source, without replacing the publication. */
+export async function ensureNativeCameraTrack(mediaTrack: MediaStreamTrack, orientation: LiveVideoOrientation) {
+  const originalConstraints = mediaTrack.getConstraints()
+  let settings: MediaTrackSettings & { resizeMode?: string } = mediaTrack.getSettings()
   const supported = navigator.mediaDevices?.getSupportedConstraints?.() as
     | (MediaTrackSupportedConstraints & { resizeMode?: boolean })
     | undefined
-  const actualRatio = settings.aspectRatio ?? ((settings.width ?? 0) / (settings.height || 1))
-  if (trackVideoOrientation(settings) === 'portrait' &&
-    (!supported?.resizeMode || actualRatio <= 9 / 16 + 0.02)) return settings
+  const ratio = settings.aspectRatio ?? ((settings.width ?? 0) / (settings.height || 1))
+  const targetRatio = orientation === 'portrait' ? 9 / 16 : 16 / 9
+  if (Math.abs(ratio - targetRatio) <= 0.02 && settings.resizeMode !== 'crop-and-scale') return settings
+  // A capability range is not a list of native sensor modes. Only try exact
+  // ratios when the browser can explicitly disable crop-and-scale.
   if (!supported?.resizeMode) return settings
-  const constraints: MediaTrackConstraints = {
-    ...mediaTrack.getConstraints(),
-    width: { ideal: 720, max: PORTRAIT_LIVE_CAPTURE.width },
-    height: { ideal: 1280, max: PORTRAIT_LIVE_CAPTURE.height },
-    aspectRatio: { exact: 9 / 16 },
-    frameRate: { ideal: PORTRAIT_LIVE_CAPTURE.frameRate, max: PORTRAIT_LIVE_CAPTURE.frameRate },
-  }
-  if (supported?.resizeMode) {
-    ;(constraints as MediaTrackConstraints & { resizeMode: string }).resizeMode = 'none'
-  }
 
-  if (supported?.resizeMode) {
+  const modes = orientation === 'portrait'
+    ? [{ width: 720, height: 1280 }, { width: 960, height: 1280 }]
+    : [{ width: 1280, height: 720 }, { width: 1280, height: 960 }]
+  for (const mode of modes) {
+    const constraints = {
+      ...originalConstraints,
+      width: { ideal: mode.width, max: mode.width },
+      height: { ideal: mode.height, max: mode.height },
+      aspectRatio: { exact: mode.width / mode.height },
+      frameRate: { ideal: 30, max: 30 },
+      resizeMode: { exact: 'none' },
+    } as MediaTrackConstraints
     try {
       await mediaTrack.applyConstraints(constraints)
+      // WebKit can report the previous dimensions immediately after reconfiguration.
+      await new Promise((resolve) => setTimeout(resolve, 50))
       settings = mediaTrack.getSettings()
-      if (trackVideoOrientation(settings) === 'portrait') return settings
-    } catch { /* The sensor may not have an uncropped 9:16 mode. */ }
+      const actual = settings.aspectRatio ?? ((settings.width ?? 0) / (settings.height || 1))
+      if (Math.abs(actual - mode.width / mode.height) <= 0.02 && settings.resizeMode === 'none') {
+        return settings
+      }
+    } catch { /* This sensor does not offer the requested uncropped mode. */ }
   }
-  try {
-    await mediaTrack.applyConstraints({
-      ...constraints,
-      width: { ideal: PORTRAIT_LIVE_CAPTURE.width, max: PORTRAIT_LIVE_CAPTURE.width },
-      aspectRatio: { exact: PORTRAIT_LIVE_CAPTURE.aspectRatio },
-    })
-    settings = mediaTrack.getSettings()
-  } catch { /* Keep the original full frame if neither native mode is available. */ }
-  return settings
+  // A browser may accept a constraint but still return another mode. Restore
+  // the source's prior request rather than leave an unverified mode selected.
+  try { await mediaTrack.applyConstraints(originalConstraints) } catch { /* Keep the live source. */ }
+  return mediaTrack.getSettings()
+}
+
+export async function ensurePortraitCameraTrack(mediaTrack: MediaStreamTrack) {
+  return ensureNativeCameraTrack(mediaTrack, 'portrait')
 }
 
 export function hostCameraTrack(room: Room) {
@@ -288,7 +344,7 @@ export async function switchHostCamera(
     // Constraints are preferences in WebKit. Ask the selected source once more
     // when its effective settings are still landscape, without replacing the
     // LiveKit publication or touching the microphone/Room.
-    if (orientation === 'portrait') selected = await ensurePortraitCameraTrack(track.mediaStreamTrack)
+    selected = await ensureNativeCameraTrack(track.mediaStreamTrack, orientation)
 
     await preferNaturalCameraFieldOfView(track.mediaStreamTrack)
     selected = track.mediaStreamTrack.getSettings()

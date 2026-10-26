@@ -14,7 +14,7 @@ import {
 } from 'livekit-client'
 import { supabase } from './supabase'
 import {
-  ensurePortraitCameraTrack,
+  ensureNativeCameraTrack,
   hostCameraTrack,
   LANDSCAPE_LIVE_CAPTURE,
   PORTRAIT_LIVE_CAPTURE,
@@ -207,16 +207,15 @@ export async function connectAsHost(url: string, token: string, orientation: Liv
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
-    const landscape = orientation === 'landscape'
     await room.localParticipant.setCameraEnabled(true, {
-      resolution: landscape
+      resolution: orientation === 'landscape'
         ? LANDSCAPE_LIVE_CAPTURE
         : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user',
     })
     const cameraTrack = hostCameraTrack(room)
     if (cameraTrack) {
-      if (!landscape) await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+      await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
       await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
       // Publish the actual camera frame. A fixed-ratio Canvas can create large
       // black bars on Safari when the device ignores requested constraints.
@@ -257,7 +256,7 @@ export async function setHostCameraEnabled(
   })
   const cameraTrack = hostCameraTrack(room)
   if (!cameraTrack) throw new Error('camera_track_unavailable')
-  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
   return true
 }
@@ -273,7 +272,7 @@ export async function restartHostCameraForOrientation(
     resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
     facingMode,
   })
-  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
   return true
 }

@@ -39,7 +39,7 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { waitForVideoFrameAdvance } from '../lib/livePortraitProcessor'
-import { canSwitchHostCamera, hostCameraTrack, liveDisplayCrop, liveFrameDiagnostics, liveStageAspect, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics, type LiveVideoFit } from '../lib/liveCamera'
+import { canSwitchHostCamera, hostCameraTrack, liveAspectLabel, liveDisplayCrop, liveFrameDiagnostics, liveStageAspect, switchHostCamera, type CameraFacing, type LiveFrameDiagnostics, type LiveVideoFit } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment } from '../lib/types'
@@ -128,7 +128,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     displayOrientation !== videoOrientation || !!frameDiagnostics?.constrained && !frameDiagnostics.publicationMismatch
   )
   const orientationNotice = orientationMismatch
-    ? `選択：${videoOrientation === 'landscape' ? '横型16:9' : '縦型9:16'}／実映像：${displayOrientation === 'landscape' ? '横型' : '縦型'}（${previewAspect.width || frameDiagnostics?.published.width || frameDiagnostics?.capture.width || '—'}×${previewAspect.height || frameDiagnostics?.published.height || frameDiagnostics?.capture.height || '—'}）。端末が希望の向き・比率を返していません。全画角表示は実映像を回転・変形しません。`
+    ? `選択：${videoOrientation === 'landscape' ? '横型16:9' : '縦型9:16'}／実映像：${displayOrientation === 'landscape' ? '横型' : '縦型'}${liveAspectLabel(actualAspect)}（${previewAspect.width || frameDiagnostics?.published.width || frameDiagnostics?.capture.width || '—'}×${previewAspect.height || frameDiagnostics?.published.height || frameDiagnostics?.capture.height || '—'}）。端末が希望の向き・比率を返していません。全画角表示は実映像を回転・変形しません。`
     : null
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
@@ -725,6 +725,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     const capability = frameDiagnostics?.capabilities
     const range = (value: { min: number; max: number } | null | undefined) => value ? `${value.min}–${value.max}` : '不明'
     return <div className="pl-live__diagnostics" role="status">
+      <p>要求 facingMode {frameDiagnostics?.request.facingMode ?? '—'} / 幅 {frameDiagnostics?.request.width ?? '—'}・高さ {frameDiagnostics?.request.height ?? '—'}・比率 {frameDiagnostics?.request.aspectRatio?.toFixed(2) ?? '—'} / resizeMode {frameDiagnostics?.request.resizeMode ?? '—'}</p>
       <p>取得 {frameDiagnostics?.capture.width ?? '—'}×{frameDiagnostics?.capture.height ?? '—'} / 送信 {frameDiagnostics?.published.width ?? '—'}×{frameDiagnostics?.published.height ?? '—'} / 表示 {previewAspect.width || '—'}×{previewAspect.height || '—'} / 画面枠 {stageSize.width || '—'}×{stageSize.height || '—'} / 実比率 {frameDiagnostics?.capture.aspectRatio?.toFixed(2) ?? '—'}</p>
       <p>カメラ {frameDiagnostics?.capture.facingMode === 'environment' ? '背面' : '前面'} / ズーム {frameDiagnostics?.capture.zoom?.toFixed(1) ?? '不明'}（対応 {range(capability?.zoom)}） / 取得方式 {frameDiagnostics?.capture.resizeMode ?? '不明'} / 対応範囲 幅 {range(capability?.width)}・高さ {range(capability?.height)}・比率 {range(capability?.aspectRatio)} / resizeMode {capability?.resizeMode.join(', ') || '不明'}</p>
       <p>対応範囲は個別の撮影モードを保証しません。実際の映像は上の取得・送信・表示寸法で確認してください。</p>

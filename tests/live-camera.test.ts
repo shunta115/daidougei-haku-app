@@ -4,9 +4,12 @@ import { Track, type Room } from 'livekit-client'
 import {
   canSwitchHostCamera,
   ensurePortraitCameraTrack,
+  ensureNativeCameraTrack,
   LANDSCAPE_LIVE_CAPTURE,
   liveCameraCapabilities,
   liveCameraSnapshot,
+  liveCameraRequest,
+  liveAspectLabel,
   liveDisplayCrop,
   liveFrameDiagnostics,
   liveStageAspect,
@@ -34,7 +37,7 @@ import {
 } from '../src/platform/lib/livekit'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
-  let settings: MediaTrackSettings & { zoom?: number } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, aspectRatio: 3 / 4, frameRate: 30, zoom }
+  let settings: MediaTrackSettings & { zoom?: number; resizeMode?: string } = { facingMode: facing, deviceId: facing, width: 960, height: 1280, aspectRatio: 3 / 4, frameRate: 30, zoom }
   const track = {
     isMuted: false,
     mediaStreamTrack: {
@@ -42,15 +45,17 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?
       enabled: true,
       muted: false,
       getSettings: () => settings,
-      getCapabilities: vi.fn(() => zoom == null ? {} : { zoom: { min: 1, max: 5, step: 0.1 } }),
+      getCapabilities: vi.fn(() => ({ resizeMode: ['none', 'crop-and-scale'], ...(zoom == null ? {} : { zoom: { min: 1, max: 5, step: 0.1 } }) })),
       getConstraints: vi.fn(() => ({ width: { ideal: 960, max: 960 }, height: { ideal: 1280, max: 1280 }, aspectRatio: { exact: 3 / 4 } })),
       applyConstraints: vi.fn(async (constraints: MediaTrackConstraints) => {
         const width = typeof constraints.width === 'object' ? constraints.width.ideal : constraints.width
         const height = typeof constraints.height === 'object' ? constraints.height.ideal : constraints.height
         const requestedZoom = (constraints.advanced?.at(-1) as MediaTrackConstraintSet & { zoom?: number })?.zoom
+        const requestedResize = (constraints as MediaTrackConstraints & { resizeMode?: string | { exact?: string } }).resizeMode
         settings = {
           ...settings,
           ...(width && height ? { width: Number(width), height: Number(height), aspectRatio: Number(width) / Number(height) } : {}),
+          ...(requestedResize ? { resizeMode: typeof requestedResize === 'string' ? requestedResize : requestedResize.exact } : {}),
           ...(requestedZoom == null ? {} : { zoom: requestedZoom }),
         }
       }),
@@ -129,6 +134,24 @@ describe('LIVE camera switch', () => {
     }))
   })
 
+  it.each([
+    ['portrait', 'user', 1280, 960, 9 / 16],
+    ['portrait', 'environment', 1280, 960, 9 / 16],
+    ['landscape', 'user', 720, 1280, 16 / 9],
+    ['landscape', 'environment', 720, 1280, 16 / 9],
+  ] as const)('negotiates %s after a %s camera switch even when Safari returns %ix%i', async (orientation, current, width, height, expected) => {
+    const { track, room, typedRoom } = fixture(current)
+    Object.assign(track.mediaStreamTrack.getSettings(), { width, height, aspectRatio: width / height })
+    track.restartTrack.mockImplementation(async (options) => {
+      Object.assign(track.mediaStreamTrack.getSettings(), { facingMode: options.facingMode, width, height, aspectRatio: width / height })
+    })
+    const next = await switchHostCamera(typedRoom, current, orientation)
+    expect(next).toBe(current === 'user' ? 'environment' : 'user')
+    expect(track.mediaStreamTrack.getSettings().aspectRatio).toBeCloseTo(expected)
+    expect(room.localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled()
+    expect(room.disconnect).not.toHaveBeenCalled()
+  })
+
   it('keeps producing the requested camera across ten front/rear switches', async () => {
     const { track, room, typedRoom } = fixture()
     let facing: 'user' | 'environment' = 'user'
@@ -176,10 +199,10 @@ describe('LIVE camera switch', () => {
 
     await expect(switchHostCamera(typedRoom, 'user')).resolves.toBe('environment')
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 720, max: 960 },
+      width: { ideal: 720, max: 720 },
       height: { ideal: 1280, max: 1280 },
       aspectRatio: { exact: 9 / 16 },
-      resizeMode: 'none',
+      resizeMode: { exact: 'none' },
     }))
   })
 
@@ -207,6 +230,17 @@ describe('LIVE camera switch', () => {
     expect(snapshot).not.toHaveProperty('deviceId')
   })
 
+  it('compares only safe requested capture constraints with actual settings', () => {
+    const { track } = fixture()
+    track.mediaStreamTrack.getConstraints.mockReturnValue({
+      deviceId: { exact: 'private-camera-id' }, facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { exact: 16 / 9 }, resizeMode: 'none',
+    } as never)
+    const request = liveCameraRequest(track.mediaStreamTrack as unknown as MediaStreamTrack)
+    expect(request).toEqual({ facingMode: 'environment', width: 1280, height: 720, aspectRatio: 16 / 9, resizeMode: 'none' })
+    expect(JSON.stringify(request)).not.toContain('private-camera-id')
+  })
+
   it('maps official LiveKit media failure categories to actionable Japanese guidance', () => {
     expect(liveMediaDeviceErrorMessage(new DOMException('', 'NotAllowedError'))).toContain('許可')
     expect(liveMediaDeviceErrorMessage(new DOMException('', 'NotFoundError'))).toContain('見つかりません')
@@ -231,6 +265,12 @@ describe('LIVE camera switch', () => {
     expect(liveDisplayCrop(4 / 3, 9 / 16, 'cover')).toEqual({ percent: 58, axis: 'horizontal' })
     expect(liveDisplayCrop(4 / 3, 16 / 9, 'cover')).toEqual({ percent: 25, axis: 'vertical' })
     expect(liveDisplayCrop(4 / 3, 9 / 16, 'contain')).toEqual({ percent: 0, axis: null })
+  })
+
+  it('shows the actual sensor ratio rather than calling every portrait or landscape frame 9:16 or 16:9', () => {
+    expect(liveAspectLabel(1280 / 960)).toBe('4:3')
+    expect(liveAspectLabel(720 / 1280)).toBe('9:16')
+    expect(liveAspectLabel(1280 / 720)).toBe('16:9')
   })
 
   it.each([
@@ -286,10 +326,10 @@ describe('LIVE camera switch', () => {
       aspectRatio: 9 / 16,
     })
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
-      width: { ideal: 720, max: 960 },
+      width: { ideal: 720, max: 720 },
       height: { ideal: 1280, max: 1280 },
       aspectRatio: { exact: 9 / 16 },
-      resizeMode: 'none',
+      resizeMode: { exact: 'none' },
     }))
   })
 
@@ -303,8 +343,39 @@ describe('LIVE camera switch', () => {
     })
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledTimes(2)
     expect(track.mediaStreamTrack.applyConstraints).toHaveBeenLastCalledWith(expect.objectContaining({
-      aspectRatio: { exact: 3 / 4 }, resizeMode: 'none',
+      aspectRatio: { exact: 3 / 4 }, resizeMode: { exact: 'none' },
     }))
+  })
+
+  it('negotiates a native 16:9 landscape mode after Safari returns a portrait source', async () => {
+    const { track } = fixture()
+    const settings = track.mediaStreamTrack.getSettings()
+    Object.assign(settings, { width: 720, height: 1280, aspectRatio: 9 / 16 })
+    await expect(ensureNativeCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack, 'landscape')).resolves.toMatchObject({
+      width: 1280, height: 720, aspectRatio: 16 / 9,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
+      width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 },
+      aspectRatio: { exact: 16 / 9 }, resizeMode: { exact: 'none' },
+    }))
+  })
+
+  it('falls back to a full-frame 4:3 landscape mode without rotating the source', async () => {
+    const { track } = fixture()
+    track.mediaStreamTrack.applyConstraints.mockRejectedValueOnce(new DOMException('', 'OverconstrainedError'))
+    await expect(ensureNativeCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack, 'landscape')).resolves.toMatchObject({
+      width: 1280, height: 960, aspectRatio: 4 / 3,
+    })
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenLastCalledWith(expect.objectContaining({
+      aspectRatio: { exact: 4 / 3 }, resizeMode: { exact: 'none' },
+    }))
+  })
+
+  it('does not force exact native modes when Safari cannot disable crop-and-scale', async () => {
+    const { track } = fixture()
+    vi.stubGlobal('navigator', { mediaDevices: { getSupportedConstraints: () => ({ resizeMode: false }) } })
+    await ensureNativeCameraTrack(track.mediaStreamTrack as unknown as MediaStreamTrack, 'landscape')
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalled()
   })
 
   it('keeps an existing full-frame portrait source when crop control is unavailable', async () => {
@@ -482,6 +553,18 @@ describe('LIVE camera switch', () => {
     expect(LANDSCAPE_LIVE_CAPTURE).toMatchObject({ width: 1280, height: 720, frameRate: 30, aspectRatio: 16 / 9 })
     expect(room.disconnect).not.toHaveBeenCalled()
     expect(track.setProcessor).not.toHaveBeenCalled()
+    expect(track.mediaStreamTrack.applyConstraints).not.toHaveBeenCalled()
+  })
+
+  it('re-negotiates landscape on the restarted LiveKit source when Safari ignores the preset', async () => {
+    const { track, room, typedRoom } = fixture()
+    track.restartTrack.mockImplementation(async () => undefined)
+    await expect(restartHostCameraForOrientation(typedRoom, 'user', 'landscape')).resolves.toBe(true)
+    expect(track.mediaStreamTrack.applyConstraints).toHaveBeenCalledWith(expect.objectContaining({
+      aspectRatio: { exact: 16 / 9 }, resizeMode: { exact: 'none' },
+    }))
+    expect(room.disconnect).not.toHaveBeenCalled()
+    expect(room.localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled()
   })
 
   it('provides accessible media controls and privacy stops on backgrounding', () => {
