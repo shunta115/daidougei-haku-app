@@ -14,6 +14,7 @@ type Room = {
 }
 type Grant = { nonce: string; epoch: number }
 const EMPTY_METER: Meter = { sent: 0, received: 0, connected: 0, relay: false }
+const DEVICE_ONLY = document.documentElement.dataset.deviceOnly === 'true'
 const initialUrl = new URL(location.href)
 const fragment = new URLSearchParams(initialUrl.hash.slice(1))
 const initialRoomId = initialUrl.searchParams.get('room') || ''
@@ -34,7 +35,10 @@ const errors: Record<string, string> = {
 }
 function message(error: unknown) {
   const text = error instanceof Error ? error.message : '接続できませんでした。'
-  if (text === 'NotAllowedError' || /Permission denied|not allowed/i.test(text)) return 'カメラ・マイクが許可されていません。Safariのサイト設定を確認してください。'
+  const name = error instanceof Error ? error.name : ''
+  if (name === 'NotAllowedError' || text === 'NotAllowedError' || /Permission denied|not allowed/i.test(text)) return 'カメラ・マイクが許可されていません。Safariのサイト設定を確認してください。'
+  if (name === 'NotFoundError') return 'カメラまたはマイクが見つかりません。iPhoneのSafariで開いて確認してください。'
+  if (name === 'NotReadableError') return 'カメラまたはマイクを使えません。ほかのカメラアプリを閉じてから再度お試しください。'
   return errors[text] || text
 }
 function Video({ stream, muted = true, label }: { stream: MediaStream | null; muted?: boolean; label?: string }) {
@@ -48,7 +52,7 @@ function Video({ stream, muted = true, label }: { stream: MediaStream | null; mu
 }
 
 function App() {
-  const [mode, setMode] = useState<'loading' | 'local' | 'device'>('loading')
+  const [mode, setMode] = useState<'loading' | 'local' | 'device'>(DEVICE_ONLY ? 'device' : 'loading')
   const [actor, setActor] = useState<Actor | null>(null)
   const [fixtures, setFixtures] = useState<{id: string; name: string}[]>([])
   const [room, setRoom] = useState<Room | null>(null)
@@ -69,7 +73,7 @@ function App() {
   const [deviceLive, setDeviceLive] = useState(false)
   const [demoDialog, setDemoDialog] = useState('')
   const tokenRef = useRef('')
-  const peerId = useRef(crypto.randomUUID())
+  const peerId = useRef(DEVICE_ONLY ? 'device-only' : crypto.randomUUID())
   const actorRef = useRef<Actor | null>(null)
   const roomRef = useRef<Room | null>(null)
   const roomIdRef = useRef(roomId)
@@ -87,6 +91,7 @@ function App() {
   const heartbeatBusy = useRef(false)
   const updateRoom = useCallback((next: Room) => { roomRef.current = next; setRoom(next) }, [])
   const api = useCallback(async <T,>(action: string, data: Record<string, unknown> = {}, keepalive = false): Promise<T> => {
+    if (DEVICE_ONLY) throw new Error('この確認画面では外部への配信やデータ保存は行いません。')
     const res = await fetch('/api/free-live', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
       body: JSON.stringify({ action, roomId: roomIdRef.current, peerId: peerId.current, ...data }),
@@ -124,6 +129,7 @@ function App() {
     setError('')
   }, [api, stopMedia])
   useEffect(() => {
+    if (DEVICE_ONLY) return () => stopMedia()
     let alive = true
     void fetch('/api/free-live').then(async res => {
       if (!res.ok) throw new Error('no_local_authority')
@@ -313,16 +319,16 @@ function App() {
   const phase = mode === 'device' ? (deviceLive ? '端末内テスト中' : 'カメラ待機') : labels[room?.phase || 'ready']
   const mb = (n: number) => `${(n / 1_000_000).toFixed(1)} MB`
   return <div className="lab-app">
-    <header className="lab-header"><a className="wordmark" href="/haku-free-live.html">HAKU<span>LIVE LAB</span></a><span className="prototype">PROTOTYPE 01</span></header>
+    <header className="lab-header"><a className="wordmark" href={DEVICE_ONLY ? './' : '/haku-free-live.html'}>HAKU<span>LIVE LAB</span></a><span className="prototype">PROTOTYPE 01</span></header>
     <main>
       <div className="lab-heading"><div><p className="eyebrow">その瞬間を、誰かのスマホで。</p><h1>ステージは、<br /><span>ここにある。</span></h1></div><Radio className="hero-radio" size={60} /></div>
-      <div className={`mode-note ${mode === 'local' ? 'local' : ''}`} role="status"><ShieldCheck size={18}/><div><b>{mode === 'local' ? 'ローカル実配信テスト · テスト用アカウント' : 'この端末のカメラ・操作を試すPreview'}</b><p>{mode === 'local' ? 'P2P / 最大5人 / TURN・SFUなし。本番データには接続しません。' : '別端末へのLIVE配信・認証・決済は未接続です。映像は端末内でのみ確認します。'}</p></div></div>
+      <div className={`mode-note ${mode === 'local' ? 'local' : ''}`} role="status"><ShieldCheck size={18}/><div><b>{mode === 'local' ? 'ローカル実配信テスト · テスト用アカウント' : 'この端末のカメラ・操作を試す確認画面'}</b><p>{mode === 'local' ? 'P2P / 最大5人 / TURN・SFUなし。本番データには接続しません。' : '映像はこの端末内だけで確認します。ほかの人への配信・録画・決済は行いません。'}</p></div></div>
       {mode === 'local' && <label className="fixture">検証用アカウント<select aria-label="検証用アカウント" value={actor?.id || ''} disabled={busy || publishing || watching} onChange={e => void run(() => login(e.target.value))}>{fixtures.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       <div className="lab-grid"><section className="stage-card">
         <div className="stage">
           {(stream || remote) ? <Video stream={stream || remote} muted={!!stream || !sound} /> : <div className="stage-empty"><div className="camera-halo"><Camera size={36}/></div><h2>あなたの視点が、<br/>誰かの最前列になる。</h2><p>{crowdView ? '本人が許可したステージを、あなたのスマホから。' : 'ボタンを押して、カメラとマイクを許可。'}</p></div>}
-          <div className="stage-top"><span className={publishing || remote ? 'live-pill active' : 'live-pill'}><i/>{phase}</span><span className="viewers"><Users size={14}/>{mode === 'local' ? room?.viewers || 0 : 0} / 5</span></div>
-          <div className="stage-bottom"><div className="avatar">H</div><div><b>HAKU テストパフォーマー</b><small>{crowdView ? 'CROWD LIVE' : 'DIRECT LIVE'} · 360p / 15fps</small></div><button className="follow" onClick={() => setDemoDialog('フォローは既存HAKUのfollowsへ接続する設計です。このPreviewでは保存しません。')} aria-label="フォロー"><Heart size={18}/></button></div>
+          <div className="stage-top"><span className={publishing || remote ? 'live-pill active' : 'live-pill'}><i/>{phase}</span><span className="viewers"><Users size={14}/>{mode === 'local' ? `${room?.viewers || 0} / 5` : `端末内 ${meter.connected} / 5`}</span></div>
+          <div className="stage-bottom"><div className="avatar">H</div><div><b>HAKU テストパフォーマー</b><small>{crowdView ? 'CROWD LIVE' : 'DIRECT LIVE'} · 360p / 15fps</small></div><button className="follow" onClick={() => setDemoDialog('この確認画面ではフォローは保存されません。')} aria-label="フォロー"><Heart size={18}/></button></div>
         </div>
         {remote && <button className="sound-button" onClick={() => setSound(!sound)}><Volume2 size={16}/>{sound ? '消音する' : '音声をONにする'}</button>}
         <div className="mode-tabs" role="tablist" aria-label="配信方式">
@@ -336,8 +342,8 @@ function App() {
           <div className="secondary-controls">
             {watching && <button onClick={join} disabled={busy}><RotateCcw size={16}/>映像を再接続</button>}
             {!publishing && !watching && <button onClick={() => { faceRef.current = faceRef.current === 'environment' ? 'user' : 'environment'; setNotice(`${faceRef.current === 'environment' ? '背面' : '前面'}カメラで次回開始します。`) }}><RotateCcw size={16}/>前後カメラ</button>}
-            <button className="tip" onClick={() => setDemoDialog('既存の投げ銭画面 /live?tipTo=出演者ID を再利用します。このPreviewでは決済しません。')}><Gift size={17}/>投げ銭で応援</button>
-            <button onClick={() => mode === 'local' && roomId ? void run(async () => { await api('report', { reason: 'privacy' }); stopMedia(); setNotice('通報を受け付け、テスト配信を緊急停止しました。') }) : setDemoDialog('通報するとローカル実配信を安全停止します。公開運用には運営の審査体制が必要です。')}><Flag size={15}/>通報</button>
+            <button className="tip" onClick={() => setDemoDialog('投げ銭は準備中です。この確認画面ではお金は動きません。')}><Gift size={17}/>投げ銭で応援</button>
+            <button onClick={() => mode === 'local' && roomId ? void run(async () => { await api('report', { reason: 'privacy' }); stopMedia(); setNotice('通報を受け付け、テスト配信を緊急停止しました。') }) : (() => { stopMedia(); setDemoDialog('端末内のカメラを停止しました。この確認画面では通報は送信されません。'); })()}><Flag size={15}/>通報</button>
           </div>
         </div>
       </section>
@@ -354,7 +360,7 @@ function App() {
       </aside></div>
       {error && <div className="feedback error" role="alert">{error}</div>}
       {notice && !error && <div className="feedback" role="status">{notice}</div>}
-      <footer><ShieldCheck size={16}/><p>画面ロック・アプリ切替でカメラとマイクを停止。自動では再開しません。<br/>iPhone Safari実機・異なる回線での動作は確認待ちです。</p></footer>
+      <footer><ShieldCheck size={16}/><p>カメラが許可されない場合は、このページをSafariで直接開いてください。<br/>画面ロック・アプリ切替でカメラとマイクを停止。自動では再開しません。<br/>iPhone Safari実機・異なる回線での動作は確認待ちです。</p></footer>
     </main>
     {demoDialog && <div className="dialog-backdrop"><div role="dialog" aria-modal="true" aria-label="試作の接続範囲" className="dialog"><ShieldCheck size={28}/><h2>HAKU連携の確認</h2><p>{demoDialog}</p><button className="primary" autoFocus onClick={() => setDemoDialog('')}>閉じる</button></div></div>}
   </div>

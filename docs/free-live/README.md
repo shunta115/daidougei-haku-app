@@ -105,7 +105,21 @@ Node.js 24、既存lockfileで `npm ci` → `npm run build` → `node experiment
 
 `/haku-free-live.html` は独立entry。権限サーバーがない環境では端末カメラと5受信のloopbackテストだけに切り替わり、実配信とは明確に区別する。公開側の `api/free-live.ts` は503で拒否し、本番DB、Stripe、LiveKitには接続しない。
 
-Vercelの読取APIでは契約プラン・無料枠残量を確認できず、請求データAPIは `costs_not_found`。管理画面もログインが必要だった。したがって、追加費用0円を確認できない公開Previewの発行を実行していない。このブランチの自動deploymentは `vercel.json` のbranch限定falseで止めた。**iPhoneから開けるPreview URLは未発行。** 費用確認後でも、最初は本番の機能を載せない端末テストだけの静的Previewに限定する。実配信Previewには、非本番の認証・原子的な権限ストア・シグナリング・HTTPSの接続を別途用意する必要がある。
+2026-10-28 JST追記: VercelのGit接続情報の読取APIで、既存HAKUプロジェクトを含むチームの契約が **Hobby** と確認できた。Hobbyは非商用利用向けなので、HAKUの確認サイトには使用しない。残り枠や商用利用の承認を確認したものではなく、プラン変更もしない。このブランチのVercel自動deploymentは引き続き `vercel.json` のbranch限定falseで停止している。
+
+**端末確認用URL（本人のみ）:** https://haku-live-device-check.eb-shimada409.chatgpt.site/
+
+HAKUから独立したSitesの静的サイト。現在のChatGPTプランに含まれるSitesを使い、追加契約・クレジット購入・従量課金の有効化は行っていない。Sites上のdeployment区分はproductionだが、HAKUの本番サイト・DB・決済・認証とは接続しない、所有者だけの端末確認サイトである。Sitesの将来の料金や無制限運用を保証するものではない。プランの制限に達した場合に購入して続行しない。
+
+画面のカメラ開始と端末内5接続は、同じiPhoneの中だけで動作する。**このURLで別のスマホへのLIVE配信・QRの認証・カメラマン交代は試せない。** これらはローカル隔離サーバーの試作だけで検証済み。投げ銭・フォロー・通報の外部送信も行わない。
+
+`node scripts/build-free-live-device.mjs /absolute/output/index.html` で再生成できる。`data-device-only="true"` によりAPIの初期接続と呼出しを拒否し、さらにCSP `connect-src 'none'` を設定する。カメラはクリックと権限許可後のみ取得、loopbackのICE serversは空。HAKUの環境変数・SDK初期化・本番シークレットを含まない。
+
+iPhoneでは、この会話と同じChatGPTアカウントで上記URLをSafariで直接開く。「カメラテストを開始する」で許可後に映像を確認し、「端末内で5接続を試す」で接続数と送受信量を確認する。「カメラ・配信を停止」でカメラ表示が消えること、アプリ切替・画面ロック後に勝手に再開しないことを確認する。「観客が配信」は事前許可と撮影/通信の同意を試す操作デモであり、本人認証の実装ではない。
+
+公開構成の実配信Previewには、非本番の認証・原子的な権限ストア・シグナリング・HTTPSの接続と費用の強制遮断を別途用意する必要がある。所有者ログイン後のHTTPSカメラはエージェントから未検証、iPhone実機検証も未実施。
+
+公式資料: [Vercel Hobby](https://vercel.com/docs/plans/hobby)、[商用利用の制約](https://vercel.com/docs/limits/fair-use-guidelines)、[ChatGPT Sitesの料金説明](https://learn.chatgpt.com/docs/pricing)。契約プランの確認は接続済みアカウントの読取結果による。
 
 ## 公式ソース
 
