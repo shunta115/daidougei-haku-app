@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "codex/haku-free-live-20261028": false
+    }
+  },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],
