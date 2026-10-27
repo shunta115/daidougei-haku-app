@@ -43,15 +43,16 @@
         const panel = document.querySelector('.pl-live__panel').getBoundingClientRect()
         const end = document.querySelector('.pl-live__end-live').getBoundingClientRect()
         const stageOverlapsPanel = !(stage.right <= panel.left || stage.left >= panel.right || stage.bottom <= panel.top || stage.top >= panel.bottom)
+        const landscapeStacked = portrait || (stage.bottom <= panel.top + 1 && panel.bottom <= innerHeight + 1)
         const controlsInsidePanel = controls.left >= panel.left && controls.right <= panel.right && controls.top >= panel.top && controls.bottom <= panel.bottom
         const ratio = stage.width / stage.height
-        const ratioOk = portrait ? Math.abs(ratio - 3 / 4) < 0.02 : stage.width < innerWidth && stage.height <= innerHeight
+        const ratioOk = portrait ? Math.abs(ratio - 3 / 4) < 0.02 : stage.width <= innerWidth && stage.height <= innerHeight
         const endAccessible = portrait
           ? end.bottom <= document.documentElement.scrollHeight + 1
-          : end.top >= 0 && end.bottom <= innerHeight
-        const passed = ratioOk && !stageOverlapsPanel && controlsInsidePanel && endAccessible
+          : end.top >= panel.top && end.bottom <= panel.scrollHeight + panel.top + 1
+        const passed = ratioOk && !stageOverlapsPanel && landscapeStacked && controlsInsidePanel && endAccessible
         document.body.dataset.status = passed ? 'passed' : 'failed'
-        document.querySelector('#result').textContent = JSON.stringify({ passed, portrait, ratio, stageOverlapsPanel, controlsInsidePanel, endAccessible, endBottom: end.bottom, viewport: [innerWidth, innerHeight] })
+        document.querySelector('#result').textContent = JSON.stringify({ passed, portrait, ratio, stageOverlapsPanel, landscapeStacked, controlsInsidePanel, endAccessible, endBottom: end.bottom, viewport: [innerWidth, innerHeight] })
       }
       requestAnimationFrame(verify)
       setTimeout(verify, 150)

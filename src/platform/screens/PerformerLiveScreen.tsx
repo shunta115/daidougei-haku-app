@@ -819,9 +819,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           {phase === 'live' ? (
             <div className="pl-live__stats">
               <span className="pl-live__pill">LIVE中</span>
+              <span className="pl-live__performer-name" title={performer?.stage_name}>{performer?.stage_name}</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
-              <span>選択{videoOrientation === 'landscape' ? '横型' : '縦型'}／実映像{displayOrientation === 'landscape' ? '横型' : '縦型'}</span>
             </div>
           ) : null}
         </div>
@@ -835,6 +835,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
           <div className="pl-live__studio-summary" aria-live="polite"><strong>配信スタジオ</strong><span>👁 {viewers}　♥ {fever.likes}　🎁 {giftCount}</span></div>
           {frameDiagnostics?.publicationMismatch && cameraEnabled ? <p className="pl-live__capture-notice" role="status">送信映像とプレビューの比率が異なります。視聴端末で映像を確認してください。</p> : null}
+          {mode !== 'phone-portrait' ? commentPane() : null}
           <div className="pl-live__studio-tools">
             <div className="pl-live__media-controls" aria-label="配信メディア操作">
             <button
@@ -885,7 +886,6 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               <label><input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} />演出を抑える</label>
             </div>
           </div> : null}
-          {mode !== 'phone-portrait' ? commentPane() : null}
           <div className="pl-live__composer">
             <input className="pl-input" style={{ marginBottom: 0 }} placeholder="コメント" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void sendComment() }} />
             <button type="button" className="pl-btn" onClick={() => void sendComment()}>送信</button>
