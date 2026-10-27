@@ -19,7 +19,7 @@ vi.mock('../api/stripe/_shared', () => ({
 }))
 vi.mock('../api/livekit/_close', () => ({ closeSessionRoom: fixture.close }))
 
-import handler from '../api/livekit/close'
+import { closeEndedSession } from '../api/livekit/presence'
 
 function response() {
   const res = {
@@ -46,7 +46,7 @@ describe('ended LIVE room closure authorization', () => {
   it('refuses another performer’s session', async () => {
     fixture.session!.performer_id = 'someone-else'
     const res = response()
-    await handler({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
+    await closeEndedSession({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
     expect(res.statusCode).toBe(404)
     expect(fixture.close).not.toHaveBeenCalled()
   })
@@ -54,14 +54,14 @@ describe('ended LIVE room closure authorization', () => {
   it('refuses to close a session that is still live', async () => {
     fixture.session!.ended_at = null
     const res = response()
-    await handler({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
+    await closeEndedSession({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
     expect(res.statusCode).toBe(409)
     expect(fixture.close).not.toHaveBeenCalled()
   })
 
   it('closes only the authenticated performer’s ended session', async () => {
     const res = response()
-    await handler({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
+    await closeEndedSession({ method: 'POST', body: { sessionId: fixture.session!.id } } as never, res as never)
     expect(res.statusCode).toBe(200)
     expect(fixture.close).toHaveBeenCalledWith('host-1', fixture.session!.id)
   })

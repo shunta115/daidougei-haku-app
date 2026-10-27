@@ -381,10 +381,10 @@ export async function endLive(performerId: string) {
 }
 
 export async function closeLiveKitSession(sessionId: string) {
-  const response = await fetch('/api/livekit/close', {
+  const response = await fetch('/api/livekit/presence', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ action: 'close-session', sessionId }),
   })
   if (!response.ok) throw new Error('LiveKit session close could not be confirmed')
 }
