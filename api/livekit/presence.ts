@@ -2,7 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
 import { requireAdmin } from '../ops/_guard.js'
 import { RoomServiceClient } from 'livekit-server-sdk'
-import { getLiveKitConfig, roomNameForPerformer } from './_shared.js'
+import { getLiveKitConfig, roomNameForSession } from './_shared.js'
+import { closeSessionRoom } from './_close.js'
 
 const STALE_SECONDS = 90
 
@@ -49,7 +50,7 @@ async function expireStaleSessions() {
   const trulyStale: typeof stale = []
   for (const row of stale) {
     try {
-      const participants = roomService ? await roomService.listParticipants(roomNameForPerformer(row.performer_id)) : []
+      const participants = roomService ? await roomService.listParticipants(roomNameForSession(row.performer_id, row.id)) : []
       const hostConnected = participants.some((participant) => participant.identity === row.performer_id)
       if (hostConnected) {
         await sb.from('live_sessions').update({ heartbeat_at: new Date().toISOString() }).eq('id', row.id).is('ended_at', null)
@@ -73,15 +74,17 @@ async function expireStaleSessions() {
     .is('ended_at', null)
   if (endError) throw endError
 
+  for (const row of trulyStale) {
+    try {
+      if (roomService) await closeSessionRoom(row.performer_id, row.id)
+    } catch {
+      // Database expiry remains authoritative; the former room is not reused.
+    }
+  }
   for (const performerId of performerIds) {
     const { count } = await sb.from('live_sessions').select('id', { count: 'exact', head: true }).eq('performer_id', performerId).is('ended_at', null)
     if (!count) {
       await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', performerId)
-      try {
-        if (roomService) await roomService.deleteRoom(roomNameForPerformer(performerId))
-      } catch {
-        // Stale database cleanup must still succeed if LiveKit is temporarily unavailable.
-      }
     }
   }
   return ids.length
@@ -108,8 +111,7 @@ async function forceEndSession(req: VercelRequest, res: VercelResponse) {
     if (endError) throw endError
     await sb.from('performers').update({ is_live: false, share_location: false, lat: null, lng: null, location_updated_at: null }).eq('id', session.performer_id)
     try {
-      const { url, apiKey, apiSecret } = getLiveKitConfig()
-      await new RoomServiceClient(url, apiKey, apiSecret).deleteRoom(roomNameForPerformer(session.performer_id))
+      await closeSessionRoom(session.performer_id, session.id)
     } catch {
       // The database state remains authoritative if the room already disappeared.
     }
@@ -157,11 +159,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     const heartbeatAt = new Date().toISOString()
+    const { data: activeSession, error: sessionError } = await sb.from('live_sessions')
+      .select('id').eq('performer_id', performerId).is('ended_at', null)
+      .order('started_at', { ascending: false }).limit(1).maybeSingle()
+    if (sessionError) throw sessionError
+    if (!activeSession) {
+      res.status(409).json({ error: 'No active live session' })
+      return
+    }
     let viewerCount: number | null = null
     try {
       const { url, apiKey, apiSecret } = getLiveKitConfig()
       const participants = await new RoomServiceClient(url, apiKey, apiSecret)
-        .listParticipants(roomNameForPerformer(performerId))
+        .listParticipants(roomNameForSession(performerId, activeSession.id))
       viewerCount = countAudienceParticipants(participants, performerId)
     } catch {
       // A LiveKit management API outage must not prevent the host heartbeat.
@@ -169,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data, error } = await sb
       .from('live_sessions')
       .update({ heartbeat_at: heartbeatAt })
-      .eq('performer_id', performerId)
+      .eq('id', activeSession.id)
       .is('ended_at', null)
       .select('id')
     if (error) throw error

@@ -19,8 +19,12 @@ export function getLiveKitConfig() {
   return { url, apiKey, apiSecret }
 }
 
-export function roomNameForPerformer(performerId: string) {
-  return `performer-${performerId}`
+export function roomNameForSession(performerId: string, sessionId: string) {
+  return `performer-${performerId}-session-${sessionId}`
+}
+
+export function previewRoomNameForPerformer(performerId: string) {
+  return `performer-${performerId}-preview`
 }
 
 export async function createLiveKitToken(opts: {

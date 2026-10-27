@@ -372,11 +372,21 @@ export async function endLive(performerId: string) {
     .eq('id', performerId)
   if (uerr) throw uerr
   // Close every open session (guards against duplicates from older builds).
-  await sb
+  const { error: sessionEndError } = await sb
     .from('live_sessions')
     .update({ ended_at: now })
     .eq('performer_id', performerId)
     .is('ended_at', null)
+  if (sessionEndError) throw sessionEndError
+}
+
+export async function closeLiveKitSession(sessionId: string) {
+  const response = await fetch('/api/livekit/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await supabaseAuthHeaders()) },
+    body: JSON.stringify({ sessionId }),
+  })
+  if (!response.ok) throw new Error('LiveKit session close could not be confirmed')
 }
 
 export async function listEventLiveSessions(eventId: string): Promise<LiveSession[]> {
