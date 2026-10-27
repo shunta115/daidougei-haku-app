@@ -234,6 +234,17 @@ export async function connectAsHost(url: string, token: string, orientation: Liv
 
 export type HostVideoOrientation = 'portrait' | 'landscape'
 
+/** Stop hardware synchronously before Safari freezes a hidden page. */
+export function stopHostMediaImmediately(room: Room) {
+  for (const source of [Track.Source.Camera, Track.Source.Microphone]) {
+    try {
+      room.localParticipant.getTrackPublication(source)?.track?.mediaStreamTrack.stop()
+    } catch {
+      // Continue stopping the other device even if this track has already ended.
+    }
+  }
+}
+
 export async function setHostMicrophoneEnabled(room: Room, enabled: boolean) {
   await room.localParticipant.setMicrophoneEnabled(enabled)
   return enabled

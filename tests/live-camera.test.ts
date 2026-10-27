@@ -34,6 +34,7 @@ import {
   liveMediaDeviceErrorMessage,
   setHostCameraEnabled,
   setHostMicrophoneEnabled,
+  stopHostMediaImmediately,
 } from '../src/platform/lib/livekit'
 
 function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?: number) {
@@ -92,6 +93,39 @@ function fixture(facing: 'user' | 'environment' = 'user', cameraCount = 2, zoom?
 afterEach(() => vi.unstubAllGlobals())
 
 describe('LIVE camera switch', () => {
+  it('stops camera and microphone hardware synchronously without disconnecting the Room', () => {
+    const cameraStop = vi.fn()
+    const microphoneStop = vi.fn()
+    const room = {
+      disconnect: vi.fn(),
+      localParticipant: {
+        getTrackPublication: vi.fn((source) => source === Track.Source.Camera
+          ? { track: { mediaStreamTrack: { stop: cameraStop } } }
+          : source === Track.Source.Microphone
+            ? { track: { mediaStreamTrack: { stop: microphoneStop } } }
+            : undefined),
+      },
+    } as unknown as Room
+
+    stopHostMediaImmediately(room)
+    expect(cameraStop).toHaveBeenCalledOnce()
+    expect(microphoneStop).toHaveBeenCalledOnce()
+    expect(room.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('still stops the microphone when the camera already ended', () => {
+    const microphoneStop = vi.fn()
+    const room = {
+      localParticipant: {
+        getTrackPublication: vi.fn((source) => source === Track.Source.Camera
+          ? { track: { mediaStreamTrack: { stop: () => { throw new Error('ended') } } } }
+          : { track: { mediaStreamTrack: { stop: microphoneStop } } }),
+      },
+    } as unknown as Room
+    stopHostMediaImmediately(room)
+    expect(microphoneStop).toHaveBeenCalledOnce()
+  })
+
   it('renders persistent camera controls with mobile touch targets in the studio panel', () => {
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
