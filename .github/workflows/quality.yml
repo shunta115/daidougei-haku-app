@@ -2,7 +2,7 @@ name: HAKU quality gate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, codex/live-studio-camera-fix]
   push:
     branches: [main, codex/haku-ci-protection]
 

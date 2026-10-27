@@ -34,6 +34,7 @@ import {
   restartHostCameraForOrientation,
   setHostCameraEnabled,
   setHostMicrophoneEnabled,
+  stopHostMediaImmediately,
 } from '../lib/livekit'
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
@@ -140,8 +141,25 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const appliedOrientationRef = useRef(videoOrientation)
   const failedAutoOrientationRef = useRef<string | null>(null)
   const hiddenAtRef = useRef<number | null>(null)
+  const privacyPauseRef = useRef(false)
+  const activeLiveRef = useRef(phase === 'live')
   const commentScroll = useLiveCommentScroll(comments.length)
   const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
+
+  useEffect(() => { activeLiveRef.current = phase === 'live' }, [phase])
+
+  const keepMediaStoppedIfHidden = async (room: Room) => {
+    if (!privacyPauseRef.current && document.visibilityState !== 'hidden') return true
+    stopHostMediaImmediately(room)
+    await Promise.allSettled([
+      setHostCameraEnabled(room, false, cameraFacing, videoOrientation),
+      setHostMicrophoneEnabled(room, false),
+    ])
+    setCameraEnabled(false)
+    setMicrophoneEnabled(false)
+    setPrivacyPaused(true)
+    return false
+  }
 
   useEffect(() => {
     const camera = roomRef.current && hostCameraTrack(roomRef.current)
@@ -247,6 +265,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     void restartHostCameraForOrientation(room, cameraFacing, videoOrientation)
       .then(async (restarted) => {
         if (!restarted) throw new Error('camera_track_unavailable')
+        if (!await keepMediaStoppedIfHidden(room)) return
         failedAutoOrientationRef.current = null
         attachLocalPreview(room)
         if (videoRef.current) await waitForVideoFrameAdvance(videoRef.current)
@@ -256,18 +275,29 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         failedAutoOrientationRef.current = videoOrientation
         setError('画面方向に合わせたカメラ調整に失敗しました。現在の映像で配信を継続します。手動で向きを選び直してください。')
       })
-      .finally(() => { orientationSwitchRef.current = false; setMediaBusy(false) })
+      .finally(() => {
+        if (privacyPauseRef.current || document.visibilityState === 'hidden') void keepMediaStoppedIfHidden(room)
+        orientationSwitchRef.current = false
+        setMediaBusy(false)
+      })
   }, [cameraEnabled, cameraFacing, videoOrientation, orientationMode, mediaBusy, phase])
 
   useEffect(() => {
-    if (phase !== 'live') return
     const stopTracksForPrivacy = () => {
       const room = roomRef.current
+      privacyPauseRef.current = true
       if (!room) return
       hiddenAtRef.current ??= Date.now()
+      stopHostMediaImmediately(room)
       setPrivacyPaused(true)
       setCameraEnabled(false)
       setMicrophoneEnabled(false)
+      if (phase !== 'live') {
+        roomRef.current = null
+        void room.disconnect()
+        setPreviewState('idle')
+        return
+      }
       void Promise.allSettled([
         setHostCameraEnabled(room, false, cameraFacing, videoOrientation),
         setHostMicrophoneEnabled(room, false),
@@ -280,6 +310,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       }
       const hiddenAt = hiddenAtRef.current
       hiddenAtRef.current = null
+      if (phase !== 'live') return
       if (hiddenAt && Date.now() - hiddenAt >= 60_000 && performer) {
         const room = roomRef.current
         roomRef.current = null
@@ -373,10 +404,50 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         setCameraRecoveryNeeded(true)
       }
     })
+    room.on(RoomEvent.Disconnected, () => {
+      if (roomRef.current !== room || endingRef.current) return
+      roomRef.current = null
+      stopHostMediaImmediately(room)
+      setCameraEnabled(false)
+      setMicrophoneEnabled(false)
+      setPrivacyPaused(true)
+      if (!activeLiveRef.current) {
+        setPreviewState('idle')
+        setError('配信準備中の接続が切れました。もう一度カメラを準備してください。')
+        return
+      }
+      endingRef.current = true
+      const activePerformerId = performer?.id
+      if (!activePerformerId) {
+        setError('映像・音声は停止しました。パフォーマー情報を再読み込みしてください。')
+        return
+      }
+      void endLive(activePerformerId)
+        .then(refreshProfile)
+        .then(() => {
+          activeLiveRef.current = false
+          setPhase('ready')
+          setPreviewState('ended')
+          setLiveSessionId(null)
+          setError('通信が切れたためLIVEを終了しました。再開は本人の操作が必要です。')
+        })
+        .catch(() => setError('映像・音声は停止しました。サーバー側のLIVE終了同期を確認してください。'))
+    })
     attachLocalPreview(room)
-    setCameraEnabled(true)
-    setMicrophoneEnabled(true)
-    setPrivacyPaused(false)
+    if (privacyPauseRef.current || document.visibilityState === 'hidden') {
+      stopHostMediaImmediately(room)
+      void Promise.allSettled([
+        setHostCameraEnabled(room, false, cameraFacing, videoOrientation),
+        setHostMicrophoneEnabled(room, false),
+      ])
+      setCameraEnabled(false)
+      setMicrophoneEnabled(false)
+      setPrivacyPaused(true)
+    } else {
+      setCameraEnabled(true)
+      setMicrophoneEnabled(true)
+      setPrivacyPaused(false)
+    }
     appliedOrientationRef.current = videoOrientation
   }
 
@@ -435,6 +506,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       return
     }
     setBusy(true)
+    privacyPauseRef.current = false
     setError(null)
     endingRef.current = false
     try {
@@ -464,7 +536,16 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         attachLocalPreview(roomRef.current)
       }
 
+      if (privacyPauseRef.current || document.visibilityState === 'hidden') {
+        throw new Error('画面が非表示になったためLIVE開始を中止しました。画面を開いて再度お試しください。')
+      }
+
       const sessionId = await startLive(performer.id, title)
+      if (privacyPauseRef.current || document.hidden) {
+        await endLive(performer.id)
+        throw new Error('画面が非表示になったためLIVE開始を中止しました。')
+      }
+      activeLiveRef.current = true
       setLiveSessionId(sessionId)
       const matchingSchedule = schedules.find((schedule) =>
         schedule.title.trim() === title.trim()
@@ -497,6 +578,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const preparePreview = async () => {
     if (!performer.is_approved) { setError('運営の承認後にLIVEを開始できます。登録状況をご確認ください。'); return }
     setBusy(true)
+    privacyPauseRef.current = false
     setError(null)
     setPreviewState('preparing')
     try {
@@ -543,6 +625,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       roomRef.current = null
       if (room) await room.disconnect()
       await endLive(performer.id)
+      activeLiveRef.current = false
       await refreshProfile()
       setLastResult({ viewers: peakRef.current, likes: fever.likes, gifts: giftCount })
       setFrameDiagnostics(null)
@@ -572,6 +655,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     try {
       const facing = await switchHostCamera(room, cameraFacing, videoOrientation)
       if (roomRef.current === room) {
+        if (!await keepMediaStoppedIfHidden(room)) return
         setCameraFacing(facing)
         attachLocalPreview(room)
         if (videoRef.current) await waitForVideoFrameAdvance(videoRef.current)
@@ -584,6 +668,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         setCameraRecoveryNeeded(/元の映像も復元|frames_not_advancing|processor_unavailable/.test(message))
       }
     } finally {
+      if (privacyPauseRef.current || document.visibilityState === 'hidden') void keepMediaStoppedIfHidden(room)
       cameraSwitchRef.current = false
       setSwitchingCamera(false)
     }
@@ -593,15 +678,18 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     const room = roomRef.current
     if (!room || mediaBusy) return
     const next = !microphoneEnabled
+    if (next && document.visibilityState !== 'hidden') privacyPauseRef.current = false
     setMediaBusy(true)
     setError(null)
     try {
       await setHostMicrophoneEnabled(room, next)
+      if (!await keepMediaStoppedIfHidden(room)) return
       setMicrophoneEnabled(next)
       if (next) setPrivacyPaused(false)
     } catch {
       setError(next ? 'マイクを再開できませんでした。マイク権限を確認してください。' : 'マイクを停止できませんでした。')
     } finally {
+      if (privacyPauseRef.current || document.visibilityState === 'hidden') void keepMediaStoppedIfHidden(room)
       setMediaBusy(false)
     }
   }
@@ -610,10 +698,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     const room = roomRef.current
     if (!room || mediaBusy || switchingCamera) return
     const next = !cameraEnabled
+    if (next && document.visibilityState !== 'hidden') privacyPauseRef.current = false
     setMediaBusy(true)
     setError(null)
     try {
       await setHostCameraEnabled(room, next, cameraFacing, videoOrientation)
+      if (!await keepMediaStoppedIfHidden(room)) return
       setCameraEnabled(next)
       if (next) {
         attachLocalPreview(room)
@@ -625,6 +715,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     } catch {
       setError(next ? 'カメラを再開できませんでした。カメラ権限を確認してください。' : 'カメラを停止できませんでした。')
     } finally {
+      if (privacyPauseRef.current || document.visibilityState === 'hidden') void keepMediaStoppedIfHidden(room)
       setMediaBusy(false)
     }
   }
@@ -633,10 +724,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     const room = roomRef.current
     if (!room || mediaBusy) return
     setMediaBusy(true)
+    if (document.visibilityState !== 'hidden') privacyPauseRef.current = false
     setError(null)
     try {
       await setHostCameraEnabled(room, false, cameraFacing, videoOrientation)
       await setHostCameraEnabled(room, true, cameraFacing, videoOrientation)
+      if (!await keepMediaStoppedIfHidden(room)) return
       attachLocalPreview(room)
       appliedOrientationRef.current = videoOrientation
       failedAutoOrientationRef.current = null
@@ -646,6 +739,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       setCameraEnabled(false)
       setError('カメラを復旧できませんでした。権限を確認して、もう一度再試行してください。音声とLIVE接続は維持しています。')
     } finally {
+      if (privacyPauseRef.current || document.visibilityState === 'hidden') void keepMediaStoppedIfHidden(room)
       setMediaBusy(false)
     }
   }
@@ -663,6 +757,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       if (room && cameraEnabled && nextOrientation !== previousOrientation) {
         const restarted = await restartHostCameraForOrientation(room, cameraFacing, nextOrientation)
         if (!restarted) throw new Error('camera_track_unavailable')
+        if (!await keepMediaStoppedIfHidden(room)) return
         attachLocalPreview(room)
         if (videoRef.current) await waitForVideoFrameAdvance(videoRef.current)
       }
@@ -676,6 +771,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         try {
           const restored = await restartHostCameraForOrientation(room, cameraFacing, previousOrientation)
           if (!restored) throw new Error('camera_track_unavailable')
+          if (!await keepMediaStoppedIfHidden(room)) return
           attachLocalPreview(room)
           if (videoRef.current) await waitForVideoFrameAdvance(videoRef.current)
           setError('配信方向を切り替えられませんでした。元の向きで配信を継続しています。')
@@ -688,6 +784,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       }
       setOrientationMode(previousMode)
     } finally {
+      if (room && (privacyPauseRef.current || document.visibilityState === 'hidden')) void keepMediaStoppedIfHidden(room)
       orientationSwitchRef.current = false
       setMediaBusy(false)
     }
