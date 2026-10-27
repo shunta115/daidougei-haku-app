@@ -124,7 +124,7 @@ export async function fetchLiveKitStatus() {
   }
 }
 
-export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
+export async function fetchLiveKitToken(performerId: string, asHost: boolean, preview = false) {
   let res: Response
   try {
     const headers = {
@@ -134,13 +134,13 @@ export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
     res = await fetch('/api/livekit/token', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ performerId, asHost }),
+      body: JSON.stringify({ performerId, asHost, preview: asHost && preview }),
     })
   } catch {
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', 'トークンAPIに到達できませんでした'))
   }
 
-  let json: { token?: string; url?: string; room?: string; error?: string } = {}
+  let json: { token?: string; url?: string; room?: string; sessionId?: string | null; error?: string } = {}
   try {
     json = (await res.json()) as typeof json
   } catch {
@@ -150,7 +150,7 @@ export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
   if (!res.ok || !json.token || !json.url) {
     throw classifyTokenFailure(res.status, json.error || '')
   }
-  return json as { token: string; url: string; room: string }
+  return json as { token: string; url: string; room: string; sessionId?: string | null }
 }
 
 function hostRoomOptions(orientation: LiveVideoOrientation) {
@@ -233,6 +233,17 @@ export async function connectAsHost(url: string, token: string, orientation: Liv
 }
 
 export type HostVideoOrientation = 'portrait' | 'landscape'
+
+/** Stop hardware synchronously before Safari freezes a hidden page. */
+export function stopHostMediaImmediately(room: Room) {
+  for (const source of [Track.Source.Camera, Track.Source.Microphone]) {
+    try {
+      room.localParticipant.getTrackPublication(source)?.track?.mediaStreamTrack.stop()
+    } catch {
+      // Continue stopping the other device even if this track has already ended.
+    }
+  }
+}
 
 export async function setHostMicrophoneEnabled(room: Room, enabled: boolean) {
   await room.localParticipant.setMicrophoneEnabled(enabled)

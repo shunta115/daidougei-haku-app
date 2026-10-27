@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createLiveKitToken, getLiveKitConfig, roomNameForPerformer } from './_shared.js'
+import { createLiveKitToken, getLiveKitConfig, previewRoomNameForPerformer, roomNameForSession } from './_shared.js'
 
 function userClient(authHeader: string | undefined) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -19,13 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
-    const { performerId, asHost } = req.body as { performerId?: string; asHost?: boolean }
+    const { performerId, asHost, preview } = req.body as { performerId?: string; asHost?: boolean; preview?: boolean }
     if (!performerId) {
       res.status(400).json({ error: 'performerId required' })
       return
     }
 
     const host = Boolean(asHost)
+    const hostPreview = host && preview === true
     if (host && !authHeader) {
       res.status(401).json({ error: 'Authorization required' })
       return
@@ -66,13 +67,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
+    let sessionId: string | null = null
+    if (!hostPreview) {
+      if (!performer.is_live) {
+        res.status(403).json({ error: 'This live stream is not currently available' })
+        return
+      }
+      const { data: session, error: sessionError } = await sb.from('live_sessions')
+        .select('id')
+        .eq('performer_id', performerId)
+        .is('ended_at', null)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (sessionError || !session) {
+        res.status(409).json({ error: 'No active live session' })
+        return
+      }
+      sessionId = session.id as string
+    }
+
     const { data: profile } = user
       ? await sb.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
       : { data: null }
     const guestIdentity = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const identity = user?.id ?? guestIdentity
     const displayName = profile?.display_name || user?.email || 'Guest'
-    const room = roomNameForPerformer(performerId)
+    const room = hostPreview
+      ? previewRoomNameForPerformer(performerId)
+      : roomNameForSession(performerId, sessionId!)
     const token = await createLiveKitToken({
       identity,
       name: host ? performer.stage_name || displayName : displayName,
@@ -85,6 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       token,
       url,
       room,
+      sessionId,
       performerId,
       identity,
     })
