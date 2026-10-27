@@ -470,10 +470,20 @@ describe('LIVE camera switch', () => {
     expect(screen).toContain('pl-live--performer')
     expect(screen).toContain('pl-live__end-live')
     expect(css).toContain(".pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__panel--live")
-    expect(css).toContain('grid-template-columns: minmax(0, 1fr) minmax(240px, 34vw)')
+    expect(css).toContain('grid-template-rows: minmax(0, 56%) minmax(0, 44%)')
+    expect(css).toContain(".pl-live--performer[data-layout='phone-landscape'][data-phase='live'] .pl-live__comments-wrap { order: -1; }")
     expect(css).toContain(".pl-live--performer[data-phase='live'] .pl-live__media-controls")
     expect(screen).toContain('pl-live__studio-tools')
     expect(screen).toContain('pl-live__end-confirm')
+  })
+
+  it('shows a compact performer identity and real audience reactions without exposing diagnostics by default', () => {
+    const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
+    expect(screen).toContain('pl-live__performer-name')
+    expect(screen).toContain('performer?.stage_name')
+    expect(screen).toContain('👁 {viewers}　♥ {fever.likes}　🎁 {giftCount}')
+    expect(screen).toContain('{settingsOpen ? <div className="pl-live__studio-settings">')
+    expect(screen).toContain('{cameraDiagnostics()}')
   })
 
   it('keeps gifts, FEVER and comments visible while offering a confirmed end and result summary', () => {
