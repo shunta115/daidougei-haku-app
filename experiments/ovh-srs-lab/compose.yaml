@@ -2,7 +2,7 @@
 # Anonymous RTMP publish/HLS read: never expose without auth/TLS.
 services:
   srs:
-    image: ossrs/srs:v6.0-r0
+    image: ossrs/srs:v6.0-r1
     restart: 'no'
     command: ./objs/srs -e
     environment:
