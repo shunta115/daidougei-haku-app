@@ -25,6 +25,8 @@
 
 計算の自動テスト: `node --test experiments/ovh-srs-lab/capacity.test.mjs`（サーバーに通信しない）。
 
+HLS視聴負荷試験用のローカル限定クライアント: `node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/test.m3u8 --viewers=5 --seconds=10`。成功数、転送バイト数、エラー数、応答時間を記録する。自動テストは `node --test experiments/ovh-srs-lab/hls-local-probe.test.mjs`。500クライアントの検証プログラムとして準備したが、**現時点での通信先はループバックのみ**、5接続を超える場合は明示フラグが必要。実VPSへの500人相当の負荷は契約・許可・請求条件が確認できるまで行わない。合成HLSサーバーによるテストは実SRS・映像デコード・iPhone・実ネットワークを保証しない。
+
 **ワンタップ配信への注意:** このcomposeはRTMP入力のみを確認する段階。iPhone Safariからの入力にはSRSのWHIP/WebRTC対応、HTTPS、UDP等の適切な通信設定、認証・権限管理、映像H.264/音声OpusからHLS向け音声への変換整合性を別途検証する。WHIP入力→HLS出力の成功は未確認。一般公開前には認証・停止機能とTLS・Firewallが必要。
 
 SRS v6.0-r0を試作用に固定しているが、v6.0-r1が公開済み。運用用イメージの選定と差分検証は別工程。
