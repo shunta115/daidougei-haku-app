@@ -48,6 +48,27 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 - **この試験は500台のiPhoneによる連続LIVE視聴ではない。** 同じ4個の短いファイルを各クライアントが1回受信しただけ。実SRSの性能、約487.6Mbpsの持続配信、1時間の安定稼働、モバイル回線、WHIP入力、画質、映像再生、OVHcloudの実効帯域は**未検証**。
 - 500クライアントの負荷は明示的な環境変数がないと実行できない。ローカル限定であり、有料VPSや本番サイトへ負荷をかける機能はない。
 
+## ワンタップWHIP → HLS ローカル試作（2026-10-29追加）
+
+今回、**「LIVE配信を開始」ボタンからカメラ/マイクを取得し、SRSのWHIP APIにSDPを送るブラウザ側のコード**を追加した。SRSがRTC→RTMP→HLSへ変換できるかを確認するための、別系統のローカルラボ。
+
+- `compose-whip.yaml`: RTMP(1935)、WHIP API(1985)、HLS(8080)、WebRTC UDP(8000)をすべて127.0.0.1にだけ公開。RTC→RTMP変換とHLSを有効化する。
+- `whip-publisher.mjs`: ワンタップ配信のブラウザ側実装。H.264優先、SDP交換、接続待機、失敗時のカメラ停止、バックグラウンド停止、終了時のWHIPリソース削除（対応サーバーのみ）を実装。**接続先はlocalhost/127.0.0.1のSRS試験URLだけに固定**し、実運用に使える秘密情報は持たない。
+- `whip-local.html`: ローカルの配信開始・終了・HLS視聴ボタンを表示する画面。
+- `whip-publisher.test.mjs`: SDP送信、エラー時停止、カメラ許可待ちの停止競合など5件の自動テスト（Node.js上のモック）。`node --test experiments/ovh-srs-lab/whip-publisher.test.mjs` で実行できる。
+
+**ローカル起動手順（Dockerのある開発端末のみ）**
+
+1. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml up -d`
+2. リポジトリルートから `python3 -m http.server 4319 --bind 127.0.0.1`
+3. 同じPCのブラウザで `http://127.0.0.1:4319/experiments/ovh-srs-lab/whip-local.html` を開き「LIVE配信を開始」を押す
+4. 画面の「映像を読み込む」でHLS再生を確認し、終了ボタン・画面非表示でカメラが停止するか検証
+5. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml down` で終了
+
+**重要な未検証項目:** この実行環境にはDockerがなく、SRSを実際に起動したWHIP→HLSのE2Eは未実施。WebRTCのOpus音声をHLS互換AACへ変換できるか、H.264ネゴシエーション、iPhone Safari、外部携帯回線、認証・権限、TLS/HTTPS、QR代理配信、500人負荷は**未確認**。ローカルHTTP URLはiPhoneから使えず、iPhoneの実機テストには別途安全なHTTPS試験環境が必要。**このローカル構成を外部公開してはならない。**
+
+参考: https://ossrs.io/lts/en-us/docs/v6/doc/webrtc / https://www.ossrs.net/lts/en-us/docs/v6/doc/hls
+
 ## 次の試験ゲート
 
 0. **費用発生前に承認が必要**。OVHcloudの最終購入画面における月額・初期費用・リージョン・契約期間・転送規約を確定し、ユーザーからその条件について個別承認を得る。現時点では契約していない。
@@ -57,4 +78,4 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 3. CPU/メモリ/通信帯域、HTTP失敗率、HLS遅延、配信者側の上り、iPhone Safariで再接続を測定。数値未採取を「合格」と表記しない。
 4. 合格後にHAKU DIRECTとCROWDの本人承認・QR・WHIP/WebRTC入力・HLS再生・投げ銭導線を**別の開発PR**で統合する。
 
-既存のLiveKit/Stripe/Supabase/本番DB/本番デプロイは変更しない。今回のComposeはRTMP入力ラボであり、iPhone Safariワンタップ配信や観客代理配信は未実装。Dockerもこの実行環境にないため、SRS実動作は未検証。
+既存のLiveKit/Stripe/Supabase/本番DB/本番デプロイは変更しない。従来のcompose.yamlはRTMP入力ラボ。新しいcompose-whip.yamlはWHIP入力を有効にしたローカル検証構成。ブラウザのワンタップWHIPクライアントは実装したが、SRS実接続、iPhone Safari、観客代理配信の本番統合は未実装。DockerがないためSRS実動作は未検証。
