@@ -35,7 +35,7 @@ export async function runProbe(options) {
   const target=validateOptions(options);
   const start=Date.now();
   const deadline=start+options.seconds*1000;
-  const stats={viewers:options.viewers, seconds:options.seconds, playlistRequests:0, segments:0, bytes:0, errors:0, firstSegmentMs:[], requestMs:[]};
+  const stats={viewers:options.viewers, seconds:options.seconds, playlistRequests:0, segments:0, bytes:0, errors:0, errorSamples:[], firstSegmentMs:[], requestMs:[]};
   async function get(url) {
     const u = new URL(url);
     if (u.origin !== target.origin) throw new Error('Cross-origin fetch prevented');
@@ -61,7 +61,7 @@ export async function runProbe(options) {
           stats.segments++;
           if (first) {stats.firstSegmentMs.push(Date.now()-start);first=false;}
         }
-      } catch (error) {stats.errors++;}
+      } catch (error) {stats.errors++; if (stats.errorSamples.length<5) stats.errorSamples.push(String(error?.message??error));}
       const delay=Math.min(1500,deadline-Date.now());
       if (delay>0) await sleep(delay);
     }
