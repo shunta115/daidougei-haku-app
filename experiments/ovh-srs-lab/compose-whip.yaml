@@ -1,0 +1,21 @@
+# LOCAL-ONLY research lab. Never publish this config on the internet.
+# SRS WHIP (browser) -> RTC-to-RTMP -> HLS; conversion requires verification.
+services:
+  srs:
+    image: ossrs/srs:v6.0-r1
+    restart: 'no'
+    command: ./objs/srs -e
+    environment:
+      SRS_RTMP_LISTEN: '1935'
+      SRS_HTTP_API_ENABLED: 'on'
+      SRS_HTTP_SERVER_ENABLED: 'on'
+      SRS_RTC_SERVER_ENABLED: 'on'
+      SRS_RTC_SERVER_CANDIDATE: '127.0.0.1'
+      SRS_VHOST_RTC_ENABLED: 'on'
+      SRS_VHOST_RTC_RTC_TO_RTMP: 'on'
+      SRS_VHOST_HLS_ENABLED: 'on'
+    ports:
+      - '127.0.0.1:1935:1935'
+      - '127.0.0.1:1985:1985'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8000:8000/udp'
