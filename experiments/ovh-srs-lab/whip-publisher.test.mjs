@@ -8,8 +8,17 @@ const fakeStream = () => { const track = fakeTrack(); return { track, getTracks:
 class FakePC {
   static getCapabilities() { return { codecs: [{ mimeType: 'video/H264' }, { mimeType: 'video/VP8' }] }; }
   constructor() { this.iceGatheringState = 'complete'; this.connectionState = 'connected'; this.listeners = new Map(); this.transceivers = []; this.closed = false; }
-  addTrack(track) { const t = { sender: { track }, setCodecPreferences(c) { this.codecs = c; } }; this.transceivers.push(t); }
+  addTrack(track) {
+    const sender = {
+      track, lastParameters: null,
+      getParameters() { return { encodings: [{}] }; },
+      async setParameters(params) { this.lastParameters = structuredClone(params); }
+    };
+    const t = { sender, setCodecPreferences(c) { this.codecs = c; } };
+    this.transceivers.push(t);
+  }
   getTransceivers() { return this.transceivers; }
+  getSenders() { return this.transceivers.map(t => t.sender); }
   async createOffer() { return { type: 'offer', sdp: 'v=0\r\no=local' }; }
   async setLocalDescription(desc) { this.localDescription = desc; }
   async setRemoteDescription(desc) { this.remoteDescription = desc; }
@@ -45,6 +54,8 @@ test('one click starts, sends SDP, and stop releases camera and WHIP resource', 
   assert.equal(requests[0].init.body, 'v=0\r\no=local');
   assert.equal(publisher.pc.remoteDescription.type, 'answer');
   assert.equal(publisher.pc.transceivers[0].codecs[0].mimeType, 'video/H264');
+  assert.equal(publisher.pc.getSenders()[0].lastParameters.encodings[0].maxBitrate, 800_000);
+  assert.equal(publisher.pc.getSenders()[0].lastParameters.encodings[0].maxFramerate, 24);
   publisher.stop();
   assert.equal(stream.track.stopped, true);
   assert.equal(requests[1].init.method, 'DELETE');
@@ -121,5 +132,48 @@ test('unexpected WebRTC failure after LIVE stops physical camera and microphone'
   pc.listeners.get('connectionstatechange')?.();
   assert.equal(stream.track.stopped, true);
   assert.equal(pc.closed, true);
+  assert.equal(publisher.state, 'error');
+});
+
+test('video and audio bitrate caps apply before WHIP publish', async () => {
+  const video = fakeTrack();
+  const audio = { ...fakeTrack(), kind: 'audio' };
+  const stream = { getTracks: () => [video, audio] };
+  let pcAtPublish;
+  const publisher = new LocalWhipPublisher({
+    getUserMedia: async () => stream,
+    PeerConnection: FakePC,
+    fetchImpl: async (_url, init) => {
+      if (init.method === 'POST') {
+        pcAtPublish = publisher.pc;
+        assert.deepEqual(pcAtPublish.getSenders().map(s => s.lastParameters.encodings[0].maxBitrate), [800_000, 48_000]);
+      }
+      return response;
+    }
+  });
+  await publisher.start(ENDPOINT);
+  assert.ok(pcAtPublish);
+  publisher.stop();
+  assert.equal(video.stopped, true);
+  assert.equal(audio.stopped, true);
+});
+
+test('bitrate cap failure prevents uncapped network publish and releases camera', async () => {
+  const stream = fakeStream();
+  let networkPosts = 0;
+  class NoCapsPC extends FakePC {
+    addTrack(track) {
+      super.addTrack(track);
+      this.transceivers.at(-1).sender.getParameters = () => ({ encodings: [] });
+    }
+  }
+  const publisher = new LocalWhipPublisher({
+    getUserMedia: async () => stream,
+    PeerConnection: NoCapsPC,
+    fetchImpl: async () => { networkPosts++; return response; }
+  });
+  await assert.rejects(publisher.start(ENDPOINT), /No encoding/);
+  assert.equal(networkPosts, 0);
+  assert.equal(stream.track.stopped, true);
   assert.equal(publisher.state, 'error');
 });
