@@ -107,3 +107,19 @@ test('stop while SDP negotiation is pending cannot reenter connecting state', as
   assert.equal(stream.track.stopped,true);
   assert.deepEqual(states,['starting','idle']);
 });
+
+test('unexpected WebRTC failure after LIVE stops physical camera and microphone', async () => {
+  const stream = fakeStream();
+  const publisher = new LocalWhipPublisher({
+    getUserMedia: async () => stream,
+    PeerConnection: FakePC,
+    fetchImpl: async () => response
+  });
+  await publisher.start(ENDPOINT);
+  const pc = publisher.pc;
+  pc.connectionState = 'failed';
+  pc.listeners.get('connectionstatechange')?.();
+  assert.equal(stream.track.stopped, true);
+  assert.equal(pc.closed, true);
+  assert.equal(publisher.state, 'error');
+});
