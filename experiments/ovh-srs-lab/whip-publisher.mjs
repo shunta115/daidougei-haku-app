@@ -86,6 +86,15 @@ export class LocalWhipPublisher {
       this.onPreview(stream);
       const pc = new this.PeerConnection({ iceServers: [], bundlePolicy: 'max-bundle' });
       this.pc = pc;
+      // Once a LIVE connection fails, release the physical camera/microphone.
+      // A browser can otherwise keep capturing after the network is gone.
+      pc.addEventListener('connectionstatechange', () => {
+        if (this.pc !== pc || generation !== this.generation) return;
+        if (pc.connectionState === 'failed') {
+          this.stop();
+          this.setState('error');
+        }
+      });
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
       preferH264(pc, this.PeerConnection);
       const offer = await pc.createOffer();
