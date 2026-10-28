@@ -52,6 +52,28 @@ function preferH264(pc, RTCImpl) {
   }
 }
 
+/** Target uplink budget, not a billing guarantee. Fail closed if unsupported. */
+export async function capOutgoingMedia(pc) {
+  const senders = pc.getSenders?.();
+  if (!senders?.length) throw new Error('WebRTC sender unavailable; refusing uncapped LIVE');
+  for (const sender of senders) {
+    const kind = sender.track?.kind;
+    if (kind !== 'video' && kind !== 'audio') continue;
+    if (typeof sender.getParameters !== 'function' || typeof sender.setParameters !== 'function') {
+      throw new Error('Cannot apply upload bitrate limits');
+    }
+    const parameters = sender.getParameters();
+    if (!Array.isArray(parameters?.encodings) || !parameters.encodings.length) {
+      throw new Error('No encoding available to apply upload bitrate limits');
+    }
+    for (const encoding of parameters.encodings) {
+      encoding.maxBitrate = kind === 'video' ? 800_000 : 48_000;
+      if (kind === 'video') encoding.maxFramerate = 24;
+    }
+    await sender.setParameters(parameters);
+  }
+}
+
 export class LocalWhipPublisher {
   constructor({ getUserMedia, PeerConnection, fetchImpl, onState = () => {}, onPreview = () => {} }) {
     this.getUserMedia = getUserMedia;
@@ -100,6 +122,8 @@ export class LocalWhipPublisher {
       const offer = await pc.createOffer();
       assertActive();
       await pc.setLocalDescription(offer);
+      assertActive();
+      await capOutgoingMedia(pc);
       assertActive();
       await waitForPeer(pc, 'iceGatheringState', 'icegatheringstatechange', ['complete'], 10000, abort.signal);
       assertActive();
