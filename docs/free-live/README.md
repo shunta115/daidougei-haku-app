@@ -4,7 +4,7 @@
 
 ## 結論と今回の到達点
 
-全国規模の配信を、運営費0円・外部アカウント不要・iPhone Safari・安定接続のすべてを保証して提供できる方式は、今回確認した資料と環境では確立できていない。今回選んだのは **最大5人・360pを目標にしたWebRTC P2Pのローカル試作**。映像中継事業者を呼ばないので、その映像中継料金は0円。認証、シグナリング、Web配信の全国運用まで追加費用0円になったという意味ではない。
+全国規模の配信を、運営費0円・外部アカウント不要・iPhone Safari・安定接続のすべてを保証して提供できる方式は、今回確認した資料と環境では確立できていない。今回選んだのは **最大5視聴・360pを目標にしたWebRTC P2P**。ローカル試作に加え、所有者限定の独立Previewに接続管理を実装した。映像中継事業者を呼ばないので、その映像中継料金は0円。認証、シグナリング、Web配信の全国運用まで追加費用0円になったという意味ではない。
 
 LiveKit Buildの無料枠は公式に強制上限が記載されており、超過で新規リクエストが拒否される。既存のHAKU実装を再利用できる有力な別案だが、既存プロジェクトの契約プラン、残り枠、他用途と共有している消費量を確認できていないため、今回の試作から接続していない。無料プロジェクトを増設して枠を水増しする運用は行わない。
 
@@ -18,10 +18,10 @@ LiveKit Buildの無料枠は公式に強制上限が記載されており、超�
 |視聴|`src/platform/screens/LiveWatchScreen.tsx`|既存の映像、コメント、ギフト、フォローを維持|
 |投げ銭|`src/app/routes.ts` の `openTip` → `/live?tipTo=出演者ID`、`TipScreen.tsx`|再利用先を確認。試作のボタンは接続説明のみで、決済画面へ遷移しない|
 |フォロー|`src/platform/lib/api.ts` の `follow` / `unfollow`、`follows`|再利用先を確認。試作は保存しない|
-|通報|同ファイルの `createReport`、`reports`|既存機能を確認。試作はローカル配信を隔離停止するのみで、本番reportsに保存しない|
+|通報|同ファイルの `createReport`、`reports`|既存機能を確認。試作内で隔離停止し、独立D1に限定した記録を保存。本番reports未接続|
 |認証|Supabase `auth.getUser()`、profiles、performers|READ ONLY認証アダプターを追加。実アカウント接続は未実施|
 |Stripe/Connect|既存tip API、台帳・送金コード|読取による依存確認のみ。API実行、送金、返金、設定変更なし|
-|DB|既存スキーマ/コード|migration追加・適用なし。本番DBへの接続・書込なし|
+|DB|既存スキーマ/コード|HAKU/Supabaseのmigration追加・適用なし。Preview専用の独立D1に1表追加。HAKU本番DBへの接続・書込なし|
 |Vercel|既存Vite/Preview構成|このブランチの自動deploymentのみ無効化。mainや他ブランチの設定は変えない|
 
 未統合PR #81（カメラ）、#83（UI）、#84（安全停止）、#86（統合TEST）をGitHubで確認。今回はmainから独立させ、それらの差分を取り込まず、既存画面を上書きしていない。Egressを含む #70/#71 は取り込まない。
@@ -32,6 +32,7 @@ LiveKit Buildの無料枠は公式に強制上限が記載されており、超�
 |---|---|---|---|
 |WebRTC P2P、TURNなし|映像を端末間で直接送るため映像中継事業者の請求なし|有料経路自体を設定しない。アプリで視聴5席を上限にする|今回の試作。配信者の上り・CPU・電池負担が人数比例。携帯NAT/企業回線では接続できない場合がある|
 |外部サービスを一切使わないP2P|同一LAN/到達可能な回線で直接接続できる場合|STUNも設定しない構成は可能だが、到達性がさらに低下|全国の携帯回線へ安定提供する構成にはならない。認証・シグナリング用サーバーは依然必要|
+|Sites + D1（今回の非公開Preview）|現在の対象ChatGPTプランに含まれるbeta内の試用。媒体はP2Pで中継しない|追加購入・有料利用の有効化なし。アプリ側で1回15分・1日10,000操作を制限。これは事業者側の請求ハードキャップとは別|所有者の端末だけで試す環境に限定。全国運用・無料アカウント不要・無制限無料の基盤とは扱わない|
 |Cloudflare Realtime SFU|月間SFU/TURN合算の最初の1,000GB。SFUへの上りは無料|超過は$0.05/GB。公式SFU資料で請求0円のサービス側ハードキャップを確認できない|未採用。発行停止やブラウザのgetStats監視だけでは既存接続・不正クライアントの超過を確実に遮断できない|
 |Cloudflare STUN|公式FAQで無料・無制限と明記|映像中継ではなく接続候補の取得だけ|ローカル試作の通常接続設定に使用。TURNは設定しない。自前STUNなら外部依存を減らせるがサーバー費が必要|
 |LiveKit Cloud Build|月5,000参加者分、下り50GB、同時100接続、$0固定費|無料枠はハードキャップ。上限後は新規要求拒否。既に接続した全セッションの瞬時停止まで資料は保証しない|少量TESTの候補。既存契約が無料Buildであると確認できた場合に限定。残り枠・共有利用も要確認|
@@ -101,23 +102,34 @@ Node.js 24、既存lockfileで `npm ci` → `npm run build` → `node experiment
 
 ブラウザー検証は同じホストの独立contextと偽カメラ/マイク、STUNなし・loopback候補許可で実行する。これは携帯回線のNAT越えやiPhone実機テストではない。検証結果の詳細は [verification.md](verification.md)。
 
-## iPhone Previewの扱い
+## iPhone Preview（Prototype 02）
 
 `/haku-free-live.html` は独立entry。権限サーバーがない環境では端末カメラと5受信のloopbackテストだけに切り替わり、実配信とは明確に区別する。公開側の `api/free-live.ts` は503で拒否し、本番DB、Stripe、LiveKitには接続しない。
 
 2026-10-28 JST追記: VercelのGit接続情報の読取APIで、既存HAKUプロジェクトを含むチームの契約が **Hobby** と確認できた。Hobbyは非商用利用向けなので、HAKUの確認サイトには使用しない。残り枠や商用利用の承認を確認したものではなく、プラン変更もしない。このブランチのVercel自動deploymentは引き続き `vercel.json` のbranch限定falseで停止している。
 
-**端末確認用URL（本人のみ）:** https://haku-live-device-check.eb-shimada409.chatgpt.site/
+**非公開LIVEテストURL（本人のみ）:** https://haku-live-device-check.eb-shimada409.chatgpt.site/haku-free-live
 
-HAKUから独立したSitesの静的サイト。現在のChatGPTプランに含まれるSitesを使い、追加契約・クレジット購入・従量課金の有効化は行っていない。Sites上のdeployment区分はproductionだが、HAKUの本番サイト・DB・決済・認証とは接続しない、所有者だけの端末確認サイトである。Sitesの将来の料金や無制限運用を保証するものではない。プランの制限に達した場合に購入して続行しない。
+HAKUから独立したSitesの所有者限定サイト。現在のChatGPTプランに含まれるSitesを使い、追加契約・クレジット購入・従量課金の有効化は行っていない。Sites上のdeployment区分はproductionだが、HAKUの本番サイト・DB・決済・認証とは接続しない。Preview専用のD1を追加し、同じ所有者の端末間で配信・視聴・QR参加・交代を試す接続管理を実装した。Sitesの将来の料金や無制限運用を保証するものではない。プランの制限に達した場合に購入して続行しない。
 
-画面のカメラ開始と端末内5接続は、同じiPhoneの中だけで動作する。**このURLで別のスマホへのLIVE配信・QRの認証・カメラマン交代は試せない。** これらはローカル隔離サーバーの試作だけで検証済み。投げ銭・フォロー・通報の外部送信も行わない。
+上限は **同時1配信・視聴5人・1回15分**。日次10,000操作、18,000参加者秒、20テストセッション、12秒の配信leaseを設定した。媒体はP2Pで、TURN/SFU/録画/Egressは使わない。5視聴へ360pの目安は配信者の送信約0.42GB/15分。携帯NAT等で直接接続できない場合は有料中継へ切り替えず失敗する。
 
-`node scripts/build-free-live-device.mjs /absolute/output/index.html` で再生成できる。`data-device-only="true"` によりAPIの初期接続と呼出しを拒否し、さらにCSP `connect-src 'none'` を設定する。カメラはクリックと権限許可後のみ取得、loopbackのICE serversは空。HAKUの環境変数・SDK初期化・本番シークレットを含まない。
+`experiments/free-live/sites-controller.mjs` はSitesが渡すログインIDをハッシュ化して所有者を結合し、テスト役割のsessionを端末IDと結合する。**HAKUの本物のパフォーマー認証ではない。** 全端末で同じ所有者のChatGPTログインが必要で、他人への公開・アカウント共用の運用には使わない。役割選択はこの閉じた環境だけのシミュレーションである。
 
-iPhoneでは、この会話と同じChatGPTアカウントで上記URLをSafariで直接開く。「カメラテストを開始する」で許可後に映像を確認し、「端末内で5接続を試す」で接続数と送受信量を確認する。「カメラ・配信を停止」でカメラ表示が消えること、アプリ切替・画面ロック後に勝手に再開しないことを確認する。「観客が配信」は事前許可と撮影/通信の同意を試す操作デモであり、本人認証の実装ではない。
+権限状態、QR、nonce、視聴席、メッセージ、使用上限をD1の版番号付きsnapshotにまとめ、比較更新が成功した場合だけ応答を確定する。別Workerからの同時要求でも席数や失効を守る。再試行IDを結合し、同じ操作の再実行や終了後の古い成功応答を拒否する。MapをWorker間で共有しない。SQLは別の試作DB専用で、HAKUのmigrationではない。
 
-公開構成の実配信Previewには、非本番の認証・原子的な権限ストア・シグナリング・HTTPSの接続と費用の強制遮断を別途用意する必要がある。所有者ログイン後のHTTPSカメラはエージェントから未検証、iPhone実機検証も未実施。
+### iPhoneでの確認手順
+
+1. 自分の2台の端末で、先に同じ所有者のChatGPTアカウントから上記URLへログインする。初回ログインでQRのfragmentが失われる場合は、ログイン後にQRを読み直す。
+2. 配信側で「LIVE配信を開始する」を押し、カメラ・マイクを許可する。表示された**視聴用QR**をもう1台で読み、「LIVEを見る」を押す。音声は「音声をONにする」で有効にする。
+3. CROWDは本人側の「観客カメラを許可してQR発行」を押し、もう1台で**観客用QR**を読む。撮影・通信の同意後に開始を押す。本人が配信中なら交代待ちになり、本人側で「撮影者1にカメラ交代」を選ぶ。旧カメラの停止ACKの後、新しい撮影者が開始する。
+4. 本人側の緊急停止、観客の停止、画面ロック、着信、アプリ切替で映像が止まり、勝手に再開しないことを確認する。
+
+投げ銭・フォローは未接続で決済・保存しない。通報は試作内だけを停止し、独立D1に限定して記録する。運営への通知や本番通報台帳との連携は未実装。映像・音声を保存しないが、接続IPを含み得るSDPと期限付きsessionが試作用状態に入る。期限切れ状態は次の要求で掃除するため、指定秒数で物理消去されると保証しない。
+
+従来の端末内テストは同じサイトの `/device-check` に残した。`node scripts/build-free-live-device.mjs /absolute/output/index.html` はAPIを呼ばないdevice-only版（CSP `connect-src 'none'`）、明示的に `--hosted` を付けた場合だけ同一originの試作APIへ接続する版を生成する。HAKUの環境変数・本番SDK・本番シークレットは使わない。
+
+接続管理はSQLiteとMiniflare D1で検証し、公開先D1のhealth成功・ログインIDなしAPIの401・配信済みHTMLとsourceの一致を確認した。**所有者ログイン後のHTTPS映像・音声、iPhone実機、別回線でのMediaStream受信は未検証。** 全国公開には本物のHAKU認証、事業者側の費用遮断、強い停止制御、通報運用の整備が残る。
 
 公式資料: [Vercel Hobby](https://vercel.com/docs/plans/hobby)、[商用利用の制約](https://vercel.com/docs/limits/fair-use-guidelines)、[ChatGPT Sitesの料金説明](https://learn.chatgpt.com/docs/pricing)。契約プランの確認は接続済みアカウントの読取結果による。
 
@@ -145,5 +157,8 @@ iPhoneでは、この会話と同じChatGPTアカウントで上記URLをSafari�
 - https://vercel.com/docs/project-configuration/git-configuration
 - https://vercel.com/docs/spend-management
 - https://vercel.com/docs/plans/hobby
+- https://developers.cloudflare.com/d1/worker-api/d1-database/
+- https://developers.cloudflare.com/d1/worker-api/prepared-statements/
+- https://learn.chatgpt.com/docs/pricing
 
 Stripe Directoryも試したが、CLI pluginの起動に必要なUnix socketが環境で拒否され検索を完了できなかった。上記は各社の公式資料を直接確認した比較で、Directoryでプロバイダーの選定・契約をしたものではない。

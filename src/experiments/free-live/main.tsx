@@ -5,7 +5,7 @@ import { Camera, CameraOff, Radio, QrCode, ShieldCheck, Users, Heart, Gift, Rota
 import { DirectPeers, deviceLoopback, PHONE_VIDEO, type Meter, type PeerMessage } from './peer'
 import './style.css'
 
-type Actor = { id: string; role: string; name: string }
+type Actor = { id: string; role: string; name: string; fixtureId?: string }
 type Room = {
   id: string; performerId: string; phase: string; epoch: number; deadline: number; reason: string | null
   crowdAllowed: boolean; viewers: number; viewerLimit: number; publisherPeer: string | null
@@ -15,6 +15,7 @@ type Room = {
 type Grant = { nonce: string; epoch: number }
 const EMPTY_METER: Meter = { sent: 0, received: 0, connected: 0, relay: false }
 const DEVICE_ONLY = document.documentElement.dataset.deviceOnly === 'true'
+const HOSTED_LAB = document.documentElement.dataset.hostedLab === 'true'
 const initialUrl = new URL(location.href)
 const fragment = new URLSearchParams(initialUrl.hash.slice(1))
 const initialRoomId = initialUrl.searchParams.get('room') || ''
@@ -32,6 +33,10 @@ const errors: Record<string, string> = {
   session_ended: '配信が終了しました。このQRと配信権限は失効しています。',
   already_requested: 'すでに交代待ちです。本人の交代操作をお待ちください。',
   authentication_required: '検証用アカウントを選び直してください。',
+  sites_sign_in_required: 'この確認サイトの所有者のChatGPTアカウントでログインしてください。',
+  lab_daily_request_limit: '本日の接続管理テストの上限に達しました。追加購入は行わず停止します。',
+  lab_store_busy: '接続管理が混み合っています。少し待ってから再接続してください。',
+  lab_unavailable: '接続管理を利用できません。カメラは停止したままです。再読み込みしてください。',
 }
 function message(error: unknown) {
   const text = error instanceof Error ? error.message : '接続できませんでした。'
@@ -65,6 +70,7 @@ function App() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [qr, setQr] = useState<{url: string; image: string; until: number} | null>(null)
+  const [watchQr, setWatchQr] = useState('')
   const [consent, setConsent] = useState(false)
   const [watching, setWatching] = useState(false)
   const [sound, setSound] = useState(false)
@@ -73,7 +79,7 @@ function App() {
   const [deviceLive, setDeviceLive] = useState(false)
   const [demoDialog, setDemoDialog] = useState('')
   const tokenRef = useRef('')
-  const peerId = useRef(DEVICE_ONLY ? 'device-only' : crypto.randomUUID())
+  const peerId = useRef(DEVICE_ONLY ? 'device-only' : crypto.randomUUID?.() || '')
   const actorRef = useRef<Actor | null>(null)
   const roomRef = useRef<Room | null>(null)
   const roomIdRef = useRef(roomId)
@@ -92,14 +98,20 @@ function App() {
   const updateRoom = useCallback((next: Room) => { roomRef.current = next; setRoom(next) }, [])
   const api = useCallback(async <T,>(action: string, data: Record<string, unknown> = {}, keepalive = false): Promise<T> => {
     if (DEVICE_ONLY) throw new Error('この確認画面では外部への配信やデータ保存は行いません。')
-    const res = await fetch('/api/free-live', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
-      body: JSON.stringify({ action, roomId: roomIdRef.current, peerId: peerId.current, ...data }),
-      keepalive, signal: keepalive ? undefined : AbortSignal.timeout(8000),
-    })
-    const result = await res.json()
-    if (!res.ok) throw new Error(result.error || '接続に失敗しました')
-    return result as T
+    if (!peerId.current) throw new Error('HTTPSのSafariで開いてください。安全な接続IDを作成できません。')
+    const body = JSON.stringify({ action, roomId: roomIdRef.current, peerId: peerId.current, ...data, requestId: crypto.randomUUID() })
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch('/api/free-live', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
+        body, keepalive, signal: keepalive ? undefined : AbortSignal.timeout(8000),
+      })
+      const result = await res.json()
+      if (HOSTED_LAB && result.error === 'lab_store_busy' && attempt < 2 && !keepalive) {
+        await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1))); continue
+      }
+      if (!res.ok) throw new Error(result.error || '接続に失敗しました')
+      return result as T
+    }
   }, [])
 
   // Stop physical tracks synchronously, including capture that resolves after navigation.
@@ -110,6 +122,7 @@ function App() {
     loopRef.current?.close(); loopRef.current = null
     epochRef.current = null; leaseUntil.current = 0
     setStream(null); setRemote(null); setLoopStreams([]); setDeviceLive(false)
+    setMeter(previous => ({ ...previous, connected: 0 }))
   }, [])
   const stopAll = useCallback((reason = '配信を終了しました。') => {
     const hasPublishing = epochRef.current !== null
@@ -132,15 +145,25 @@ function App() {
     if (DEVICE_ONLY) return () => stopMedia()
     let alive = true
     void fetch('/api/free-live').then(async res => {
-      if (!res.ok) throw new Error('no_local_authority')
+      if (!res.ok) {
+        const failure = await res.json().catch(() => ({}))
+        throw new Error(failure.error || 'lab_unavailable')
+      }
       const config = await res.json()
-      if (config.mode !== 'local-fixtures') throw new Error('no_local_authority')
+      if (config.mode !== (HOSTED_LAB ? 'sites-owner-lab' : 'local-fixtures')) throw new Error('lab_unavailable')
       if (!alive) return
       setMode('local'); setFixtures(config.fixtures)
       await login(isCrowd || isWatch ? 'demo-fan-1' : 'demo-performer')
-    }).catch(() => { if (alive) setMode('device') })
+    }).catch(error => { if (alive) { if (HOSTED_LAB) setError(message(error)); else setMode('device') } })
     return () => { alive = false; stopMedia() }
   }, [login, stopMedia])
+  useEffect(() => {
+    let active = true
+    if (!roomId) { setWatchQr(''); return }
+    const url = `${location.origin}${location.pathname}?room=${roomId}&watch=1`
+    void QRCode.toDataURL(url, { width: 240, margin: 2 }).then(image => { if (active) setWatchQr(image) }).catch(() => undefined)
+    return () => { active = false }
+  }, [roomId])
   useEffect(() => {
     const hidden = () => { if (document.hidden) stopAll('画面を離れたためカメラ・マイクを停止しました。再開はボタンを押してください。') }
     const gone = () => stopAll('画面を閉じたため停止しました。')
@@ -319,11 +342,11 @@ function App() {
   const phase = mode === 'device' ? (deviceLive ? '端末内テスト中' : 'カメラ待機') : labels[room?.phase || 'ready']
   const mb = (n: number) => `${(n / 1_000_000).toFixed(1)} MB`
   return <div className="lab-app">
-    <header className="lab-header"><a className="wordmark" href={DEVICE_ONLY ? './' : '/haku-free-live.html'}>HAKU<span>LIVE LAB</span></a><span className="prototype">PROTOTYPE 01</span></header>
+    <header className="lab-header"><a className="wordmark" href={DEVICE_ONLY ? './' : '/haku-free-live.html'}>HAKU<span>LIVE LAB</span></a><span className="prototype">PROTOTYPE {HOSTED_LAB ? '02' : '01'}</span></header>
     <main>
       <div className="lab-heading"><div><p className="eyebrow">その瞬間を、誰かのスマホで。</p><h1>ステージは、<br /><span>ここにある。</span></h1></div><Radio className="hero-radio" size={60} /></div>
-      <div className={`mode-note ${mode === 'local' ? 'local' : ''}`} role="status"><ShieldCheck size={18}/><div><b>{mode === 'local' ? 'ローカル実配信テスト · テスト用アカウント' : 'この端末のカメラ・操作を試す確認画面'}</b><p>{mode === 'local' ? 'P2P / 最大5人 / TURN・SFUなし。本番データには接続しません。' : '映像はこの端末内だけで確認します。ほかの人への配信・録画・決済は行いません。'}</p></div></div>
-      {mode === 'local' && <label className="fixture">検証用アカウント<select aria-label="検証用アカウント" value={actor?.id || ''} disabled={busy || publishing || watching} onChange={e => void run(() => login(e.target.value))}>{fixtures.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
+      <div className={`mode-note ${mode === 'local' ? 'local' : ''}`} role="status"><ShieldCheck size={18}/><div><b>{HOSTED_LAB ? '所有者だけの非公開LIVEテスト' : mode === 'local' ? 'ローカル実配信テスト · テスト用アカウント' : 'この端末のカメラ・操作を試す確認画面'}</b><p>{HOSTED_LAB ? '最大5視聴・1回15分。全端末で所有者のChatGPTログインが必要です。HAKU本番・決済には接続しません。' : mode === 'local' ? 'P2P / 最大5人 / TURN・SFUなし。本番データには接続しません。' : '映像はこの端末内だけで確認します。ほかの人への配信・録画・決済は行いません。'}</p></div></div>
+      {mode === 'local' && <label className="fixture">{HOSTED_LAB ? 'この端末の役割（テスト専用）' : '検証用アカウント'}<select aria-label="検証用アカウント" value={actor?.fixtureId || actor?.id || ''} disabled={busy || publishing || watching} onChange={e => void run(() => login(e.target.value))}>{fixtures.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       <div className="lab-grid"><section className="stage-card">
         <div className="stage">
           {(stream || remote) ? <Video stream={stream || remote} muted={!!stream || !sound} /> : <div className="stage-empty"><div className="camera-halo"><Camera size={36}/></div><h2>あなたの視点が、<br/>誰かの最前列になる。</h2><p>{crowdView ? '本人が許可したステージを、あなたのスマホから。' : 'ボタンを押して、カメラとマイクを許可。'}</p></div>}
@@ -349,14 +372,15 @@ function App() {
       </section>
       <aside>
         {(mode === 'local' && owner) && <section className="panel"><p className="section-kicker">CROWD LIVE</p><h2>観客に、カメラを託す。</h2><p>本人が許可した5分間のQRから参加。撮影者は一人ずつ交代します。</p><button className="outline" disabled={busy || room?.phase === 'ended'} onClick={permitCrowd}><QrCode size={18}/>観客カメラを許可してQR発行</button>
-          {qr && <div className="qr-box"><img src={qr.image} alt="観客用の配信参加QRコード"/><a href={qr.url} target="_blank" rel="noreferrer">観客用リンクを開く</a><small>有効期限 {new Date(qr.until).toLocaleTimeString('ja-JP')} · ローカル接続のみ</small></div>}
+          {qr && <div className="qr-box"><img src={qr.image} alt="観客用の配信参加QRコード"/><a href={qr.url} target="_blank" rel="noreferrer">観客用リンクを開く</a><small>有効期限 {new Date(qr.until).toLocaleTimeString('ja-JP')} · {HOSTED_LAB ? '所有者の端末のみ' : 'ローカル接続のみ'}</small></div>}
           {room?.crowdAllowed && <button className="text-danger" onClick={() => void run(async () => { updateRoom(await api<Room>('consent', { allowed: false })); setQr(null) })}>観客の配信許可を取り消す</button>}
-          {room?.queue.map(q => <button className="outline" key={q.peerId} onClick={() => void run(async () => { updateRoom(await api<Room>('handoff', { nextPeer: q.peerId })) })}>{q.actorId} にカメラ交代</button>)}
+          {room?.queue.map((q, i) => <button className="outline" key={q.peerId} onClick={() => void run(async () => { updateRoom(await api<Room>('handoff', { nextPeer: q.peerId })) })}>撮影者 {i + 1} にカメラ交代</button>)}
           {roomId && <a className="watch-link" href={`${location.pathname}?room=${roomId}&watch=1`} target="_blank" rel="noreferrer">視聴用リンクを開く →</a>}
+          {HOSTED_LAB && watchQr && <div className="qr-box"><img src={watchQr} alt="視聴用QRコード"/><small>別のスマホで読み取り、同じChatGPTアカウントでログインして視聴してください。</small></div>}
           {room && room.phase !== 'ended' && <button className="emergency" onClick={() => stopAll('本人の緊急停止を実行しました。')}><CameraOff size={17}/>すべての配信を緊急停止</button>}
         </section>}
         <section className="panel"><p className="section-kicker">ZERO RELAY COST</p><h2>無料を、仕組みで守る。</h2><div className="cost-line"><span>映像中継サービス利用</span><strong>¥0</strong></div><p>この試作は有料中継を使いません。端末の通信料金・電池は利用者負担です。</p><div className="metric-grid"><div><span>送信量（実測）</span><b>{mb(meter.sent)}</b></div><div><span>受信量（実測）</span><b>{mb(meter.received)}</b></div><div><span>映像接続数</span><b>{meter.connected} / 5</b></div><div><span>TURN中継</span><b>使用しない</b></div></div><small>5人へ送る目安は約1.68GB / 時間。電波・動きで変動。上限と計測値は通信会社の請求額を保証しません。</small></section>
-        <section className="panel"><p className="section-kicker">DEVICE CHECK</p><h2>5つの受信接続を試す。</h2><p>同じ端末内のWebRTCテストです。外部の視聴者や携帯回線の接続検証ではありません。</p><button className="outline" disabled={busy || watching || mode !== 'device'} onClick={testFive}><Users size={18}/>端末内で5接続を試す</button>{loopStreams.length > 0 && <div className="loop-grid">{loopStreams.map((s, i) => <div key={i}><Video stream={s} label={`端末内受信 ${i + 1}`}/><span>端末内 {i + 1}</span></div>)}</div>}</section>
+        <section className="panel"><p className="section-kicker">DEVICE CHECK</p><h2>5つの受信接続を試す。</h2><p>同じ端末内のWebRTCテストです。外部の視聴者や携帯回線の接続検証ではありません。</p>{HOSTED_LAB ? <a className="watch-link" href="/device-check.html">端末内テスト画面を開く →</a> : <button className="outline" disabled={busy || watching || mode !== 'device'} onClick={testFive}><Users size={18}/>端末内で5接続を試す</button>}{loopStreams.length > 0 && <div className="loop-grid">{loopStreams.map((s, i) => <div key={i}><Video stream={s} label={`端末内受信 ${i + 1}`}/><span>端末内 {i + 1}</span></div>)}</div>}</section>
       </aside></div>
       {error && <div className="feedback error" role="alert">{error}</div>}
       {notice && !error && <div className="feedback" role="status">{notice}</div>}

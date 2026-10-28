@@ -29,14 +29,16 @@
 
 ## 公開までに残っていること
 
-1. 別端末へ実配信するPreviewの、商用利用条件・強制的な請求遮断・残り枠の確認。Vercel現契約はHobbyと確認できたため採用しない。所有者のみの端末確認サイトは発行済み（下記）。
+1. 一般公開基盤の商用利用条件・強制的な請求遮断・残り枠の確認。Vercel現契約はHobbyのため採用しない。所有者のみの別端末接続用Previewは発行済み（下記）。
 2. 非本番での本物のHAKU認証・フォロー・通報・投げ銭画面接続。現在のボタンは接続説明のみで、決済も保存もしない。
-3. 永続的で原子的な権限ストア、低負担のシグナリング、停止時に確実に配信経路を制御する公開構成。ローカルMapをserverlessに転用しない。
+3. 試作D1には永続的で原子的な権限ストアを実装済み。一般公開に向けた低負担のシグナリングと、停止時に配信経路を強制制御する構成は未実装。ローカルMapをserverlessで共有しない。
 4. iPhone Safari実機、別端末、Wi-Fi↔4G/5G、TURNが必要な回線、電池/発熱、1時間連続配信。
 5. カメラ許可の拒否・取消、画面ロック、着信、Safari強制終了、QR期限切れを実機で確認。
 6. 不正クライアントのP2P通信を中央強制停止できない制約と、通報審査・肖像/プライバシーの現場運用を解消/合意すること。
 
 ## 端末確認サイトの追加検証（2026-10-28 JST）
+
+この節はPrototype 01の記録。現行のPrototype 02は次の節に記載する。
 
 URL: https://haku-live-device-check.eb-shimada409.chatgpt.site/
 
@@ -47,3 +49,24 @@ URL: https://haku-live-device-check.eb-shimada409.chatgpt.site/
 - 所有者ログイン後のHTTPSカメラと5接続は、この追加確認では未検証。iPhone実機・別端末配信の結果として扱わない。既存の偽デバイスによるloopback検証は上表の範囲。
 
 この確認サイトはSites側の区分ではproduction deploymentになるが、HAKUの本番アプリを公開/変更したものではない。今回、HAKU本番DB変更・migration・mainマージ・HAKU本番deploy・Stripe決済/送金/返金・有料契約・課金設定変更・LiveKit Egress・本番シークレット取得/外部送信は実施していない。既存AWP2026のデータは変更していない。
+
+## Prototype 02: 別端末の接続管理（2026-10-28 JST）
+
+最新版: https://haku-live-device-check.eb-shimada409.chatgpt.site/haku-free-live
+
+|確認|結果と範囲|
+|---|---|
+|HAKUの全Vitest|76ファイル/473件成功。追加9件は実SQLiteを使ったSites adapterの権限・同時更新・失効・再試行・日次上限の検証|
+|型とビルド|HAKUのtypecheck/build、SitesのTypeScriptとVinext buildが成功|
+|実Miniflare D1 binding|27操作の接続管理フローが成功。5席、6人目拒否、QR参加、交代ACK、終了後のgrant拒否を確認。映像・音声はこの検証に含めない|
+|Viewer→カメラ交代|同じ撮影者の古い視聴席を消し、自分への配信接続ができないことをSQLiteテストで確認|
+|公開先の独立D1|health API 200、persistent=true。テスト専用の新しい表のみ。HAKU/Supabaseへ接続していない|
+|公開先の認証境界|Sitesのサービスアクセスだけでは訪問者IDを取得せず、通常APIは401。ブラウザーからの所有者ログインゲートも確認|
+|公開HTML|Cloudflareのcanonical redirect後のHTMLが、pushしたsourceの生成物とSHA-256で一致。hosted-labガードを確認|
+|managed preview|日本語の表示と、訪問者ログインが確認できない場合にLIVE開始を無効にすることを確認。弱い接続IDへの代替はしない|
+|上限|同時1配信、視聴5人、1回15分、1日10,000操作。追加購入・有料経路への切替は実装しない|
+|実機|iPhone同士、携帯回線、音声の聞き取り、発熱、画面ロックの実機テストは未実施|
+
+公開先の検証記録は `artifacts/free-live/sites-hosted-evidence.json`。sourceはSites側のGit commit `76bb67bb376bce08f454bd5b5f54fa7fd639ee2e` に保存。Prototype 01の端末内画面も `/device-check` に保全した。今回の一般公開・本物のHAKU認証・投げ銭/フォロー接続は未実施。
+
+D1再現用コードは `tests/browser/free-live-d1.mjs`。Wrangler/Miniflareが入った独立Sites checkoutから `node --import ./scripts/sites-env.mjs /absolute/haku-repo/tests/browser/free-live-d1.mjs /absolute/sites-checkout` で使える。HAKUの依存追加は不要で、本番D1やSupabaseには接続しない。

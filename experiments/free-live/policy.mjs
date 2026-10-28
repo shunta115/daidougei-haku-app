@@ -12,10 +12,14 @@ export const FREE_LIVE_LIMITS = Object.freeze({
   viewerMs: 20_000, dailyParticipantSeconds: 18_000,
 })
 
-export function makeAuthority({ now = Date.now, id = () => crypto.randomUUID(), limits = {} } = {}) {
+export function makeAuthority({ now = Date.now, id = () => crypto.randomUUID(), limits = {}, snapshot = null } = {}) {
   const cap = { ...FREE_LIVE_LIMITS, ...limits }
-  const rooms = new Map()
-  let day = '', consumedSeconds = 0, lastTick = now()
+  if (snapshot && (snapshot.schema !== 1 || !Array.isArray(snapshot.rooms))) throw new Error('invalid_authority_snapshot')
+  // Only server-owned persisted state may be supplied here, never a request body.
+  const rooms = new Map((snapshot?.rooms || []).map(([key, room]) => [key, {
+    ...room, viewers: new Map(room.viewers), reports: new Set(room.reports),
+  }]))
+  let day = snapshot?.day || '', consumedSeconds = snapshot?.consumedSeconds || 0, lastTick = snapshot?.lastTick ?? now()
   function fail(code, status) { throw new LivePolicyError(code, status) }
   function authenticated(actor) { if (!actor?.id || actor.active !== true) fail('authentication_required', 401) }
   function owner(room, actor) {
@@ -78,6 +82,11 @@ export function makeAuthority({ now = Date.now, id = () => crypto.randomUUID(), 
   return {
     limits: cap,
     tick,
+    snapshot() {
+      return structuredClone({ schema: 1, day, consumedSeconds, lastTick,
+        rooms: [...rooms].map(([key, room]) => [key, { ...room, viewers: [...room.viewers], reports: [...room.reports] }]),
+      })
+    },
     create(actor, title = 'HAKU テストパフォーマー') {
       tick(); authenticated(actor)
       if (!actor.approved || actor.role !== 'performer') fail('approved_performer_required')
@@ -127,6 +136,7 @@ export function makeAuthority({ now = Date.now, id = () => crypto.randomUUID(), 
       const g = room.grant
       if (!g || g.actorId !== actor.id || g.peerId !== peerId || g.nonce !== nonce || g.epoch !== epoch || g.until <= now()) fail('publish_grant_invalid')
       room.grant = null; room.publisher = { actorId: actor.id, peerId, epoch, until: now() + cap.leaseMs }
+      for (const [key, viewer] of room.viewers) if (viewer.actorId === actor.id) room.viewers.delete(key)
       room.phase = 'live'
       return publicState(room, actor)
     },
