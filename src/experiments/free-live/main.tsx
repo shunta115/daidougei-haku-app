@@ -339,6 +339,7 @@ function App() {
   const owner = actor?.id === room?.performerId || (!room && actor?.role === 'performer')
   const publishing = !!stream
   const crowdView = mode === 'device' ? deviceCrowd : isCrowd || actor?.role === 'fan' && !isWatch
+  const crowdStream = mode === 'local' && room?.publisherId ? room.publisherId !== room.performerId : crowdView
   const phase = mode === 'device' ? (deviceLive ? '端末内テスト中' : 'カメラ待機') : labels[room?.phase || 'ready']
   const mb = (n: number) => `${(n / 1_000_000).toFixed(1)} MB`
   return <div className="lab-app">
@@ -351,7 +352,7 @@ function App() {
         <div className="stage">
           {(stream || remote) ? <Video stream={stream || remote} muted={!!stream || !sound} /> : <div className="stage-empty"><div className="camera-halo"><Camera size={36}/></div><h2>あなたの視点が、<br/>誰かの最前列になる。</h2><p>{crowdView ? '本人が許可したステージを、あなたのスマホから。' : 'ボタンを押して、カメラとマイクを許可。'}</p></div>}
           <div className="stage-top"><span className={publishing || remote ? 'live-pill active' : 'live-pill'}><i/>{phase}</span><span className="viewers"><Users size={14}/>{mode === 'local' ? `${room?.viewers || 0} / 5` : `端末内 ${meter.connected} / 5`}</span></div>
-          <div className="stage-bottom"><div className="avatar">H</div><div><b>HAKU テストパフォーマー</b><small>{crowdView ? 'CROWD LIVE' : 'DIRECT LIVE'} · 360p / 15fps</small></div><button className="follow" onClick={() => setDemoDialog('この確認画面ではフォローは保存されません。')} aria-label="フォロー"><Heart size={18}/></button></div>
+          <div className="stage-bottom"><div className="avatar">H</div><div><b>HAKU テストパフォーマー</b><small>{crowdStream ? 'CROWD LIVE' : 'DIRECT LIVE'} · 360p / 15fps</small></div><button className="follow" onClick={() => setDemoDialog('この確認画面ではフォローは保存されません。')} aria-label="フォロー"><Heart size={18}/></button></div>
         </div>
         {remote && <button className="sound-button" onClick={() => setSound(!sound)}><Volume2 size={16}/>{sound ? '消音する' : '音声をONにする'}</button>}
         <div className="mode-tabs" role="tablist" aria-label="配信方式">
@@ -359,6 +360,7 @@ function App() {
           <button role="tab" aria-selected={crowdView} disabled={publishing || mode === 'local'} onClick={() => setDeviceCrowd(true)}><QrCode size={16}/>観客が配信</button>
         </div>
         <div className="stage-controls">
+          {mode === 'local' && owner && room?.phase === 'live' && room.publisherId !== actor?.id && !publishing && !watching && <button className="outline" disabled={busy} onClick={join}><Radio size={18}/>観客カメラをこの画面で見る</button>}
           {crowdView && <><label className="consent-row"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}/><span>周囲の撮影許可を確認し、スマホの通信量を使うことに同意します。</span></label>{mode === 'device' && <label className="consent-row"><input type="checkbox" checked={deviceAllowed} onChange={e => setDeviceAllowed(e.target.checked)}/><span>本人の事前許可（操作デモ）</span></label>}</>}
           {!publishing && !watching && (isWatch && mode === 'local' ? <button className="primary" disabled={busy || !actor} onClick={join}><Radio size={19}/>LIVEを見る<ArrowRight size={18}/></button> : <button className="primary" disabled={busy || mode === 'loading' || mode === 'local' && !actor} onClick={crowdView ? startCrowd : startDirect}><Camera size={19}/>{busy ? '準備しています…' : room?.canClaim ? '交代してLIVEを開始する' : mode === 'device' ? 'カメラテストを開始する' : 'LIVE配信を開始する'}<ArrowRight size={18}/></button>)}
           {(publishing || watching) && <button className="stop" onClick={() => stopAll()}><Square size={16}/>カメラ・配信を停止</button>}

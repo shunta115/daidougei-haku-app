@@ -115,6 +115,8 @@ describe('owner-private Sites signaling with real SQLite compare-and-swap', () =
     const claim = { action: 'claim', roomId, nonce: grant.nonce, epoch: grant.epoch, requestId: crypto.randomUUID() }
     const started = await app.call(claim, fan)
     expect(started.status).toBe(200)
+    expect((await app.call({ action: 'join', roomId }, owner)).status).toBe(200)
+    expect((await app.call({ action: 'poll', roomId }, fan)).data.peers).toContainEqual({ peerId: owner.peerId, actorId: owner.actor.id })
     expect((await app.call({ ...claim, requestId: crypto.randomUUID() }, fan)).status).toBe(403)
     await app.call({ action: 'stop', roomId }, owner)
     expect((await app.call(claim, fan)).data.error).toBe('stale_request')

@@ -67,6 +67,6 @@ URL: https://haku-live-device-check.eb-shimada409.chatgpt.site/
 |上限|同時1配信、視聴5人、1回15分、1日10,000操作。追加購入・有料経路への切替は実装しない|
 |実機|iPhone同士、携帯回線、音声の聞き取り、発熱、画面ロックの実機テストは未実施|
 
-公開先の検証記録は `artifacts/free-live/sites-hosted-evidence.json`。sourceはSites側のGit commit `76bb67bb376bce08f454bd5b5f54fa7fd639ee2e` に保存。Prototype 01の端末内画面も `/device-check` に保全した。今回の一般公開・本物のHAKU認証・投げ銭/フォロー接続は未実施。
+公開先の検証記録は `artifacts/free-live/sites-hosted-evidence.json`。sourceはSites側のGit commit `1b239130cf0b6b183ea57c08e3f942908a42d22d` に保存。本人が観客カメラを同じ画面で視聴するボタンを追加し、SQLiteテストで本人の視聴権限も確認した。Prototype 01の端末内画面は `/device-check` に保全した。今回の一般公開・本物のHAKU認証・投げ銭/フォロー接続は未実施。
 
 D1再現用コードは `tests/browser/free-live-d1.mjs`。Wrangler/Miniflareが入った独立Sites checkoutから `node --import ./scripts/sites-env.mjs /absolute/haku-repo/tests/browser/free-live-d1.mjs /absolute/sites-checkout` で使える。HAKUの依存追加は不要で、本番D1やSupabaseには接続しない。
