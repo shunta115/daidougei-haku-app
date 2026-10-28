@@ -331,9 +331,13 @@ function App() {
     loopRef.current?.close(); loopAbort.current?.abort()
     const abort = new AbortController(); loopAbort.current = abort
     const version = generation.current
-    const result = await deviceLoopback(next, (i, value) => setLoopStreams(prev => { const list = [...prev]; list[i] = value; return list }), abort.signal)
+    setLoopStreams([]); setNotice('端末内の接続を準備しています。接続成立を確認中です。')
+    let result: Awaited<ReturnType<typeof deviceLoopback>>
+    try {
+      result = await deviceLoopback(next, (i, value) => setLoopStreams(prev => { const list = [...prev]; list[i] = value; return list }), abort.signal)
+    } catch (err) { stopMedia(); setNotice(''); throw err }
     if (generation.current !== version || document.hidden) result.close()
-    else { loopRef.current = result; setNotice('同じ端末内で5つの受信接続をテスト中です。5台の実機・携帯回線の検証とは異なります。') }
+    else { loopRef.current = result; setNotice('端末内で5つの接続が成立しました。映像が黒い場合は表示の確認が必要です。外部端末への配信は未検証です。') }
   })
 
   const owner = actor?.id === room?.performerId || (!room && actor?.role === 'performer')

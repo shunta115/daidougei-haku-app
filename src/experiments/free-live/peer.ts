@@ -137,16 +137,36 @@ export async function deviceLoopback(stream: MediaStream, onRemote: (index: numb
       pairs.push(a, b)
       stream.getTracks().forEach(track => a.addTrack(track, stream))
       b.ontrack = event => { if (!closed) onRemote(i, event.streams[0] || new MediaStream([event.track])) }
-      a.onicecandidate = event => { if (event.candidate && !closed) void b.addIceCandidate(event.candidate).catch(() => undefined) }
-      b.onicecandidate = event => { if (event.candidate && !closed) void a.addIceCandidate(event.candidate).catch(() => undefined) }
-      const offer = await a.createOffer(); await a.setLocalDescription(offer); await b.setRemoteDescription(offer)
-      const answer = await b.createAnswer(); await b.setLocalDescription(answer); await a.setRemoteDescription(answer)
+      // Exchange complete descriptions: never discard early ICE candidates before
+      // the opposite endpoint has a remote description.
+      await b.setRemoteDescription(await descriptionWithIce(a, 'offer'))
+      await a.setRemoteDescription(await descriptionWithIce(b, 'answer'))
       for (const sender of a.getSenders()) {
         const p = sender.getParameters(); p.encodings ||= [{}]
         p.encodings.forEach(e => { e.maxBitrate = sender.track?.kind === 'video' ? 600_000 : 48_000 })
         await sender.setParameters(p)
       }
     }
+    // ontrack only means that SDP advertised a track, not that RTP arrived.
+    // Do not report a running test until all five transports really connect.
+    await new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>
+      const cleanup = () => {
+        clearTimeout(timer)
+        pairs.forEach(pc => pc.removeEventListener('connectionstatechange', check))
+        signal?.removeEventListener('abort', check)
+      }
+      const check = () => {
+        if (closed || pairs.some(pc => pc.connectionState === 'failed')) {
+          cleanup(); reject(new Error('端末内の映像接続に失敗しました。カメラを停止して、再読み込み後にお試しください。')); return
+        }
+        if (pairs.length === 10 && pairs.every(pc => pc.connectionState === 'connected')) { cleanup(); resolve() }
+      }
+      timer = setTimeout(() => { cleanup(); reject(new Error('端末内の映像接続が20秒以内に成立しませんでした。このiPhoneでの5接続テストは未成功です。')) }, 20_000)
+      pairs.forEach(pc => pc.addEventListener('connectionstatechange', check))
+      signal?.addEventListener('abort', check, { once: true })
+      check()
+    })
     return { close, meter: async () => {
       const reports = await Promise.all(pairs.map(pc => pc.getStats()))
       let sent = 0, received = 0
