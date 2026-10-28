@@ -5,12 +5,12 @@
 ## 契約前の判断
 
 - OVHcloud欧州のVPS-3を候補とする。公式掲示価格は月$12.32から、6vCPU、12GB、2Gbps公称、対象地域の通信は無制限。契約期間・税・購入地域・規約・実際の帯域は注文前に確認する。
-- **アジア拠点は不採用**。公式注記ではムンバイ/シンガポール/シドニーのVPS-2, VPS-3は1TB/月を超えると10Mbpsに制限される。
+- **アジア拠点は今回不採用**。OVHcloud公式ページ間でアジア向け月間転送量の表記が食い違う。VPS製品ページではVPS-3は1TB、Unmetered VPSの説明ページではVPS-3は3TBと記載され、いずれも超過後10Mbps制限。契約画面の具体的商品・リージョン条件で確定するまで両方を未確定として扱う。500人×3時間×30日の約19.75TBにはいずれも不足。
 - 500人×(映像800kbps+音声48kbps)×1.15 = **約487.6Mbps** の下り。1時間約219.42GB、1日3時間×30日なら約19.75TB（500人が常時見る極端な条件）。
 - 20本同時の500人LIVEは約9.75Gbpsを要する。VPS-3単体の公称2Gbpsでは不可能。出演者数と同時配信数を分けて計算する。
 - 料金や公称2Gbpsだけで500人成功とは判断しない。日本のiPhoneでの遅延・通信品質・CPU・帯域を実測する。
 
-公式資料: https://www.ovhcloud.com/en/vps/ / https://github.com/ossrs/srs
+公式資料: https://www.ovhcloud.com/en/vps/ / https://www.ovhcloud.com/en/vps/unmetered-vps/ / https://github.com/ossrs/srs / https://ossrs.io/lts/en-us/docs/v6/doc/webrtc / https://www.ossrs.net/lts/en-us/docs/v6/doc/hls
 
 ## ローカル・非本番のSRS起動
 
@@ -21,7 +21,13 @@
 3. `curl -f http://127.0.0.1:8080/live/test.m3u8` でHLSが出るか確認
 4. `docker compose -f experiments/ovh-srs-lab/compose.yaml down` で終了
 
-見積もりのみ: `node experiments/ovh-srs-lab/capacity.mjs --viewers=500 --simultaneous-streams=1`
+見積もりのみ: `node experiments/ovh-srs-lab/capacity.mjs --viewers=500 --simultaneous-streams=1`。
+
+計算の自動テスト: `node --test experiments/ovh-srs-lab/capacity.test.mjs`（サーバーに通信しない）。
+
+**ワンタップ配信への注意:** このcomposeはRTMP入力のみを確認する段階。iPhone Safariからの入力にはSRSのWHIP/WebRTC対応、HTTPS、UDP等の適切な通信設定、認証・権限管理、映像H.264/音声OpusからHLS向け音声への変換整合性を別途検証する。WHIP入力→HLS出力の成功は未確認。一般公開前には認証・停止機能とTLS・Firewallが必要。
+
+SRS v6.0-r0を試作用に固定しているが、v6.0-r1が公開済み。運用用イメージの選定と差分検証は別工程。
 
 ## 次の試験ゲート
 
