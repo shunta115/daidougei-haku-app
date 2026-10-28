@@ -1,0 +1,15 @@
+# Local-only SRS lab. NOT a deployable production configuration.
+# Anonymous RTMP publish/HLS read: never expose without auth/TLS.
+services:
+  srs:
+    image: ossrs/srs:v6.0-r0
+    restart: 'no'
+    command: ./objs/srs -e
+    environment:
+      SRS_RTMP_LISTEN: '1935'
+      SRS_HTTP_SERVER_ENABLED: 'on'
+      SRS_VHOST_HLS_ENABLED: 'on'
+      SRS_HTTP_API_ENABLED: 'off'
+    ports:
+      - '127.0.0.1:1935:1935'
+      - '127.0.0.1:8080:8080'
