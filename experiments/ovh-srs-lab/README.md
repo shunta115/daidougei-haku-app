@@ -60,8 +60,8 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 **ローカル起動手順（Dockerのある開発端末のみ）**
 
 1. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml up -d`
-2. リポジトリルートから `python3 -m http.server 4319 --bind 127.0.0.1`
-3. 同じPCのブラウザで `http://127.0.0.1:4319/experiments/ovh-srs-lab/whip-local.html` を開き「LIVE配信を開始」を押す
+2. `node experiments/ovh-srs-lab/local-gateway.mjs` で同一オリジンのローカルゲートウェイを起動
+3. 同じPCのブラウザで `http://127.0.0.1:4319/` を開き「LIVE配信を開始」を押す
 4. 画面の「映像を読み込む」でHLS再生を確認し、終了ボタン・画面非表示でカメラが停止するか検証
 5. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml down` で終了
 
@@ -86,6 +86,13 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 - ただし、この設定はWebRTCの送信目標・上限ヒントであり、ネットワーク転送量や通信事業者の請求を完全に制御するものではない。配信者の実送信量、HLS側の実出力ビットレートは今後実測する。
 - エラー時の停止を含むNode.js自動テストを追加。**20/20件成功**（2026-10-29、既存18件+送信レート制御2件）。
 - 500人向け実サーバー配信・iPhone Safari・SRSコンテナ起動の検証は依然として未完了。
+
+## 2026-10-29 同一オリジン・ローカルゲートウェイ追加
+
+- ブラウザが4319番でページを開き、SRS WHIPが1985番・HLSが8080番という構成では、ブラウザのCORS制限で動作しない可能性がある。この問題を避けるため、**127.0.0.1:4319に限定した同一オリジンのゲートウェイ**を追加。
+- `local-gateway.mjs` はWHIPのSDP送信・リソース削除、HLSマニフェスト/セグメント、ローカルHTML/JSの固定ルートだけを許可。ホスト・Originを検査し、外部アクセスと未知のパスを拒否する。実運用に流用しない。
+- `whip-local.html` は4319番経由のWHIP・HLSへ変更。**SRS本体の動作、WebRTC接続、音声変換、iPhone実機は依然として未検証**。
+- `local-gateway.test.mjs` に固定ルート、WHIP/HLSプロキシ、外部Origin拒否の3テストを追加。テストファイルをGitHubへ保存済みだが、この変更について実行結果は未確認。
 
 ## 次の試験ゲート
 
