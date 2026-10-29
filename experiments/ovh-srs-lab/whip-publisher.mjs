@@ -5,10 +5,10 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
 export function localWhipEndpoint(value) {
   const url = new URL(value);
   if (url.protocol !== 'http:' || !LOOPBACK.has(url.hostname) ||
-      url.pathname !== '/rtc/v1/whip/' || url.port !== '1985' || url.username || url.password ||
+      url.pathname !== '/rtc/v1/whip/' || !['1985','4319'].includes(url.port) || url.username || url.password ||
       url.searchParams.get('app') !== 'live' ||
       !/^haku-lab(?:-[a-z0-9]+)?$/.test(url.searchParams.get('stream') || '')) {
-    throw new Error('WHIP lab accepts only local SRS /rtc/v1/whip/?app=live&stream=haku-lab');
+    throw new Error('WHIP lab accepts only local SRS/gateway /rtc/v1/whip/?app=live&stream=haku-lab');
   }
   return url;
 }
