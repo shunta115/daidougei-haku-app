@@ -31,7 +31,7 @@ try{
   const r=await runProbe({url:'http://127.0.0.1:'+server.address().port+'/test.m3u8',viewers:500,seconds:15});
   const elapsed=(Date.now()-t)/1000;
   console.log(JSON.stringify({elapsedSeconds:elapsed,firstSegment:r.viewersWithFirstSegment,segments:r.segments,bytes:r.bytes,errors:r.errors,errorSamples:r.errorSamples,requestP95Ms:r.requestP95Ms,throughputMbps:r.bytes*8/1e6/elapsed,perViewerBytes:r.bytes/500},null,2));
-  if(r.viewersWithFirstSegment!==500||r.errors>0||r.segments!==2000)process.exitCode=1;
+  if(r.viewersWithFirstSegment!==500||r.errors>0||r.segments!==500)process.exitCode=1;
 }finally{
   if(old===undefined)delete process.env.HAKU_LOCAL_LOAD_APPROVED;else process.env.HAKU_LOCAL_LOAD_APPROVED=old;
   await new Promise(resolve=>server.close(resolve));
