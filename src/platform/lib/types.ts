@@ -157,6 +157,8 @@ export type PerformerAppearance = {
   ends_at: string | null
   venue_name: string
   venue_address: string
+  venue_lat?: number | null
+  venue_lng?: number | null
   region: string
   country: string
   description: string
