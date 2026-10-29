@@ -1,12 +1,13 @@
 import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronRight, Clock3, Map as MapIcon, MapPin, Navigation, Radio, TentTree, UserRound, UsersRound } from 'lucide-react'
+import { CalendarDays, ChevronRight, Clock3, Globe2, Heart, LogIn, Map as MapIcon, MapPin, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
   getFeaturedEvent,
   getSignedInUserId,
   listApprovedPerformers,
+  listApprovedPerformersByIds,
   listEventSlots,
   listEventVenues,
   listFollowedPerformers,
@@ -28,6 +29,8 @@ type Props = {
   onWatchLive: (id: string) => void
   initialView?: View
   includePublicTest?: boolean
+  onOpenEvents?: () => void
+  onRequireAuth?: () => void
 }
 
 type View = 'map' | 'schedule'
@@ -37,7 +40,7 @@ function timeLabel(value: string) {
   return String(value || '').slice(0, 5)
 }
 
-export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map', includePublicTest = false }: Props) {
+export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 'map', includePublicTest = false, onOpenEvents, onRequireAuth }: Props) {
   const { t, lang } = useLang()
   const [view, setView] = useState<View>(initialView)
   const [event, setEvent] = useState<FeaturedEvent | null>(null)
@@ -49,14 +52,19 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [viewerPeaks, setViewerPeaks] = useState<Record<string, number>>({})
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [mapError, setMapError] = useState<string | null>(null)
   const [locationClock, setLocationClock] = useState(Date.now())
   const [filter, setFilter] = useState<DiscoveryFilter>('all')
   const [appearances, setAppearances] = useState<PerformerAppearance[]>([])
-  const [appearancePeriod, setAppearancePeriod] = useState<AppearancePeriod>('today')
+  const [schedulePerformers, setSchedulePerformers] = useState<Performer[]>([])
+  const [appearancePeriod, setAppearancePeriod] = useState<AppearancePeriod>('all')
   const [followedPerformerIds, setFollowedPerformerIds] = useState<Set<string>>(new Set())
-  const [followingOnly, setFollowingOnly] = useState(false)
+  const [scheduleMode, setScheduleMode] = useState<'all' | 'following'>('all')
+  const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
   const [scheduleLoading, setScheduleLoading] = useState(true)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+
+  useEffect(() => setView(initialView), [initialView])
 
   const refreshLiveMap = useCallback(async () => {
     const [acts, ranks] = await Promise.all([
@@ -73,11 +81,9 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     void (async () => {
       try {
         const featured = await getFeaturedEvent()
-        const [acts, ranks, publicAppearances, signedInUserId] = await Promise.all([
+        const [acts, ranks] = await Promise.all([
           listApprovedPerformers(includePublicTest),
           listLiveRanking().catch(() => []),
-          listUpcomingPublishedAppearances(),
-          getSignedInUserId().catch(() => null),
         ])
         const [venueRows, slotRows] = featured
           ? await Promise.all([listEventVenues(featured.id), listEventSlots(featured.id)])
@@ -88,22 +94,41 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         setViewerPeaks(Object.fromEntries(ranks.map((row) => [row.performer.id, row.viewer_peak])))
         setVenues(venueRows)
         setSlots(slotRows)
-        setAppearances(publicAppearances)
-        if (signedInUserId) {
-          const followed = await listFollowedPerformers(signedInUserId).catch(() => [])
-          if (!cancelled) setFollowedPerformerIds(new Set(followed.map((performer) => performer.id)))
-        }
-        setScheduleLoading(false)
         setSelectedDate(String(slotRows[0]?.date || '2026-10-10').slice(0, 10))
       } catch {
-        if (!cancelled) {
-          setError(t('mapLoadError'))
-          setScheduleLoading(false)
-        }
+        if (!cancelled) setMapError(t('mapLoadError'))
       }
     })()
     return () => { cancelled = true }
   }, [t, includePublicTest])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      setScheduleLoading(true)
+      setScheduleError(null)
+      try {
+        const [publicAppearances, userId] = await Promise.all([
+          listUpcomingPublishedAppearances(),
+          getSignedInUserId().catch(() => null),
+        ])
+        const [acts, followed] = await Promise.all([
+          listApprovedPerformersByIds(publicAppearances.map((row) => row.performer_id)),
+          userId ? listFollowedPerformers(userId).catch(() => []) : Promise.resolve([]),
+        ])
+        if (cancelled) return
+        setAppearances(publicAppearances)
+        setSchedulePerformers(acts)
+        setSignedInUserId(userId)
+        setFollowedPerformerIds(new Set(followed.map((performer) => performer.id)))
+      } catch {
+        if (!cancelled) setScheduleError('出演予定を読み込めませんでした。時間をおいて再度お試しください。')
+      } finally {
+        if (!cancelled) setScheduleLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (view !== 'map') return
@@ -133,14 +158,14 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     }
   }, [refreshLiveMap, view, includePublicTest])
 
-  const performerById = useMemo(() => new Map(performers.map((performer) => [performer.id, performer])), [performers])
+  const performerById = useMemo(() => new Map(schedulePerformers.map((performer) => [performer.id, performer])), [schedulePerformers])
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
   const dateSlots = useMemo(() => slots.filter((slot) => String(slot.date).slice(0, 10) === selectedDate), [slots, selectedDate])
   const visibleAppearances = useMemo(() => {
     const rows = filterAppearancesForPeriod(appearances, appearancePeriod)
       .filter((appearance) => performerById.has(appearance.performer_id))
-    return followingOnly ? rows.filter((appearance) => followedPerformerIds.has(appearance.performer_id)) : rows
-  }, [appearancePeriod, appearances, followedPerformerIds, followingOnly, performerById])
+    return scheduleMode === 'following' ? rows.filter((appearance) => followedPerformerIds.has(appearance.performer_id)) : rows
+  }, [appearancePeriod, appearances, followedPerformerIds, scheduleMode, performerById])
   const liveMapPerformers = useMemo(
     () => performers.filter((performer) => isFreshLiveLocation(performer, locationClock)),
     [locationClock, performers],
@@ -209,7 +234,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         <button type="button" role="tab" aria-selected={view === 'schedule'} data-active={view === 'schedule'} onClick={() => setView('schedule')}><CalendarDays size={17} /> {t('scheduleTab')}</button>
       </div>
 
-      {error ? <p className="pl-error">{error}</p> : null}
+      {view === 'map' && mapError ? <p className="pl-error">{mapError}</p> : null}
 
       {view === 'map' ? (
         <>
@@ -319,31 +344,38 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         <section className="pl-schedule-v7" aria-label="出演スケジュール">
           <header className="pl-appearance-schedule__intro">
             <div><p>UPCOMING</p><h2>これからの出演予定</h2></div>
-            <span>プロフィールで公開中の予定</span>
+            {onOpenEvents ? <button type="button" className="pl-appearance-schedule__events" onClick={onOpenEvents}>イベント <ChevronRight size={15} /></button> : <span>プロフィールで公開中の予定</span>}
           </header>
+          <div className="pl-appearance-schedule__modes" role="tablist" aria-label="表示対象">
+            <button type="button" role="tab" aria-selected={scheduleMode === 'all'} data-active={scheduleMode === 'all'} onClick={() => setScheduleMode('all')}><Globe2 size={17} /> すべて</button>
+            <button type="button" role="tab" aria-selected={scheduleMode === 'following'} data-active={scheduleMode === 'following'} onClick={() => setScheduleMode('following')}><Heart size={17} /> フォロー中</button>
+          </div>
           <div className="pl-appearance-schedule__filters" role="tablist" aria-label="期間">
-            {([['today', '今日'], ['tomorrow', '明日'], ['week', '今週'], ['month', '今月']] as const).map(([period, label]) => (
+            {([['all', 'すべて'], ['today', '今日'], ['tomorrow', '明日'], ['week', '今週'], ['month', '今月']] as const).map(([period, label]) => (
               <button type="button" role="tab" aria-selected={appearancePeriod === period} data-active={appearancePeriod === period} key={period} onClick={() => setAppearancePeriod(period)}>{label}</button>
             ))}
           </div>
-          <button type="button" className="pl-appearance-schedule__following" data-active={followingOnly} disabled={followedPerformerIds.size === 0} onClick={() => setFollowingOnly((value) => !value)}>
-            <UsersRound size={16} /> フォロー中のみ
-          </button>
           {scheduleLoading ? <div className="pl-appearance-empty" role="status"><CalendarDays size={28} /><strong>出演予定を読み込み中</strong></div> : null}
-          {!scheduleLoading && visibleAppearances.length === 0 ? (
+          {!scheduleLoading && scheduleError ? (
+            <div className="pl-appearance-empty pl-appearance-empty--error" role="alert"><CalendarDays size={30} /><strong>出演予定を読み込めませんでした</strong><span>予定が0件なのではなく、取得中に問題が発生しました。時間をおいて再度お試しください。</span></div>
+          ) : null}
+          {!scheduleLoading && !scheduleError && scheduleMode === 'following' && !signedInUserId ? (
+            <div className="pl-appearance-empty" role="status"><Heart size={30} /><strong>ログインするとフォロー中の予定を確認できます</strong><span>気になるパフォーマーをフォローして、出演予定をまとめて見つけましょう。</span>{onRequireAuth ? <button type="button" className="pl-action pl-action--primary" onClick={onRequireAuth}><LogIn size={16} /> ログイン</button> : null}</div>
+          ) : null}
+          {!scheduleLoading && !scheduleError && (scheduleMode === 'all' || signedInUserId) && visibleAppearances.length === 0 ? (
             <div className="pl-appearance-empty" role="status">
               <CalendarDays size={30} />
-              <strong>{followingOnly ? 'フォロー中の出演予定はありません' : 'この期間の出演予定はありません'}</strong>
-              <span>{followingOnly ? '期間を変えるか、すべての出演予定を表示してみましょう。' : '別の期間を選ぶと、これからのステージが見つかるかもしれません。'}</span>
+              <strong>{scheduleMode === 'following' ? 'フォロー中の出演予定はありません' : 'この期間の出演予定はありません'}</strong>
+              <span>{scheduleMode === 'following' ? '期間を変えるか、すべての出演予定を表示してみましょう。' : '別の期間を選ぶと、これからのステージが見つかるかもしれません。'}</span>
             </div>
           ) : null}
-          {visibleAppearances.map((appearance) => {
+          {!scheduleError && (scheduleMode === 'all' || signedInUserId) ? visibleAppearances.map((appearance) => {
             const act = performerById.get(appearance.performer_id)!
             const place = [appearance.venue_name, appearance.region].filter(Boolean).join(' · ')
             const mapQuery = appearance.venue_address || [appearance.venue_name, appearance.region, appearance.country].filter(Boolean).join(' ')
             const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`
-            const date = new Date(`${appearance.performance_date}T12:00:00+09:00`)
-            const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'Asia/Tokyo' }).format(date)
+            const date = new Date(`${appearance.performance_date}T12:00:00Z`)
+            const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC' }).format(date)
             return (
               <article key={appearance.id} className="pl-appearance-row">
                 <button type="button" className="pl-appearance-row__profile" onClick={() => onOpenPerformer(act.id)} aria-label={`${act.stage_name}のプロフィールを開く`}>
@@ -355,7 +387,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 {mapQuery ? <a className="pl-appearance-row__map" href={mapHref} target="_blank" rel="noopener noreferrer"><MapIcon size={14} /> MAPで見る</a> : null}
               </article>
             )
-          })}
+          }) : null}
         </section>
       )}
 
