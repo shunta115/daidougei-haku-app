@@ -35,7 +35,7 @@ try {
     throw new Error('WHIP connected but no media bytes or video frames were sent');
   }
   ok = true;
-  await new Promise(resolve => setTimeout(resolve, 50000));
+  await new Promise(resolve => setTimeout(resolve, 80000));
 } finally {
   if (ok) await page.getByRole('button', { name: '配信を終了' }).click().catch(() => {});
   await browser.close();
