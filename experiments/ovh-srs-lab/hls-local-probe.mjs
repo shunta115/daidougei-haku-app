@@ -34,7 +34,7 @@ export function segmentUrls(playlist, manifestUrl) {
 export function mediaPlaylistUrl(playlist, manifestUrl) {
   if (!playlist.startsWith('#EXTM3U')) throw new Error('Not an HLS playlist');
   if (playlist.includes('#EXTINF:')) return manifestUrl;
-  const lines = playlist.split(/\\r?\\n/).map(s => s.trim());
+  const lines = playlist.split(/\r?\n/).map(s => s.trim());
   const variantIndex = lines.findIndex(line => line.startsWith('#EXT-X-STREAM-INF:'));
   if (variantIndex < 0 || !lines[variantIndex + 1]) throw new Error('No HLS media playlist');
   const root = new URL(manifestUrl);
