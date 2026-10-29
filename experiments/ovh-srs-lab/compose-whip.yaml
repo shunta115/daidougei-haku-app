@@ -13,6 +13,7 @@ services:
       SRS_RTC_SERVER_CANDIDATE: '127.0.0.1'
       SRS_VHOST_RTC_ENABLED: 'on'
       SRS_VHOST_RTC_RTC_TO_RTMP: 'on'
+      SRS_VHOST_RTC_INIT_RATE_FROM_SDP: 'on'
       SRS_VHOST_HLS_ENABLED: 'on'
       # Test 4s HLS segments vs SRS default 10s; lower delay increases HTTP load.
       SRS_VHOST_HLS_HLS_FRAGMENT: '4'
