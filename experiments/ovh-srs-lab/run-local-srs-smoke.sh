@@ -21,8 +21,9 @@ if [[ -n "$(printenv DOCKER_CONTEXT || true)" && "$(printenv DOCKER_CONTEXT)" !=
   echo "Refusing non-default Docker context" >&2
   exit 2
 fi
+PUBLISHER_PID=''
 cleanup() {
-  if [[ -n "$(printenv PUBLISHER_PID || true)" ]]; then
+  if [[ -n "$PUBLISHER_PID" ]]; then
     kill "$PUBLISHER_PID" 2>/dev/null || true
     wait "$PUBLISHER_PID" 2>/dev/null || true
   fi
