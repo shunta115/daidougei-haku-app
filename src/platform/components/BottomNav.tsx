@@ -23,7 +23,7 @@ export function BottomNav({ role, active, onNavigate }: BottomNavProps) {
 
   const publicItems: NavItem[] = [
     { key: 'fan-home', label: t('home'), icon: Home },
-    { key: 'event-list', label: labels.event, icon: CalendarDays },
+    { key: 'schedule', label: t('scheduleTab'), icon: CalendarDays },
     { key: 'live-list', label: labels.live, icon: Radio },
     { key: 'map-schedule', label: labels.map, icon: MapPinned },
     { key: 'profile', label: labels.account, icon: User },
