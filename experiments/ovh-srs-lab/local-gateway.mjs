@@ -34,7 +34,9 @@ export function makeGateway({host='127.0.0.1',port=4319,whipPort=1985,hlsPort=80
       }
       if(route.type==='whip') {
         if(u.searchParams.get('app')!=='live' || u.searchParams.get('stream')!=='haku-lab' || [...u.searchParams.keys()].some(k=>!['app','stream'].includes(k))) {send(403,'Invalid test stream');return;}
-      } else if(u.search) {send(403,'Query not allowed');return;}
+      } else if(u.search && !(route.type==='hls' && u.pathname==='/live/haku-lab.m3u8' &&
+        [...u.searchParams.keys()].length===1 && u.searchParams.has('hls_ctx') &&
+        /^[a-z0-9]{1,64}$/.test(u.searchParams.get('hls_ctx')||''))) {send(403,'Query not allowed');return;}
       const chunks=[];let size=0;
       if(req.method==='POST') {
         if(!String(req.headers['content-type']||'').startsWith('application/sdp')) {send(415,'SDP required');return;}
