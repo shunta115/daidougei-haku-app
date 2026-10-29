@@ -33,17 +33,17 @@ test('receive segments with two synthetic local viewers',async()=>{
 
 test('follow only same-path SRS hls_ctx media playlists', () => {
  const root='http://127.0.0.1:8080/live/test.m3u8';
- const master='#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\n/live/test.m3u8?hls_ctx=abc123\\n';
+ const master='#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n/live/test.m3u8?hls_ctx=abc123\n';
  assert.equal(mediaPlaylistUrl(master,root),root+'?hls_ctx=abc123');
- assert.equal(mediaPlaylistUrl('#EXTM3U\\n#EXTINF:4,\\nseg-1.ts\\n',root),root);
- assert.throws(()=>mediaPlaylistUrl('#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\nhttp://example.com/x.m3u8\\n',root));
- assert.throws(()=>mediaPlaylistUrl('#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\n/live/test.m3u8?token=secret\\n',root));
+ assert.equal(mediaPlaylistUrl('#EXTM3U\n#EXTINF:4,\nseg-1.ts\n',root),root);
+ assert.throws(()=>mediaPlaylistUrl('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhttp://example.com/x.m3u8\n',root));
+ assert.throws(()=>mediaPlaylistUrl('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n/live/test.m3u8?token=secret\n',root));
 });
 
 test('receive SRS master and media playlists with local viewer',async()=>{
  const server=createServer((req,res)=>{
-   if(req.url==='/live/test.m3u8') res.end('#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1\\n/live/test.m3u8?hls_ctx=abc123\\n');
-   else if(req.url==='/live/test.m3u8?hls_ctx=abc123') res.end('#EXTM3U\\n#EXTINF:4.0,\\nseg-1.ts\\n');
+   if(req.url==='/live/test.m3u8') res.end('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n/live/test.m3u8?hls_ctx=abc123\n');
+   else if(req.url==='/live/test.m3u8?hls_ctx=abc123') res.end('#EXTM3U\n#EXTINF:4.0,\nseg-1.ts\n');
    else if(req.url==='/live/seg-1.ts') res.end(Buffer.alloc(1024,7));
    else {res.statusCode=404;res.end('no');}
  });
