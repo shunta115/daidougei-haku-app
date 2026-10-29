@@ -39,7 +39,7 @@ small { color:#bdc9dc; }
 <button id="watchButton" style="margin-top:8px">映像を読み込む</button>
 <p class="note">iPhone SafariのHLS再生を想定。WHIP→HLSの音声・映像変換はSRS実機での確認が必要です。</p>
 </section>
-<small>LOCAL ONLY / localhost SRS: WHIP 1985, HLS 8080 / 実サーバー500人性能は未検証</small>
+<small>LOCAL ONLY / localhost gateway 4319 → SRS WHIP 1985, HLS 8080 / 実サーバー500人性能は未検証</small>
 </main>
 <script type="module">
 import {LocalWhipPublisher} from './whip-publisher.mjs';
@@ -57,12 +57,12 @@ const publisher=new LocalWhipPublisher({
   }
 });
 $('start').addEventListener('click', async ()=>{
-  try { await publisher.start('http://127.0.0.1:1985/rtc/v1/whip/?app=live&stream=haku-lab'); }
+  try { await publisher.start('http://127.0.0.1:4319/rtc/v1/whip/?app=live&stream=haku-lab'); }
   catch (error) { $('status').textContent='開始できません: '+String(error.message||error); }
 });
 $('stop').addEventListener('click',()=>publisher.stop());
 $('watchButton').addEventListener('click',async()=>{
-  $('watch').src='http://127.0.0.1:8080/live/haku-lab.m3u8';
+  $('watch').src='http://127.0.0.1:4319/live/haku-lab.m3u8';
   try { await $('watch').play(); }
   catch { $('watchButton').textContent='動画の再生ボタンを押してください'; }
 });
