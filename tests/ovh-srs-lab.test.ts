@@ -21,7 +21,8 @@ describe('HAKU LIVE isolated SRS/WHIP lab', () => {
       encoding: 'utf8',
       timeout: 45000,
       maxBuffer: 2 * 1024 * 1024,
-      env: { ...process.env, HAKU_LOCAL_LOAD_APPROVED: 'YES' },
+      // Each test controls its own explicit local-load opt-in. Never override globally.
+      env: { ...process.env, HAKU_LOCAL_LOAD_APPROVED: '' },
     })
     expect(result.error?.message ?? '', result.stderr).toBe('')
     expect(result.status, [result.stdout, result.stderr].join('\n')).toBe(0)
