@@ -57,7 +57,7 @@ export async function runProbe(options) {
     if (u.origin !== target.origin) throw new Error('Cross-origin fetch prevented');
     const t=Date.now();
     const response=await fetch(url, {signal:AbortSignal.timeout(3000),cache:'no-store',redirect:'error'});
-    if (!response.ok) throw new Error('HTTP '+response.status+' '+url);
+    if (!response.ok) throw new Error('HTTP '+response.status);
     const data=await response.arrayBuffer();
     stats.requestMs.push(Date.now()-t);
     return new Uint8Array(data);
@@ -72,7 +72,10 @@ export async function runProbe(options) {
         const mediaUrl=mediaPlaylistUrl(master,target.href);
         const playlist=mediaUrl===target.href?master:new TextDecoder().decode(await get(mediaUrl));
         if(mediaUrl!==target.href) stats.playlistRequests++;
-        for (const uri of segmentUrls(playlist, mediaUrl)) {
+        const segments=segmentUrls(playlist, mediaUrl);
+        // A live viewer joins at the live edge, not at the oldest retained HLS segment.
+        if (first) for (const old of segments.slice(0,-1)) seen.add(old);
+        for (const uri of segments) {
           if (seen.has(uri) || Date.now()>=deadline) continue;
           const data=await get(uri);
           seen.add(uri);
