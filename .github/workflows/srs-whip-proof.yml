@@ -32,7 +32,7 @@ jobs:
           docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof up -d
           node experiments/ovh-srs-lab/local-gateway.mjs > /tmp/haku-gateway.log 2>&1 &
           for i in $(seq 1 40); do
-            if curl --fail --silent --max-time 2 http://127.0.0.1:4319/ > /dev/null; then exit 0; fi
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4319/ > /dev/null && curl --fail --silent --max-time 2 http://127.0.0.1:1985/api/v1/versions > /dev/null; then exit 0; fi
             sleep 1
           done
           exit 1
@@ -45,6 +45,7 @@ jobs:
             if ! kill -0 "$publisher_pid" 2>/dev/null; then
               echo "WHIP publisher failed before HLS"
               cat /tmp/haku-browser.log
+              cat /tmp/haku-gateway.log
               docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof logs --tail=100
               exit 1
             fi
