@@ -21,16 +21,23 @@ if [[ -n "$(printenv DOCKER_CONTEXT || true)" && "$(printenv DOCKER_CONTEXT)" !=
   echo "Refusing non-default Docker context" >&2
   exit 2
 fi
+# Never operate against a remote Docker daemon, even if a context is the default.
+DOCKER_ENDPOINT="$(docker context inspect --format '{{ (index .Endpoints "docker").Host }}' 2>/dev/null || true)"
+if [[ "$DOCKER_ENDPOINT" != unix://* ]]; then
+  echo "Refusing remote or unknown Docker daemon: $DOCKER_ENDPOINT" >&2
+  exit 2
+fi
+PROJECT="haku-srs-smoke-$"
 PUBLISHER_PID=''
 cleanup() {
   if [[ -n "$PUBLISHER_PID" ]]; then
     kill "$PUBLISHER_PID" 2>/dev/null || true
     wait "$PUBLISHER_PID" 2>/dev/null || true
   fi
-  docker compose -f "$COMPOSE" -p haku-srs-local-smoke down --remove-orphans >/dev/null 2>&1 || true
+  docker compose -f "$COMPOSE" -p "$PROJECT" down --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-docker compose -f "$COMPOSE" -p haku-srs-local-smoke up -d
+docker compose -f "$COMPOSE" -p "$PROJECT" up -d
 echo "Waiting for SRS localhost RTMP..."
 for i in $(seq 1 20); do
   if (echo > /dev/tcp/127.0.0.1/1935) >/dev/null 2>&1; then break; fi
