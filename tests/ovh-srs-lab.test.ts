@@ -16,7 +16,7 @@ describe('HAKU LIVE isolated SRS/WHIP lab', () => {
       'hls-local-probe.test.mjs',
       'hls-500-synthetic.test.mjs',
     ].map(file => dir + file)
-    const result = spawnSync(process.execPath, ['--test', ...files], {
+    const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...files], {
       cwd: process.cwd(),
       encoding: 'utf8',
       timeout: 45000,
