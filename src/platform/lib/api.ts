@@ -772,15 +772,22 @@ export async function listPerformerAppearances(performerId: string, includePriva
 /** Public profile appearances used by the global schedule. AWP event slots stay separate. */
 export async function listUpcomingPublishedAppearances(now = new Date()): Promise<PerformerAppearance[]> {
   const sb = requireSupabase()
-  const { data, error } = await sb
-    .from('performer_appearances')
-    .select('*')
-    .eq('status', 'published')
-    .gte('starts_at', now.toISOString())
-    .order('starts_at')
-    .limit(200)
-  if (error) throw error
-  return (data as PerformerAppearance[]) ?? []
+  const pageSize = 1000
+  const rows: PerformerAppearance[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await sb
+      .from('performer_appearances')
+      .select('*')
+      .eq('status', 'published')
+      .gte('starts_at', now.toISOString())
+      .order('starts_at')
+      .order('id')
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    const page = (data as PerformerAppearance[]) ?? []
+    rows.push(...page)
+    if (page.length < pageSize) return rows
+  }
 }
 
 async function dispatchAppearanceEvent(appearanceId: string) {
