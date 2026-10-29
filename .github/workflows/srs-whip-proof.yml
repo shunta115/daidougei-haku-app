@@ -63,6 +63,7 @@ jobs:
         run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof down --remove-orphans
 
   rtmp-hls-500-http:
+    needs: whip-hls
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
