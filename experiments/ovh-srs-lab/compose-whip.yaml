@@ -14,6 +14,9 @@ services:
       SRS_VHOST_RTC_ENABLED: 'on'
       SRS_VHOST_RTC_RTC_TO_RTMP: 'on'
       SRS_VHOST_HLS_ENABLED: 'on'
+      # Test 4s HLS segments vs SRS default 10s; lower delay increases HTTP load.
+      SRS_VHOST_HLS_HLS_FRAGMENT: '4'
+      SRS_VHOST_HLS_HLS_WINDOW: '24'
     ports:
       - '127.0.0.1:1935:1935'
       - '127.0.0.1:1985:1985'
