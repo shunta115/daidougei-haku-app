@@ -4,21 +4,9 @@ services:
   srs:
     image: ossrs/srs:v7.0.205
     restart: 'no'
-    command: ./objs/srs -e
-    environment:
-      SRS_RTMP_LISTEN: '1935'
-      SRS_HTTP_API_ENABLED: 'on'
-      SRS_HTTP_SERVER_ENABLED: 'on'
-      SRS_RTC_SERVER_ENABLED: 'on'
-      SRS_RTC_SERVER_CANDIDATE: '127.0.0.1'
-      SRS_VHOST_RTC_ENABLED: 'on'
-      SRS_VHOST_HTTP_REMUX_ENABLED: 'on'
-      SRS_VHOST_RTC_RTC_TO_RTMP: 'on'
-      SRS_VHOST_RTC_INIT_RATE_FROM_SDP: 'on'
-      SRS_VHOST_HLS_ENABLED: 'on'
-      # Test 4s HLS segments vs SRS default 10s; lower delay increases HTTP load.
-      SRS_VHOST_HLS_HLS_FRAGMENT: '4'
-      SRS_VHOST_HLS_HLS_WINDOW: '24'
+    command: ./objs/srs -c conf/haku-whip-hls.conf
+    volumes:
+      - ./srs-whip-hls.conf:/usr/local/srs/conf/haku-whip-hls.conf:ro
     ports:
       - '127.0.0.1:1935:1935'
       - '127.0.0.1:1985:1985'
