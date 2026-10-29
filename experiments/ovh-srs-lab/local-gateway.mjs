@@ -12,7 +12,7 @@ export function classifyRequest(method,path) {
   if(method==='GET' && path==='/whip-publisher.mjs') return {file:'whip-publisher.mjs',type:'text/javascript; charset=utf-8'};
   if(method==='POST' && path==='/rtc/v1/whip/') return {port:1985,type:'whip'};
   if(method==='DELETE' && /^\/rtc\/v1\/whip\/[a-zA-Z0-9/_-]{1,150}$/.test(path)) return {port:1985,type:'whip-delete'};
-  if(method==='GET' && /^\/live\/haku-lab(?:-[a-z0-9]+)?\.(?:m3u8|ts|m4s|mp4)$/.test(path)) return {port:8080,type:'hls'};
+  if(method==='GET' && (path==='/live/haku-lab.m3u8' || /^\/live\/haku-lab-[0-9]+\.ts$/.test(path))) return {port:8080,type:'hls'};
   return null;
 }
 
