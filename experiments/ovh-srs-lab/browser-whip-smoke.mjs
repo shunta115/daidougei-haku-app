@@ -28,9 +28,14 @@ try {
   if (!dimensions.width || !dimensions.height || !dimensions.audioTracks) {
     throw new Error('Browser did not capture video and audio');
   }
-  console.log(JSON.stringify({ browserWhipConnected: true, ...dimensions }));
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  const media = await page.evaluate(() => window.__hakuLabMediaCounters());
+  console.log(JSON.stringify({ browserWhipConnected: true, ...dimensions, media }));
+  if (!media || media.videoBytes <= 0 || media.audioBytes <= 0 || media.videoFrames <= 0) {
+    throw new Error('WHIP connected but no media bytes or video frames were sent');
+  }
   ok = true;
-  await new Promise(resolve => setTimeout(resolve, 60000));
+  await new Promise(resolve => setTimeout(resolve, 50000));
 } finally {
   if (ok) await page.getByRole('button', { name: '配信を終了' }).click().catch(() => {});
   await browser.close();
