@@ -815,7 +815,7 @@ async function listUpcomingLegacyEventAppearances(now: Date): Promise<PerformerA
     .order('start_time')
   if (error) throw error
   return ((data as LegacyAppearanceSlot[]) ?? []).map((slot) => {
-    const startTime = timeLabelForAppearance(slot.start_time)
+    const startTime = timeLabelForAppearance(slot.start_time) || '00:00:00'
     const endTime = timeLabelForAppearance(slot.end_time)
     return {
       id: `event-slot:${slot.id}`,
