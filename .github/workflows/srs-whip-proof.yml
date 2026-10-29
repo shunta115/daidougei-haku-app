@@ -92,6 +92,7 @@ jobs:
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep -q '^#EXTINF'; then break; fi
             if ! kill -0 "$publisher_pid" 2>/dev/null; then
               echo "RTMP test encoder stopped"
+              cat /tmp/haku-ffmpeg.log
               exit 1
             fi
             sleep 1
