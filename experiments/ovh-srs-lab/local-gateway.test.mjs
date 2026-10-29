@@ -53,10 +53,13 @@ test('same-origin local WHIP/HLS gateway forwards only permitted requests',async
     const playlist=await fetch(origin+'/live/haku-lab.m3u8');
     assert.equal(playlist.status,200);
     assert.equal(await playlist.text(),'#EXTM3U\n#EXTINF:2,\nhaku-lab-0.ts\n');
+    const media=await fetch(origin+'/live/haku-lab.m3u8?hls_ctx=abc123');
+    assert.equal(media.status,200);
+    assert.equal(seen.at(-1).path,'/live/haku-lab.m3u8?hls_ctx=abc123');
     const segment=await fetch(origin+'/live/haku-lab-0.ts');
     assert.equal(segment.status,200);
     assert.equal((await segment.arrayBuffer()).byteLength,188);
-    assert.equal(seen.length,4);
+    assert.equal(seen.length,5);
   }finally{await close(gateway);await close(whip);await close(hls);}
 });
 
@@ -70,6 +73,8 @@ test('reject cross-origin writes and unknown paths before forwarding',async()=>{
     const badStream=await fetch(origin+'/rtc/v1/whip/?app=live&stream=other',{
       method:'POST',headers:{'Content-Type':'application/sdp',Origin:origin},body:'v=0'});
     assert.equal(badStream.status,403);
+    const badContext=await fetch(origin+'/live/haku-lab.m3u8?hls_ctx=abc123&token=x');
+    assert.equal(badContext.status,403);
     const badPath=await fetch(origin+'/api/livekit/token');
     assert.equal(badPath.status,404);
   }finally{await close(gateway);}
