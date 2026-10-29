@@ -61,12 +61,16 @@ window.__hakuLabMediaCounters = async () => {
   const pc = publisher.pc;
   if (!pc) return null;
   const stats = await pc.getStats();
-  const result = { videoBytes: 0, audioBytes: 0, videoFrames: 0 };
+  const result = { videoBytes: 0, audioBytes: 0, videoFrames: 0, videoPackets: 0, videoCodec: null, videoFmtp: null };
   for (const entry of stats.values()) {
     if (entry.type !== 'outbound-rtp' || entry.isRemote) continue;
     if (entry.kind === 'video') {
       result.videoBytes += entry.bytesSent || 0;
       result.videoFrames += entry.framesSent || 0;
+      result.videoPackets += entry.packetsSent || 0;
+      const codec = stats.get(entry.codecId);
+      result.videoCodec = codec?.mimeType || null;
+      result.videoFmtp = codec?.sdpFmtpLine || null;
     }
     if (entry.kind === 'audio') result.audioBytes += entry.bytesSent || 0;
   }
