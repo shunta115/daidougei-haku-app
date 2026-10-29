@@ -661,7 +661,12 @@ function PlatformShell() {
   }
 
   const openMap = () => {
-    window.history.pushState({}, '', MAP_PATH)
+    spaGo(MAP_PATH)
+    setScreen('map-schedule')
+  }
+
+  const openSchedule = () => {
+    spaGo(FESTIVAL_PATH)
     setScreen('map-schedule')
   }
 
@@ -740,7 +745,7 @@ function PlatformShell() {
     } else if (screen === 'search') {
       guestBody = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
     } else if (screen === 'map-schedule') {
-      guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
+      guestBody = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} onOpenEvents={openEventList} onRequireAuth={() => setScreen('auth')} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} />
     } else if (screen === 'event-list') {
       guestBody = <EventListScreen onOpen={openEvent} />
     } else if (screen === 'event-detail' && eventSlug) {
@@ -782,12 +787,12 @@ function PlatformShell() {
           {guestShowNav ? (
             <BottomNav
               role="fan"
-              active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}
+              active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen === 'map-schedule' && window.location.pathname === FESTIVAL_PATH ? 'schedule' : screen}
               onNavigate={(key) => {
                 setPerformerId(null)
                 setMerchProductId(null)
                 leavePerformerUrl()
-                if (key === 'event-list') { openEventList(); return }
+                if (key === 'schedule') { openSchedule(); return }
                 if (key === 'profile') {
                   setScreen('auth')
                   return
@@ -908,7 +913,7 @@ function PlatformShell() {
         body = <SearchScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} />
         break
       case 'map-schedule':
-        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} includePublicTest={previewOn && role === 'admin'} />
+        body = <MapScheduleScreen onOpenPerformer={openPerformer} onWatchLive={openWatch} onOpenEvents={openEventList} initialView={window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map'} includePublicTest={previewOn && role === 'admin'} />
         break
       case 'event-list':
         body = <EventListScreen onOpen={openEvent} />
@@ -1081,12 +1086,12 @@ function PlatformShell() {
       {showNav && !previewOn ? (
         <BottomNav
           role={navRole}
-          active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen}
+          active={performerId && screen === 'profile' ? 'performer-public' : PERFORMER_DESK_SCREENS.has(screen) ? 'profile' : screen === 'map-schedule' && window.location.pathname === FESTIVAL_PATH ? 'schedule' : screen}
           onNavigate={(key) => {
             setPerformerId(null)
             setMerchProductId(null)
             leavePerformerUrl()
-            if (key === 'event-list') { openEventList(); return }
+            if (key === 'schedule') { openSchedule(); return }
             if (key === 'map-schedule') { openMap(); return }
             setScreen(key as PlatformScreen)
           }}
