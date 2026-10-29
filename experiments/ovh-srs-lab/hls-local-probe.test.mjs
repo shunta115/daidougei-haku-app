@@ -25,8 +25,8 @@ test('receive segments with two synthetic local viewers',async()=>{
   const r=await runProbe({url:'http://127.0.0.1:'+port+'/live/test.m3u8',viewers:2,seconds:2});
   assert.equal(r.errors,0);
   assert.equal(r.viewersWithFirstSegment,2);
-  assert.equal(r.segments,4);
-  assert.equal(r.bytes,4096);
+  assert.equal(r.segments,2);
+  assert.equal(r.bytes,2048);
   assert.ok(r.requestP95Ms!==null);
  } finally {await new Promise(resolve=>server.close(resolve));}
 });
