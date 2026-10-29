@@ -14,9 +14,11 @@ try {
   await page.goto('http://127.0.0.1:4319/', { waitUntil: 'load' });
   await page.getByRole('button', { name: 'LIVE配信を開始' }).click();
   await page.waitForFunction(
-    () => document.getElementById('status')?.textContent === 'LIVE配信中',
+    () => { const status = document.getElementById('status')?.textContent ?? ''; return status === 'LIVE配信中' || status.startsWith('開始できません'); },
     { timeout: 25000 }
   );
+  const status = await page.locator('#status').textContent();
+  if (status !== 'LIVE配信中') throw new Error('Browser WHIP: ' + status);
   const dimensions = await page.locator('#preview').evaluate(video => ({
     width: video.videoWidth,
     height: video.videoHeight,
