@@ -425,6 +425,10 @@
 .pl-appearance-empty span { max-width: 280px; color: var(--xp-muted); font-size: 12px; line-height: 1.6; }
 .pl-appearance-empty .pl-action { margin-top: 4px; }
 .pl-appearance-empty--error { border-color: rgba(255,113,139,.35); color: #ff718b; }
+.pl-near-search { display:grid; gap:7px; margin:0 0 12px; color:var(--xp-muted); font-size:11px; }
+.pl-near-appearance { overflow:hidden; border:1px solid var(--xp-line); border-radius:16px; background:rgba(12,29,48,.68); }
+.pl-near-appearance > button { width:100%; }
+.pl-near-appearance > a { min-height:40px; display:flex; align-items:center; justify-content:center; gap:6px; border-top:1px solid var(--xp-line); color:#8bc3ff; font-size:11px; font-weight:850; text-decoration:none; }
 .pl-schedule-preview { display: grid; gap: 8px; }
 .pl-schedule-preview__note { margin: 6px 2px 2px; color: #8bc3ff; font-size: 10px; font-weight: 850; }
 .pl-schedule-row--preview { opacity: .84; cursor: default; }

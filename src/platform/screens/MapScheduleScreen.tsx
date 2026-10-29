@@ -24,6 +24,7 @@ import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
 import { filterAppearancesForPeriod, type AppearancePeriod } from '../lib/appearanceSchedule'
 import { appearanceMapState, mapVisibleAppearances } from '../lib/appearanceMap'
+import { rankNearbyAppearances } from '../lib/nearbyAppearances'
 import { FESTIVAL_PATH } from '../../app/routes'
 
 type Props = {
@@ -55,6 +56,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [viewerPeaks, setViewerPeaks] = useState<Record<string, number>>({})
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [areaQuery, setAreaQuery] = useState('')
   const [mapError, setMapError] = useState<string | null>(null)
   const [locationClock, setLocationClock] = useState(Date.now())
   const [filter, setFilter] = useState<DiscoveryFilter>('all')
@@ -236,6 +238,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     }))
     .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY)),
   [liveMapPerformers, userLocation])
+  const nearbyAppearances = useMemo(() => rankNearbyAppearances(appearanceMarkers, userLocation, areaQuery), [appearanceMarkers, areaQuery, userLocation])
 
   return (
     <main className="pl-experience pl-map-schedule">
@@ -336,6 +339,15 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             )
           })() : null}
           </div>
+
+          <section className="pl-near-live" aria-label="近くの出演予定">
+            <header><div><p>NEARBY STAGES</p><h2>近くの大道芸を探す</h2></div><span>{nearbyAppearances.length}件</span></header>
+            {!userLocation ? <label className="pl-near-search">地域・会場から探す<input className="pl-input" type="search" value={areaQuery} onChange={(event) => setAreaQuery(event.target.value)} placeholder="例：東京、練馬城址公園" /></label> : null}
+            {nearbyAppearances.length ? <div className="pl-near-live__rail">{nearbyAppearances.map(({ appearance, performer, distance }) => {
+              const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${appearance.venue_lat},${appearance.venue_lng}`
+              return <article key={appearance.id} className="pl-near-appearance"><button type="button" onClick={() => { setSelectedAppearance(appearance.id); setSelectedPerformer(null); setSelectedVenue(null); document.getElementById('haku-venue-map')?.scrollIntoView({ behavior: 'smooth' }) }}><span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>予定</i></span><span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{appearance.performance_date} {timeLabel(appearance.start_time)} · {appearance.venue_name}</small><em>{distance != null ? `${formatMapDistance(distance)} · ` : ''}{appearance.region}</em></span><ChevronRight size={18} /></button><a href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={15} /> Google Mapsで経路案内</a></article>
+            })}</div> : <p className="pl-near-live__empty">条件に合う公開予定はありません。</p>}
+          </section>
 
           <section className="pl-map-directory" aria-label={t('mapEvents')}>
             <header><div><p>EVENT</p><h2>{t('mapEvents')}</h2></div></header>
