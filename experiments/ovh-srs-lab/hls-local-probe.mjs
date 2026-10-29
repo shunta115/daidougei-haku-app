@@ -74,11 +74,12 @@ export async function runProbe(options) {
         if(mediaUrl!==target.href) stats.playlistRequests++;
         const segments=segmentUrls(playlist, mediaUrl);
         // A live viewer joins at the live edge, not at the oldest retained HLS segment.
-        if (first) for (const old of segments.slice(0,-1)) seen.add(old);
+        if (first) for (const old of segments.slice(0,-1)) seen.add(new URL(old).pathname);
         for (const uri of segments) {
-          if (seen.has(uri) || Date.now()>=deadline) continue;
+          const segmentPath=new URL(uri).pathname;
+          if (seen.has(segmentPath) || Date.now()>=deadline) continue;
           const data=await get(uri);
-          seen.add(uri);
+          seen.add(segmentPath);
           stats.bytes+=data.length;
           stats.segments++;
           if (first) {stats.firstSegmentMs.push(Date.now()-start);first=false;}
