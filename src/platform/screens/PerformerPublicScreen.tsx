@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
+import { BadgeCheck, Copy, Download, Heart, MapPin, Play, Printer, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
 import { AppBackButton } from '../components/AppBackButton'
 import {
@@ -23,7 +23,7 @@ import { trackProductEvent, useTrackView } from '../lib/track'
 import type { MerchProduct, Performer, PerformerAppearance } from '../lib/types'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
-import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
+import { downloadQrCard, performerQrDataUrl, printQrCard } from '../lib/qr'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
 import './performer-home.css'
@@ -250,6 +250,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         a.click()
       }
     }
+  }
+  const printQr = async () => {
+    if (!p) return
+    try { await printQrCard({ url: canonicalUrl, name: p.stage_name, handle: handleOf(p) }) }
+    catch { setError(t('hpQr')) }
   }
 
   const openMap = (venue: EventVenueRow | null) => {
@@ -526,6 +531,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
               {copyState === 'ok' ? `✓ ${t('hpCopyDone')}` : copyState === 'fail' ? t('hpCopyFail') : <><Copy size={16} /> {t('hpCopy')}</>}
             </button>
             <button type="button" onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
+            <button type="button" onClick={() => void printQr()}><Printer size={16} /> Print</button>
           </div>
         </div>
       ) : null}
