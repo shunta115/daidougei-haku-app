@@ -2,17 +2,20 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
-const fake = vi.hoisted(() => ({ slots: vi.fn() }))
+const fake = vi.hoisted(() => ({ slots: vi.fn(), appearances: vi.fn(), featured: vi.fn() }))
 vi.mock('../src/platform/lib/api', () => ({
   liveReservationsEnabled: false,
-  getFeaturedEvent: async () => ({ id: 'e', name_ja: 'AWP' }),
+  getFeaturedEvent: fake.featured,
   listEventSlots: fake.slots,
   listApprovedPerformers: async () => [{ id: 'p', stage_name: 'テスト出演者', is_live: true }],
+  listApprovedPerformersByIds: async () => [{ id: 'p', stage_name: 'テスト出演者', is_live: true }],
   listEventVenues: async () => [],
   listLiveRanking: async () => [],
   listLivePerformers: async () => [],
   listEventLiveSessions: async () => [],
   getSignedInUserId: async () => null,
+  listFollowedPerformers: async () => [],
+  listUpcomingPublishedAppearances: fake.appearances,
   listUpcomingLiveSchedules: async () => [],
   listOwnLiveReservationIds: async () => [],
   reserveLiveSchedule: async () => undefined,
@@ -28,33 +31,55 @@ beforeEach(() => {
   const storage = new JSDOM('', { url: 'http://localhost' }).window.localStorage
   vi.stubGlobal('localStorage', storage)
   fake.slots.mockResolvedValue([slot])
+  fake.featured.mockResolvedValue({ id: 'e', name_ja: 'AWP' })
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  fake.appearances.mockResolvedValue([{
+    id: 'a', performer_id: 'p', title: '公開ステージ', performance_date: today,
+    start_time: '18:00:00', starts_at: new Date(Date.now() + 60_000).toISOString(),
+    venue_name: '公開会場', venue_address: '東京都渋谷区', region: '東京', country: '日本', timezone: 'Asia/Tokyo', status: 'published',
+  }])
+})
+it('keeps public appearances visible when MAP data fails', async () => {
+  fake.featured.mockRejectedValue(new Error('venue unavailable'))
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} /></LangProvider>)
+  expect(await screen.findByText('公開ステージ')).toBeTruthy()
+  expect(screen.queryByText('出演予定を読み込めませんでした')).toBeNull()
+  expect(screen.queryByText('会場情報を読み込めませんでした')).toBeNull()
+})
+it('shows a login guide for the following mode when signed out', async () => {
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onRequireAuth={vi.fn()} /></LangProvider>)
+  await screen.findByText('公開ステージ')
+  fireEvent.click(screen.getByRole('tab', { name: /フォロー中/ }))
+  expect(screen.getByText('ログインするとフォロー中の予定を確認できます')).toBeTruthy()
+  expect(screen.getByRole('button', { name: /ログイン/ })).toBeTruthy()
+})
+it('syncs the schedule and MAP views to direct URLs and popstate navigation', async () => {
+  window.history.replaceState({}, '', '/event')
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} /></LangProvider>)
+  await screen.findByText('公開ステージ')
+  expect(screen.getByRole('tablist', { name: '表示対象' })).toBeTruthy()
+
+  window.history.pushState({}, '', '/map')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  expect(await screen.findByRole('group', { name: /MAPの絞り込み|Map filters/i })).toBeTruthy()
+  expect(screen.queryByRole('tablist', { name: '表示対象' })).toBeNull()
+
+  window.history.pushState({}, '', '/event')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  expect(await screen.findByRole('tablist', { name: '表示対象' })).toBeTruthy()
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks() })
-it('shows and disables cancelled map schedule rows, refreshing same-day changes', async () => {
-  const live = vi.fn(), profile = vi.fn()
-  const mount = () => render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={profile} onWatchLive={live} /></LangProvider>)
-  mount()
-  await screen.findAllByText('テスト出演者')
-  const row = () => document.querySelector<HTMLButtonElement>('.pl-schedule-row')!
-  expect(row().disabled).toBe(false)
-  fireEvent.click(row())
-  expect(live).toHaveBeenCalledTimes(1)
-  fake.slots.mockResolvedValue([{ ...slot, status: 'cancelled', note_ja: '雨天' }])
-  cleanup()
-  mount()
-  await screen.findAllByText('テスト出演者')
-  expect(row().disabled).toBe(true)
-  expect(row().textContent).toContain('中止：雨天')
-  expect(row().textContent).not.toContain('LIVE')
-  fireEvent.click(row())
-  expect(live).toHaveBeenCalledTimes(1)
-  expect(profile).not.toHaveBeenCalled()
-  fake.slots.mockResolvedValue([{ ...slot, start_time: '13:00:00' }])
-  cleanup()
-  mount()
-  await screen.findAllByText('テスト出演者')
-  expect(row().disabled).toBe(false)
-  expect(row().textContent).toContain('13:00')
+it('shows public profile appearances and keeps AWP slots out of the normal schedule', async () => {
+  const profile = vi.fn()
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={profile} onWatchLive={vi.fn()} /></LangProvider>)
+  await screen.findByText('公開ステージ')
+  expect(screen.queryByRole('tablist', { name: /MAP.*スケジュール/i })).toBeNull()
+  expect(screen.getByText('公開会場 · 東京')).toBeTruthy()
+  expect(screen.queryByText('AWP')).toBeNull()
+  expect(document.querySelector('.pl-schedule-row')).toBeNull()
+  expect(screen.getByRole('link', { name: 'MAPで見る' }).getAttribute('href')).toContain('google.com/maps/search')
+  fireEvent.click(screen.getByRole('button', { name: 'テスト出演者のプロフィールを開く' }))
+  expect(profile).toHaveBeenCalledWith('p')
 })
 it('excludes cancelled LIVE plans on initial load and after refresh', async () => {
   fake.slots.mockResolvedValue([{ ...slot, status: 'cancelled' }])
