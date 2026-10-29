@@ -130,7 +130,7 @@ jobs:
         env:
           HAKU_LOCAL_LOAD_APPROVED: YES
         run: |
-          ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=854x480:rate=24 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 800k -g 48 -c:a aac -b:a 48k -ar 48000 -f flv rtmp://127.0.0.1:1935/live/haku-lab > /tmp/haku-ffmpeg.log 2>&1 &
+          ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=854x480:rate=24 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 800k -maxrate 900k -bufsize 1800k -g 48 -c:a aac -b:a 48k -ar 48000 -f flv rtmp://127.0.0.1:1935/live/haku-lab > /tmp/haku-ffmpeg.log 2>&1 &
           publisher_pid=$!
           for i in $(seq 1 50); do
             if node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8 > /dev/null; then break; fi
@@ -144,7 +144,7 @@ jobs:
           node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8
           for viewers in 1 10 50 100 500; do
             node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers="$viewers" --seconds=10 > /tmp/haku-load-result.json
-            node -e "const r=require('/tmp/haku-load-result.json'); console.log(JSON.stringify({viewers:r.viewers,receivedFirstSegment:r.viewersWithFirstSegment,errors:r.errors,bytes:r.bytes,p95Ms:r.requestP95Ms})); if(r.viewersWithFirstSegment!==r.viewers || r.errors>0) process.exit(1)"
+            node -e "const r=require('/tmp/haku-load-result.json'); console.log(JSON.stringify({viewers:r.viewers,receivedFirstSegment:r.viewersWithFirstSegment,errors:r.errors,bytes:r.bytes,throughputMbps:Number((r.bytes*8/r.seconds/1e6).toFixed(2)),p95Ms:r.requestP95Ms})); if(r.viewersWithFirstSegment!==r.viewers || r.errors>0) process.exit(1)"
             docker stats --no-stream --format 'SRS CPU {{.CPUPerc}} MEM {{.MemUsage}} NET {{.NetIO}}' haku-srs-load-srs-1
           done
           kill "$publisher_pid" 2>/dev/null || true
