@@ -36,6 +36,26 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Verify RTMP to HLS baseline before WHIP
+        run: |
+          timeout 25 ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=320x180:rate=15 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 300k -g 30 -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/haku-rtmp-control > /tmp/haku-rtmp-baseline.log 2>&1 &
+          encoder_pid=$!
+          for i in $(seq 1 18); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 | grep -q '^#EXTINF'; then break; fi
+            if ! kill -0 "$encoder_pid" 2>/dev/null; then
+              echo 'RTMP baseline encoder stopped before HLS'
+              cat /tmp/haku-rtmp-baseline.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! curl --fail --silent --max-time 3 http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 | grep -q '^#EXTINF'; then
+            echo 'RTMP baseline produced no HLS'
+            cat /tmp/haku-rtmp-baseline.log
+            exit 1
+          fi
+          kill "$encoder_pid" 2>/dev/null || true
+          echo 'RTMP to HLS baseline generated a segment'
       - name: Publish browser camera and validate HLS audio/video
         run: |
           node experiments/ovh-srs-lab/browser-whip-smoke.mjs > /tmp/haku-browser.log 2>&1 &
