@@ -11,6 +11,9 @@ test('only fixed local routes accepted',()=>{
   assert.equal(classifyRequest('GET','/').file,'whip-local.html');
   assert.equal(classifyRequest('POST','/rtc/v1/whip/').port,1985);
   assert.equal(classifyRequest('GET','/live/haku-lab.m3u8').port,8080);
+  assert.equal(classifyRequest('GET','/live/haku-lab-0.ts').port,8080);
+  assert.equal(classifyRequest('GET','/live/haku-lab-123.ts').port,8080);
+  assert.equal(classifyRequest('GET','/live/haku-lab-other.ts'),null);
   for(const path of ['/api/stripe','/etc/passwd','/live/production.m3u8','/live/../../secret','/rtc/v1/whip/../../admin']){
     assert.equal(classifyRequest('GET',path),null);
   }
@@ -27,8 +30,9 @@ test('same-origin local WHIP/HLS gateway forwards only permitted requests',async
   });
   const hls=createServer((req,res)=>{
     seen.push({path:req.url,method:req.method});
+    if(req.url==='/live/haku-lab-0.ts') {res.writeHead(200,{'Content-Type':'video/mp2t'});res.end(Buffer.alloc(188,0x47));return;}
     res.writeHead(200,{'Content-Type':'application/vnd.apple.mpegurl'});
-    res.end('#EXTM3U\n');
+    res.end('#EXTM3U\n#EXTINF:2,\nhaku-lab-0.ts\n');
   });
   await start(whip);await start(hls);
   const gateway=makeGateway({whipPort:whip.address().port,hlsPort:hls.address().port});
@@ -48,8 +52,11 @@ test('same-origin local WHIP/HLS gateway forwards only permitted requests',async
     assert.equal(del.status,200);
     const playlist=await fetch(origin+'/live/haku-lab.m3u8');
     assert.equal(playlist.status,200);
-    assert.equal(await playlist.text(),'#EXTM3U\n');
-    assert.equal(seen.length,3);
+    assert.equal(await playlist.text(),'#EXTM3U\n#EXTINF:2,\nhaku-lab-0.ts\n');
+    const segment=await fetch(origin+'/live/haku-lab-0.ts');
+    assert.equal(segment.status,200);
+    assert.equal((await segment.arrayBuffer()).byteLength,188);
+    assert.equal(seen.length,4);
   }finally{await close(gateway);await close(whip);await close(hls);}
 });
 
