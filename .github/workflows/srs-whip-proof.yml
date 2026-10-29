@@ -36,6 +36,8 @@ jobs:
             sleep 1
           done
           exit 1
+      - name: Verify loopback RTMP handshake
+        run: node experiments/ovh-srs-lab/rtmp-handshake.mjs
       - name: Verify RTMP to HLS baseline before WHIP
         run: |
           timeout 25 ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=320x180:rate=15 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 300k -g 30 -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/haku-rtmp-control > /tmp/haku-rtmp-baseline.log 2>&1 &
