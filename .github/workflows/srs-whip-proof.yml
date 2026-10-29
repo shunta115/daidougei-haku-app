@@ -53,6 +53,8 @@ jobs:
           done
           if ! curl --fail --silent --max-time 3 http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 | grep -q '^#EXTINF'; then
             echo 'RTMP baseline produced no HLS'
+            echo 'Lab HLS files:'
+            docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof exec -T srs sh -c "find ./objs/nginx/html -maxdepth 4 -type f \\( -name '*.m3u8' -o -name '*.ts' \\) -print" || true
             cat /tmp/haku-rtmp-baseline.log
             exit 1
           fi
