@@ -120,7 +120,7 @@ jobs:
           sudo apt-get install -y ffmpeg
       - name: Start isolated localhost SRS
         run: |
-          docker compose -f experiments/ovh-srs-lab/compose.yaml -p haku-srs-load up -d
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-load up -d
           for i in $(seq 1 30); do
             if curl --silent --max-time 2 http://127.0.0.1:8080/ > /dev/null && (echo > /dev/tcp/127.0.0.1/1935) > /dev/null 2>&1; then exit 0; fi
             sleep 1
@@ -141,10 +141,13 @@ jobs:
             fi
             sleep 1
           done
-          curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep '^#EXTINF'
-          node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers=500 --seconds=15 > /tmp/haku-load-result.json
-          node -e "const r=require('/tmp/haku-load-result.json'); console.log(JSON.stringify({viewers:r.viewers,receivedFirstSegment:r.viewersWithFirstSegment,errors:r.errors,bytes:r.bytes,p95Ms:r.requestP95Ms})); if(r.viewersWithFirstSegment!==500 || r.errors>0) process.exit(1)"
+          node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8
+          for viewers in 1 10 50 100 500; do
+            node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers="$viewers" --seconds=10 > /tmp/haku-load-result.json
+            node -e "const r=require('/tmp/haku-load-result.json'); console.log(JSON.stringify({viewers:r.viewers,receivedFirstSegment:r.viewersWithFirstSegment,errors:r.errors,bytes:r.bytes,p95Ms:r.requestP95Ms})); if(r.viewersWithFirstSegment!==r.viewers || r.errors>0) process.exit(1)"
+            docker stats --no-stream --format 'SRS CPU {{.CPUPerc}} MEM {{.MemUsage}} NET {{.NetIO}}' haku-srs-load-srs-1
+          done
           kill "$publisher_pid" 2>/dev/null || true
       - name: Clean up isolated lab
         if: always()
-        run: docker compose -f experiments/ovh-srs-lab/compose.yaml -p haku-srs-load down --remove-orphans
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-load down --remove-orphans
