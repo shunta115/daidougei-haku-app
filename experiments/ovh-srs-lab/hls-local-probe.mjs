@@ -31,6 +31,22 @@ export function segmentUrls(playlist, manifestUrl) {
   return urls;
 }
 
+export function mediaPlaylistUrl(playlist, manifestUrl) {
+  if (!playlist.startsWith('#EXTM3U')) throw new Error('Not an HLS playlist');
+  if (playlist.includes('#EXTINF:')) return manifestUrl;
+  const lines = playlist.split(/\\r?\\n/).map(s => s.trim());
+  const variantIndex = lines.findIndex(line => line.startsWith('#EXT-X-STREAM-INF:'));
+  if (variantIndex < 0 || !lines[variantIndex + 1]) throw new Error('No HLS media playlist');
+  const root = new URL(manifestUrl);
+  const variant = new URL(lines[variantIndex + 1], root);
+  if (variant.origin !== root.origin || variant.pathname !== root.pathname ||
+      [...variant.searchParams.keys()].some(key => key !== 'hls_ctx') ||
+      !/^[a-z0-9]{1,64}$/.test(variant.searchParams.get('hls_ctx') || '')) {
+    throw new Error('Unsafe HLS media playlist URL');
+  }
+  return variant.href;
+}
+
 export async function runProbe(options) {
   const target=validateOptions(options);
   const start=Date.now();
@@ -51,9 +67,12 @@ export async function runProbe(options) {
     let first=true;
     while (Date.now()<deadline) {
       try {
-        const playlist=new TextDecoder().decode(await get(target.href));
+        const master=new TextDecoder().decode(await get(target.href));
         stats.playlistRequests++;
-        for (const uri of segmentUrls(playlist, target.href)) {
+        const mediaUrl=mediaPlaylistUrl(master,target.href);
+        const playlist=mediaUrl===target.href?master:new TextDecoder().decode(await get(mediaUrl));
+        if(mediaUrl!==target.href) stats.playlistRequests++;
+        for (const uri of segmentUrls(playlist, mediaUrl)) {
           if (seen.has(uri) || Date.now()>=deadline) continue;
           const data=await get(uri);
           seen.add(uri);
