@@ -83,14 +83,17 @@ jobs:
             exit 1
           fi
           echo 'WHIP HLS media playlist ready'
-          if ! timeout 20 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 http://127.0.0.1:8080/live/haku-lab.m3u8 > /tmp/haku-codecs.txt; then
-            echo 'ffprobe could not read WHIP HLS'
+          for i in $(seq 1 20); do
+            timeout 5 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 http://127.0.0.1:8080/live/haku-lab.m3u8 > /tmp/haku-codecs.txt || true
+            if grep -q 'h264,video' /tmp/haku-codecs.txt && grep -q 'aac,audio' /tmp/haku-codecs.txt; then break; fi
+            sleep 2
+          done
+          cat /tmp/haku-codecs.txt
+          if ! grep -q 'h264,video' /tmp/haku-codecs.txt || ! grep -q 'aac,audio' /tmp/haku-codecs.txt; then
+            echo 'WHIP HLS did not contain both H.264 video and AAC audio'
             cat /tmp/haku-browser.log
             exit 1
           fi
-          cat /tmp/haku-codecs.txt
-          grep -q 'h264,video' /tmp/haku-codecs.txt
-          grep -q 'aac,audio' /tmp/haku-codecs.txt
           echo 'H.264 and AAC streams identified'
           timeout 20 ffmpeg -nostdin -hide_banner -v error -xerror -i http://127.0.0.1:8080/live/haku-lab.m3u8 -t 6 -map 0:v:0 -map 0:a:0 -f null -
           echo 'H.264 and AAC decoded for six seconds'
