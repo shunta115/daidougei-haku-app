@@ -30,7 +30,7 @@ try {
   }
   console.log(JSON.stringify({ browserWhipConnected: true, ...dimensions }));
   ok = true;
-  await new Promise(resolve => setTimeout(resolve, 30000));
+  await new Promise(resolve => setTimeout(resolve, 60000));
 } finally {
   if (ok) await page.getByRole('button', { name: '配信を終了' }).click().catch(() => {});
   await browser.close();
