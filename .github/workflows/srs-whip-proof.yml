@@ -44,6 +44,8 @@ jobs:
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep -q '^#EXTINF'; then break; fi
             if ! kill -0 "$publisher_pid" 2>/dev/null; then
               echo "WHIP publisher failed before HLS"
+              cat /tmp/haku-browser.log
+              docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof logs --tail=100
               exit 1
             fi
             sleep 1
@@ -54,6 +56,7 @@ jobs:
           grep -q 'aac,audio' /tmp/haku-codecs.txt
           node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers=5 --seconds=10
           wait "$publisher_pid"
+          cat /tmp/haku-browser.log
           echo "Browser WHIP -> SRS -> HLS H.264/AAC proved on loopback"
       - name: Clean up isolated lab
         if: always()
