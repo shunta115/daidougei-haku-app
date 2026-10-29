@@ -1,6 +1,6 @@
 import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, ChevronRight, Clock3, Globe2, Heart, LogIn, Map as MapIcon, MapPin, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronRight, Clock3, Copy, Globe2, Heart, LogIn, Map as MapIcon, MapPin, Navigation, Radio, Share2, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
@@ -25,6 +25,7 @@ import type { PerformerAppearance } from '../lib/types'
 import { filterAppearancesForPeriod, type AppearancePeriod } from '../lib/appearanceSchedule'
 import { appearanceMapState, mapVisibleAppearances } from '../lib/appearanceMap'
 import { rankNearbyAppearances } from '../lib/nearbyAppearances'
+import { appearanceLandingUrl, appearanceShareLinks, appearanceShareText, copyAppearanceUrl, shareAppearance } from '../lib/appearanceShare'
 import { FESTIVAL_PATH } from '../../app/routes'
 
 type Props = {
@@ -410,6 +411,9 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const place = [appearance.venue_name, appearance.region].filter(Boolean).join(' · ')
             const mapQuery = appearance.venue_address || [appearance.venue_name, appearance.region, appearance.country].filter(Boolean).join(' ')
             const mapHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`
+            const shareUrl = appearanceLandingUrl(window.location.origin, act.id, appearance.id)
+            const shareText = appearanceShareText(act.stage_name, appearance)
+            const social = appearanceShareLinks(shareUrl, shareText)
             const date = new Date(`${appearance.performance_date}T12:00:00Z`)
             const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'ja-JP', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC' }).format(date)
             return (
@@ -420,7 +424,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                   <span className="pl-schedule-row__body"><strong>{act.stage_name}</strong><small>{appearance.title}</small><span><MapPin size={12} /> {place}</span></span>
                   <ChevronRight size={18} />
                 </button>
-                {mapQuery ? <a className="pl-appearance-row__map" href={mapHref} target="_blank" rel="noopener noreferrer"><MapIcon size={14} /> MAPで見る</a> : null}
+                <div className="pl-appearance-row__actions">{mapQuery ? <a href={mapHref} target="_blank" rel="noopener noreferrer"><MapIcon size={14} /> MAPで見る</a> : null}<a href={social.line} target="_blank" rel="noopener noreferrer">LINE</a><a href={social.x} target="_blank" rel="noopener noreferrer">X</a><button type="button" onClick={() => void shareAppearance(shareUrl, shareText)}><Share2 size={14} /> 共有</button><button type="button" onClick={() => void copyAppearanceUrl(shareUrl)} aria-label="出演予定URLをコピー"><Copy size={14} /></button></div>
               </article>
             )
           }) : null}
