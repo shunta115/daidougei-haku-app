@@ -871,6 +871,15 @@ export async function createPerformerAppearance(performerId: string, input: Perf
   return data as PerformerAppearance
 }
 
+export async function createPerformerAppearances(performerId: string, inputs: PerformerAppearanceInput[]) {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performer_appearances').insert(inputs.map((input) => ({ ...input, performer_id: performerId }))).select('*')
+  if (error) throw error
+  const rows = (data as PerformerAppearance[]) ?? []
+  await Promise.all(rows.map((row) => dispatchAppearanceEvent(row.id)))
+  return rows
+}
+
 export async function updatePerformerAppearance(id: string, input: Partial<PerformerAppearanceInput>) {
   const sb = requireSupabase()
   const { data, error } = await sb.from('performer_appearances').update(input).eq('id', id).select('*').single()
