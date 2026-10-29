@@ -122,7 +122,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
         setSignedInUserId(userId)
         setFollowedPerformerIds(new Set(followed.map((performer) => performer.id)))
       } catch (loadError) {
-        console.error('schedule_load_failed', loadError)
+        console.error('schedule_load_failed', JSON.stringify(loadError))
         if (!cancelled) setScheduleError('出演予定を読み込めませんでした。時間をおいて再度お試しください。')
       } finally {
         if (!cancelled) setScheduleLoading(false)
