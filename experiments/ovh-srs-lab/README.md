@@ -98,7 +98,8 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 
 - **公式SRS v6.0-r1の設定を監査**。HLSの標準セグメント名は `[app]/[stream]-[seq].ts`。従来のローカルゲートウェイは連番セグメントを通せず、映像が再生できない不具合があったため修正した。既存の配信テストにも実際のSRS形式のセグメント検証を追加。
 - `tests/ovh-srs-lab.test.ts` を追加し、既存GitHub ActionsのVitest品質ゲートからNode.jsのローカル安全試験を呼び出すようにした。**CI結果を確認するまでは成功と表記しない。**
-- `compose-whip.yaml` ではHLSセグメントを4秒、保持ウィンドウを24秒に設定（SRS標準の10秒セグメントから短縮）。視聴遅延を下げる狙いだが、500人のHTTPリクエスト増加と実際のSafari遅延を測定してから採否を決める。\n- `run-local-srs-smoke.sh` を追加。Dockerを使える開発機で明示的に `HAKU_SRS_LOCAL_SMOKE=YES bash experiments/ovh-srs-lab/run-local-srs-smoke.sh` を実行すると、SRS起動→FFmpegで実映像送出→HLS/音声コーデック検査→5視聴負荷試験→自動終了する。Dockerがない現環境では**未実行**。
+- `compose-whip.yaml` ではHLSセグメントを4秒、保持ウィンドウを24秒に設定（SRS標準の10秒セグメントから短縮）。視聴遅延を下げる狙いだが、500人のHTTPリクエスト増加と実際のSafari遅延を測定してから採否を決める。
+- `run-local-srs-smoke.sh` を追加。Dockerを使える開発機で明示的に `HAKU_SRS_LOCAL_SMOKE=YES bash experiments/ovh-srs-lab/run-local-srs-smoke.sh` を実行すると、SRS起動→FFmpegで実映像送出→HLS/音声コーデック検査→5視聴負荷試験→自動終了する。Dockerがない現環境では**未実行**。
 - SRSの試験ポートはlocalhostのみ。Docker接続先がリモートの場合は拒否。外部負荷試験・有料サーバー・本番環境は一切変更していない。
 
 ## 次の試験ゲート
