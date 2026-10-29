@@ -75,7 +75,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
       - name: Start isolated localhost SRS
-        run: docker compose -f experiments/ovh-srs-lab/compose.yaml -p haku-srs-load up -d
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose.yaml -p haku-srs-load up -d
+          for i in $(seq 1 30); do
+            if curl --silent --max-time 2 http://127.0.0.1:8080/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
       - name: Publish RTMP and request HLS with 500 concurrent synthetic clients
         env:
           HAKU_LOCAL_LOAD_APPROVED: YES
