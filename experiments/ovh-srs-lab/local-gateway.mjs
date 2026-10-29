@@ -21,7 +21,10 @@ export function makeGateway({host='127.0.0.1',port=4319,whipPort=1985,hlsPort=80
   const server=createServer(async(req,res)=>{
     const send=(status,body)=>{res.writeHead(status,{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(body);};
     try {
-      const u=new URL(req.url||'/', 'http://127.0.0.1:'+port);
+      const localOrigin='http://127.0.0.1:'+(server.address()?.port||port);
+      if(req.headers.host!==new URL(localOrigin).host || req.headers['sec-fetch-site']==='cross-site' ||
+        (req.headers.origin && req.headers.origin!==localOrigin)) {send(403,'Local origin only');return;}
+      const u=new URL(req.url||'/',localOrigin);
       const route=classifyRequest(req.method,u.pathname);
       if(!route || (u.search && route.file)) {send(404,'Not found');return;}
       if(route.file) {
