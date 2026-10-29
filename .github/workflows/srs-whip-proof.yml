@@ -24,7 +24,7 @@ jobs:
         run: |
           npm ci
           npm install --no-save --package-lock=false playwright@1.56.1
-          npx playwright install chromium --with-deps
+          npx playwright install chrome --with-deps
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
       - name: Start localhost SRS and gateway
@@ -46,7 +46,6 @@ jobs:
               echo "WHIP publisher failed before HLS"
               cat /tmp/haku-browser.log
               cat /tmp/haku-gateway.log
-              docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof logs --tail=100
               exit 1
             fi
             sleep 1
