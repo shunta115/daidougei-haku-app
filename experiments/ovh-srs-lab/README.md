@@ -94,6 +94,13 @@ SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerの�
 - `whip-local.html` は4319番経由のWHIP・HLSへ変更。**SRS本体の動作、WebRTC接続、音声変換、iPhone実機は依然として未検証**。
 - `local-gateway.test.mjs` に固定ルート、WHIP/HLSプロキシ、外部Origin拒否の3テストを追加。テストファイルをGitHubへ保存済みだが、この変更について実行結果は未確認。
 
+## 2026-10-29 最新進捗：実SRS試験への準備
+
+- **公式SRS v6.0-r1の設定を監査**。HLSの標準セグメント名は `[app]/[stream]-[seq].ts`。従来のローカルゲートウェイは連番セグメントを通せず、映像が再生できない不具合があったため修正した。既存の配信テストにも実際のSRS形式のセグメント検証を追加。
+- `tests/ovh-srs-lab.test.ts` を追加し、既存GitHub ActionsのVitest品質ゲートからNode.jsのローカル安全試験を呼び出すようにした。**CI結果を確認するまでは成功と表記しない。**
+- `run-local-srs-smoke.sh` を追加。Dockerを使える開発機で明示的に `HAKU_SRS_LOCAL_SMOKE=YES bash experiments/ovh-srs-lab/run-local-srs-smoke.sh` を実行すると、SRS起動→FFmpegで実映像送出→HLS/音声コーデック検査→5視聴負荷試験→自動終了する。Dockerがない現環境では**未実行**。
+- SRSの試験ポートはlocalhostのみ。Docker接続先がリモートの場合は拒否。外部負荷試験・有料サーバー・本番環境は一切変更していない。
+
 ## 次の試験ゲート
 
 0. **費用発生前に承認が必要**。OVHcloudの最終購入画面における月額・初期費用・リージョン・契約期間・転送規約を確定し、ユーザーからその条件について個別承認を得る。現時点では契約していない。
