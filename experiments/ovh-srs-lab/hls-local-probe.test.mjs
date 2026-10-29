@@ -55,3 +55,23 @@ test('receive SRS master and media playlists with local viewer',async()=>{
    assert.equal(r.viewersWithFirstSegment,1);
  } finally {await new Promise(resolve=>server.close(resolve));}
 });
+
+test('changing segment query does not redownload the same live segment',async()=>{
+ let playlistReads=0;
+ const server=createServer((req,res)=>{
+   if(req.url==='/live/test.m3u8') {
+     playlistReads++;
+     res.end('#EXTM3U\n#EXTINF:4.0,\nseg-1.ts?hls_ctx='+playlistReads+'\n');
+   } else if(req.url?.startsWith('/live/seg-1.ts?hls_ctx=')) res.end(Buffer.alloc(1024,7));
+   else {res.statusCode=404;res.end('no');}
+ });
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ try {
+   const {port}=server.address();
+   const r=await runProbe({url:'http://127.0.0.1:'+port+'/live/test.m3u8',viewers:1,seconds:3});
+   assert.equal(r.errors,0);
+   assert.ok(playlistReads>=2);
+   assert.equal(r.segments,1);
+   assert.equal(r.bytes,1024);
+ } finally {await new Promise(resolve=>server.close(resolve));}
+});
