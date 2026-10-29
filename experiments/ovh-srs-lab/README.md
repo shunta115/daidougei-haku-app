@@ -1,6 +1,14 @@
 # HAKU LIVE: OVHcloud + SRS 500視聴検証
 
-状態: **準備のみ**。OVHcloud契約なし、500人負荷試験なし、本番接続なし。
+状態（2026-10-29更新）: **GitHub Actionsの隔離されたlocalhost試験でWHIP→SRS→HLSのH.264映像・AAC音声を生成・デコード済み。RTMP入力によるHLS視聴は最大500疑似クライアントを10秒間、初回受信500/500・取得エラー0で実測。** 実VPS、iPhone Safari、QR代理配信の実認証、500人×長時間は未検証。PR #88はDraft、一般公開不可。以下の過去の「未実施」は当時の記録であり、この最新状態に置き換える。
+
+## 隔離CIの最新実測
+
+- [SRS WHIP local proof（GitHub Actions）](https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764234): Chrome疑似カメラ・マイク→WHIP→SRS→HLS。RTMPハンドシェイクとRTMP→HLS基準試験も成功。HLS内のH.264/AACをffprobeで確認し、ffmpegで両トラックを6秒間デコード。WHIP由来HLSを5疑似視聴者が受信。
+- 同一ワークフローの別ジョブで、RTMP H.264/AAC入力のSRS HLSを10秒ずつ段階測定。1人: 1/1・0エラー・1.11Mbps・p95 30ms。10人: 10/10・0エラー・14.55Mbps・p95 27ms。50人: 50/50・0エラー・72.46Mbps・p95 50ms。100人: 100/100・0エラー・145.56Mbps・p95 95ms。500人: 500/500・0エラー・597.31Mbps・p95 332ms。Mbpsはプローブが取得したセグメントバイト数を10秒で割った値。コンテナのCPU/メモリ/累積NETはCIログ参照。瞬間CPU値をピーク値と見なさない。
+- HLSプローブはライブ端から取得し、クエリが変わっても同一セグメントを再取得しない。以前の50/100人での過大転送とエラーはこの重複受信が原因。これは**localhost・単一CIランナー・10秒**であり、500台の実機、外部ネットワーク、WHIP入力の500人、1時間運用や日本からの品質を証明しない。
+- [HAKU quality gate](https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764189): TypeScript、447件Vitest、本番ビルド成功。追加費用のあるサービスは起動していない。既存LiveKit、DB、Stripe、Connect、本番デプロイには触れていない。
+- [PR #87](https://github.com/shunta115/daidougei-haku-app/pull/87) のQR発行・本人承認・一回限りの権限・交代/停止は設計上再利用可能。ただしSRSのWHIP publish認可とHAKU実認証への接続は未実装。ローカルSRSは認証・TLSなしのため外部公開厳禁。
 
 ## 契約前の判断
 
