@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 
 const browser = await chromium.launch({
+  channel: 'chrome',
   headless: true,
   args: [
     '--use-fake-device-for-media-stream',
