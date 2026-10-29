@@ -14,16 +14,18 @@ const row = (date: string, status: PerformerAppearance['status'] = 'published') 
 describe('appearance schedule periods', () => {
   const now = new Date('2026-10-29T06:00:00Z')
 
-  it('builds Japan-time today, tomorrow, week, and month ranges', () => {
-    expect(appearancePeriodRange('today', now)).toEqual({ start: '2026-10-29', end: '2026-10-29' })
-    expect(appearancePeriodRange('tomorrow', now)).toEqual({ start: '2026-10-30', end: '2026-10-30' })
-    expect(appearancePeriodRange('week', now)).toEqual({ start: '2026-10-29', end: '2026-11-01' })
-    expect(appearancePeriodRange('month', now)).toEqual({ start: '2026-10-29', end: '2026-10-31' })
+  it('builds ranges in the appearance timezone', () => {
+    expect(appearancePeriodRange('today', now, 'Asia/Tokyo')).toEqual({ start: '2026-10-29', end: '2026-10-29' })
+    expect(appearancePeriodRange('tomorrow', now, 'Asia/Tokyo')).toEqual({ start: '2026-10-30', end: '2026-10-30' })
+    expect(appearancePeriodRange('week', now, 'Asia/Tokyo')).toEqual({ start: '2026-10-29', end: '2026-11-01' })
+    expect(appearancePeriodRange('month', now, 'Asia/Tokyo')).toEqual({ start: '2026-10-29', end: '2026-10-31' })
+    expect(appearancePeriodRange('today', now, 'America/Los_Angeles')).toEqual({ start: '2026-10-28', end: '2026-10-28' })
   })
 
   it('keeps only published appearances inside the selected period', () => {
     const rows = [row('2026-10-29'), row('2026-10-30'), row('2026-10-31', 'private'), row('2026-11-01')]
     expect(filterAppearancesForPeriod(rows, 'week', now).map((item) => item.performance_date)).toEqual(['2026-10-29', '2026-10-30', '2026-11-01'])
     expect(filterAppearancesForPeriod(rows, 'month', now).map((item) => item.performance_date)).toEqual(['2026-10-29', '2026-10-30'])
+    expect(filterAppearancesForPeriod(rows, 'all', now).map((item) => item.performance_date)).toEqual(['2026-10-29', '2026-10-30', '2026-11-01'])
   })
 })
