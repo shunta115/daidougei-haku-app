@@ -53,11 +53,27 @@ it('shows a login guide for the following mode when signed out', async () => {
   expect(screen.getByText('ログインするとフォロー中の予定を確認できます')).toBeTruthy()
   expect(screen.getByRole('button', { name: /ログイン/ })).toBeTruthy()
 })
+it('syncs the schedule and MAP views to direct URLs and popstate navigation', async () => {
+  window.history.replaceState({}, '', '/event')
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} /></LangProvider>)
+  await screen.findByText('公開ステージ')
+  expect(screen.getByRole('tablist', { name: '表示対象' })).toBeTruthy()
+
+  window.history.pushState({}, '', '/map')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  expect(await screen.findByRole('group', { name: /MAPの絞り込み|Map filters/i })).toBeTruthy()
+  expect(screen.queryByRole('tablist', { name: '表示対象' })).toBeNull()
+
+  window.history.pushState({}, '', '/event')
+  window.dispatchEvent(new PopStateEvent('popstate'))
+  expect(await screen.findByRole('tablist', { name: '表示対象' })).toBeTruthy()
+})
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks() })
 it('shows public profile appearances and keeps AWP slots out of the normal schedule', async () => {
   const profile = vi.fn()
   render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={profile} onWatchLive={vi.fn()} /></LangProvider>)
   await screen.findByText('公開ステージ')
+  expect(screen.queryByRole('tablist', { name: /MAP.*スケジュール/i })).toBeNull()
   expect(screen.getByText('公開会場 · 東京')).toBeTruthy()
   expect(screen.queryByText('AWP')).toBeNull()
   expect(document.querySelector('.pl-schedule-row')).toBeNull()
