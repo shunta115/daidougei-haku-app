@@ -332,6 +332,9 @@
 .pl-google-marker--live { width: 72px; }
 .pl-google-marker--performer img, .pl-google-marker--performer b { border-color:#9d7cff; border-radius:14px; }
 .pl-google-marker--performer span { background:rgba(35,22,67,.9); }
+.pl-google-marker--appearance img, .pl-google-marker--appearance b { border-color:#36d488; box-shadow:0 0 0 5px rgba(54,212,136,.18),0 6px 18px rgba(0,18,38,.32); }
+.pl-google-marker--appearance i { background:#087849; }
+.pl-google-marker--appearance.pl-google-marker--overlap img, .pl-google-marker--appearance.pl-google-marker--overlap b { border-color:#36d488; box-shadow:0 0 0 4px rgba(54,212,136,.22),0 0 0 8px rgba(255,59,137,.2),0 6px 18px rgba(0,18,38,.32); }
 .pl-google-marker--live img, .pl-google-marker--live b { width: 52px; height: 52px; border-color: #ff3b89; box-shadow: 0 0 0 5px rgba(255,59,137,.2), 0 6px 18px rgba(0,18,38,.32); }
 .pl-google-marker--live::before { content: ''; position: absolute; top: -4px; width: 60px; height: 60px; border: 1px solid rgba(255,59,137,.5); border-radius: 50%; animation: pl-live-marker-pulse 1.8s ease-out infinite; }
 .pl-google-marker i { z-index: 2; padding: 2px 6px; border: 2px solid #fff; border-radius: 999px; background: #ff3b89; color: #fff; font-size: 7px; font-style: normal; font-weight: 950; }
