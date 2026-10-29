@@ -23,6 +23,7 @@ import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
 import { filterAppearancesForPeriod, type AppearancePeriod } from '../lib/appearanceSchedule'
+import { FESTIVAL_PATH } from '../../app/routes'
 
 type Props = {
   onOpenPerformer: (id: string) => void
@@ -65,6 +66,12 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [scheduleError, setScheduleError] = useState<string | null>(null)
 
   useEffect(() => setView(initialView), [initialView])
+
+  useEffect(() => {
+    const syncViewToUrl = () => setView(window.location.pathname === FESTIVAL_PATH ? 'schedule' : 'map')
+    window.addEventListener('popstate', syncViewToUrl)
+    return () => window.removeEventListener('popstate', syncViewToUrl)
+  }, [])
 
   const refreshLiveMap = useCallback(async () => {
     const [acts, ranks] = await Promise.all([
@@ -229,11 +236,6 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       </header>
 
       <GlobalMessageBar />
-
-      <div className="pl-segment" role="tablist" aria-label={t('mapAndSchedule')}>
-        <button type="button" role="tab" aria-selected={view === 'map'} data-active={view === 'map'} onClick={() => setView('map')}><MapIcon size={17} /> {t('mapTab')}</button>
-        <button type="button" role="tab" aria-selected={view === 'schedule'} data-active={view === 'schedule'} onClick={() => setView('schedule')}><CalendarDays size={17} /> {t('scheduleTab')}</button>
-      </div>
 
       {view === 'map' && mapError ? <p className="pl-error">{mapError}</p> : null}
 
