@@ -56,6 +56,22 @@ const publisher=new LocalWhipPublisher({
     $('stop').disabled=state==='idle'||state==='error';
   }
 });
+// Local-only, aggregate media counters; never expose SDP, ICE, tokens or stream keys.
+window.__hakuLabMediaCounters = async () => {
+  const pc = publisher.pc;
+  if (!pc) return null;
+  const stats = await pc.getStats();
+  const result = { videoBytes: 0, audioBytes: 0, videoFrames: 0 };
+  for (const entry of stats.values()) {
+    if (entry.type !== 'outbound-rtp' || entry.isRemote) continue;
+    if (entry.kind === 'video') {
+      result.videoBytes += entry.bytesSent || 0;
+      result.videoFrames += entry.framesSent || 0;
+    }
+    if (entry.kind === 'audio') result.audioBytes += entry.bytesSent || 0;
+  }
+  return result;
+};
 $('start').addEventListener('click', async ()=>{
   try { await publisher.start('http://127.0.0.1:4319/rtc/v1/whip/?app=live&stream=haku-lab'); }
   catch (error) { $('status').textContent='開始できません: '+String(error.message||error); }
