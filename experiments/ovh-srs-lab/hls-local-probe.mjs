@@ -56,7 +56,7 @@ export async function runProbe(options) {
     const u = new URL(url);
     if (u.origin !== target.origin) throw new Error('Cross-origin fetch prevented');
     const t=Date.now();
-    const response=await fetch(url, {signal:AbortSignal.timeout(3000),cache:'no-store',redirect:'error'});
+    const response=await fetch(url, {signal:AbortSignal.timeout(10000),cache:'no-store',redirect:'error'});
     if (!response.ok) throw new Error('HTTP '+response.status);
     const data=await response.arrayBuffer();
     stats.requestMs.push(Date.now()-t);
