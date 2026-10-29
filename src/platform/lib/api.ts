@@ -783,11 +783,61 @@ export async function listUpcomingPublishedAppearances(now = new Date()): Promis
       .order('starts_at')
       .order('id')
       .range(from, from + pageSize - 1)
-    if (error) throw error
+    if (error) {
+      if (error.code !== 'PGRST205') throw error
+      return listUpcomingLegacyEventAppearances(now)
+    }
     const page = (data as PerformerAppearance[]) ?? []
     rows.push(...page)
     if (page.length < pageSize) return rows
   }
+}
+
+type LegacyAppearanceSlot = EventSlotRow & {
+  events: { name_ja: string; status: string } | null
+  event_venues: { name_ja: string } | null
+}
+
+/** Compatibility path for environments where the additive appearance migration is not applied yet. */
+async function listUpcomingLegacyEventAppearances(now: Date): Promise<PerformerAppearance[]> {
+  const sb = requireSupabase()
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now)
+  const { data, error } = await sb
+    .from('event_slots')
+    .select('*,events!inner(name_ja,status),event_venues(name_ja)')
+    .eq('events.status', 'published')
+    .gte('date', today)
+    .not('performer_id', 'is', null)
+    .neq('status', 'cancelled')
+    .order('date')
+    .order('start_time')
+  if (error) throw error
+  return ((data as LegacyAppearanceSlot[]) ?? []).map((slot) => {
+    const startTime = timeLabelForAppearance(slot.start_time)
+    const endTime = timeLabelForAppearance(slot.end_time)
+    return {
+      id: `event-slot:${slot.id}`,
+      performer_id: slot.performer_id!,
+      title: slot.events?.name_ja || slot.stage_ja || '出演予定',
+      performance_date: String(slot.date).slice(0, 10),
+      start_time: startTime,
+      end_time: endTime,
+      timezone: 'Asia/Tokyo',
+      starts_at: `${String(slot.date).slice(0, 10)}T${startTime}+09:00`,
+      ends_at: endTime ? `${String(slot.date).slice(0, 10)}T${endTime}+09:00` : null,
+      venue_name: slot.event_venues?.name_ja || slot.stage_ja || '',
+      venue_address: '', region: '', country: 'JP', description: '',
+      admission_type: 'free', admission_details: '', image_url: null, ticket_url: null,
+      is_live_planned: Boolean(slot.is_stream), rain_policy: '', organizer_info: '', notes: '',
+      status: 'published', published_at: null, cancelled_at: null, created_at: '', updated_at: '',
+    }
+  })
+}
+
+function timeLabelForAppearance(value: string | null | undefined) {
+  return String(value || '').slice(0, 8) || null
 }
 
 async function dispatchAppearanceEvent(appearanceId: string) {
