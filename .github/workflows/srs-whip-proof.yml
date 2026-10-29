@@ -1,0 +1,60 @@
+name: SRS WHIP local proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/ovh-srs-lab/**'
+      - '.github/workflows/srs-whip-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  whip-hls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install test tools
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chromium --with-deps
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start localhost SRS and gateway
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof up -d
+          node experiments/ovh-srs-lab/local-gateway.mjs > /tmp/haku-gateway.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4319/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Publish browser camera and validate HLS audio/video
+        run: |
+          node experiments/ovh-srs-lab/browser-whip-smoke.mjs > /tmp/haku-browser.log 2>&1 &
+          publisher_pid=$!
+          for i in $(seq 1 35); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep -q '^#EXTINF'; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then
+              echo "WHIP publisher failed before HLS"
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep '^#EXTINF'
+          timeout 20 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 http://127.0.0.1:8080/live/haku-lab.m3u8 > /tmp/haku-codecs.txt
+          grep -q 'h264,video' /tmp/haku-codecs.txt
+          grep -q 'aac,audio' /tmp/haku-codecs.txt
+          node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers=5 --seconds=10
+          wait "$publisher_pid"
+          echo "Browser WHIP -> SRS -> HLS H.264/AAC proved on loopback"
+      - name: Clean up isolated lab
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof down --remove-orphans
