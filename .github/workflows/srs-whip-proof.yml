@@ -40,7 +40,7 @@ jobs:
         run: |
           node experiments/ovh-srs-lab/browser-whip-smoke.mjs > /tmp/haku-browser.log 2>&1 &
           publisher_pid=$!
-          for i in $(seq 1 35); do
+          for i in $(seq 1 55); do
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep -q '^#EXTINF'; then break; fi
             if ! kill -0 "$publisher_pid" 2>/dev/null; then
               echo "WHIP publisher failed before HLS"
