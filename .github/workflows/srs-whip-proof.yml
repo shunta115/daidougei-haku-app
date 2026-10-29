@@ -40,7 +40,7 @@ jobs:
         run: node experiments/ovh-srs-lab/rtmp-handshake.mjs
       - name: Verify RTMP to HLS baseline before WHIP
         run: |
-          timeout 25 ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=320x180:rate=15 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 300k -g 30 -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/haku-rtmp-control > /tmp/haku-rtmp-baseline.log 2>&1 &
+          timeout 25 ffmpeg -nostdin -hide_banner -loglevel info -re -f lavfi -i testsrc2=size=320x180:rate=15 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 300k -g 30 -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/haku-rtmp-control > /tmp/haku-rtmp-baseline.log 2>&1 &
           encoder_pid=$!
           for i in $(seq 1 18); do
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 | grep -q '^#EXTINF'; then break; fi
@@ -114,7 +114,7 @@ jobs:
         env:
           HAKU_LOCAL_LOAD_APPROVED: YES
         run: |
-          ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=854x480:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 800k -g 48 -c:a aac -b:a 48k -ar 48000 -f flv rtmp://127.0.0.1:1935/live/haku-lab > /tmp/haku-ffmpeg.log 2>&1 &
+          ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=854x480:rate=24 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 800k -g 48 -c:a aac -b:a 48k -ar 48000 -f flv rtmp://127.0.0.1:1935/live/haku-lab > /tmp/haku-ffmpeg.log 2>&1 &
           publisher_pid=$!
           for i in $(seq 1 50); do
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/live/haku-lab.m3u8 | grep -q '^#EXTINF'; then break; fi
