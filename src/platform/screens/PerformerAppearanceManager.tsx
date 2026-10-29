@@ -4,12 +4,14 @@ import { useLang } from '../../i18n/LangProvider'
 import { useAuth } from '../lib/auth'
 import {
   createPerformerAppearance,
+  createPerformerAppearances,
   deletePerformerAppearance,
   listPerformerAppearances,
   updatePerformerAppearance,
   type PerformerAppearanceInput,
 } from '../lib/api'
 import type { PerformerAppearance, PerformerAppearanceStatus } from '../lib/types'
+import { appearanceDates } from '../lib/appearanceRegistration'
 
 const empty = (): PerformerAppearanceInput => ({
   title: '', performance_date: '', start_time: '', end_time: null,
@@ -26,9 +28,9 @@ const copy = {
 } as const
 
 const extendedCopy = {
-  ja: { organizer: '主催者情報', postpone: '延期', archive: 'アーカイブ', upcoming: '今後の出演予定', history: '過去・アーカイブ', confirmPostpone: 'この公演を延期にしますか？フォロワーへ延期通知が作成されます。', confirmArchive: 'この予定をアーカイブしますか？公開表示と通知の対象外になります。' },
-  en: { organizer: 'Organizer information', postpone: 'Postpone', archive: 'Archive', upcoming: 'Upcoming appearances', history: 'Past and archived', confirmPostpone: 'Postpone this performance? A postponement alert will be created for followers.', confirmArchive: 'Archive this appearance? It will be hidden from public listings and notifications.' },
-  'zh-TW': { organizer: '主辦單位資訊', postpone: '延期', archive: '封存', upcoming: '即將舉行', history: '過去與封存', confirmPostpone: '確定延期此演出？將建立延期通知給追蹤者。', confirmArchive: '確定封存此預定？公開頁面與通知將不再顯示。' },
+  ja: { organizer: '主催者情報', postpone: '延期', archive: 'アーカイブ', upcoming: '今後の出演予定', history: '過去・アーカイブ', extraDates: '追加開催日（カンマ区切り）', reuseVenue: '前回の会場を使う', duplicateAction: '複製して新規登録', confirmPostpone: 'この公演を延期にしますか？フォロワーへ延期通知が作成されます。', confirmArchive: 'この予定をアーカイブしますか？公開表示と通知の対象外になります。' },
+  en: { organizer: 'Organizer information', postpone: 'Postpone', archive: 'Archive', upcoming: 'Upcoming appearances', history: 'Past and archived', extraDates: 'Additional dates (comma separated)', reuseVenue: 'Reuse previous venue', duplicateAction: 'Duplicate as new', confirmPostpone: 'Postpone this performance? A postponement alert will be created for followers.', confirmArchive: 'Archive this appearance? It will be hidden from public listings and notifications.' },
+  'zh-TW': { organizer: '主辦單位資訊', postpone: '延期', archive: '封存', upcoming: '即將舉行', history: '過去與封存', extraDates: '其他日期（逗號分隔）', reuseVenue: '使用上次會場', duplicateAction: '複製新增', confirmPostpone: '確定延期此演出？將建立延期通知給追蹤者。', confirmArchive: '確定封存此預定？公開頁面與通知將不再顯示。' },
 } as const
 
 function cleanUrl(value: string | null) {
@@ -47,6 +49,7 @@ export function PerformerAppearanceManager() {
   const [rows, setRows] = useState<PerformerAppearance[]>([])
   const [form, setForm] = useState<PerformerAppearanceInput>(empty)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [additionalDates, setAdditionalDates] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,12 +70,19 @@ export function PerformerAppearanceManager() {
     if (!storageKey || editingId || !window.localStorage) return
     window.localStorage.setItem(storageKey, JSON.stringify(form))
   }, [editingId, form, storageKey])
+  useEffect(() => {
+    const dirty = Boolean(form.title || form.performance_date || form.venue_name || additionalDates)
+    if (!dirty || busy) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [additionalDates, busy, form])
 
   const sorted = useMemo(() => [...rows].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)), [rows])
   const upcoming = sorted.filter((row) => row.status !== 'archived' && Date.parse(row.ends_at ?? row.starts_at) >= Date.now())
   const history = sorted.filter((row) => row.status === 'archived' || Date.parse(row.ends_at ?? row.starts_at) < Date.now()).reverse()
   const change = <K extends keyof PerformerAppearanceInput>(key: K, value: PerformerAppearanceInput[K]) => setForm((current) => ({ ...current, [key]: value }))
-  const reset = () => { setEditingId(null); setForm(empty()); setError(null); if (storageKey && window.localStorage) window.localStorage.removeItem(storageKey) }
+  const reset = () => { setEditingId(null); setAdditionalDates(''); setForm(empty()); setError(null); if (storageKey && window.localStorage) window.localStorage.removeItem(storageKey) }
   const edit = (row: PerformerAppearance) => {
     setEditingId(row.id)
     setForm({
@@ -93,13 +103,23 @@ export function PerformerAppearanceManager() {
     try {
       const input = { ...form, title: form.title.trim(), venue_name: form.venue_name.trim(), image_url: cleanUrl(form.image_url), ticket_url: cleanUrl(form.ticket_url), end_time: form.end_time || null, status }
       if (editingId) await updatePerformerAppearance(editingId, input)
-      else await createPerformerAppearance(performer.id, input)
+      else {
+        const dates = appearanceDates(input.performance_date, additionalDates)
+        if (dates.length === 1) await createPerformerAppearance(performer.id, input)
+        else await createPerformerAppearances(performer.id, dates.map((performance_date) => ({ ...input, performance_date })))
+      }
       await reload(); reset(); setMessage(text.saved)
     } catch (cause) {
       const duplicate = typeof cause === 'object' && cause && 'code' in cause && cause.code === '23505'
       setError(duplicate ? text.duplicate : text.failed)
     } finally { setBusy(false) }
   }
+  const reuseVenue = () => {
+    const previous = [...rows].sort((a, b) => Date.parse(b.starts_at) - Date.parse(a.starts_at))[0]
+    if (!previous) return
+    setForm((current) => ({ ...current, venue_name: previous.venue_name, venue_address: previous.venue_address, venue_lat: previous.venue_lat, venue_lng: previous.venue_lng, region: previous.region, country: previous.country, timezone: previous.timezone }))
+  }
+  const duplicate = (row: PerformerAppearance) => { edit(row); setEditingId(null); setAdditionalDates(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }
   const remove = async (row: PerformerAppearance) => {
     if (busy || !window.confirm(text.delete)) return
     setBusy(true)
@@ -114,8 +134,10 @@ export function PerformerAppearanceManager() {
       <h2 className="pl-h2">{editingId ? text.edit : text.new}</h2>
       <label>{text.event}<input className="pl-input" maxLength={120} required value={form.title} onChange={(e) => change('title', e.target.value)} /></label>
       <div className="pl-appearance-form__grid"><label>{text.date}<input className="pl-input" type="date" required value={form.performance_date} onChange={(e) => change('performance_date', e.target.value)} /></label><label>{text.start}<input className="pl-input" type="time" required value={form.start_time} onChange={(e) => change('start_time', e.target.value)} /></label><label>{text.end}<input className="pl-input" type="time" value={form.end_time ?? ''} onChange={(e) => change('end_time', e.target.value || null)} /></label></div>
+      {!editingId ? <label>{text.extraDates}<input className="pl-input" inputMode="numeric" placeholder="2026-11-01, 2026-11-03" value={additionalDates} onChange={(e) => setAdditionalDates(e.target.value)} /></label> : null}
       <label>{text.timezone}<input className="pl-input" required value={form.timezone} onChange={(e) => change('timezone', e.target.value)} /></label>
       <label>{text.venue}<input className="pl-input" maxLength={160} required value={form.venue_name} onChange={(e) => change('venue_name', e.target.value)} /></label>
+      {rows.length ? <button type="button" className="pl-btn pl-btn--ghost" onClick={reuseVenue}>{text.reuseVenue}</button> : null}
       <label>{text.address}<input className="pl-input" value={form.venue_address} onChange={(e) => change('venue_address', e.target.value)} /></label>
       <fieldset><legend>{text.coordinates}</legend><div className="pl-appearance-form__grid"><label>Latitude<input className="pl-input" type="number" min="-90" max="90" step="any" value={form.venue_lat ?? ''} onChange={(e) => change('venue_lat', e.target.value === '' ? null : Number(e.target.value))} /></label><label>Longitude<input className="pl-input" type="number" min="-180" max="180" step="any" value={form.venue_lng ?? ''} onChange={(e) => change('venue_lng', e.target.value === '' ? null : Number(e.target.value))} /></label></div></fieldset>
       <div className="pl-appearance-form__grid"><label>{text.region}<input className="pl-input" value={form.region} onChange={(e) => change('region', e.target.value)} /></label><label>{text.country}<input className="pl-input" value={form.country} onChange={(e) => change('country', e.target.value)} /></label></div>
@@ -131,10 +153,10 @@ export function PerformerAppearanceManager() {
       {error ? <p className="pl-error" role="alert">{error}</p> : null}{message ? <p className="pl-registration__notice" role="status">{message}</p> : null}
       <div className="pl-appearance-actions"><button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => void save('draft')}><Save size={17} />{text.draft}</button><button className="pl-btn" disabled={busy} onClick={() => void save('published')}><Send size={17} />{text.publish}</button>{editingId ? <button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => void save('private')}>{text.private}</button> : null}{editingId ? <button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => void save('postponed')}>{text.postpone}</button> : null}{editingId ? <button className="pl-btn pl-btn--danger" disabled={busy} onClick={() => void save('cancelled')}><XCircle size={17} />{text.cancel}</button> : null}{editingId ? <button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => void save('archived')}>{text.archive}</button> : null}</div>
     </section>
-    <section className="pl-appearance-list">{sorted.length === 0 ? <p className="pl-muted">{text.empty}</p> : null}{upcoming.length ? <><h2 className="pl-h2">{text.upcoming}</h2>{upcoming.map((row) => <AppearanceRow key={row.id} row={row} busy={busy} text={text} edit={edit} remove={remove} />)}</> : null}{history.length ? <><h2 className="pl-h2">{text.history}</h2>{history.map((row) => <AppearanceRow key={row.id} row={row} busy={busy} text={text} edit={edit} remove={remove} />)}</> : null}</section>
+    <section className="pl-appearance-list">{sorted.length === 0 ? <p className="pl-muted">{text.empty}</p> : null}{upcoming.length ? <><h2 className="pl-h2">{text.upcoming}</h2>{upcoming.map((row) => <AppearanceRow key={row.id} row={row} busy={busy} text={text} edit={edit} duplicate={duplicate} remove={remove} />)}</> : null}{history.length ? <><h2 className="pl-h2">{text.history}</h2>{history.map((row) => <AppearanceRow key={row.id} row={row} busy={busy} text={text} edit={edit} duplicate={duplicate} remove={remove} />)}</> : null}</section>
   </div>
 }
 
-function AppearanceRow({ row, busy, text, edit, remove }: { row: PerformerAppearance; busy: boolean; text: typeof copy[keyof typeof copy] & typeof extendedCopy[keyof typeof extendedCopy]; edit: (row: PerformerAppearance) => void; remove: (row: PerformerAppearance) => Promise<void> }) {
-  return <article className="pl-card"><span className="pl-registration__status">{row.status}</span><h2 className="pl-h2">{row.title}</h2><p><CalendarDays size={16} /> {row.performance_date} {row.start_time.slice(0, 5)}・{row.venue_name}</p><div className="pl-appearance-actions"><button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => edit(row)}>{text.edit}</button>{['draft', 'private', 'archived'].includes(row.status) ? <button className="pl-btn pl-btn--danger" disabled={busy} onClick={() => void remove(row)}><Trash2 size={16} />{text.delete}</button> : null}</div></article>
+function AppearanceRow({ row, busy, text, edit, duplicate, remove }: { row: PerformerAppearance; busy: boolean; text: typeof copy[keyof typeof copy] & typeof extendedCopy[keyof typeof extendedCopy]; edit: (row: PerformerAppearance) => void; duplicate: (row: PerformerAppearance) => void; remove: (row: PerformerAppearance) => Promise<void> }) {
+  return <article className="pl-card"><span className="pl-registration__status">{row.status}</span><h2 className="pl-h2">{row.title}</h2><p><CalendarDays size={16} /> {row.performance_date} {row.start_time.slice(0, 5)}・{row.venue_name}</p><div className="pl-appearance-actions"><button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => edit(row)}>{text.edit}</button><button className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => duplicate(row)}>{text.duplicateAction}</button>{['draft', 'private', 'archived'].includes(row.status) ? <button className="pl-btn pl-btn--danger" disabled={busy} onClick={() => void remove(row)}><Trash2 size={16} />{text.delete}</button> : null}</div></article>
 }
