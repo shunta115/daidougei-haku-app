@@ -1016,3 +1016,116 @@
   padding: 0 !important;
   max-width: none;
 }
+
+
+/* HAKU LIVE immersive UI v1: existing LiveKit/Stripe logic is untouched.
+   Comments, orientation and controls are overlays, never flow siblings that resize video. */
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100svh;
+  min-height: 520px;
+  overflow: hidden;
+  background: #050608;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__panel--live {
+  position: absolute;
+  z-index: 9;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  display: block;
+  pointer-events: none;
+  background: none;
+  border: 0;
+  overflow: visible;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__comments-wrap {
+  position: absolute;
+  left: max(12px,env(safe-area-inset-left,0px));
+  right: 76px;
+  bottom: calc(164px + env(safe-area-inset-bottom,0px));
+  height: min(27svh,210px);
+  max-height: none;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: auto;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__comments {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  background: transparent;
+  border: 0;
+  padding: 8px 0;
+  mask-image: linear-gradient(to bottom,transparent,black 22%);
+  -webkit-mask-image: linear-gradient(to bottom,transparent,black 22%);
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__comment {
+  border: 0;
+  background: rgba(0,0,0,.25);
+  color: white;
+  text-shadow: 0 1px 4px #000;
+  margin-bottom: 5px;
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 100%;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__composer {
+  position: absolute;
+  left: max(12px,env(safe-area-inset-left,0px));
+  right: max(12px,env(safe-area-inset-right,0px));
+  bottom: calc(76px + env(safe-area-inset-bottom,0px));
+  z-index: 10;
+  pointer-events: auto;
+  background: none;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__end-live {
+  position: absolute;
+  left: max(12px,env(safe-area-inset-left,0px));
+  bottom: max(10px,env(safe-area-inset-bottom,0px));
+  width: calc(100% - 24px);
+  z-index: 10;
+  min-height: 48px;
+  border-radius: 24px;
+  pointer-events: auto;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__prefs {
+  display: none;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__orientation-picker--compact {
+  display: none;
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__media-controls {
+  bottom: calc(178px + env(safe-area-inset-bottom,0px));
+}
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-fever {
+  bottom: calc(130px + env(safe-area-inset-bottom,0px));
+}
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live {
+  padding-top: 14px;
+}
+@media (max-height: 620px) {
+  .pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__comments-wrap {
+    height: min(19svh,120px);
+  }
+}
