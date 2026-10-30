@@ -16,13 +16,20 @@ export function makeSrsCrowdGate({
   });
   const dailyStarts = new Map();
   const active = new Map();
+  const revocationPending = new Set();
   const dayKey = () => TOKYO_DAY.format(new Date(now()));
 
   async function close(roomId) {
     const current = active.get(roomId);
     if (!current) return;
-    active.delete(roomId);
-    await closeMedia(current).catch(() => { throw new Error('srs_disconnect_unconfirmed'); });
+    try {
+      await closeMedia(current);
+      active.delete(roomId);
+      revocationPending.delete(roomId);
+    } catch {
+      revocationPending.add(roomId);
+      throw new Error('srs_disconnect_unconfirmed');
+    }
   }
   return {
     authority,
@@ -54,6 +61,7 @@ export function makeSrsCrowdGate({
         }
         return { room: claimed, media };
       } catch (error) {
+        try { await close(roomId); } catch { throw new Error('srs_disconnect_unconfirmed'); }
         authority.stop(actor, roomId, 'srs_publish_failed');
         throw error;
       }
@@ -70,12 +78,17 @@ export function makeSrsCrowdGate({
       await close(roomId);
       return state;
     },
-    acknowledgeStop: (...args) => authority.acknowledgeStop(...args),
+    acknowledgeStop(actor, roomId, peerId) {
+      if (revocationPending.has(roomId) || active.has(roomId)) throw new LivePolicyError('srs_disconnect_unconfirmed', 503);
+      return authority.acknowledgeStop(actor, roomId, peerId);
+    },
     async sweep(actorByRoom) {
       authority.tick();
       for (const roomId of active.keys()) {
         const actor = actorByRoom(roomId);
-        if (!actor || authority.state(actor, roomId).phase !== 'live') await close(roomId);
+        let phase;
+        try { phase = actor ? authority.state(actor, roomId).phase : 'ended'; } catch { phase = 'ended'; }
+        if (phase !== 'live') await close(roomId);
       }
     },
   };
