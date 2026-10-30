@@ -2,6 +2,7 @@ import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Globe2, Heart, LogIn, Map as MapIcon, MapPin, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
 import { GoogleVenueMap } from '../components/GoogleVenueMap'
+import { AppearanceShareActions } from '../components/AppearanceShareActions'
 import { GlobalMessageBar } from '../components/GlobalMessageBar'
 import {
   getFeaturedEvent,
@@ -388,6 +389,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                   <ChevronRight size={18} />
                 </button>
                 {mapQuery ? <a className="pl-appearance-row__map" href={mapHref} target="_blank" rel="noopener noreferrer"><MapIcon size={14} /> MAPで見る</a> : null}
+                <AppearanceShareActions appearance={appearance} performerId={act.id} stageName={act.stage_name} />
               </article>
             )
           }) : null}
@@ -411,3 +413,4 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     </main>
   )
 }
+

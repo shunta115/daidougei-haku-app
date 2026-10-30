@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
+import { BadgeCheck, Copy, Download, Heart, MapPin, Play, Printer, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
 import { AppBackButton } from '../components/AppBackButton'
 import {
@@ -23,7 +23,8 @@ import { trackProductEvent, useTrackView } from '../lib/track'
 import type { MerchProduct, Performer, PerformerAppearance } from '../lib/types'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
-import { downloadQrCard, performerQrDataUrl } from '../lib/qr'
+import { downloadQrCard, performerQrDataUrl, printQrCard } from '../lib/qr'
+import { copyAppearanceUrl, isShareCancellation } from '../lib/appearanceShare'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
 import './performer-home.css'
@@ -110,6 +111,13 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
   const [tipPick, setTipPick] = useState<number>(1000)
   const [qrSrc, setQrSrc] = useState('')
+  const [qrBusy, setQrBusy] = useState<'save' | 'print' | null>(null)
+  const [qrActionError, setQrActionError] = useState('')
+  const qrText = lang === 'en'
+    ? { print: 'Print', saveHint: 'The PNG is saved to Downloads. You can also touch and hold the QR image to save it.', saveFail: 'Could not save. Touch and hold the QR image to save it.', printFail: 'Could not open the print card. Allow pop-ups and try again.' }
+    : lang === 'zh-TW'
+      ? { print: '列印', saveHint: 'PNG會儲存至下載項目，也可長按QR圖片儲存。', saveFail: '無法儲存，請長按QR圖片儲存。', printFail: '無法開啟列印卡片，請允許彈出式視窗後重試。' }
+      : { print: '印刷', saveHint: 'PNGはダウンロード先に保存されます。QR画像の長押しでも保存できます。', saveFail: '保存できませんでした。QR画像を長押しして保存してください。', printFail: '印刷カードを開けませんでした。ポップアップを許可して再度お試しください。' }
   const appearanceText = lang === 'en'
     ? { detail: 'View details', cancelled: 'Cancelled', postponed: 'Postponed', organizer: 'Organizer', free: 'Free', paid: 'Paid', tip: 'Tips', upcoming: 'Upcoming appearances', history: 'Past appearances' }
     : lang === 'zh-TW'
@@ -201,32 +209,15 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     if (navigator.share) {
       try {
         await navigator.share({ title: p.stage_name, text, url: canonicalUrl })
-      } catch {
-        /* cancelled */
+      } catch (cause) {
+        if (!isShareCancellation(cause)) await copyLink()
       }
       return
     }
     await copyLink()
   }
 
-  const writeCanonicalUrl = async () => {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(canonicalUrl)
-      return
-    }
-    const input = document.createElement('input')
-    input.value = canonicalUrl
-    input.setAttribute('readonly', '')
-    input.style.position = 'fixed'
-    input.style.opacity = '0'
-    document.body.appendChild(input)
-    input.focus()
-    input.select()
-    input.setSelectionRange(0, canonicalUrl.length)
-    const ok = document.execCommand('copy')
-    input.remove()
-    if (!ok) throw new Error('copy')
-  }
+  const writeCanonicalUrl = () => copyAppearanceUrl(canonicalUrl)
 
   const copyLink = async () => {
     try {
@@ -239,17 +230,19 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   }
 
   const saveQr = async () => {
-    if (!p) return
+    if (!p || qrBusy) return
+    setQrBusy('save'); setQrActionError('')
     try {
       await downloadQrCard({ url: canonicalUrl, name: p.stage_name, handle: handleOf(p) })
-    } catch {
-      if (qrSrc) {
-        const a = document.createElement('a')
-        a.href = qrSrc
-        a.download = `${handleOf(p)}-qr.png`
-        a.click()
-      }
-    }
+    } catch { setQrActionError(qrText.saveFail) }
+    finally { setQrBusy(null) }
+  }
+  const printQr = async () => {
+    if (!p || qrBusy) return
+    setQrBusy('print'); setQrActionError('')
+    try { await printQrCard({ url: canonicalUrl, name: p.stage_name, handle: handleOf(p) }) }
+    catch { setQrActionError(qrText.printFail) }
+    finally { setQrBusy(null) }
   }
 
   const openMap = (venue: EventVenueRow | null) => {
@@ -519,13 +512,16 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
             <span>@{handle}</span>
             {qrSrc ? <img className="hp-qr__code" src={qrSrc} alt="" width={240} height={240} /> : null}
             <p>{t('hpQrHint')}</p>
+            <p>{qrText.saveHint}</p>
+            {qrActionError ? <p role="alert">{qrActionError}</p> : null}
           </div>
           <div className="hp-qr__actions">
             <button type="button" onClick={() => void shareProfile()}><Share2 size={16} /> {t('hpShare')}</button>
             <button type="button" onClick={() => void copyLink()}>
               {copyState === 'ok' ? `✓ ${t('hpCopyDone')}` : copyState === 'fail' ? t('hpCopyFail') : <><Copy size={16} /> {t('hpCopy')}</>}
             </button>
-            <button type="button" onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
+            <button type="button" disabled={qrBusy !== null} aria-busy={qrBusy === 'save'} onClick={() => void saveQr()}><Download size={16} /> {t('hpSave')}</button>
+            <button type="button" disabled={qrBusy !== null} aria-busy={qrBusy === 'print'} onClick={() => void printQr()}><Printer size={16} /> {qrText.print}</button>
           </div>
         </div>
       ) : null}
