@@ -4,10 +4,12 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 export function localWhipEndpoint(value) {
   const url = new URL(value);
-  if (url.protocol !== 'http:' || !LOOPBACK.has(url.hostname) ||
-      url.pathname !== '/rtc/v1/whip/' || !['1985','4319'].includes(url.port) || url.username || url.password ||
-      url.searchParams.get('app') !== 'live' ||
-      !/^haku-lab(?:-[a-z0-9]+)?$/.test(url.searchParams.get('stream') || '')) {
+  const legacy = url.pathname === '/rtc/v1/whip/' && ['1985','4319'].includes(url.port) &&
+      url.searchParams.get('app') === 'live' && /^haku-lab(?:-[a-z0-9]+)?$/.test(url.searchParams.get('stream') || '');
+  const crowd = url.pathname === '/whip' &&
+      /^[a-f0-9-]{36}$/i.test(url.searchParams.get('room') || '') && url.searchParams.size === 1 &&
+      ((url.protocol === 'http:' && LOOPBACK.has(url.hostname) && url.port === '4320') || url.protocol === 'https:');
+  if (url.username || url.password || !(legacy || crowd) || (legacy && (url.protocol !== 'http:' || !LOOPBACK.has(url.hostname)))) {
     throw new Error('WHIP lab accepts only local SRS/gateway /rtc/v1/whip/?app=live&stream=haku-lab');
   }
   return url;
@@ -87,7 +89,7 @@ export class LocalWhipPublisher {
 
   setState(state) { this.state = state; this.onState(state); }
 
-  async start(endpointText) {
+  async start(endpointText, { headers = {}, mediaConstraints } = {}) {
     if (this.state !== 'idle' && this.state !== 'error') throw new Error('Already starting or live');
     const endpoint = localWhipEndpoint(endpointText);
     const generation = ++this.generation;
@@ -96,7 +98,7 @@ export class LocalWhipPublisher {
     const assertActive = () => { if (generation !== this.generation || abort.signal.aborted) throw new Error('LIVE start cancelled'); };
     this.setState('starting');
     try {
-      const stream = await this.getUserMedia({
+      const stream = await this.getUserMedia(mediaConstraints ?? {
         video: { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: 'environment' },
         audio: { echoCancellation: true, noiseSuppression: true }
       });
@@ -129,7 +131,7 @@ export class LocalWhipPublisher {
       assertActive();
       this.setState('connecting');
       const response = await this.fetchImpl(endpoint.href, {
-        method: 'POST', headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
+        method: 'POST', headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp', ...headers },
         body: pc.localDescription.sdp, signal: abort.signal, redirect: 'error'
       });
       if (!response.ok) throw new Error('WHIP server rejected publish: HTTP ' + response.status);
@@ -153,6 +155,31 @@ export class LocalWhipPublisher {
         this.setState('error');
       }
       throw error;
+    }
+  }
+
+  async switchCamera(facingMode) {
+    if (this.state !== 'live' || !this.pc || !this.stream || this.switchingCamera) throw new Error('Camera switch unavailable');
+    if (!['user', 'environment'].includes(facingMode)) throw new Error('Invalid camera');
+    const sender = this.pc.getSenders().find(item => item.track?.kind === 'video');
+    if (!sender) throw new Error('Video sender unavailable');
+    this.switchingCamera = true;
+    let replacement;
+    try {
+      replacement = await this.getUserMedia({ video: { facingMode: { ideal: facingMode } }, audio: false });
+      const next = replacement.getVideoTracks()[0];
+      if (!next || this.state !== 'live') throw new Error('Camera switch cancelled');
+      await sender.replaceTrack(next);
+      if (this.state !== 'live') throw new Error('Camera switch cancelled');
+      const previous = this.stream.getVideoTracks()[0];
+      if (previous) { this.stream.removeTrack(previous); previous.stop(); }
+      this.stream.addTrack(next);
+      this.onPreview(this.stream);
+      this.facingMode = facingMode;
+      replacement = null;
+    } finally {
+      replacement?.getTracks().forEach(track => track.stop());
+      this.switchingCamera = false;
     }
   }
 

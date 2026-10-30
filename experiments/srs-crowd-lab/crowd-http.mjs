@@ -1,6 +1,7 @@
 // Non-production loopback proof. Caller must supply a real authenticated actor resolver.
 // Never bind this gateway or the unauthenticated SRS API to a public interface.
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { makeSrsCrowdGate } from './publish-gate.mjs';
 import { openSrsWhip, closeSrsWhip } from './srs-loopback.mjs';
 
@@ -30,6 +31,32 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const origin = 'http://127.0.0.1:' + address.port;
       if (req.headers.host !== new URL(origin).host || (req.headers.origin && req.headers.origin !== origin) || req.headers['sec-fetch-site'] === 'cross-site') {
         json(res, 403, { error: 'local_origin_only' }); return;
+      }
+      if (req.method === 'GET' && req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end('<!doctype html><meta charset="utf-8"><title>HAKU CROWD local proof</title>'); return;
+      }
+      if (req.method === 'GET' && req.url === '/whip-publisher.mjs') {
+        const source = await readFile(new URL('../ovh-srs-lab/whip-publisher.mjs', import.meta.url));
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(source); return;
+      }
+      const mediaUrl = new URL(req.url, origin);
+      const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
+      const hlsQuery = !mediaUrl.search || (
+        mediaUrl.searchParams.size === 1 &&
+        /^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')
+      );
+      if (req.method === 'GET' && hlsPath && hlsQuery) {
+        const response = await fetch('http://127.0.0.1:8080' + mediaUrl.pathname + mediaUrl.search, {
+          redirect: 'error', signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) { json(res, response.status, { error: 'hls_unavailable' }); return; }
+        res.writeHead(200, {
+          'Content-Type': mediaUrl.pathname.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+          'Cache-Control': 'no-store',
+        });
+        res.end(Buffer.from(await response.arrayBuffer())); return;
       }
       const actor = await resolveActor(req);
       if (!actor?.id || actor.active !== true) { json(res, 401, { error: 'authentication_required' }); return; }
