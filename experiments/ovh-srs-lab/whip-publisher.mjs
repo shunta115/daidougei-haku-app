@@ -88,7 +88,7 @@ export class LocalWhipPublisher {
 
   setState(state) { this.state = state; this.onState(state); }
 
-  async start(endpointText, { headers = {} } = {}) {
+  async start(endpointText, { headers = {}, mediaConstraints } = {}) {
     if (this.state !== 'idle' && this.state !== 'error') throw new Error('Already starting or live');
     const endpoint = localWhipEndpoint(endpointText);
     const generation = ++this.generation;
@@ -97,7 +97,7 @@ export class LocalWhipPublisher {
     const assertActive = () => { if (generation !== this.generation || abort.signal.aborted) throw new Error('LIVE start cancelled'); };
     this.setState('starting');
     try {
-      const stream = await this.getUserMedia({
+      const stream = await this.getUserMedia(mediaConstraints ?? {
         video: { width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: 'environment' },
         audio: { echoCancellation: true, noiseSuppression: true }
       });
@@ -154,6 +154,31 @@ export class LocalWhipPublisher {
         this.setState('error');
       }
       throw error;
+    }
+  }
+
+  async switchCamera(facingMode) {
+    if (this.state !== 'live' || !this.pc || !this.stream || this.switchingCamera) throw new Error('Camera switch unavailable');
+    if (!['user', 'environment'].includes(facingMode)) throw new Error('Invalid camera');
+    const sender = this.pc.getSenders().find(item => item.track?.kind === 'video');
+    if (!sender) throw new Error('Video sender unavailable');
+    this.switchingCamera = true;
+    let replacement;
+    try {
+      replacement = await this.getUserMedia({ video: { facingMode: { ideal: facingMode } }, audio: false });
+      const next = replacement.getVideoTracks()[0];
+      if (!next || this.state !== 'live') throw new Error('Camera switch cancelled');
+      await sender.replaceTrack(next);
+      if (this.state !== 'live') throw new Error('Camera switch cancelled');
+      const previous = this.stream.getVideoTracks()[0];
+      if (previous) { this.stream.removeTrack(previous); previous.stop(); }
+      this.stream.addTrack(next);
+      this.onPreview(this.stream);
+      this.facingMode = facingMode;
+      replacement = null;
+    } finally {
+      replacement?.getTracks().forEach(track => track.stop());
+      this.switchingCamera = false;
     }
   }
 
