@@ -1178,3 +1178,46 @@
   .pl-live__settings-trigger {top: 8px;right: max(65px,env(safe-area-inset-right,0px));}
   .pl-live__settings-popover {top: 52px;max-height: calc(100svh - 60px);}
 }
+
+
+/* PR #99: keep the captured frame untouched while allowing a local preview crop. */
+.pl-live--performer[data-phase='live'][data-layout='phone-portrait'] .pl-live__video {
+  object-fit: var(--video-fit, contain);
+}
+.pl-live__fit-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pl-live__fit-control button { min-height: 44px; padding: 8px 12px; border: 1px solid rgba(255,255,255,.4); border-radius: 12px; background: rgba(255,255,255,.08); color: #fff; }
+.pl-live__fit-control button[aria-pressed='true'] { border-color: #5ef4dd; background: rgba(94,244,221,.2); }
+.pl-live__fit-control small { flex-basis: 100%; color: rgba(255,255,255,.75); }
+.pl-live__confirm-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.7); }
+.pl-live__confirm { width: min(100%, 420px); padding: 20px; border: 1px solid rgba(255,255,255,.3); border-radius: 20px; background: #101b27; color: #fff; }
+.pl-live__confirm h2 { margin: 0 0 8px; font-size: 20px; }
+.pl-live__confirm p { margin: 0 0 16px; }
+.pl-live__confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.pl-live__confirm button { min-height: 44px; flex: 1; }
+
+/* The viewer stage occupies the upper area in landscape; comments and input remain below it. */
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__stage {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 62svh;
+}
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__panel--live {
+  position: absolute;
+  inset: 62svh 0 0;
+  width: 100%;
+  max-height: none;
+  overflow-y: auto;
+  padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  border-radius: 0;
+  background: #0b1420;
+  backdrop-filter: none;
+}
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__creator-mini,
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__prefs { display: none; }
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__comments { max-height: 16svh; }
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions { top: auto; bottom: 8px; }
+@media (max-height: 420px) and (orientation: landscape) {
+  .pl-live--watch[data-layout='phone-landscape'] .pl-live__stage { height: 58svh; }
+  .pl-live--watch[data-layout='phone-landscape'] .pl-live__panel--live { top: 58svh; }
+  .pl-live--watch[data-layout='phone-landscape'] .pl-live__comments { max-height: 12svh; }
+}
