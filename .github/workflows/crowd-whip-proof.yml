@@ -63,6 +63,11 @@ jobs:
           node experiments/ovh-srs-lab/hls-ready.mjs "$manifest"
           echo "Gateway master playlist:"
           curl --fail --silent "$manifest" | head -n 12
+          echo "Gateway media playlist and first segment HTTP status:"
+          media=$(curl --fail --silent "$manifest" | tail -n 1)
+          curl --fail --silent "http://127.0.0.1:4320${media}" | head -n 12
+          segment=$(curl --fail --silent "http://127.0.0.1:4320${media}" | grep -v "^#" | head -n 1)
+          curl --silent --output /dev/null --write-out "Gateway segment HTTP %{http_code} bytes %{size_download}\\n" "http://127.0.0.1:4320/live/${segment}"
           echo "Direct SRS codec probe:"
           timeout 8 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "http://127.0.0.1:8080/live/${stream}.m3u8" || true
           for i in $(seq 1 20); do
