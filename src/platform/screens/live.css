@@ -1129,3 +1129,52 @@
     height: min(19svh,120px);
   }
 }
+
+
+/* Accessible live settings: replaces the permanently visible orientation picker. */
+.pl-live__settings-trigger {
+  position: absolute;
+  z-index: 12;
+  top: calc(60px + env(safe-area-inset-top,0px));
+  right: max(12px,env(safe-area-inset-right,0px));
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 9px 12px;
+  min-height: 40px;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 999px;
+  background: rgba(10,15,25,.78);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  pointer-events: auto;
+}
+.pl-live__settings-popover {
+  position: absolute;
+  z-index: 13;
+  top: calc(108px + env(safe-area-inset-top,0px));
+  left: max(12px,env(safe-area-inset-left,0px));
+  right: max(12px,env(safe-area-inset-right,0px));
+  max-height: min(62svh,420px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(94,244,221,.45);
+  border-radius: 18px;
+  background: rgba(15,22,32,.96);
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  pointer-events: auto;
+}
+.pl-live--performer[data-phase='live'] .pl-live__settings-popover .pl-live__orientation-picker--compact,
+.pl-live--performer[data-phase='live'] .pl-live__settings-popover .pl-live__prefs {
+  display: flex;
+  position: static;
+  max-width: 100%;
+  margin: 0 0 10px;
+}
+.pl-live--performer[data-phase='live'] .pl-live__settings-popover .pl-live__orientation-picker--compact {
+  display: block;
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .pl-live__settings-trigger {top: 8px;right: max(65px,env(safe-area-inset-right,0px));}
+  .pl-live__settings-popover {top: 52px;max-height: calc(100svh - 60px);}
+}
