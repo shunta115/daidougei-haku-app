@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { makeSrsCrowdGate } from './publish-gate.mjs';
 import { openSrsWhip, closeSrsWhip } from './srs-loopback.mjs';
+import { makeWatchTickets, rewriteHlsPlaylist } from './hls-access.mjs';
 
 const MAX_BODY = 128 * 1024;
 const json = (res, status, value) => {
@@ -24,6 +25,7 @@ async function body(req) {
 export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ openMedia: openSrsWhip, closeMedia: closeSrsWhip }) } = {}) {
   if (typeof resolveActor !== 'function') throw new Error('authenticated_actor_resolver_required');
   const owners = new Map();
+  const tickets = makeWatchTickets();
   let timer;
   const server = createServer(async (req, res) => {
     try {
@@ -43,20 +45,30 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       }
       const mediaUrl = new URL(req.url, origin);
       const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
-      const hlsQuery = !mediaUrl.search || (
-        mediaUrl.searchParams.size === 1 &&
-        /^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')
-      );
-      if (req.method === 'GET' && hlsPath && hlsQuery) {
-        const response = await fetch('http://127.0.0.1:8080' + mediaUrl.pathname + mediaUrl.search, {
-          redirect: 'error', signal: AbortSignal.timeout(5000),
-        });
+      if (req.method === 'GET' && hlsPath) {
+        const token = mediaUrl.searchParams.get('watch');
+        const roomId = [...owners.keys()].find(key => 'haku-lab-' + key.replaceAll('-', '') === mediaUrl.pathname.match(/^\\/live\\/(haku-lab-[a-f0-9]{32})/)[1]);
+        const sourceActor = owners.get(roomId);
+        let state;
+        try { state = sourceActor ? gate.state(sourceActor, roomId) : null; } catch { state = null; }
+        const otherParams = [...mediaUrl.searchParams.keys()].filter(key => key !== 'watch');
+        if (!roomId || otherParams.some(key => key !== 'hls_ctx') || otherParams.length > 1 ||
+            (otherParams.length && !/^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')) ||
+            !tickets.verify(token, roomId, state)) {
+          json(res, 401, { error: 'watch_not_authorized' }); return;
+        }
+        const upstream = new URL('http://127.0.0.1:8080' + mediaUrl.pathname);
+        if (mediaUrl.searchParams.has('hls_ctx')) upstream.searchParams.set('hls_ctx', mediaUrl.searchParams.get('hls_ctx'));
+        const response = await fetch(upstream, { redirect: 'error', signal: AbortSignal.timeout(5000) });
         if (!response.ok) { json(res, response.status, { error: 'hls_unavailable' }); return; }
+        const playlist = mediaUrl.pathname.endsWith('.m3u8');
         res.writeHead(200, {
-          'Content-Type': mediaUrl.pathname.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
-          'Cache-Control': 'no-store',
+          'Content-Type': playlist ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+          'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
         });
-        res.end(Buffer.from(await response.arrayBuffer())); return;
+        if (playlist) res.end(rewriteHlsPlaylist(await response.text(), mediaUrl, token));
+        else res.end(Buffer.from(await response.arrayBuffer()));
+        return;
       }
       const actor = await resolveActor(req);
       if (!actor?.id || actor.active !== true) { json(res, 401, { error: 'authentication_required' }); return; }
@@ -70,6 +82,13 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       }
       if (!roomId || url.searchParams.size !== 1) { json(res, 404, { error: 'not_found' }); return; }
       if (req.method === 'GET' && url.pathname === '/state') { json(res, 200, gate.state(actor, roomId)); return; }
+      if (req.method === 'GET' && url.pathname === '/watch-ticket') {
+        const state = gate.state(actor, roomId);
+        if (state.phase !== 'live' || (actor.id !== state.performerId && actor.id !== state.publisherId)) {
+          json(res, 403, { error: 'watch_not_authorized' }); return;
+        }
+        json(res, 200, { ticket: tickets.issue({ roomId, actorId: actor.id, epoch: state.epoch }) }); return;
+      }
       if (req.method !== 'POST') { json(res, 404, { error: 'not_found' }); return; }
       if (url.pathname === '/whip') {
         if (!String(req.headers['content-type'] || '').startsWith('application/sdp')) { json(res, 415, { error: 'sdp_required' }); return; }
