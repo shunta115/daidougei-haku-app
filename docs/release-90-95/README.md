@@ -53,11 +53,13 @@
 
 通知INSERT: authenticated=false、service_role=true。当日RPC: anon=false、authenticated=true。
 
+PreviewはREADY。iPhone相当WebKitで匿名の`/event`・`/map`のHTML/アセット200と画面描画、TEST RESTへのGETを確認。Google Maps APIキーは既存Production専用でPreviewにないため、実地図は未設定表示。課金を避けてキーの複製・新規作成は行っていない。ログインしたTESTアカウントで登録からMAPまでの実接続確認は未完了。
+
 TEST advisorには既存のsearch_path・公開SECURITY DEFINER等の指摘あり。今回対象外の認証・LIVE・管理関数を一括変更していない。
 
 ## 検証と限界
 
-検証結果の最終値は `validation.json` を参照。
+検証結果の最終値は `validation.json`、機能別判定は `feature-status.md` を参照。TypeScript・Production build通過、全81ファイル465テスト通過、WebKitの22項目通過。
 
 - TypeScriptとProduction buildを実施。buildには既存の大きなchunk警告あり。
 - 全Vitestを実施。初回はブラウザ準備・他の検証との競合でPGlite起動がタイムアウトしたため、負荷を取り除いて全体再実行。

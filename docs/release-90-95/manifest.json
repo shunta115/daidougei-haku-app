@@ -26,5 +26,7 @@
       "sha256": "d5fe94aa90514bab119bb116a0b03036caaffe95440a16a20234cd74de6e99fb",
       "version": "20261030182434"
     }
-  ]
+  ],
+  "test_apply_sha256": "6b9c7a87f7560627a3373af7170e717c700fc482eef018aef5143e53edcde94f",
+  "production_proposal_sha256": "2e12bea6214f444f10bc74d868a538f646ffe9a794a8a5e00ab37f9f7ce27745"
 }
