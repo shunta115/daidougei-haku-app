@@ -375,8 +375,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
 
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
           <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
-          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
+          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live--watch .pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
+          <button type="button" onClick={() => void toggleFollow()} aria-label={following ? "フォローを解除" : "フォローする"}><Heart size={23} fill={following ? "currentColor" : "none"} /><small>{following ? "フォロー中" : "フォロー"}</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
         </aside>
       </div>
