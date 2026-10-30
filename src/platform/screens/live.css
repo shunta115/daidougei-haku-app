@@ -1313,6 +1313,7 @@
 .pl-live__pill { background: var(--live-pink); color: #fff; }
 .pl-live__settings-popover {
   position: fixed;
+  z-index: 100;
   top: auto;
   bottom: max(10px, env(safe-area-inset-bottom,0px));
   left: 50%;
