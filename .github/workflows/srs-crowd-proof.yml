@@ -1,0 +1,30 @@
+name: SRS CROWD isolated proof
+
+on:
+  pull_request:
+    branches:
+      - codex/haku-live-ovh-srs-500-lab-20261029
+    paths:
+      - 'experiments/srs-crowd-lab/**'
+      - 'experiments/free-live/policy.mjs'
+      - 'tests/srs-crowd-lab.test.ts'
+      - '.github/workflows/srs-crowd-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test experiments/srs-crowd-lab/*.test.mjs
+      - run: npm run typecheck
+      - run: npm test -- --run
+      - run: npm run build
