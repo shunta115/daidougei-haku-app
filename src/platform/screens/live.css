@@ -1283,6 +1283,9 @@
 
 /* Reference design: readable translucent chrome without blurring the video beneath it. */
 .pl-live { --live-neon: #45f0d4; --live-pink: #ff285a; }
+/* The shared landscape page shell caps ordinary pages at 680px. LIVE must
+   fill its viewport even when experience.css is loaded after this file. */
+.pl-shell.pl-shell--live { width: 100%; max-width: none; padding: 0; }
 .pl-live .pl-live__panel, .pl-live .pl-live__comments, .pl-live .pl-live__comment,
 .pl-live .pl-live__creator-mini, .pl-live .pl-live__media-control,
 .pl-live .pl-live__side-actions button, .pl-live .pl-live__chip,
