@@ -41,7 +41,7 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
         res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(source); return;
       }
-      if (req.method === 'GET' && /^\\/live\\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\\.(?:m3u8|ts)$/.test(req.url || '')) {
+      if (req.method === 'GET' && /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(req.url || '')) {
         const response = await fetch('http://127.0.0.1:8080' + req.url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
         if (!response.ok) { json(res, response.status, { error: 'hls_unavailable' }); return; }
         res.writeHead(200, { 'Content-Type': req.url.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t', 'Cache-Control': 'no-store' });
