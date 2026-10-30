@@ -10,6 +10,10 @@ on:
       - 'experiments/ovh-srs-lab/whip-publisher.mjs'
       - '.github/workflows/crowd-whip-proof.yml'
 
+concurrency:
+  group: crowd-whip-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
