@@ -31,3 +31,30 @@ it('keeps legacy event slots shareable without linking to a nonexistent appearan
   expect(url.searchParams.get('profile')).toBe('p')
   expect(url.searchParams.has('schedule')).toBe(false)
 })
+
+
+it('removes the copy field and restores focus even when legacy copy throws', async () => {
+  vi.stubGlobal('navigator', {})
+  const button = document.createElement('button')
+  document.body.append(button)
+  button.focus()
+  Object.defineProperty(document, 'execCommand', { configurable: true, value: () => { throw new Error('copy failed') } })
+  await expect(copyAppearanceUrl('https://haku.example')).rejects.toThrow('copy failed')
+  expect(document.querySelector('input')).toBeNull()
+  expect(document.activeElement).toBe(button)
+  button.remove()
+})
+
+it('recognizes cancellation across realms without copying', async () => {
+  const copy = vi.fn()
+  vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue({ name: 'AbortError' }), clipboard: { writeText: copy } })
+  expect(await shareAppearance('https://haku.example', 'HAKU')).toBe('cancelled')
+  expect(copy).not.toHaveBeenCalled()
+})
+
+it('falls back to copying after a native share permission failure', async () => {
+  const copy = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { share: vi.fn().mockRejectedValue(new Error('denied')), clipboard: { writeText: copy } })
+  expect(await shareAppearance('https://haku.example', 'HAKU')).toBe('copied')
+  expect(copy).toHaveBeenCalledWith('https://haku.example')
+})

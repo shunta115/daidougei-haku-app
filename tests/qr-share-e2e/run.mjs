@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { webkit, devices } from 'playwright'
 
 const output = process.env.HAKU_QR_EVIDENCE || '/tmp/haku-qr-share-evidence'
@@ -63,15 +63,26 @@ try {
   await page.locator('.hp-qr__actions').getByRole('button', { name: /保存/ }).click()
   const download = await downloadPromise
   await download.saveAs(`${output}/performer-qr.png`)
-  check('QR card downloads as PNG', download.suggestedFilename().endsWith('.png'))
+  const png = await readFile(`${output}/performer-qr.png`)
+  check('QR card downloads as a 720x900 PNG', download.suggestedFilename().endsWith('.png') && png.subarray(1, 4).toString() === 'PNG' && png.readUInt32BE(16) === 720 && png.readUInt32BE(20) === 900)
   const popupPromise = page.waitForEvent('popup')
-  await page.getByRole('button', { name: 'Print', exact: true }).click()
+  await page.getByRole('button', { name: '印刷', exact: true }).click()
   const popup = await popupPromise
   await popup.waitForFunction(() => window.__printed === true)
   check('print card contains only the public name and QR image', (await popup.locator('main h1').innerText()) === 'Safari出演者' && await visible(popup.locator('main img')))
   check('print uses A4 layout', (await popup.locator('style').textContent()).includes('size:A4'))
   await popup.screenshot({ path: `${output}/iphone-qr-print.png`, fullPage: true })
+  await popup.getByRole('button', { name: '印刷 / Print', exact: true }).click()
+  check('manual print button remains usable', await popup.evaluate(() => window.__printed === true))
+  const square = await popup.locator('main img').boundingBox()
+  check('QR print image remains square on a phone viewport', Math.abs(square.width - square.height) < 1)
+  await popup.emulateMedia({ media: 'print' })
+  check('print controls are hidden in print media', !(await popup.getByRole('button', { name: '印刷 / Print', exact: true }).isVisible()))
   await popup.close()
+  await page.evaluate(() => { window.__originalOpen = window.open; window.open = () => null })
+  await page.getByRole('button', { name: '印刷', exact: true }).click()
+  check('blocked popup gives a visible error and allows retry', await visible(page.getByRole('alert')) && await page.getByRole('button', { name: '印刷', exact: true }).isEnabled())
+  await page.evaluate(() => { window.open = window.__originalOpen })
   check('no browser runtime errors', errors.length === 0)
   console.log(JSON.stringify({ browser: `WebKit ${browser.version()}`, device: 'iPhone 13', passed: true, checks }, null, 2))
 } catch (error) { console.error(error); process.exitCode = 1 }

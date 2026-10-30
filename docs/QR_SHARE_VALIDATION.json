@@ -4,8 +4,8 @@
   "branch": "codex/qr-share-only",
   "typecheck": "passed",
   "vitest": {
-    "files": 77,
-    "passed": 453,
+    "files": 78,
+    "passed": 460,
     "failed": 0
   },
   "production_build": "passed",
@@ -21,9 +21,13 @@
       "Safari clipboard-denial fallback is invoked",
       "anonymous shared URL resolves to the existing appearance detail",
       "QR canvas renders in WebKit",
-      "QR card downloads as PNG",
+      "QR card downloads as a 720x900 PNG",
       "print card contains only the public name and QR image",
       "print uses A4 layout",
+      "manual print button remains usable",
+      "QR print image remains square on a phone viewport",
+      "print controls are hidden in print media",
+      "blocked popup gives a visible error and allows retry",
       "no browser runtime errors"
     ],
     "errors": [],
@@ -31,11 +35,18 @@
   },
   "new_database_dependencies": false,
   "backend_changes": false,
-  "physical_iphone": "3 manual checks pending",
+  "physical_iphone": "3 manual checks pending; release held",
   "test_credentials": "not discovered; no auth weakening",
   "maps_key": "production-only; not copied",
   "physical_backup_restore": "not performed; local logical alternatives do not prove physical recovery",
   "environment_secret_write": "automatic review rejected; not performed",
   "manual_static_deployment": "automatic review rejected; not performed",
-  "production_actions": false
+  "production_actions": false,
+  "audit_base": "93ee236cff9c166c97f9a5f8d7a7bd134a8fe02f",
+  "audit_date": "2026-10-31",
+  "exact_source_validation": "Unrelated trailing-newline differences aligned with 93ee236; only QR/share fixes, tests and docs are committed",
+  "new_paid_services": false,
+  "real_payments": false,
+  "main_merge": false,
+  "production_deployment": false
 }

@@ -23,10 +23,14 @@ export function appearanceShareLinks(url: string, text: string) {
 export async function shareAppearance(url: string, text: string) {
   if (navigator.share) {
     try { await navigator.share({ title: 'HAKU 出演予定', text, url }); return 'shared' as const }
-    catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled' as const }
+    catch (error) { if (isShareCancellation(error)) return 'cancelled' as const }
   }
   await copyAppearanceUrl(url)
   return 'copied' as const
+}
+
+export function isShareCancellation(error: unknown) {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
 }
 
 export async function copyAppearanceUrl(url: string) {
@@ -34,14 +38,20 @@ export async function copyAppearanceUrl(url: string) {
     try { await navigator.clipboard.writeText(url); return } catch { /* Safari permission fallback */ }
   }
   const input = document.createElement('input')
+  const previousFocus = document.activeElement
   input.value = url
   input.readOnly = true
   input.style.position = 'fixed'
   input.style.opacity = '0'
+  input.style.fontSize = '16px'
   document.body.append(input)
-  input.select()
-  input.setSelectionRange(0, url.length)
-  const copied = document.execCommand('copy')
-  input.remove()
-  if (!copied) throw new Error('copy_failed')
+  try {
+    input.focus({ preventScroll: true })
+    input.select()
+    input.setSelectionRange(0, url.length)
+    if (!document.execCommand('copy')) throw new Error('copy_failed')
+  } finally {
+    input.remove()
+    if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true })
+  }
 }
