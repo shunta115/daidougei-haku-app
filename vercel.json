@@ -1,11 +1,23 @@
 {
   "crons": [
-    { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
+    {
+      "path": "/api/ops/run?job=stripe-transfer-retry",
+      "schedule": "0 0 * * *"
+    }
   ],
   "rewrites": [
-    { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
-    { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },
-    { "source": "/api/awp-results", "destination": "/api/ops/run?job=awp-results" },
+    {
+      "source": "/api/profile/display-name",
+      "destination": "/api/stripe/tip?action=display-name"
+    },
+    {
+      "source": "/api/votes/device",
+      "destination": "/api/ops/run?job=votes-device"
+    },
+    {
+      "source": "/api/awp-results",
+      "destination": "/api/ops/run?job=awp-results"
+    },
     {
       "source": "/official",
       "destination": "/official-v6.html"
@@ -27,6 +39,10 @@
       "destination": "/haku-admin.html"
     },
     {
+      "source": "/performer/:performerId",
+      "destination": "/api/ops/inbox?resource=official-home&homeAction=page&performerId=:performerId"
+    },
+    {
       "source": "/((?!api/)(?!haku-admin).*)",
       "destination": "/index.html"
     }
@@ -41,5 +57,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/ops/inbox.ts": {
+      "includeFiles": "dist/index.html"
+    }
+  }
 }

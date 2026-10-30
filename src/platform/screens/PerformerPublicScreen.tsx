@@ -1,3 +1,5 @@
+import { homeRead, type HomeData, assetUrl } from '../lib/officialHome'
+import { HomeGallery, PublicHomeSections, BookingForm } from '../components/official-home/PublicHome'
 import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Copy, Download, Heart, MapPin, Play, QrCode, Share2, X } from 'lucide-react'
 import { PerformerAvatar } from '../components/PerformerAvatar'
@@ -96,6 +98,11 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const { user } = useAuth()
   const { t, lang } = useLang()
   useTrackView('performer_view', { performerId })
+  const [official, setOfficial] = useState<HomeData | null>(null)
+  const [homeHidden, setHomeHidden] = useState(false)
+  const [homeTab, setHomeTab] = useState('all')
+  const [booking, setBooking] = useState(false)
+  useEffect(() => { let alive = true; setOfficial(null); setHomeHidden(false); homeRead(performerId).then(data => { if(alive) setOfficial(data) }).catch(e => { if(alive && e.status === 404) setHomeHidden(true) }); return () => { alive = false } }, [performerId])
   const [p, setP] = useState<Performer | null>(null)
   const [following, setFollowing] = useState(false)
   const [merch, setMerch] = useState<MerchProduct[]>([])
@@ -119,6 +126,26 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     const path = performerPath(performerId)
     return typeof window === 'undefined' ? path : `${window.location.origin}${path}`
   }, [performerId])
+
+  useEffect(() => {
+    if (!p) return
+    const originalTitle = document.title
+    const touched: Array<{ node: HTMLElement; prior: string | null; added: boolean }> = []
+    const meta = (selector: string, attr: string, value: string, create: () => HTMLElement) => {
+      let node = document.head.querySelector<HTMLElement>(selector)
+      const added = !node
+      if (!node) { node = create(); document.head.appendChild(node) }
+      touched.push({node, prior: node.getAttribute(attr), added}); node.setAttribute(attr,value)
+    }
+    document.title = `${p.stage_name}｜公式プロフィール・出演依頼｜HAKU`
+    const description = String(official?.home?.details.tagline || p.bio || p.genre).slice(0,160)
+    meta('meta[name="description"]','content',description,()=>Object.assign(document.createElement('meta'),{name:'description'}))
+    const serverCanonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href
+    const seoCanonical = serverCanonical && new URL(serverCanonical).pathname === performerPath(performerId) ? serverCanonical : canonicalUrl
+    meta('link[rel="canonical"]','href',seoCanonical,()=>Object.assign(document.createElement('link'),{rel:'canonical'}))
+    if(homeHidden) meta('meta[name="robots"]','content','noindex',()=>Object.assign(document.createElement('meta'),{name:'robots'}))
+    return () => { document.title=originalTitle; for(const {node,prior,added} of touched){if(added)node.remove();else if(prior===null)node.removeAttribute(node.tagName==='LINK'?'href':'content');else node.setAttribute(node.tagName==='LINK'?'href':'content',prior)} }
+  }, [p?.id,p?.stage_name,p?.bio,p?.genre,official?.home?.details.tagline,canonicalUrl,homeHidden])
 
   useEffect(() => {
     let alive = true
@@ -260,11 +287,12 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
     spaGo(FESTIVAL_PATH)
   }
 
+  if (homeHidden) return <p className="hp-page">このページは公開されていません。</p>
   if (!p && !error) return <p className="pl-muted hp-page">{t('hpLoading')}</p>
   if (!p) return <p className="pl-error hp-page">{error}</p>
 
   const handle = handleOf(p)
-  const catchCopy = p.support_blurb || (p.bio ? p.bio.split('\n')[0] : '')
+  const catchCopy = official?.home?.details.tagline || p.support_blurb || (p.bio ? p.bio.split('\n')[0] : '')
   const bio = p.bio || t('profileReady')
   const upcoming = slots.filter((slot) => slotPhase(slot) !== 'past')
   const next = upcoming[0] ?? null
@@ -279,16 +307,13 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
   const pastAppearances = appearances.filter((appearance) => Date.parse(appearance.ends_at ?? appearance.starts_at) < Date.now()).reverse()
   const goSection = (id: SectionId) => {
     setSection(id)
+    if(official) setHomeTab(id === 'schedule' ? 'schedule' : 'all')
     window.document.getElementById(`hp-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   const metric = (value: number | null) => value === null ? t('hpUncounted') : compactCount(value)
 
   return (
-    <article className={`hp-page${p.is_live ? ' hp-page--live' : ''}`}>
-      <div className="hp-hero">
-        {p.photo_url ? <img src={p.photo_url} alt="" /> : <span className="hp-hero__empty" />}
-        <div className="hp-hero__fade" />
-        {p.is_live ? <em className="hp-hero__live">LIVE</em> : null}
+    <article className={`hp-page hp-page--official${p.is_live ? ' hp-page--live' : ''}`}>
         <header className="hp-bar">
           <AppBackButton className="hp-icon" iconOnly onClick={onBack} label={t('back')} />
           <div className="hp-bar__actions">
@@ -300,7 +325,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
             </button>
           </div>
         </header>
-      </div>
+      <HomeGallery photos={official?.assets.filter(a=>a.kind==='photo') || []} fallback={p.photo_url} name={p.stage_name} hero />
 
       <div className="hp-sheet">
         <section className="hp-idrow" aria-labelledby="hp-name">
@@ -323,6 +348,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         {p.genre ? <p className="hp-genre">{p.genre}</p> : null}
         {catchCopy ? <p className="hp-catch">{catchCopy}</p> : null}
 
+        {official ? <><div className="oh-business-cta"><button className="oh-button" onClick={()=>setBooking(true)}>出演を依頼する · HAKU事務局</button>{official.assets.some(a=>a.kind==='pdf') ? <a className="oh-button oh-button--outline" href={assetUrl(official.assets.find(a=>a.kind==='pdf')!,false,true)}>宣材PDFをダウンロード</a>:null}</div><nav className="oh-nav" aria-label="公式ページセクション" role="tablist" onKeyDown={e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;const buttons=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button'));const current=buttons.indexOf(document.activeElement as HTMLButtonElement);const next=buttons[(current+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length];e.preventDefault();next.focus();next.click()}}>{[['all','すべて'],...(official.assets.some(a=>a.kind==='photo')?[['photos','写真']]:[]),...(official.assets.some(a=>a.kind==='video')||p.video_url?[['videos','動画']]:[]),...(Object.values(official.home?.details||{}).some(Boolean)?[['profile','プロフィール']]:[]),...(official.assets.some(a=>a.kind==='pdf')?[['documents','宣材資料']]:[]),['schedule','出演予定']].map(([key,label])=><button key={key} role="tab" aria-selected={homeTab===key} tabIndex={homeTab===key?0:-1} onClick={()=>setHomeTab(key)}>{label}</button>)}</nav></> : null}
         <ul className="hp-chips">
           {p.city ? <li>📍 {p.city}</li> : null}
           {p.genre ? <li>◉ {p.genre}</li> : null}
@@ -383,7 +409,8 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           ))}
         </nav>
 
-        <section id="hp-media" className="hp-block">
+        {official ? <PublicHomeSections assets={official.assets} details={official.home?.details || {}} legacyVideo={p.video_url} activeTab={homeTab} />:null}
+        <section id="hp-media" className="hp-block" hidden={Boolean(official)}>
           <h2>{t('hpPerformance')}</h2>
           {p.photo_url || videoHref ? (
             <button
@@ -399,7 +426,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           )}
         </section>
 
-        <section id="hp-schedule" className="hp-block">
+        <section id="hp-schedule" className="hp-block" hidden={Boolean(official)&&homeTab!=='all'&&homeTab!=='schedule'}>
           <h2>{t('hpUpcoming')}</h2>
           {appearances.length === 0 && later.length === 0 && !next ? (
             <p className="hp-empty">{t('hpNoSchedule')}</p>
@@ -529,6 +556,7 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
           </div>
         </div>
       ) : null}
+      {booking ? <BookingForm performerId={performerId} name={p.stage_name} onClose={()=>setBooking(false)} />:null}
     </article>
   )
 }
