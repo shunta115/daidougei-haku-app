@@ -36,9 +36,10 @@ export function filterAppearancesForPeriod(
   now = new Date(),
 ) {
   return rows.filter((row) => {
-    if (row.status !== 'published') return false
+    if (row.status !== 'published' && !(row.published_at && ['cancelled', 'postponed'].includes(row.status))) return false
     if (period === 'all') return true
     const { start, end } = appearancePeriodRange(period, now, row.timezone || 'UTC')
     return row.performance_date >= start && row.performance_date <= end
   })
 }
+

@@ -22,7 +22,7 @@ vi.mock('../src/platform/lib/api', () => ({
   cancelLiveReservation: async () => undefined,
   subscribePerformerMapUpdates: () => () => {},
 }))
-vi.mock('../src/platform/components/GoogleVenueMap', () => ({ GoogleVenueMap: () => null }))
+vi.mock('../src/platform/components/GoogleVenueMap', () => ({ GoogleVenueMap: ({ appearanceMarkers = [] }: { appearanceMarkers?: { appearance: { id: string } }[] }) => <div data-testid="appearance-markers">{appearanceMarkers.map((row) => row.appearance.id).join(',')}</div> }))
 import { LangProvider } from '../src/i18n/LangProvider'
 import { MapScheduleScreen } from '../src/platform/screens/MapScheduleScreen'
 import { LiveListScreen } from '../src/platform/screens/LiveListScreen'
@@ -69,6 +69,31 @@ it('syncs the schedule and MAP views to direct URLs and popstate navigation', as
   expect(await screen.findByRole('tablist', { name: '表示対象' })).toBeTruthy()
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks() })
+
+it('refreshes cancellation and time changes on focus without remounting the MAP', async () => {
+  const rows = await fake.appearances()
+  const published = { ...rows[0], venue_lat: 35.7, venue_lng: 139.7, ends_at: new Date(Date.now() + 3600000).toISOString(), published_at: new Date().toISOString() }
+  fake.appearances.mockResolvedValue([published])
+  render(<LangProvider><MapScheduleScreen initialView="map" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} /></LangProvider>)
+  await screen.findByText('近くの大道芸を探す')
+  const markers = screen.getByTestId('appearance-markers')
+  await vi.waitFor(() => expect(markers.textContent).toBe('a'))
+  fake.appearances.mockResolvedValue([{ ...published, status: 'cancelled' }])
+  window.dispatchEvent(new Event('focus'))
+  await vi.waitFor(() => expect(markers.textContent).toBe(''))
+  fake.appearances.mockResolvedValue([{ ...published, start_time: '19:00:00' }])
+  window.dispatchEvent(new Event('focus'))
+  await vi.waitFor(() => expect(markers.textContent).toBe('a'))
+  expect(await screen.findByText(/19:00/)).toBeTruthy()
+})
+
+it('retains publicly announced cancellations in the schedule with a status label', async () => {
+  const rows = await fake.appearances()
+  fake.appearances.mockResolvedValue([{ ...rows[0], status: 'cancelled', published_at: new Date().toISOString() }])
+  render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} /></LangProvider>)
+  expect(await screen.findByText('公開ステージ')).toBeTruthy()
+  expect(screen.getByText('中止')).toBeTruthy()
+})
 it('shows public profile appearances and keeps AWP slots out of the normal schedule', async () => {
   const profile = vi.fn()
   render(<LangProvider><MapScheduleScreen initialView="schedule" onOpenPerformer={profile} onWatchLive={vi.fn()} /></LangProvider>)
@@ -98,3 +123,4 @@ it('excludes cancelled LIVE plans on initial load and after refresh', async () =
   await screen.findAllByText('テスト出演者')
   expect(screen.queryByText(/2099-10-10/)).toBeNull()
 })
+

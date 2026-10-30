@@ -46,6 +46,30 @@ export async function downloadQrCard(opts: { url: string; name: string; handle: 
   URL.revokeObjectURL(href)
 }
 
+export async function printQrCard(opts: { url: string; name: string; handle: string }) {
+  const popup = window.open('', '_blank', 'width=760,height=960')
+  if (!popup) throw new Error('popup_blocked')
+  popup.opener = null
+  const src = await performerQrDataUrl(opts.url, 520)
+  const doc = popup.document
+  doc.title = `${opts.name} HAKU QR`
+  const style = doc.createElement('style')
+  style.textContent = 'body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;color:#111}.card{width:150mm;text-align:center}.card img{width:110mm;height:110mm}.card h1{margin:8mm 0 2mm;font-size:24pt}.card p{margin:0;font-size:14pt;color:#555}@page{size:A4;margin:18mm}'
+  const card = doc.createElement('main')
+  card.className = 'card'
+  const image = doc.createElement('img')
+  image.alt = ''
+  const name = doc.createElement('h1')
+  name.textContent = opts.name
+  const handle = doc.createElement('p')
+  handle.textContent = `@${opts.handle}`
+  card.append(image, name, handle)
+  doc.head.append(style)
+  doc.body.append(card)
+  image.addEventListener('load', () => { popup.focus(); popup.print() }, { once: true })
+  image.src = src
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
