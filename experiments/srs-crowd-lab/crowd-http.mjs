@@ -47,7 +47,7 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
       if (req.method === 'GET' && hlsPath) {
         const token = mediaUrl.searchParams.get('watch');
-        const roomId = [...owners.keys()].find(key => 'haku-lab-' + key.replaceAll('-', '') === mediaUrl.pathname.match(/^\\/live\\/(haku-lab-[a-f0-9]{32})/)[1]);
+        const roomId = [...owners.keys()].find(key => mediaUrl.pathname.startsWith('/live/haku-lab-' + key.replaceAll('-', '')));
         const sourceActor = owners.get(roomId);
         let state;
         try { state = sourceActor ? gate.state(sourceActor, roomId) : null; } catch { state = null; }
