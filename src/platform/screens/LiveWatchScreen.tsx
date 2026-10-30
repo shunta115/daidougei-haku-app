@@ -399,13 +399,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </div>
         </div>
 
-        {!isOverlayChrome ? (
-          <div className="pl-live__titlebar">
-            <strong>{p?.stage_name}</strong>
-            <span>{p?.live_title || p?.genre || ''}</span>
-          </div>
-        ) : null}
-
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
           <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
           <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live--watch .pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
@@ -428,10 +421,12 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
             {comments.map((c) => (
               <div key={c.id} className="pl-live__comment">
-                <span><strong>{c.display_name}</strong> {c.body}</span>
+                <span className="pl-live__comment-content"><span className="pl-live__comment-avatar" aria-hidden="true">{c.display_name.slice(0, 1)}</span><span><strong>{c.display_name}</strong> {c.body}</span></span>
                 {canModerate ? <span className="pl-live__comment-actions">
+                  <details><summary aria-label={`${c.display_name}のコメント操作`}>•••</summary><span>
                   {c.user_id !== user?.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
                   <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
+                  </span></details>
                 </span> : null}
               </div>
             ))}
@@ -495,7 +490,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         </div>
       </div>
       {settingsOpen && !mini ? <section className="pl-live__settings-popover pl-live__settings-popover--viewer" role="dialog" aria-label="視聴設定" onKeyDown={(event) => { if (event.key === 'Escape') setSettingsOpen(false) }}>
-        <header><strong>視聴設定</strong><button type="button" aria-label="設定を閉じる" onClick={() => setSettingsOpen(false)}><X size={20} /></button></header>
+        <header><strong>視聴設定</strong><button type="button" aria-label="視聴設定を閉じる" onClick={() => setSettingsOpen(false)}><X size={20} /></button></header>
         <div className="pl-live__fit-control" role="group" aria-label="映像表示">
           <button type="button" aria-pressed={objectFit === 'contain'} onClick={() => { setObjectFit('contain'); setSettingsOpen(false) }}>全画角</button>
           <button type="button" aria-pressed={objectFit === 'cover'} onClick={() => { setObjectFit('cover'); setSettingsOpen(false) }}>全画面</button>

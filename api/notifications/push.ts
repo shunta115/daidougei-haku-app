@@ -42,9 +42,12 @@ function message(locale: Delivery['locale'], payload: Delivery['payload']) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' })
   const user = await requireAuthUser(req, res)
   if (!user) return
+  if (req.method === 'GET') return res.status(200).json({
+    liveStartEnabled: process.env.ENABLE_LIVE_START_WEB_PUSH === 'true' && Boolean(process.env.WEB_PUSH_SUBJECT && process.env.WEB_PUSH_VAPID_PUBLIC_KEY && process.env.WEB_PUSH_VAPID_PRIVATE_KEY),
+  })
   const isLive = req.body?.kind === 'live_start'
   if (req.body?.kind != null && req.body.kind !== 'appearance' && !isLive) return res.status(400).json({ error: 'invalid_kind' })
   let eventId = typeof req.body?.eventId === 'string' ? req.body.eventId : ''

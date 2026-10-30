@@ -979,6 +979,10 @@ export async function disableAppearancePush(userId: string, locale: Notification
 
 export async function getLivePushPreference(userId: string): Promise<{ available: boolean; enabled: boolean }> {
   if (!liveStartWebPushEnabled || !import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY) return { available: false, enabled: false }
+  const headers = await supabaseAuthHeaders()
+  const response = await fetch('/api/notifications/push', { headers }).catch(() => null)
+  const server = response?.ok ? await response.json().catch(() => ({})) as { liveStartEnabled?: boolean } : null
+  if (!server?.liveStartEnabled) return { available: false, enabled: false }
   const sb = requireSupabase()
   const { data, error } = await sb.from('notification_preferences').select('live_push_enabled').eq('user_id', userId).maybeSingle()
   if (error) return { available: false, enabled: false }

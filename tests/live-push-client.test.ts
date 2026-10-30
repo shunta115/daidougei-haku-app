@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.stubGlobal('PushManager', class {})
   vi.stubGlobal('matchMedia', () => ({ matches: false }))
   vi.stubGlobal('fetch', mock.fetch)
+  mock.fetch.mockResolvedValue({ ok: true, json: async () => ({ liveStartEnabled: true }) })
   mock.from.mockImplementation((table: string) => {
     const builder: Record<string, unknown> = { error: null }
     builder.select = vi.fn(() => builder)
@@ -77,6 +78,13 @@ describe('optional LIVE Push client connection', () => {
     const client = await api()
     await expect(client.enableLiveStartPush('test-user', 'ja')).rejects.toThrow('live_push_unavailable')
     expect(mock.updates).toHaveLength(0)
+  })
+
+  it('does not offer LIVE Push when server dispatch is disabled', async () => {
+    mock.fetch.mockResolvedValue({ ok: true, json: async () => ({ liveStartEnabled: false }) })
+    const client = await api()
+    expect(await client.getLivePushPreference('test-user')).toEqual({ available: false, enabled: false })
+    expect(mock.from).not.toHaveBeenCalled()
   })
 
   it('requests iPhone-compatible permission before the first network await', async () => {

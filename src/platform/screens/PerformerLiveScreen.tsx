@@ -773,6 +773,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             </div>
           ) : null}
         </div>
+        {phase === 'live' ? <button type="button" className="pl-live__settings-trigger" aria-label="配信設定" aria-expanded={liveSettingsOpen}
+          aria-controls="pl-live-settings" onClick={() => setLiveSettingsOpen((open) => !open)}>
+          <Settings2 size={17} aria-hidden="true" /> 配信設定
+        </button> : null}
         {phase === 'live' ? (
           <div className="pl-live__media-controls" aria-label="配信メディア操作">
             <button
@@ -863,12 +867,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
-          <button type="button" className="pl-live__settings-trigger" aria-label="配信設定" aria-expanded={liveSettingsOpen}
-            aria-controls="pl-live-settings" onClick={() => setLiveSettingsOpen((open) => !open)}>
-            <Settings2 size={17} aria-hidden="true" /> 配信設定
-          </button>
           {liveSettingsOpen ? <section id="pl-live-settings" className="pl-live__settings-popover" role="dialog" aria-label="配信設定" onKeyDown={(event) => { if (event.key === 'Escape') setLiveSettingsOpen(false) }}>
-            <header><strong>配信設定</strong><button type="button" aria-label="設定を閉じる" onClick={() => setLiveSettingsOpen(false)}><X size={20} /></button></header>
+            <header><strong>配信設定</strong><button type="button" aria-label="配信設定を閉じる" onClick={() => setLiveSettingsOpen(false)}><X size={20} /></button></header>
             {orientationPicker(true)}
             <div className="pl-live__fit-control" role="group" aria-label="プレビュー表示">
               <button type="button" aria-pressed={previewFit === 'contain'} onClick={() => { setPreviewFit('contain'); setLiveSettingsOpen(false) }}>全画角</button>
@@ -897,10 +897,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
               {comments.map((c) => (
                 <div key={c.id} className="pl-live__comment">
-                  <span><strong>{c.display_name}</strong> {c.body}</span>
+                  <span className="pl-live__comment-content"><span className="pl-live__comment-avatar" aria-hidden="true">{c.display_name.slice(0, 1)}</span><span><strong>{c.display_name}</strong> {c.body}</span></span>
                   {canModerate ? <span className="pl-live__comment-actions">
+                    <details><summary aria-label={`${c.display_name}のコメント操作`}>•••</summary><span>
                     {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
                     <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
+                    </span></details>
                   </span> : null}
                 </div>
               ))}

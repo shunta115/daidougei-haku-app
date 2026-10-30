@@ -48,6 +48,12 @@ try {
       await page.screenshot({ path: `${output}/viewer-${name}-${count}.png` })
       results.checks.push({ type: 'viewer-density', name, width, height, comments: count, ...measured })
       if (count === 100) {
+        await page.getByRole('button', { name: '視聴設定', exact: true }).click()
+        await page.getByRole('button', { name: '全画面', exact: true }).click()
+        await page.screenshot({ path: `${output}/viewer-${name}-cover.png` })
+        const cover = await dimensions(page)
+        assert.deepEqual(cover.stage, measured.stage, 'Display fit must not change the media stage')
+        results.checks.push({ type: 'display-cover', name, stage: cover.stage })
         await page.locator('video').evaluate((element) => { element.dataset.qaIdentity = 'original-video' })
         await page.getByRole('button', { name: '小窓で視聴を続ける', exact: true }).click()
         await page.locator('.pl-live--mini').waitFor()
@@ -78,6 +84,9 @@ try {
     await page.screenshot({ path: `${output}/host-settings-${name}.png` })
     await page.getByRole('button', { name: '設定を閉じる', exact: true }).click()
     assert.equal(await sheet.count(), 0)
+    await page.getByRole('button', { name: '配信設定', exact: true }).click()
+    await page.getByRole('button', { name: '全画面', exact: true }).click()
+    await page.screenshot({ path: `${output}/host-${name}-cover.png` })
     assert.deepEqual(errors, [])
     await context.close()
   }

@@ -49,6 +49,14 @@ async function run(body: unknown) {
 }
 
 describe('optional LIVE start Web Push endpoint', () => {
+  it('reports availability without exposing credentials or reading optional tables', async () => {
+    const res = response()
+    await handler({ method: 'GET' } as VercelRequest, res as unknown as VercelResponse)
+    expect(res.body).toEqual({ liveStartEnabled: false })
+    expect(mock.admin).not.toHaveBeenCalled()
+    expect(mock.send).not.toHaveBeenCalled()
+  })
+
   it('defaults OFF before reading optional schema or sending Push', async () => {
     const res = await run({ kind: 'live_start', liveSessionId: live })
     expect(res.code).toBe(202)
