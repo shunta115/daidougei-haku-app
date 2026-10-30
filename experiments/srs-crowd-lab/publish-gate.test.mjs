@@ -90,3 +90,25 @@ test('expired QR and failed SRS publish fail closed', async () => {
   await gate.publish(performer, room.id, 'owner-peer', direct.nonce, direct.epoch, 'v=0');
   assert.equal(opened.length, 1);
 });
+
+test('unconfirmed SRS disconnect blocks handoff to another camera', async () => {
+  let disconnectFails = true;
+  const gate = makeSrsCrowdGate({
+    id: (() => { let i = 0; return () => 'id-' + ++i; })(),
+    openMedia: async () => ({ cid: 'camera-1' }),
+    closeMedia: async () => { if (disconnectFails) throw new Error('network_failure'); },
+  });
+  const room = gate.create(performer);
+  gate.consent(performer, room.id, true);
+  const qr = gate.qr(performer, room.id);
+  const first = gate.request(fan, room.id, 'peer-1', qr.token, true);
+  await gate.publish(fan, room.id, 'peer-1', first.nonce, first.epoch, 'v=0');
+  gate.request(nextFan, room.id, 'peer-2', qr.token, true);
+  await assert.rejects(gate.handoff(performer, room.id, 'peer-2'), /srs_disconnect_unconfirmed/);
+  assert.throws(() => gate.acknowledgeStop(fan, room.id, 'peer-1'), /srs_disconnect_unconfirmed/);
+  assert.equal(gate.authority.pendingGrant(nextFan, room.id, 'peer-2'), null);
+  disconnectFails = false;
+  await gate.sweep(() => performer);
+  const next = gate.acknowledgeStop(fan, room.id, 'peer-1');
+  assert.equal(next.phase, 'arming');
+});
