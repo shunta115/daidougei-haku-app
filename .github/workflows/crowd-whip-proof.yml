@@ -61,6 +61,10 @@ jobs:
             sleep 1
           done
           node experiments/ovh-srs-lab/hls-ready.mjs "$manifest"
+          echo "Gateway master playlist:"
+          curl --fail --silent "$manifest" | head -n 12
+          echo "Direct SRS codec probe:"
+          timeout 8 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "http://127.0.0.1:8080/live/${stream}.m3u8" || true
           for i in $(seq 1 20); do
             timeout 5 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$manifest" > /tmp/haku-crowd-codecs.txt || true
             if grep -q 'h264,video' /tmp/haku-crowd-codecs.txt && grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt; then break; fi
