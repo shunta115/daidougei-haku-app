@@ -57,7 +57,11 @@ jobs:
             sleep 1
           done
           node experiments/ovh-srs-lab/hls-ready.mjs "$manifest"
-          timeout 10 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$manifest" > /tmp/haku-crowd-codecs.txt
+          for i in $(seq 1 20); do
+            timeout 5 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$manifest" > /tmp/haku-crowd-codecs.txt || true
+            if grep -q 'h264,video' /tmp/haku-crowd-codecs.txt && grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt; then break; fi
+            sleep 2
+          done
           cat /tmp/haku-crowd-codecs.txt
           grep -q 'h264,video' /tmp/haku-crowd-codecs.txt
           grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt
