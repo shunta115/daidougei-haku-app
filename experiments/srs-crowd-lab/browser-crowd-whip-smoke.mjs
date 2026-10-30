@@ -39,6 +39,9 @@ try {
       },
       mediaConstraints: { video: { facingMode: { ideal: 'environment' } }, audio: true },
     });
+    window.__crowdHeartbeat = setInterval(() => {
+      void api('/heartbeat?room=' + room.id, 'camera', { peerId, epoch: grant.epoch }).catch(() => publisher.stop());
+    }, 5000);
     const tracks = publisher.stream.getTracks();
     if (publisher.state !== 'live' || tracks.filter(t => t.kind === 'video').length !== 1 ||
         tracks.filter(t => t.kind === 'audio').length !== 1) throw new Error('media_not_live');
@@ -53,6 +56,7 @@ try {
       method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: '{}',
     });
     const result = await response.json();
+    clearInterval(window.__crowdHeartbeat);
     window.__crowdPublisher.stop();
     return response.ok && result.phase === 'ended';
   });
