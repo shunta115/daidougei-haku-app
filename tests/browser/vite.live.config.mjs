@@ -11,6 +11,7 @@ const mocked = new Set(['api', 'auth', 'supabase', 'livekit', 'liveCamera', 'use
 // config and entry points never import this fixture or its aliases.
 export default defineConfig({
   root: repository,
+  optimizeDeps: { entries: ['experiments/live-ui/browser-harness.html'] },
   plugins: [{
     name: 'haku-live-local-fixture',
     enforce: 'pre',
