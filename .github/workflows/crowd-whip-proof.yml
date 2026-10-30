@@ -71,8 +71,12 @@ jobs:
             sleep 2
           done
           cat /tmp/haku-crowd-codecs.txt
-          grep -q 'h264,video' /tmp/haku-crowd-codecs.txt
-          grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt
+          if ! grep -q 'h264,video' /tmp/haku-crowd-codecs.txt || ! grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt; then
+            echo 'Missing H.264/AAC in gateway HLS; browser counters and SRS codecs:'
+            cat /tmp/haku-crowd-browser.log
+            timeout 5 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "http://127.0.0.1:8080/live/${stream}.m3u8" || true
+            exit 1
+          fi
           timeout 20 ffmpeg -nostdin -hide_banner -v error -xerror -i "$manifest" -t 6 -map 0:v:0 -map 0:a:0 -f null -
           wait "$publisher_pid"
           cat /tmp/haku-crowd-browser.log
