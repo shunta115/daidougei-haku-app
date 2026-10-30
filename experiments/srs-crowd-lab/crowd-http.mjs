@@ -41,10 +41,21 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
         res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(source); return;
       }
-      if (req.method === 'GET' && /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(req.url || '')) {
-        const response = await fetch('http://127.0.0.1:8080' + req.url, { redirect: 'error', signal: AbortSignal.timeout(5000) });
+      const mediaUrl = new URL(req.url, origin);
+      const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
+      const hlsQuery = !mediaUrl.search || (
+        mediaUrl.pathname.endsWith('.m3u8') && mediaUrl.searchParams.size === 1 &&
+        /^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')
+      );
+      if (req.method === 'GET' && hlsPath && hlsQuery) {
+        const response = await fetch('http://127.0.0.1:8080' + mediaUrl.pathname + mediaUrl.search, {
+          redirect: 'error', signal: AbortSignal.timeout(5000),
+        });
         if (!response.ok) { json(res, response.status, { error: 'hls_unavailable' }); return; }
-        res.writeHead(200, { 'Content-Type': req.url.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t', 'Cache-Control': 'no-store' });
+        res.writeHead(200, {
+          'Content-Type': mediaUrl.pathname.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+          'Cache-Control': 'no-store',
+        });
         res.end(Buffer.from(await response.arrayBuffer())); return;
       }
       const actor = await resolveActor(req);
