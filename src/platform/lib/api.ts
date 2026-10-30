@@ -260,52 +260,29 @@ export async function updateOwnDisplayName(value: string): Promise<string> {
   return data.displayName || displayName
 }
 
-export async function startLive(performerId: string, title?: string) {
+function liveLifecycleError(error: { message?: string; code?: string }) {
+  if (error.code === 'PGRST202' || /function.*not.*find|schema cache/i.test(error.message || '')) {
+    return new Error('LIVEの安全更新が未適用です。運営に連絡してください。旧方式では開始しません。')
+  }
+  if (error.message?.includes('LIVE_BUSY')) return new Error('別の画面でLIVEが準備中または配信中です。元の画面で終了してください。')
+  if (error.message?.includes('LIVE_SESSION_EXPIRED')) return new Error('LIVEの接続期限が切れました。再接続するか終了を確認してください。')
+  return new Error(error.message || 'LIVEの状態を更新できませんでした。')
+}
+
+export async function reserveLive(performerId: string, operationId: string, title?: string): Promise<string> {
   await assertApprovedActivePerformer(performerId)
+  const { data, error } = await requireSupabase().rpc('reserve_direct_live', {
+    p_performer_id: performerId, p_operation_id: operationId, p_title: title?.trim() || null,
+  })
+  if (error) throw liveLifecycleError(error)
+  if (typeof data !== 'string') throw new Error('LIVE session reservation unavailable')
+  return data
+}
+
+export async function startLive(performerId: string, title?: string, sessionId?: string, operationId?: string) {
+  await assertApprovedActivePerformer(performerId)
+  if (!sessionId || !operationId) throw new Error('LIVE session reservation required')
   const sb = requireSupabase()
-  const now = new Date().toISOString()
-  const liveTitle = title?.trim() || null
-
-  const { data: existing } = await sb
-    .from('live_sessions')
-    .select('id')
-    .eq('performer_id', performerId)
-    .is('ended_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const { data: performerRow } = await sb
-    .from('performers')
-    .select('is_live, stage_name, live_title')
-    .eq('id', performerId)
-    .maybeSingle()
-
-  const alreadyLive = Boolean(performerRow?.is_live && existing?.id)
-
-  const patch: Partial<Performer> & { stream_url: null } = {
-    is_live: true,
-    live_title: liveTitle ?? (performerRow?.live_title as string | null) ?? null,
-    stream_url: null,
-  }
-  if (!alreadyLive) {
-    patch.live_started_at = now
-  }
-
-  const { error: uerr } = await sb.from('performers').update(patch).eq('id', performerId)
-  if (uerr) throw uerr
-
-  if (alreadyLive && existing?.id) {
-    if (liveTitle) {
-      await sb.from('live_sessions').update({ title: liveTitle }).eq('id', existing.id)
-    }
-    return existing.id as string
-  }
-
-  if (existing?.id) {
-    await sb.from('live_sessions').update({ ended_at: now }).eq('id', existing.id)
-  }
-
   const featured = await getFeaturedEvent().catch(() => null)
   let venueId: string | null = null
   let eventSlotId: string | null = null
@@ -324,60 +301,27 @@ export async function startLive(performerId: string, title?: string) {
     eventSlotId = (match?.id as string | undefined) ?? null
   }
 
-  const baseInsert = {
-    performer_id: performerId,
-    stream_url: null as null,
-    title: liveTitle,
-    started_at: now,
-  }
-  const boundInsert = { ...baseInsert, event_id: featured?.id ?? null, venue_id: venueId }
-  const slotBoundInsert = { ...boundInsert, event_slot_id: eventSlotId }
-
-  let inserted = await sb.from('live_sessions').insert(slotBoundInsert).select('id').single()
-  if (inserted.error) {
-    inserted = await sb.from('live_sessions').insert(boundInsert).select('id').single()
-  }
-  if (inserted.error) {
-    inserted = await sb.from('live_sessions').insert(baseInsert).select('id').single()
-  }
-  if (inserted.error) throw inserted.error
-
-  const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
-  const { error: nerr } = await sb.rpc('notify_followers_live_start', {
-    p_performer_id: performerId,
-    p_stage_name: stageName,
-    p_title: liveTitle,
+  const { data, error } = await sb.rpc('activate_direct_live', {
+    p_performer_id: performerId, p_session_id: sessionId, p_operation_id: operationId,
+    p_event_id: featured?.id ?? null, p_venue_id: venueId, p_event_slot_id: eventSlotId, p_title: title?.trim() || null,
   })
-  if (nerr) {
-    console.warn('notify_followers_live_start', nerr.message)
-  }
-
-  return (inserted.data?.id as string) ?? null
+  if (error) throw liveLifecycleError(error)
+  return data as string
 }
 
-export async function endLive(performerId: string) {
-  const sb = requireSupabase()
-  const now = new Date().toISOString()
-  const { error: uerr } = await sb
-    .from('performers')
-    .update({
-      is_live: false,
-      share_location: false,
-      live_started_at: null,
-      live_title: null,
-      lat: null,
-      lng: null,
-      location_updated_at: null,
-    })
-    .eq('id', performerId)
-  if (uerr) throw uerr
-  // Close every open session (guards against duplicates from older builds).
-  const { error: sessionError } = await sb
-    .from('live_sessions')
-    .update({ ended_at: now })
-    .eq('performer_id', performerId)
-    .is('ended_at', null)
-  if (sessionError) throw sessionError
+export async function endLive(performerId: string, expectedSessionId?: string | null) {
+  // Resolve once, then scope the atomic end to that session; retries cannot end a newer LIVE.
+  const sessionId = expectedSessionId || await getActiveLiveSessionId(performerId)
+  if (!sessionId) return
+  const { error } = await requireSupabase().rpc('finish_direct_live', {
+    p_performer_id: performerId, p_session_id: sessionId,
+  })
+  if (error) throw liveLifecycleError(error)
+  // End is already durable. Management API cleanup cannot undo that transaction.
+  void supabaseAuthHeaders().then((headers) => fetch('/api/livekit/presence', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ action: 'cleanup-ended', performerId, sessionId }),
+  })).catch(() => undefined)
 }
 
 export async function listEventLiveSessions(eventId: string): Promise<LiveSession[]> {

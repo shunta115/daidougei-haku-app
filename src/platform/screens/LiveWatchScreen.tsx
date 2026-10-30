@@ -119,6 +119,19 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   }, [performerId, allowPublicTest])
 
   useEffect(() => {
+    let active = true
+    const poll = async () => {
+      try {
+        const row = await getPerformer(performerId, allowPublicTest)
+        if (active && row) setP(row)
+      } catch { /* Realtime and next poll can recover a transient read failure. */ }
+    }
+    const timer = window.setInterval(() => void poll(), 10_000)
+    window.addEventListener('online', poll)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('online', poll) }
+  }, [performerId, allowPublicTest])
+
+  useEffect(() => {
     return subscribePerformerLive(performerId, (row) => {
       setP((prev) => (prev ? { ...prev, ...row } : prev))
       if (row.is_live === false) {
@@ -144,7 +157,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
       .catch(() => undefined)
     return () => { active = false }
-  }, [p?.is_live, performerId])
+  }, [p?.is_live, p?.live_started_at, performerId])
 
   useEffect(() => {
     if (!liveSessionId) return
@@ -229,7 +242,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, performerId, t, connectionAttempt])
+  }, [p?.is_live, p?.live_started_at, performerId, t, connectionAttempt])
 
   useEffect(() => {
     if (!p?.is_live || viewers <= 0) return

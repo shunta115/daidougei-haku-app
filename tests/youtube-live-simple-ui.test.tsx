@@ -5,7 +5,7 @@ import { YouTubeLiveSetup } from '../src/platform/components/YouTubeLiveSetup'
 import { ConnectedLiveWatchScreen } from '../src/platform/screens/ConnectedLiveWatchScreen'
 import type { Performer } from '../src/platform/lib/types'
 
-const api = vi.hoisted(() => ({ updatePerformer: vi.fn(), getPerformer: vi.fn() }))
+const api = vi.hoisted(() => ({ updatePerformer: vi.fn(), getPerformer: vi.fn(), getSignedInUserId: vi.fn().mockResolvedValue(null), isFollowing: vi.fn().mockResolvedValue(false), follow: vi.fn(), unfollow: vi.fn(), subscribePerformerLive: () => () => undefined }))
 vi.mock('../src/platform/lib/api', () => api)
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
 vi.mock('../src/platform/components/YouTubeLivePlayer', () => ({
@@ -83,7 +83,7 @@ describe('YouTube LIVE simple registration UI', () => {
 })
 
 describe('viewer routing', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks(); api.getSignedInUserId.mockResolvedValue(null); api.isFollowing.mockResolvedValue(false) })
 
   it('keeps HAKU DIRECT ahead of YouTube when both are active', async () => {
     api.getPerformer.mockResolvedValue({ ...performer, is_live: true, youtube_live_enabled: true, youtube_live_video_id: 'abcdefghijk', youtube_live_url: 'https://www.youtube.com/watch?v=abcdefghijk' })

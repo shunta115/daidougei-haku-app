@@ -17,6 +17,7 @@ import {
   notifyLiveReservationStarted,
   postLiveComment,
   startLive,
+  reserveLive,
   subscribeLiveComments,
   updateLiveViewerPeak,
   updatePerformer,
@@ -104,6 +105,11 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   )
   const videoRef = useRef<HTMLVideoElement>(null)
   const roomRef = useRef<Room | null>(null)
+  const operationRef = useRef(crypto.randomUUID())
+  const reservedSessionRef = useRef<string | null>(null)
+  const connectPromiseRef = useRef<Promise<Room> | null>(null)
+  const mountedRef = useRef(true)
+  const actionBusyRef = useRef(false)
   useVideoAspect(videoRef, videoOrientation === 'landscape' ? 16 / 9 : 9 / 16)
   const startedAtRef = useRef<number>(
     performer?.live_started_at ? new Date(performer.live_started_at).getTime() : Date.now(),
@@ -174,18 +180,25 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   }, [performer, phase, shareLocation])
 
   useEffect(() => {
-    if (!performer || phase !== 'live') return
+    if (!performer || !liveSessionId || (phase !== 'live' && previewState !== 'ready') || transportState !== 'connected') return
     let active = true
     const heartbeat = async () => {
       try {
         const headers = await supabaseAuthHeaders()
         if (!active) return
-        await fetch('/api/livekit/presence', {
+        const response = await fetch('/api/livekit/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ performerId: performer.id }),
+          body: JSON.stringify({ performerId: performer.id, sessionId: reservedSessionRef.current, operationId: operationRef.current }),
           keepalive: true,
         })
+        if (active && response.status === 409) {
+          const room = roomRef.current
+          roomRef.current = null
+          void room?.disconnect()
+          setTransportState('disconnected')
+          setError('LIVEセッションが終了または切断されました。再接続するか終了を確認してください。')
+        }
       } catch {
         // LIVE transport remains independent; the next heartbeat retries automatically.
       }
@@ -193,7 +206,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     void heartbeat()
     const timer = window.setInterval(() => void heartbeat(), 20_000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [performer, phase])
+  }, [performer, phase, transportState, liveSessionId, previewState])
 
   useEffect(() => {
     if (orientationMode !== 'auto' || phase !== 'live' || !cameraEnabled || appliedOrientationRef.current === videoOrientation || failedAutoOrientationRef.current === videoOrientation || orientationSwitchRef.current || mediaBusy) return
@@ -217,12 +230,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   }, [cameraEnabled, cameraFacing, videoOrientation, orientationMode, mediaBusy, phase])
 
   useEffect(() => {
-    if (phase !== 'live') return
+    if (phase !== 'live' && previewState !== 'ready') return
     const stopTracksForPrivacy = () => {
       const room = roomRef.current
       if (!room) return
       hiddenAtRef.current ??= Date.now()
       setPrivacyPaused(true)
+      if (phase === 'ready') setPreviewState('idle')
       setCameraEnabled(false)
       setMicrophoneEnabled(false)
       void Promise.allSettled([
@@ -241,9 +255,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         const room = roomRef.current
         roomRef.current = null
         void room?.disconnect()
-        void endLive(performer.id)
-          .then(refreshProfile)
+        void endLive(performer.id, reservedSessionRef.current)
           .then(() => {
+            void refreshProfile().catch(() => undefined)
             setPhase('ready')
             setPreviewState('ended')
             setError('バックグラウンド状態が60秒を超えたため、プライバシー保護のためLIVEを終了しました。')
@@ -259,7 +273,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('pagehide', stopTracksForPrivacy)
     }
-  }, [cameraFacing, videoOrientation, performer, phase, refreshProfile])
+  }, [cameraFacing, videoOrientation, performer, phase, previewState, refreshProfile])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -348,16 +362,28 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setPublishedOrientation(videoOrientation)
   }
 
-  const connectHostRoom = async () => {
-    if (!performer) throw new Error('パフォーマー情報を確認できませんでした。登録状況に戻って再読み込みしてください。')
-    const status = await fetchLiveKitStatus()
-    if (!status.configured) {
-      throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
-    }
-    const { token, url } = await fetchLiveKitToken(performer.id, true)
-    const room = await connectAsHost(url, token, videoOrientation)
-    wireRoom(room)
-    return room
+  const connectHostRoom = (): Promise<Room> => {
+    if (connectPromiseRef.current) return connectPromiseRef.current
+    const pending = (async () => {
+      if (!performer) throw new Error('パフォーマー情報を確認できませんでした。')
+      const status = await fetchLiveKitStatus()
+      if (!status.configured) throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
+      const sessionId = await reserveLive(performer.id, operationRef.current, title)
+      reservedSessionRef.current = sessionId
+      setLiveSessionId(sessionId)
+      const { token, url } = await fetchLiveKitToken(performer.id, true, sessionId, operationRef.current)
+      const room = await connectAsHost(url, token, videoOrientation)
+      if (!mountedRef.current) {
+        await room.disconnect()
+        await endLive(performer.id, sessionId).catch(() => undefined)
+        throw new Error('配信画面を閉じたためカメラ接続を終了しました。')
+      }
+      wireRoom(room)
+      return room
+    })()
+    connectPromiseRef.current = pending
+    void pending.finally(() => { if (connectPromiseRef.current === pending) connectPromiseRef.current = null }).catch(() => undefined)
+    return pending
   }
 
   // Rejoin camera if DB says live but room is gone (e.g. remount / refresh).
@@ -376,6 +402,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         if (!cancelled) {
           if (e instanceof LiveKitClientError) setError(e.message)
           else setError(liveKitErrorMessage('connection', e instanceof Error ? e.message : undefined))
+          setTransportState('disconnected')
         }
       } finally {
         if (!cancelled) setBusy(false)
@@ -388,7 +415,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   }, [performer?.id, performer?.is_live])
 
   useEffect(() => {
+    mountedRef.current = true
     return () => {
+      mountedRef.current = false
+      if (performerId && reservedSessionRef.current) void endLive(performerId, reservedSessionRef.current).catch(() => undefined)
       const room = roomRef.current
       roomRef.current = null
       if (room) void room.disconnect()
@@ -398,10 +428,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   if (!performer || !profile) return <p className="pl-muted">Loading…</p>
 
   const goLive = async () => {
+    if (actionBusyRef.current) return
+    if (privacyPaused) { setError('カメラ・マイクを準備し直してから開始してください。'); return }
     if (!performer.is_approved) {
       setError('運営の承認後にLIVEを開始できます。登録状況をご確認ください。')
       return
     }
+    actionBusyRef.current = true
     setBusy(true)
     setError(null)
     endingRef.current = false
@@ -432,7 +465,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         attachLocalPreview(roomRef.current)
       }
 
-      const sessionId = await startLive(performer.id, title)
+      const sessionId = await startLive(performer.id, title, reservedSessionRef.current ?? undefined, operationRef.current)
       setLiveSessionId(sessionId)
       const matchingSchedule = schedules.find((schedule) =>
         schedule.title.trim() === title.trim()
@@ -448,15 +481,20 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         peakRef.current = 0
       }
       setPhase('live')
-      await refreshProfile()
+      // Profile refresh is observational; failure must not tear down a published LIVE.
+      void refreshProfile().catch(() => undefined)
     } catch (e) {
       const room = roomRef.current
       roomRef.current = null
       if (room) void room.disconnect()
+      if (phase === 'ready' && reservedSessionRef.current) {
+        await endLive(performer.id, reservedSessionRef.current).then(() => { reservedSessionRef.current = null }).catch(() => undefined)
+      }
       if (phase === 'live') setTransportState('disconnected')
       if (e instanceof LiveKitClientError) setError(e.message)
       else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : 'LIVEを開始できませんでした。通信を確認してもう一度お試しください。'))
     } finally {
+      actionBusyRef.current = false
       setBusy(false)
     }
   }
@@ -468,12 +506,20 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setPreviewState('preparing')
     try {
       if (!roomRef.current) await connectHostRoom()
-      else attachLocalPreview(roomRef.current)
+      else {
+        await setHostCameraEnabled(roomRef.current, true, cameraFacing, videoOrientation)
+        await setHostMicrophoneEnabled(roomRef.current, true)
+        setCameraEnabled(true); setMicrophoneEnabled(true); setPrivacyPaused(false)
+        attachLocalPreview(roomRef.current)
+      }
       setPreviewState('ready')
     } catch (e) {
       const room = roomRef.current
       roomRef.current = null
       if (room) void room.disconnect()
+      if (reservedSessionRef.current) {
+        await endLive(performer.id, reservedSessionRef.current).then(() => { reservedSessionRef.current = null }).catch(() => undefined)
+      }
       const message = e instanceof Error ? e.message : ''
       const denied = /permission|notallowed|denied|許可/i.test(message)
       setPreviewState(denied ? 'denied' : 'idle')
@@ -509,8 +555,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       const room = roomRef.current
       roomRef.current = null
       if (room) await room.disconnect()
-      await endLive(performer.id)
-      await refreshProfile()
+      await endLive(performer.id, reservedSessionRef.current)
+      reservedSessionRef.current = null
+      void refreshProfile().catch(() => undefined)
       setPhase('ready')
       setPreviewState('ended')
       setElapsed(0)

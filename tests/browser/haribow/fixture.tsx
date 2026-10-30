@@ -2,14 +2,14 @@ import { useState } from 'react'
 
 const query = new URLSearchParams(location.search)
 const commentCount = Math.min(1000, Math.max(0, Number(query.get('comments') || 0)))
-const performer = { id: 'qa-performer', stage_name: 'Test Performer', is_live: query.get('phase') !== 'ready', is_approved: true, live_started_at: new Date(Date.now() - 27_000).toISOString(), live_title: 'LOCAL UI FIXTURE', genre: 'パフォーマンス', photo_url: null, share_location: false, youtube_live_enabled: false }
+const performer = { id: 'qa-performer', stage_name: 'Test Performer', is_live: query.get('phase') !== 'ready' && query.get('provider') !== 'youtube', is_approved: true, live_started_at: new Date(Date.now() - 27_000).toISOString(), live_title: 'LOCAL UI FIXTURE', genre: 'パフォーマンス', photo_url: null, share_location: false, youtube_live_enabled: query.get('provider') === 'youtube', youtube_live_video_id: 'abcdefghijk', youtube_live_url: 'https://www.youtube.com/watch?v=abcdefghijk' }
 const profile = { id: 'qa-user', display_name: 'QA Viewer', role: 'performer' }
 const performerListeners = new Set<(row: unknown) => void>()
 const commentListeners = new Set<{ onInsert: (row: unknown) => void; onDelete: (id: string) => void }>()
 const noop = () => undefined
 const refreshProfile = async () => undefined
 let currentRoom: any
-const qa = { emit: (event: string) => currentRoom?.emit(event), audioStarts: 0, connects: 0, disconnects: 0, follows: 0, end: () => endLive(), comments: commentCount }
+const qa = { emit: (event: string) => currentRoom?.emit(event), events: [] as string[], audioStarts: 0, connects: 0, disconnects: 0, follows: 0, end: () => endLive(), comments: commentCount }
 Object.assign(window, { __hakuLiveQa: qa })
 
 export const useAuth = () => ({ user: { id: profile.id }, profile, performer, refreshProfile })
@@ -28,13 +28,15 @@ export const postLiveComment = async (input: { body: string; displayName: string
 export const deleteLiveComment = async (id: string) => { commentListeners.forEach((listener) => listener.onDelete(id)) }
 export const muteLiveCommentUser = async () => undefined
 export const canModerateLiveComments = async () => true
+export const getSignedInUserId = async () => profile.id
 export const isFollowing = async () => false
 export const follow = async () => { qa.follows += 1 }
 export const unfollow = async () => { qa.follows -= 1 }
 export const updateLiveViewerPeak = async () => undefined
-export const updatePerformer = async () => undefined
-export const startLive = async () => { performer.is_live = true; return 'qa-session' }
-export const endLive = async () => { performer.is_live = false; performerListeners.forEach((listener) => listener({ is_live: false })) }
+export const updatePerformer = async (_id: string, patch: object) => { Object.assign(performer, patch); performerListeners.forEach((listener) => listener(patch)) }
+export const reserveLive = async () => { qa.events.push('reserve'); return 'qa-session' }
+export const startLive = async () => { qa.events.push('activate'); performer.is_live = true; return 'qa-session' }
+export const endLive = async () => { qa.events.push('end'); performer.is_live = false; performerListeners.forEach((listener) => listener({ is_live: false })) }
 export const listPerformerLiveSchedules = async () => []
 export const createLiveSchedule = async () => ({ id: 'qa-schedule' })
 export const notifyLiveReservationStarted = async () => undefined
@@ -66,12 +68,12 @@ function source() {
     animation = requestAnimationFrame(draw)
   }
   draw()
-  sourceStream = canvas.captureStream(15)
+  sourceStream = canvas.captureStream ? canvas.captureStream(15) : new MediaStream()
   return sourceStream
 }
 const cameraTrack = {
   isMuted: false,
-  get mediaStreamTrack() { return source().getVideoTracks()[0] },
+  get mediaStreamTrack() { return source().getVideoTracks()[0] || { readyState: 'live', getSettings: () => ({ facingMode: facing }) } },
   getSourceTrackSettings: () => ({ width: canvas?.width || 720, height: canvas?.height || 1280, facingMode: facing, frameRate: 15 }),
   getProcessor: () => undefined,
   getSenderStats: async () => [{ frameWidth: canvas?.width || 720, frameHeight: canvas?.height || 1280, framesPerSecond: 15, targetBitrate: 1_000_000, qualityLimitationReason: 'none', rid: 'qa', timestamp: performance.now(), bytesSent: performance.now() * 125 }],
@@ -80,6 +82,7 @@ const cameraTrack = {
 const publication = { kind: 'video', track: cameraTrack }
 function room() {
   qa.connects += 1
+  qa.events.push('publish')
   source()
   const listeners = new Map<string, Function[]>()
   currentRoom = {
