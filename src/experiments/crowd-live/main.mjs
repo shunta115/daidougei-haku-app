@@ -136,6 +136,7 @@ async function init() {
     } else if (profile.role === 'performer') {
       $('owner').hidden = false;
       $('camera').hidden = false;
+      $('start').hidden = true;
       status('本人の配信、または観客の代理配信を選べます。');
     } else {
       status('出演者のQRを読み込んでください。');
