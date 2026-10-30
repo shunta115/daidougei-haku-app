@@ -1,6 +1,7 @@
 // Non-production loopback proof. Caller must supply a real authenticated actor resolver.
 // Never bind this gateway or the unauthenticated SRS API to a public interface.
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { makeSrsCrowdGate } from './publish-gate.mjs';
 import { openSrsWhip, closeSrsWhip } from './srs-loopback.mjs';
 
@@ -30,6 +31,15 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const origin = 'http://127.0.0.1:' + address.port;
       if (req.headers.host !== new URL(origin).host || (req.headers.origin && req.headers.origin !== origin) || req.headers['sec-fetch-site'] === 'cross-site') {
         json(res, 403, { error: 'local_origin_only' }); return;
+      }
+      if (req.method === 'GET' && req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end('<!doctype html><meta charset="utf-8"><title>HAKU CROWD local proof</title>'); return;
+      }
+      if (req.method === 'GET' && req.url === '/whip-publisher.mjs') {
+        const source = await readFile(new URL('../ovh-srs-lab/whip-publisher.mjs', import.meta.url));
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(source); return;
       }
       const actor = await resolveActor(req);
       if (!actor?.id || actor.active !== true) { json(res, 401, { error: 'authentication_required' }); return; }
