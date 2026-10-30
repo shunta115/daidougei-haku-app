@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : { data: null }
     const guestIdentity = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const identity = host ? performerId : `viewer-${user?.id ?? 'guest'}-${guestIdentity}`
-    const displayName = profile?.display_name || user?.email || 'Guest'
+    const displayName = profile?.display_name || 'Guest'
     const room = sessionRoomName(performerId, session.id)
     const token = await createLiveKitToken({
       identity,
