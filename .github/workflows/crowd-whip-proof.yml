@@ -50,7 +50,7 @@ jobs:
           done
           stream=$(cat /tmp/haku-crowd-stream)
           if [[ ! "$stream" =~ ^haku-lab-[a-f0-9]{32}$ ]]; then exit 1; fi
-          manifest="http://127.0.0.1:8080/live/${stream}.m3u8"
+          manifest="http://127.0.0.1:4320/live/${stream}.m3u8"
           for i in $(seq 1 50); do
             if node experiments/ovh-srs-lab/hls-ready.mjs "$manifest" > /dev/null; then break; fi
             if ! kill -0 "$publisher_pid" 2>/dev/null; then cat /tmp/haku-crowd-browser.log; exit 1; fi
