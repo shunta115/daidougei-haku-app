@@ -138,4 +138,49 @@ $$;
 revoke all on function public.claim_live_start_push_deliveries(uuid, integer) from public, anon, authenticated;
 grant execute on function public.claim_live_start_push_deliveries(uuid, integer) to service_role;
 
+-- Preserve the existing client RPC signature while making in-app LIVE alerts
+-- session-idempotent. A session row lock serializes concurrent requests.
+create or replace function public.notify_followers_live_start(
+  p_performer_id uuid, p_stage_name text, p_title text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_session_id uuid;
+  v_name text;
+  v_title text;
+  v_body text;
+begin
+  if auth.uid() is null or auth.uid() <> p_performer_id then raise exception 'not allowed'; end if;
+  select s.id, p.stage_name, s.title into v_session_id, v_name, v_title
+  from public.live_sessions s
+  join public.performers p on p.id = s.performer_id
+  join public.profiles profile on profile.id = p.id
+  where s.performer_id = p_performer_id and s.ended_at is null
+    and p.is_live and p.is_approved and not p.is_private_test and profile.status = 'active'
+  order by s.started_at desc limit 1 for update of s;
+  if not found then return; end if;
+  v_body := coalesce(nullif(btrim(v_name), ''), 'パフォーマー') ||
+    case when nullif(btrim(v_title), '') is null then ' がライブ配信を開始しました'
+    else ' が「' || btrim(v_title) || '」を配信開始しました' end;
+  insert into public.notifications (user_id, title, body, link, kind, meta)
+  select audience.user_id, 'LIVE開始', v_body, 'live:' || p_performer_id::text,
+    'live_started', jsonb_build_object('live_session_id', v_session_id, 'performer_id', p_performer_id)
+  from (
+    select fan_id as user_id from public.follows where performer_id = p_performer_id
+    union
+    select fan_id as user_id from public.oshi where performer_id = p_performer_id
+  ) audience
+  where not exists (
+    select 1 from public.notifications n where n.user_id = audience.user_id
+      and n.kind = 'live_started' and n.meta->>'live_session_id' = v_session_id::text
+  );
+end;
+$$;
+revoke all on function public.notify_followers_live_start(uuid, text, text) from public, anon;
+grant execute on function public.notify_followers_live_start(uuid, text, text) to authenticated;
+
 commit;

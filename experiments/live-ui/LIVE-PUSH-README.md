@@ -25,7 +25,7 @@
 4. TEST環境に既存VAPID値を設定し、両feature flagを限定有効化して受信・重複・拒否・終了後抑止を実機確認。本番環境変数は変更していない。
 5. 一時停止はflagをOFFへ戻して再デプロイ。キューの過去履歴の削除は不要。一般公開は未承認。
 
-通常LIVE開始のHAKU内通知は既存 `notify_followers_live_start` を引き続き利用する。この既存RPC自体にはLIVEセッション単位の一意制約がなく、`startLive()` のalreadyLive判定を越える同時呼出しでは重複余地が残る。今回の独立Pushキューは一意化済みだが、HAKU内通知の冪等性改善は別途SQL差分と既存クライアント互換確認が必要。
+同じmigrationに、既存 `notify_followers_live_start` の引数を維持したHAKU内通知の重複防止も準備した。有効なLIVEセッション行をロックし、通知のsession IDと受信者で重複を抑止する。表示名・タイトルはDBから読み、本人以外・未承認・非公開TEST・終了済みLIVEを除外する。適用前の既存通知はsession IDを持たないため、適用は配信中のLIVEがない状態で行い、既存クライアントとの互換をTESTで確認する。本番DBには未適用。
 
 ## iPhone条件
 

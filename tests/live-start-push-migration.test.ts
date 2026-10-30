@@ -19,6 +19,8 @@ describe('optional LIVE start Push migration', () => {
   beforeAll(async () => {
     await db.exec(`
       create role anon; create role authenticated; create role service_role bypassrls;
+      create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema public to anon, authenticated, service_role;
       create table public.profiles(id uuid primary key, status text not null default 'active');
       create table public.performers(id uuid primary key references public.profiles(id), stage_name text, is_live boolean, is_approved boolean, is_private_test boolean);
@@ -26,12 +28,16 @@ describe('optional LIVE start Push migration', () => {
       create table public.notification_preferences(user_id uuid primary key references public.profiles(id), appearance_push_enabled boolean not null default false, locale text not null default 'ja');
       create table public.push_subscriptions(id uuid primary key, user_id uuid references public.profiles(id), endpoint text, p256dh text, auth text, disabled_at timestamptz);
       create table public.follows(fan_id uuid, performer_id uuid, unique(fan_id,performer_id));
+      create table public.oshi(fan_id uuid, performer_id uuid, unique(fan_id,performer_id));
+      create table public.notifications(id uuid default gen_random_uuid(), user_id uuid, title text, body text, link text, kind text, meta jsonb);
       insert into public.profiles(id) values ('${owner}'),('${fan}'),('${stranger}'),('${privateOwner}');
       insert into public.performers values ('${owner}','Test performer',true,true,false),('${privateOwner}','Private performer',true,true,true);
       insert into public.live_sessions values ('${live}','${owner}','Test LIVE',null),('${privateLive}','${privateOwner}','Private LIVE',null),('${ended}','${owner}','Ended LIVE',now());
       insert into public.notification_preferences(user_id,appearance_push_enabled) values ('${fan}',true),('${stranger}',true);
       insert into public.push_subscriptions values ('${subscription}','${fan}','https://push.example.test/only-test','test-p256dh','test-auth',null);
       insert into public.follows values ('${fan}','${owner}');
+      insert into public.oshi values ('${fan}','${owner}');
+      alter table public.live_sessions add column started_at timestamptz not null default now();
     `)
     await db.exec(migration)
     await db.exec(migration)
@@ -60,6 +66,21 @@ describe('optional LIVE start Push migration', () => {
     await expect(db.query(`select public.enqueue_live_start_push('${live}','${stranger}')`)).rejects.toThrow('live_not_eligible')
     await expect(db.query(`select public.enqueue_live_start_push('${privateLive}','${privateOwner}')`)).rejects.toThrow('live_not_eligible')
     await expect(db.query(`select public.enqueue_live_start_push('${ended}','${owner}')`)).rejects.toThrow('live_not_eligible')
+  })
+
+  it('deduplicates in-app follower and oshi alerts by active session and hides private LIVE', async () => {
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [owner])
+    await db.query(`select public.notify_followers_live_start('${owner}','Untrusted name','Untrusted title')`)
+    await db.query(`select public.notify_followers_live_start('${owner}','Repeated','Repeated')`)
+    const rows = (await db.query<{ body: string; link: string }>('select body,link from public.notifications')).rows
+    expect(rows).toHaveLength(1)
+    expect(rows[0].body).toContain('Test performer')
+    expect(rows[0].body).not.toContain('Untrusted')
+    expect(rows[0].link).toBe(`live:${owner}`)
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [privateOwner])
+    await db.query(`select public.notify_followers_live_start('${privateOwner}','Private','Private')`)
+    expect((await db.query('select * from public.notifications')).rows).toHaveLength(1)
+    await expect(db.query(`select public.notify_followers_live_start('${owner}','Other','Other')`)).rejects.toThrow('not allowed')
   })
 
   it('does not expose queue contents or privileged enqueue to browser roles', async () => {
