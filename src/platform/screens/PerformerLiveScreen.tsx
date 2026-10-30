@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { RoomEvent, type Room } from 'livekit-client'
-import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
+import { ArrowDown, Mic, MicOff, Settings2, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import { YouTubeLiveSetup } from '../components/YouTubeLiveSetup'
@@ -63,6 +63,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
+  const [liveSettingsOpen, setLiveSettingsOpen] = useState(false)
   const [orientationMode, setOrientationMode] = useState<LiveOrientationMode>(() =>
     readLiveOrientationMode(liveOrientationStorage()),
   )
@@ -829,7 +830,18 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
-          {orientationPicker(true)}
+          <button type="button" className="pl-live__settings-trigger" aria-expanded={liveSettingsOpen}
+            aria-controls="pl-live-settings" onClick={() => setLiveSettingsOpen((open) => !open)}>
+            <Settings2 size={17} aria-hidden="true" /> 配信設定
+          </button>
+          {liveSettingsOpen ? <div id="pl-live-settings" className="pl-live__settings-popover">
+            {orientationPicker(true)}
+            <div className="pl-live__prefs">
+              <label><input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} /> MAP位置共有</label>
+              <label><input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} /> ギフト音</label>
+              <label><input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} /> 演出を抑える</label>
+            </div>
+          </div> : null}
           <div className="pl-live__comments-wrap">
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
               {comments.map((c) => (
@@ -859,20 +871,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               送信
             </button>
           </div>
-          <div className="pl-live__prefs">
-            <label>
-              <input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />
-              MAP位置共有
-            </label>
-            <label>
-              <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
-              ギフト音
-            </label>
-            <label>
-              <input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} />
-              演出を抑える
-            </label>
-          </div>
+
           <button type="button" className="pl-btn pl-btn--block pl-btn--danger pl-live__end-live" disabled={busy || mediaBusy || switchingCamera} onClick={() => void stopLive()}>
             ライブ終了
           </button>
