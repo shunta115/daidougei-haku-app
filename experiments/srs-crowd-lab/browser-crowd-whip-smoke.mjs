@@ -61,7 +61,9 @@ try {
     return response.ok && result.phase === 'ended';
   });
   if (!stopped) throw new Error('performer_stop_failed');
-  console.log('Performer stop ended the CROWD session');
+  const listing = await fetch('http://127.0.0.1:1985/api/v1/streams/?start=0&count=100').then(response => response.json());
+  if ((listing.streams || []).some(item => item.name === stream && item.publish?.active)) throw new Error('srs_publisher_remained_after_stop');
+  console.log('Performer stop ended the CROWD session and disconnected SRS WHIP publisher');
 } finally {
   await browser.close();
 }
