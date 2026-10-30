@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
 const status = message => { $('status').textContent = message; };
 const configUrl = import.meta.env.VITE_SUPABASE_URL;
 const gatewayText = import.meta.env.VITE_CROWD_TEST_GATEWAY_URL;
-let gateway, session, actorId, roomId, qrToken, publisher, timer, facing = 'environment';
+let gateway, session, actorId, roomId, qrToken, publisher, timer, watchRoom, facing = 'environment';
 
 function validGateway(value) {
   if (!value) return null;
@@ -106,10 +106,7 @@ async function begin(grant) {
     await stopRoom();
   }
 }
-function hls(room) {
-  const stream = 'haku-lab-' + room.replaceAll('-', '');
-  $('watch').src = gateway + '/live/' + stream + '.m3u8';
-}
+function hls(room) { watchRoom = room; }
 async function init() {
   try {
     if (!supabase || new URL(configUrl).hostname !== TEST_HOST) throw new Error('test_auth_only');
@@ -189,7 +186,13 @@ $('switch').addEventListener('click', async () => {
 $('stop').addEventListener('click', () => { stopCapture(); void stopRoom(); });
 $('emergency').addEventListener('click', () => { stopCapture('本人がLIVEを停止しました。'); void stopRoom(); });
 $('play').addEventListener('click', async () => {
-  try { await $('watch').play(); } catch { status('再生ボタンを押して映像を開始してください。'); }
+  try {
+    if (!watchRoom) throw new Error('room_missing');
+    const { ticket } = await api('/watch-ticket?room=' + encodeURIComponent(watchRoom), null, 'GET');
+    const stream = 'haku-lab-' + watchRoom.replaceAll('-', '');
+    $('watch').src = gateway + '/live/' + stream + '.m3u8?watch=' + encodeURIComponent(ticket);
+    await $('watch').play();
+  } catch { status('本人または撮影者のログインと配信状態を確認してください。'); }
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && publisher?.state === 'live') { stopCapture('画面を離れたため送信を停止しました。'); void stopRoom(); }

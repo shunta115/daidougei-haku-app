@@ -40,7 +40,8 @@ export function mediaPlaylistUrl(playlist, manifestUrl) {
   const root = new URL(manifestUrl);
   const variant = new URL(lines[variantIndex + 1], root);
   if (variant.origin !== root.origin || variant.pathname !== root.pathname ||
-      [...variant.searchParams.keys()].some(key => key !== 'hls_ctx') ||
+      [...variant.searchParams.keys()].some(key => key !== 'hls_ctx' && key !== 'watch') ||
+      variant.searchParams.get('watch') !== root.searchParams.get('watch') ||
       !/^[a-z0-9]{1,64}$/.test(variant.searchParams.get('hls_ctx') || '')) {
     throw new Error('Unsafe HLS media playlist URL');
   }
