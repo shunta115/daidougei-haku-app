@@ -1368,6 +1368,7 @@
 
 @media (max-width: 640px) and (orientation: portrait) {
   .pl-live--performer[data-phase='ready'] { padding: 12px; gap: 12px; background: #080e16; }
+  .pl-live--performer[data-phase='ready']:not([data-preview-state='ready']) .pl-live__stage { display: none; }
   .pl-live--performer[data-phase='ready'] .pl-live__stage { max-height: 28svh; aspect-ratio: 16/9; border-radius: 18px; }
   .pl-live--performer[data-phase='ready'] .pl-live__stage .pl-live__hud-top { display: none; }
   .pl-live--performer[data-phase='ready'] .pl-live__setup-panel { padding: 18px; border-radius: 22px; }

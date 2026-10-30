@@ -739,6 +739,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       className={`pl-live pl-live--performer${phase === 'live' && isOverlayChrome ? ' pl-live--immersive' : ''}`}
       data-layout={mode}
       data-phase={phase}
+      data-preview-state={previewState}
       data-video-orientation={displayOrientation}
       style={{
         '--video-aspect': String(displayOrientation === 'portrait' ? 9 / 16 : 16 / 9),
@@ -898,12 +899,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               {comments.map((c) => (
                 <div key={c.id} className="pl-live__comment">
                   <span className="pl-live__comment-content"><span className="pl-live__comment-avatar" aria-hidden="true">{c.display_name.slice(0, 1)}</span><span><strong>{c.display_name}</strong> {c.body}</span></span>
-                  {canModerate ? <span className="pl-live__comment-actions">
+                  {canModerate ? <div className="pl-live__comment-actions">
                     <details><summary aria-label={`${c.display_name}のコメント操作`}>•••</summary><span>
                     {c.user_id !== profile.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
                     <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
                     </span></details>
-                  </span> : null}
+                  </div> : null}
                 </div>
               ))}
             </div>

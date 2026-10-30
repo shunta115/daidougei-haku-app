@@ -63,7 +63,7 @@ describe('LIVE comment session and scrolling', () => {
     }
     expect(viewer).toContain('canModerateLiveComments')
     expect(performer).toContain('canModerateLiveComments')
-    expect(performer).toContain('canModerate ? <span className="pl-live__comment-actions">')
+    expect(performer).toContain('canModerate ? <div className="pl-live__comment-actions">')
     expect(viewer).not.toContain("setError(e instanceof Error ? e.message : 'コメント失敗')")
   })
 
