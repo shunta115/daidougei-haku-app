@@ -4,7 +4,7 @@ import { closeSrsWhip } from './srs-loopback.mjs';
 const stream = 'haku-lab-revokeproof';
 const base = 'http://127.0.0.1:1985';
 const find = async () => {
-  const response = await fetch(base + '/api/v1/streams?start=0&count=100', { signal: AbortSignal.timeout(3000) });
+  const response = await fetch(base + '/api/v1/streams/?start=0&count=100', { signal: AbortSignal.timeout(3000) });
   if (!response.ok) throw new Error('srs_streams_unavailable');
   const data = await response.json();
   if (data.code !== 0) throw new Error('srs_streams_rejected');
