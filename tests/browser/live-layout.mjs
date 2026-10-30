@@ -47,7 +47,7 @@ try {
       baseline ||= measured.stage
       assert.ok(Math.abs(measured.stage.width - baseline.width) < 2 && Math.abs(measured.stage.height - baseline.height) < 2, 'Comments must not shrink the stage')
       assert.ok(measured.stage.width >= width - 4 && measured.stage.height >= height - 4, 'Mobile stage should fill the viewport')
-      results.checks.push({ type: 'viewer-density', name, width, height, comments: count, ...measured })
+      results.checks.push({ type: 'viewer-density', name, width, height, commentCount: count, ...measured })
       if (count === 100) {
         await page.getByRole('button', { name: '視聴設定', exact: true }).click()
         await page.getByRole('button', { name: '全画面', exact: true }).click()
