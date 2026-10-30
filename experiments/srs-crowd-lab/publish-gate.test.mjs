@@ -22,7 +22,7 @@ function fixture() {
 test('preapproved QR grants one camera, bound to the actual fan identity and performer room', async () => {
   const { gate, opened } = fixture();
   const room = gate.create(performer);
-  gate.consent(performer, room.id, true);
+  await gate.consent(performer, room.id, true);
   const qr = gate.qr(performer, room.id);
   const grant = gate.request(fan, room.id, 'peer-1', qr.token, true);
   assert.equal(grant.actorId, fan.id);
@@ -40,7 +40,7 @@ test('preapproved QR grants one camera, bound to the actual fan identity and per
 test('performer revocation calls SRS disconnect and blocks stale publish', async () => {
   const { gate, closed } = fixture();
   const room = gate.create(performer);
-  gate.consent(performer, room.id, true);
+  await gate.consent(performer, room.id, true);
   const qr = gate.qr(performer, room.id);
   const grant = gate.request(fan, room.id, 'peer-1', qr.token, true);
   await gate.publish(fan, room.id, 'peer-1', grant.nonce, grant.epoch, 'v=0');
@@ -53,7 +53,7 @@ test('performer revocation calls SRS disconnect and blocks stale publish', async
 test('handoff disconnects old camera before granting the new one', async () => {
   const { gate, closed, opened } = fixture();
   const room = gate.create(performer);
-  gate.consent(performer, room.id, true);
+  await gate.consent(performer, room.id, true);
   const qr = gate.qr(performer, room.id);
   const first = gate.request(fan, room.id, 'peer-1', qr.token, true);
   await gate.publish(fan, room.id, 'peer-1', first.nonce, first.epoch, 'v=0');
@@ -82,7 +82,7 @@ test('three one-hour starts per Tokyo calendar day', async () => {
 test('expired QR and failed SRS publish fail closed', async () => {
   const { gate, advance, opened } = fixture();
   const room = gate.create(performer);
-  gate.consent(performer, room.id, true);
+  await gate.consent(performer, room.id, true);
   const qr = gate.qr(performer, room.id);
   advance(5 * 60_000 + 1);
   assert.throws(() => gate.request(fan, room.id, 'peer-1', qr.token, true), /invalid_or_expired_qr/);
@@ -99,7 +99,7 @@ test('unconfirmed SRS disconnect blocks handoff to another camera', async () => 
     closeMedia: async () => { if (disconnectFails) throw new Error('network_failure'); },
   });
   const room = gate.create(performer);
-  gate.consent(performer, room.id, true);
+  await gate.consent(performer, room.id, true);
   const qr = gate.qr(performer, room.id);
   const first = gate.request(fan, room.id, 'peer-1', qr.token, true);
   await gate.publish(fan, room.id, 'peer-1', first.nonce, first.epoch, 'v=0');
@@ -111,4 +111,17 @@ test('unconfirmed SRS disconnect blocks handoff to another camera', async () => 
   await gate.sweep(() => performer);
   const next = gate.acknowledgeStop(fan, room.id, 'peer-1');
   assert.equal(next.phase, 'arming');
+});
+
+test('revoking CROWD consent disconnects an active SRS publisher', async () => {
+  const { gate, closed } = fixture();
+  const room = gate.create(performer);
+  await gate.consent(performer, room.id, true);
+  const qr = gate.qr(performer, room.id);
+  const grant = gate.request(fan, room.id, 'peer-1', qr.token, true);
+  await gate.publish(fan, room.id, 'peer-1', grant.nonce, grant.epoch, 'v=0');
+  const state = await gate.consent(performer, room.id, false);
+  assert.equal(state.phase, 'ended');
+  assert.equal(closed.length, 1);
+  await assert.rejects(gate.publish(fan, room.id, 'peer-1', grant.nonce, grant.epoch, 'v=0'));
 });
