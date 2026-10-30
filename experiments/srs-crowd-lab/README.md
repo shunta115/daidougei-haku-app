@@ -19,7 +19,7 @@ iPhone Safariのカメラ、バックグラウンド、再接続、H.264/AAC再�
 
 ## ローカル検証
 
-`node --test experiments/srs-crowd-lab/*.test.mjs` で、本人/代理権限、HTTP経由の一回限りWHIP、SRS切断確認、再利用拒否を検証する。TypeScript、Vitest、ビルドは独立GitHub Actionsで実施。SRS映像・音声の実デコードと疑似負荷の証拠は基点の PR #88 を参照。
+`node --test experiments/srs-crowd-lab/*.test.mjs` で、本人/代理権限、HTTP経由の一回限りWHIP、SRS切断確認、再利用拒否を検証する。TypeScript、Vitest、ビルドは独立GitHub Actionsで実施。GitHub Actions の SRS コンテナへ FFmpeg 試験映像を送信し、管理APIで publisher を実切断して一覧から消えたことを確認済み（RTMP入力。WHIP入力の強制切断は未検証）。SRS映像・音声の実デコードと疑似負荷の証拠は基点の PR #88 を参照。
 
 ## 実機検証前の必要作業
 
