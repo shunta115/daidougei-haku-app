@@ -1,0 +1,12 @@
+{
+  "project": "pmmtijwswzwhuriqhlep",
+  "operation": "read-only backup metadata",
+  "listed": 8,
+  "completed": 8,
+  "latest_completed_utc": "2026-10-30T17:27:24.341Z",
+  "latest_completed_jst": "2026-10-31T02:27:24.341000+09:00",
+  "pitr_enabled": false,
+  "physical_backups_available": true,
+  "restore_exercised": false,
+  "production_modified": false
+}

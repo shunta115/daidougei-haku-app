@@ -56,7 +56,27 @@
     "target": "preview",
     "app_commit": "21bfb568caa8036ec6a666c4697f495c3e245a9b",
     "anonymous_routes": "200 and rendered /event /map; TEST REST GET observed",
-    "google_maps_key": "production-only; absent in Preview; offline marker E2E passed"
+    "google_maps_key": "production-only; absent in Preview; offline marker E2E passed",
+    "smoke": {
+      "routes": [
+        {
+          "path": "/event",
+          "status": 200,
+          "rendered": true
+        },
+        {
+          "path": "/map",
+          "status": 200,
+          "rendered": true
+        }
+      ],
+      "test_database_get_observed": true,
+      "console_warnings": 1,
+      "limitations": "Read-only network policy blocked analytics, fonts and toolbar; navigation produced one CORS console warning. Actual map key and signed-in flow remain unverified."
+    },
+    "latest_head_url": "https://daidougei-haku-hvjmwtqq8-daidougei-s-projects.vercel.app",
+    "latest_head_state": "READY",
+    "latest_head_sha": "8c1b15f6badc8d5f8bbd99a49fce2413be8273e8"
   },
   "not_completed": [
     "Preview Google Maps API key is absent; actual map tiles/overlays not tested online",
@@ -64,5 +84,17 @@
     "signed-in TEST account full browser-to-database registration flow",
     "production backup restore verification"
   ],
-  "prohibited_actions_performed": false
+  "prohibited_actions_performed": false,
+  "production_backup": {
+    "project": "pmmtijwswzwhuriqhlep",
+    "operation": "read-only backup metadata",
+    "listed": 8,
+    "completed": 8,
+    "latest_completed_utc": "2026-10-30T17:27:24.341Z",
+    "latest_completed_jst": "2026-10-31T02:27:24.341000+09:00",
+    "pitr_enabled": false,
+    "physical_backups_available": true,
+    "restore_exercised": false,
+    "production_modified": false
+  }
 }
