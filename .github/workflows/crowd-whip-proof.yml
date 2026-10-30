@@ -1,0 +1,75 @@
+name: CROWD QR to real WHIP/HLS proof
+
+on:
+  pull_request:
+    branches:
+      - codex/haku-srs-crowd-integration-20261030
+    paths:
+      - 'experiments/srs-crowd-lab/**'
+      - 'experiments/free-live/haku-auth.mjs'
+      - 'experiments/ovh-srs-lab/whip-publisher.mjs'
+      - '.github/workflows/crowd-whip-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  crowd-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install isolated media tools
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chrome --with-deps
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start loopback SRS and authenticated fixture gateway
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-crowd-media up -d
+          node experiments/srs-crowd-lab/fixture-gateway.mjs > /tmp/haku-crowd-gateway.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4320/ > /dev/null && curl --fail --silent --max-time 2 http://127.0.0.1:1985/api/v1/versions > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: QR grant to Chrome WHIP to decoded HLS audio and video
+        run: |
+          node experiments/srs-crowd-lab/browser-crowd-whip-smoke.mjs > /tmp/haku-crowd-browser.log 2>&1 &
+          publisher_pid=$!
+          for i in $(seq 1 65); do
+            if [ -s /tmp/haku-crowd-stream ]; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then cat /tmp/haku-crowd-browser.log; exit 1; fi
+            sleep 1
+          done
+          stream=$(cat /tmp/haku-crowd-stream)
+          if [[ ! "$stream" =~ ^haku-lab-[a-f0-9]{32}$ ]]; then exit 1; fi
+          manifest="http://127.0.0.1:8080/live/${stream}.m3u8"
+          for i in $(seq 1 50); do
+            if node experiments/ovh-srs-lab/hls-ready.mjs "$manifest" > /dev/null; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then cat /tmp/haku-crowd-browser.log; exit 1; fi
+            sleep 1
+          done
+          node experiments/ovh-srs-lab/hls-ready.mjs "$manifest"
+          timeout 10 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$manifest" > /tmp/haku-crowd-codecs.txt
+          cat /tmp/haku-crowd-codecs.txt
+          grep -q 'h264,video' /tmp/haku-crowd-codecs.txt
+          grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt
+          timeout 20 ffmpeg -nostdin -hide_banner -v error -xerror -i "$manifest" -t 6 -map 0:v:0 -map 0:a:0 -f null -
+          wait "$publisher_pid"
+          cat /tmp/haku-crowd-browser.log
+      - name: Run authority and application checks
+        run: |
+          node --test experiments/srs-crowd-lab/*.test.mjs
+          npm run typecheck
+          npx vitest run
+          npm run build
+      - name: Clean up
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-crowd-media down --remove-orphans
