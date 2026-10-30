@@ -6,9 +6,10 @@ export function localWhipEndpoint(value) {
   const url = new URL(value);
   const legacy = url.pathname === '/rtc/v1/whip/' && ['1985','4319'].includes(url.port) &&
       url.searchParams.get('app') === 'live' && /^haku-lab(?:-[a-z0-9]+)?$/.test(url.searchParams.get('stream') || '');
-  const crowd = url.pathname === '/whip' && url.port === '4320' &&
-      /^[a-f0-9-]{36}$/i.test(url.searchParams.get('room') || '') && url.searchParams.size === 1;
-  if (url.protocol !== 'http:' || !LOOPBACK.has(url.hostname) || url.username || url.password || !(legacy || crowd)) {
+  const crowd = url.pathname === '/whip' &&
+      /^[a-f0-9-]{36}$/i.test(url.searchParams.get('room') || '') && url.searchParams.size === 1 &&
+      ((url.protocol === 'http:' && LOOPBACK.has(url.hostname) && url.port === '4320') || url.protocol === 'https:');
+  if (url.username || url.password || !(legacy || crowd) || (legacy && (url.protocol !== 'http:' || !LOOPBACK.has(url.hostname)))) {
     throw new Error('WHIP lab accepts only local SRS/gateway /rtc/v1/whip/?app=live&stream=haku-lab');
   }
   return url;
