@@ -59,3 +59,15 @@ Stripe秘密値のモードが確認できないため、外部TEST Checkout生�
 - https://docs.livekit.io/transport/media/publish/
 - https://developers.google.com/youtube/iframe_api_reference
 - https://vercel.com/docs/project-configuration/git-configuration
+
+## 自動検証の証跡
+
+- Chrome模擬ブラウザ: 390×844で14項目成功。準備→publish→公開→終了の順序、公開前のバックグラウンド復帰、既存のフォロー/応援、YouTubeエラー時の外部導線を含む。
+- 横画面844×390: phone-landscape判定、音声開始とフォローの実クリック成功。これもモックAPI/Roomであり実機検証ではない。
+- WebKit E2E: 起動失敗のため未検証。新規隔離WebKit26.0の20秒launch timeoutを記録。OS保護設定の変更はしていない。
+- 新規SQL試験9件: 予約中にlive_sessionsを作らない、本人/承認、競合操作拒否、途中失敗rollback、通知一回、終了の再試行と旧要求、lease失効、重複事前確認でデータを削除しないことを確認。
+- 新規token認可4件、heartbeat/強制終了5件はモック依存のサーバー単体試験。
+- 新規JWT2件は実livekit-server-sdkを使い、ローカルの偽キーによるHMAC署名とsubscribe-only/単一Room/短期TTLを検証。Cloudの本番キーが受理される証拠ではない。
+- YouTube player復旧3件: load timeout、autoplay拒否、iframeの再mount、古いcallback抑止、安全な外部URLを確認。
+- TypeScript: アプリとLIVEサーバーの両設定で成功。新規tsconfig.live-server.jsonで従来のアプリ設定に含まれなかったLIVE APIも検査。
+- 本番相当build: 成功（最終21.12秒）。大きなchunkの既存警告あり。金融API/手数料/送金コードへの差分なし。
