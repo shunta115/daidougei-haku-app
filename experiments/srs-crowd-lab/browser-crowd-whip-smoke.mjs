@@ -47,7 +47,7 @@ try {
   const stream = 'haku-lab-' + result.roomId.replaceAll('-', '');
   await writeFile('/tmp/haku-crowd-stream', stream, { mode: 0o600 });
   console.log(JSON.stringify({ browserWhipConnected: true, capturedWidth: result.video.width, capturedHeight: result.video.height }));
-  await new Promise(resolve => setTimeout(resolve, 45000));
+  await new Promise(resolve => setTimeout(resolve, 80000));
   const stopped = await page.evaluate(async () => {
     const response = await fetch('/stop?room=' + window.__crowdRoom, {
       method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: '{}',
