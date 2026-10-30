@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { RoomEvent, type Room } from 'livekit-client'
-import { ArrowDown, Mic, MicOff, Settings2, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
+import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
+import { ArrowDown, Mic, MicOff, Settings2, SwitchCamera, Trash2, UserX, Video, VideoOff, X } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import { YouTubeLiveSetup } from '../components/YouTubeLiveSetup'
@@ -41,6 +41,9 @@ import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
+import { useLiveViewportHeight } from '../lib/useLiveViewport'
+import { readHostVideoDiagnostics, type HostVideoDiagnostics } from '../lib/liveVideoDiagnostics'
+import { readLiveDisplayPreference, saveLiveDisplayPreference } from '../lib/liveDisplayPreferences'
 import type { LiveComment } from '../lib/types'
 import type { LiveSchedule } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -63,9 +66,14 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const { performer, profile, refreshProfile } = useAuth()
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
+  const viewportHeight = useLiveViewportHeight()
   const [liveSettingsOpen, setLiveSettingsOpen] = useState(false)
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
-  const [previewFit, setPreviewFit] = useState<'contain' | 'cover'>('contain')
+  const [previewFit, setPreviewFit] = useState<'contain' | 'cover'>(() => readLiveDisplayPreference('cover-host', false) ? 'cover' : 'contain')
+  const [commentsVisible, setCommentsVisible] = useState(() => readLiveDisplayPreference('comments'))
+  const [giftEffects, setGiftEffects] = useState(() => readLiveDisplayPreference('gift-effects'))
+  const [connectionLabel, setConnectionLabel] = useState('未接続')
+  const [diagnostics, setDiagnostics] = useState<HostVideoDiagnostics | null>(null)
   const [orientationMode, setOrientationMode] = useState<LiveOrientationMode>(() =>
     readLiveOrientationMode(liveOrientationStorage()),
   )
@@ -119,6 +127,20 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const hiddenAtRef = useRef<number | null>(null)
   const commentScroll = useLiveCommentScroll(comments.length)
   const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
+  useEffect(() => saveLiveDisplayPreference('comments', commentsVisible), [commentsVisible])
+  useEffect(() => saveLiveDisplayPreference('gift-effects', giftEffects), [giftEffects])
+  useEffect(() => saveLiveDisplayPreference('cover-host', previewFit === 'cover'), [previewFit])
+  useEffect(() => {
+    if (!liveSettingsOpen) return
+    let active = true
+    const update = async () => {
+      const snapshot = await readHostVideoDiagnostics(roomRef.current, videoRef.current)
+      if (active) setDiagnostics(snapshot)
+    }
+    void update()
+    const timer = window.setInterval(() => void update(), 2000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [liveSettingsOpen])
 
   useEffect(() => {
     if (!liveReservationsEnabled || !performerId || phase !== 'ready') {
@@ -313,6 +335,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
 
   const wireRoom = (room: Room) => {
     roomRef.current = room
+    setConnectionLabel('接続済み')
     setCameraFacing(hostCameraTrack(room)?.mediaStreamTrack.getSettings().facingMode === 'environment' ? 'environment' : 'user')
     void canSwitchHostCamera()
       .then((available) => { if (roomRef.current === room) setCameraSwitchAvailable(available) })
@@ -321,7 +344,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     room.on(RoomEvent.ParticipantDisconnected, () => setViewers(Math.max(0, countViewers(room) - 1)))
     room.on(RoomEvent.ConnectionQualityChanged, () => {
       applyNetworkAdaptation(room, room.localParticipant.connectionQuality)
+      const quality = room.localParticipant.connectionQuality
+      setConnectionLabel(quality === ConnectionQuality.Lost ? '通信切断' : quality === ConnectionQuality.Poor ? '通信低下' : quality === ConnectionQuality.Good || quality === ConnectionQuality.Excellent ? '良好' : '接続済み')
     })
+    room.on(RoomEvent.Reconnecting, () => setConnectionLabel('再接続中'))
+    room.on(RoomEvent.Reconnected, () => setConnectionLabel('接続済み'))
+    room.on(RoomEvent.Disconnected, () => setConnectionLabel('未接続'))
     room.on(RoomEvent.MediaDevicesError, (mediaError) => {
       if (roomRef.current !== room) return
       setError(liveMediaDeviceErrorMessage(mediaError))
@@ -657,7 +685,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         ] as const).map(([value, label, detail]) => (
           <button key={value} type="button" aria-pressed={orientationMode === value}
             data-selected={orientationMode === value} disabled={busy || mediaBusy || switchingCamera}
-            onClick={() => void selectOrientation(value)}>
+            onClick={() => void selectOrientation(value).then(() => { if (compact) setLiveSettingsOpen(false) })}>
             <strong>{label}</strong><small>{detail}</small>
           </button>
         ))}
@@ -715,6 +743,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       style={{
         '--video-aspect': String(displayOrientation === 'portrait' ? 9 / 16 : 16 / 9),
         '--video-fit': previewFit,
+        '--live-viewport-height': viewportHeight,
       } as CSSProperties}
     >
       <div className="pl-live__stage">
@@ -727,20 +756,20 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </div>
         ) : null}
         {phase === 'live' && performer ? (
-          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
+          <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn && giftEffects} reducedMotion={calmMotion} effectsEnabled={giftEffects} onGift={fever.addGift} />
         ) : null}
         {phase === 'live' ? <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} /> : null}
         {phase === 'ready' && previewState !== 'ready' ? <div className="pl-live__placeholder">{previewState === 'preparing' ? 'カメラ・マイクの許可を待っています…' : previewState === 'denied' ? 'カメラ・マイクを許可してください' : previewState === 'ended' ? 'LIVE配信を終了しました' : 'ここにカメラ映像が表示されます'}</div> : null}
         <div className="pl-live__hud-top">
-          <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
-            戻る
+          <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" aria-label={phase === 'live' ? 'LIVE終了を確認' : '戻る'} onClick={() => { if (phase === 'live') setEndConfirmOpen(true); else onBack() }}>
+            <X size={22} />
           </button>
           {phase === 'live' ? (
             <div className="pl-live__stats">
               <span className="pl-live__pill">LIVE中</span>
               <span>{formatDuration(elapsed)}</span>
               <span>👁 {viewers}</span>
-              <span>{displayOrientation === 'landscape' ? '横型 16:9' : '縦型 9:16'}で配信中</span>
+              <span className="pl-live__connection-status">{connectionLabel}</span>
             </div>
           ) : null}
         </div>
@@ -786,7 +815,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       </div>
 
       {phase === 'ready' ? (
-        <div className="pl-live__panel">
+        <div className="pl-live__panel pl-live__setup-panel">
+          <header className="pl-live__setup-heading"><h1>LIVE配信の設定</h1><button type="button" aria-label="設定を閉じて戻る" onClick={onBack}><X size={22} /></button></header>
           <div className="pl-live-methods" role="radiogroup" aria-label="配信方法">
             <button type="button" role="radio" aria-checked="true" data-selected="true">
               <Video aria-hidden="true" /><span><strong>HAKU DIRECT LIVE</strong><small>HAKUのカメラ・マイクで直接配信</small></span>
@@ -795,9 +825,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
               <span aria-hidden="true">▶</span><span><strong>YouTube LIVE連携</strong><small>YouTubeのURLを貼ってHAKUで公開</small></span>
             </button>
           </div>
-          <p className="pl-brand">LIVE FOR YOUR FANS</p><h1 className="pl-h1">会場に来られないファンにも届けよう</h1>
-          <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
           {orientationPicker()}
+          <section className="pl-live__quality-setting" aria-label="画質設定"><h2>画質設定</h2><strong>自動 <small>通信状況に応じて調整</small></strong><p>手動の1080p・720p・480p固定は現在未対応です。実際の映像サイズは配信設定の診断で確認できます。</p></section>
+          <label className="pl-live__setting-toggle"><span>コメントを表示</span><input type="checkbox" checked={commentsVisible} onChange={(event) => setCommentsVisible(event.target.checked)} /></label>
+          <label className="pl-live__setting-toggle"><span>ギフト演出<small>投げ銭の受付は継続します</small></span><input type="checkbox" checked={giftEffects} onChange={(event) => setGiftEffects(event.target.checked)} /></label>
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
           <label>
             <span className="pl-label">タイトル（任意）</span>
@@ -832,24 +863,37 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
-          <button type="button" className="pl-live__settings-trigger" aria-expanded={liveSettingsOpen}
+          <button type="button" className="pl-live__settings-trigger" aria-label="配信設定" aria-expanded={liveSettingsOpen}
             aria-controls="pl-live-settings" onClick={() => setLiveSettingsOpen((open) => !open)}>
             <Settings2 size={17} aria-hidden="true" /> 配信設定
           </button>
-          {liveSettingsOpen ? <div id="pl-live-settings" className="pl-live__settings-popover">
+          {liveSettingsOpen ? <section id="pl-live-settings" className="pl-live__settings-popover" role="dialog" aria-label="配信設定" onKeyDown={(event) => { if (event.key === 'Escape') setLiveSettingsOpen(false) }}>
+            <header><strong>配信設定</strong><button type="button" aria-label="設定を閉じる" onClick={() => setLiveSettingsOpen(false)}><X size={20} /></button></header>
             {orientationPicker(true)}
             <div className="pl-live__fit-control" role="group" aria-label="プレビュー表示">
-              <button type="button" aria-pressed={previewFit === 'contain'} onClick={() => setPreviewFit('contain')}>全画角</button>
-              <button type="button" aria-pressed={previewFit === 'cover'} onClick={() => setPreviewFit('cover')}>全画面</button>
+              <button type="button" aria-pressed={previewFit === 'contain'} onClick={() => { setPreviewFit('contain'); setLiveSettingsOpen(false) }}>全画角</button>
+              <button type="button" aria-pressed={previewFit === 'cover'} onClick={() => { setPreviewFit('cover'); setLiveSettingsOpen(false) }}>全画面</button>
               <small>全画面では端が切れる場合があります。送信映像は変わりません。</small>
             </div>
+            <label className="pl-live__setting-toggle"><span>コメントを表示</span><input type="checkbox" checked={commentsVisible} onChange={(event) => setCommentsVisible(event.target.checked)} /></label>
+            <label className="pl-live__setting-toggle"><span>ギフト演出</span><input type="checkbox" checked={giftEffects} onChange={(event) => setGiftEffects(event.target.checked)} /></label>
             <div className="pl-live__prefs">
               <label><input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} /> MAP位置共有</label>
               <label><input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} /> ギフト音</label>
               <label><input type="checkbox" checked={calmMotion} onChange={(e) => setCalmMotion(e.target.checked)} /> 演出を抑える</label>
             </div>
-          </div> : null}
-          <div className="pl-live__comments-wrap">
+            <details className="pl-live__diagnostics"><summary>映像診断・画質（自動）</summary>
+              <p>原カメラ {diagnostics?.source?.width ?? '—'}×{diagnostics?.source?.height ?? '—'} · {diagnostics?.source?.facingMode ?? '不明'} · zoom {diagnostics?.source?.zoom ?? '取得不可'}</p>
+              <p>送信入力 {diagnostics?.senderInput?.width ?? '—'}×{diagnostics?.senderInput?.height ?? '—'}{diagnostics?.processorActive ? '（Canvas全画角合成）' : '（カメラ直接）'}</p>
+              <p>実エンコード {diagnostics?.encodedLayers.map((layer) => `${layer.width ?? '—'}×${layer.height ?? '—'} / ${layer.framesPerSecond ?? '—'}fps / ${layer.qualityLimitationReason ?? '不明'}`).join('、') || '取得待ち'}</p>
+              <p>表示映像 {diagnostics?.preview?.width ?? '—'}×{diagnostics?.preview?.height ?? '—'} · 表示枠 {diagnostics?.preview?.elementWidth ?? '—'}×{diagnostics?.preview?.elementHeight ?? '—'} · {previewFit === 'cover' ? '全画面（端をクロップする場合あり）' : '全画角'}</p>
+              <p>実送信速度 {diagnostics?.measuredBitrateBps == null ? '計測待ち' : `${Math.round(diagnostics.measuredBitrateBps / 1000)} kbps`} · 原カメラ能力 {diagnostics?.sourceCapabilities ? `${diagnostics.sourceCapabilities.width?.min ?? '—'}〜${diagnostics.sourceCapabilities.width?.max ?? '—'} × ${diagnostics.sourceCapabilities.height?.min ?? '—'}〜${diagnostics.sourceCapabilities.height?.max ?? '—'}` : 'この送信方式では取得不可'}</p>
+              <p>方向設定は{displayOrientation === 'portrait' ? '縦型9:16' : '横型16:9'}です。原カメラと送信入力の比率が異なる場合は全画角合成による余白が含まれます。手動の解像度固定・アーカイブ保存は未対応です。</p>
+              <details><summary>詳細数値</summary><pre>{JSON.stringify(diagnostics, null, 2)}</pre></details>
+            </details>
+            <button type="button" className="pl-btn pl-btn--block" onClick={() => setLiveSettingsOpen(false)}>設定を閉じる</button>
+          </section> : null}
+          <div className="pl-live__comments-wrap" hidden={!commentsVisible}>
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
               {comments.map((c) => (
                 <div key={c.id} className="pl-live__comment">

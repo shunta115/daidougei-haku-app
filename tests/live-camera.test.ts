@@ -212,7 +212,7 @@ describe('LIVE camera switch', () => {
     const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
     expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[^}]*object-fit: cover;/)
-    expect(screen).toContain("useState<'contain' | 'cover'>('contain')")
+    expect(screen).toContain("readLiveDisplayPreference('cover-host', false)")
     expect(screen).toContain("'--video-fit': previewFit")
     expect(css).toContain('object-fit: var(--video-fit, contain)')
     expect(viewer).toContain("'--video-fit': objectFit")

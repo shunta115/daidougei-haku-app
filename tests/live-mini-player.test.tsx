@@ -7,6 +7,10 @@ const state = vi.hoisted(() => ({
   disconnect: vi.fn().mockResolvedValue(undefined),
   connect: vi.fn(),
   getPerformer: vi.fn(),
+  follow: vi.fn().mockResolvedValue(undefined),
+  unfollow: vi.fn().mockResolvedValue(undefined),
+  user: null as null | { id: string },
+  comments: [] as Array<Record<string, unknown>>,
   onPerformer: null as null | ((row: { is_live: boolean }) => void),
 }))
 vi.mock('../src/platform/lib/api', () => ({
@@ -15,11 +19,16 @@ vi.mock('../src/platform/lib/api', () => ({
     state.onPerformer = callback
     return () => { state.onPerformer = null }
   },
-  getActiveLiveSessionId: vi.fn().mockResolvedValue(null),
+  getActiveLiveSessionId: vi.fn().mockResolvedValue('session-1'),
+  listLiveComments: vi.fn(async () => state.comments),
+  subscribeLiveComments: () => () => undefined,
+  canModerateLiveComments: vi.fn().mockResolvedValue(false),
+  follow: state.follow,
+  unfollow: state.unfollow,
   isFollowing: vi.fn().mockResolvedValue(false),
   updateLiveViewerPeak: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ user: null, profile: null }) }))
+vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ user: state.user, profile: state.user ? { id: state.user.id, display_name: 'TEST' } : null }) }))
 const translate = vi.hoisted(() => (key: string) => key)
 vi.mock('../src/i18n/LangProvider', () => ({ useLang: () => ({ t: translate }) }))
 vi.mock('../src/platform/lib/useLiveLayout', () => ({ useLiveLayout: () => ({ mode: 'phone-portrait', isOverlayChrome: true }) }))
@@ -51,6 +60,9 @@ const props = { performerId: 'performer-1', onBack: vi.fn(), onTip: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  localStorage.clear()
+  state.user = null
+  state.comments = []
   state.onPerformer = null
   state.getPerformer.mockResolvedValue({ id: 'performer-1', stage_name: 'TEST LIVE', is_live: true, live_started_at: null })
   state.connect.mockResolvedValue({ disconnect: state.disconnect, on: vi.fn(), localParticipant: { connectionQuality: 1 } })
@@ -85,5 +97,43 @@ describe('persistent HAKU DIRECT viewer', () => {
     state.onPerformer?.({ is_live: false })
     expect(onEnded).toHaveBeenCalledOnce()
     expect(state.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens compact settings on demand and closes after choosing a display fit', async () => {
+    const view = render(<LiveWatchScreen {...props} />)
+    await waitFor(() => expect(state.connect).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('dialog', { name: '視聴設定' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '視聴設定' }))
+    expect(screen.getByRole('dialog', { name: '視聴設定' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '全画面', exact: true }))
+    expect(screen.queryByRole('dialog', { name: '視聴設定' })).toBeNull()
+    expect((view.container.querySelector('.pl-live') as HTMLElement).style.getPropertyValue('--video-fit')).toBe('cover')
+    expect(state.connect).toHaveBeenCalledTimes(1)
+  })
+
+  it('mutes both existing media elements and preserves performer follow and tip actions', async () => {
+    state.user = { id: 'fan-1' }
+    const onTip = vi.fn()
+    const view = render(<LiveWatchScreen {...props} onTip={onTip} />)
+    await waitFor(() => expect(state.connect).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: '音声をオフ' }))
+    expect(view.container.querySelector('video')?.muted).toBe(true)
+    expect(view.container.querySelector('audio')?.muted).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '＋フォロー' }))
+    await waitFor(() => expect(state.follow).toHaveBeenCalledWith('fan-1', 'performer-1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'フォロー中' }))
+    await waitFor(() => expect(state.unfollow).toHaveBeenCalledWith('fan-1', 'performer-1'))
+    fireEvent.click(screen.getByRole('button', { name: '応援する' }))
+    expect(onTip).toHaveBeenCalledOnce()
+  })
+
+  it.each([100, 1000])('renders %i comments with one unchanged media stage', async (total) => {
+    state.comments = Array.from({ length: total }, (_, index) => ({ id: String(index), display_name: 'Fan', body: `Comment ${index}`, user_id: 'fan-1' }))
+    const view = render(<LiveWatchScreen {...props} />)
+    await waitFor(() => expect(view.container.querySelectorAll('.pl-live__comment')).toHaveLength(total))
+    await waitFor(() => expect(state.connect).toHaveBeenCalledTimes(1))
+    expect(view.container.querySelectorAll('.pl-live__stage')).toHaveLength(1)
+    expect(view.container.querySelectorAll('video')).toHaveLength(1)
+    expect(state.connect).toHaveBeenCalledTimes(1)
   })
 })
