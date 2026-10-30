@@ -49,8 +49,15 @@ try {
   });
   const stream = 'haku-lab-' + result.roomId.replaceAll('-', '');
   await writeFile('/tmp/haku-crowd-stream', stream, { mode: 0o600 });
-  console.log(JSON.stringify({ browserWhipConnected: true, capturedWidth: result.video.width, capturedHeight: result.video.height }));
-  await new Promise(resolve => setTimeout(resolve, 80000));
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  const media = await page.evaluate(async () => {
+    const stats = await window.__crowdPublisher.pc.getStats();
+    const outbound = [...stats.values()].filter(item => item.type === 'outbound-rtp' && !item.isRemote);
+    return { videoBytes: outbound.filter(item => item.kind === 'video').reduce((sum, item) => sum + (item.bytesSent || 0), 0), audioBytes: outbound.filter(item => item.kind === 'audio').reduce((sum, item) => sum + (item.bytesSent || 0), 0) };
+  });
+  console.log(JSON.stringify({ browserWhipConnected: true, capturedWidth: result.video.width, capturedHeight: result.video.height, media }));
+  if (media.videoBytes <= 0 || media.audioBytes <= 0) throw new Error('browser_media_not_transmitting');
+  await new Promise(resolve => setTimeout(resolve, 70000));
   const stopped = await page.evaluate(async () => {
     const response = await fetch('/stop?room=' + window.__crowdRoom, {
       method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: '{}',
