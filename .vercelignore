@@ -11,3 +11,7 @@
 **/* 2.example
 .env.vercel.tmp
 .env.vercel.prod
+# Official homepage local-only verification fixtures
+scripts/test-official-home-*.mjs
+tests/fixtures/official-home/**
+artifacts/official-home/**

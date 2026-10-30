@@ -12,7 +12,10 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-comments.test.ts tests/live-comment-moderation-migration.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts",
-    "test:registration": "vitest run"
+    "test:registration": "vitest run",
+    "test:official-home": "vitest run tests/official-home-db.test.ts tests/official-home-api.test.ts tests/official-home-ui.test.tsx tests/official-home-validation.test.ts",
+    "test:official-home:host": "node scripts/test-official-home-host.mjs",
+    "test:official-home:browser": "node scripts/test-official-home-browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
@@ -20,6 +23,7 @@
     "livekit-client": "^2.21.0",
     "livekit-server-sdk": "^2.17.0",
     "lucide-react": "^0.468.0",
+    "pdf-lib": "1.17.1",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -37,6 +41,7 @@
     "@vercel/node": "^5.8.27",
     "@vitejs/plugin-react": "^4.3.1",
     "jsdom": "^26.1.0",
+    "playwright": "1.59.0",
     "typescript": "^5.9.3",
     "vite": "^5.4.10",
     "vitest": "^3.2.7"
