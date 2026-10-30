@@ -26,7 +26,7 @@ async function openSrsWhip({ stream, sdp }) {
 }
 
 async function publisherFor(stream) {
-  const result = await request('/api/v1/streams?start=0&count=100');
+  const result = await request('/api/v1/streams/?start=0&count=100');
   const matches = (result.streams || []).filter(item => item.name === stream && item.app === 'live' && item.publish?.active);
   if (matches.length > 1) throw new Error('ambiguous_srs_publisher');
   return matches[0] || null;
