@@ -12,6 +12,7 @@ HAKU DIRECT / YouTube LIVE連携とも **NO-GO**。実iPhone Safariで映像・�
 - 本人/承認/activeを検証し、performer行ロックで開始・終了・期限切れを直列化。live_sessions作成とis_live公開は単一DBトランザクション。開始失敗は全部ロールバック。
 - 操作IDとsession IDで再試行を識別。同一操作は再利用、競合操作は拒否、期限切れは新枠へ更新。古い終了要求が新しい配信を終了しない。
 - 旧クライアントの非原子的LIVE更新をtriggerで拒否。migration未適用なら旧方式にfallbackせず開始を停止。
+- トークンの参加者名は表示名が空でもメールアドレスを出さない（Guestへfallback）。
 - トークンのRoomをsessionごとに分離。公開前予約を視聴者に渡さず、視聴トークンのpublish権限はfalse。視聴IDを接続ごとに変え、本人が視聴したときも配信接続を追い出さない。join tokenの期限は5分（接続済み配信を5分で終了する意味ではない）。
 - heartbeatは接続中だけ送信し、サーバーもSFU上の本人接続と操作IDを検証。再接続断念後の画面だけのheartbeatで幽霊LIVEを維持しない。DBのlease失効処理を毎分実行するmigrationを用意。
 - 接続中に画面を閉じた場合の遅いconnect完了を切断。準備失敗/画面離脱で既知の予約を終了する。profile再取得失敗だけで正常配信を切断しない。最終的に送信できなかった終了はleaseが処理する設計。
@@ -62,12 +63,23 @@ Stripe秘密値のモードが確認できないため、外部TEST Checkout生�
 
 ## 自動検証の証跡
 
+最終全件実行: **79ファイル・471件成功**（15秒上限、109.56秒）。`b1c03ea` の実装を検証。差分の金融コード変更なしを再確認。Draft PR: https://github.com/shunta115/daidougei-haku-app/pull/100
+
 - Chrome模擬ブラウザ: 390×844で14項目成功。準備→publish→公開→終了の順序、公開前のバックグラウンド復帰、既存のフォロー/応援、YouTubeエラー時の外部導線を含む。
 - 横画面844×390: phone-landscape判定、音声開始とフォローの実クリック成功。これもモックAPI/Roomであり実機検証ではない。
 - WebKit E2E: 起動失敗のため未検証。新規隔離WebKit26.0の20秒launch timeoutを記録。OS保護設定の変更はしていない。
 - 新規SQL試験9件: 予約中にlive_sessionsを作らない、本人/承認、競合操作拒否、途中失敗rollback、通知一回、終了の再試行と旧要求、lease失効、重複事前確認でデータを削除しないことを確認。
-- 新規token認可4件、heartbeat/強制終了5件はモック依存のサーバー単体試験。
+- 新規token認可5件、heartbeat/強制終了5件はモック依存のサーバー単体試験。
 - 新規JWT2件は実livekit-server-sdkを使い、ローカルの偽キーによるHMAC署名とsubscribe-only/単一Room/短期TTLを検証。Cloudの本番キーが受理される証拠ではない。
 - YouTube player復旧3件: load timeout、autoplay拒否、iframeの再mount、古いcallback抑止、安全な外部URLを確認。
 - TypeScript: アプリとLIVEサーバーの両設定で成功。新規tsconfig.live-server.jsonで従来のアプリ設定に含まれなかったLIVE APIも検査。
 - 本番相当build: 成功（最終21.12秒）。大きなchunkの既存警告あり。金融API/手数料/送金コードへの差分なし。
+
+## 最終リリース判定
+
+| 方式 | ローカル実装 | 自動検証 | 実機・実サービス | 本番判定 |
+|---|---|---|---|---|
+| HAKU DIRECT | 修復済み、DB変更は未適用 | SQL・認可・JWT・heartbeat・模擬UI成功 | iPhone/実LiveKitのAV/復帰/終了は未検証 | NO-GO |
+| YouTube視聴連携 | 修復済み、本番URL未登録 | 登録・復旧・外部導線・模擬UI成功 | iPhone/実動画の再生・音声・公開設定は未検証 | NO-GO |
+
+ブランチのVercel deployment一覧が0件であることを確認。Preview作成停止を維持。mainマージ・本番デプロイ・TEST/本番migration・実決済は未実行。次に必要なのはTEST限定migration 2本の個別承認。
