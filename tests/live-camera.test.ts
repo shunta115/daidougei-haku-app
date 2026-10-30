@@ -216,7 +216,7 @@ describe('LIVE camera switch', () => {
     expect(screen).toContain("'--video-fit': previewFit")
     expect(css).toContain('object-fit: var(--video-fit, contain)')
     expect(viewer).toContain("'--video-fit': objectFit")
-    expect(screen).not.toContain("? 'cover' : 'contain'")
+    expect(screen).not.toContain("displayOrientation === 'landscape' ? 'cover'")
     expect(viewer).not.toContain("videoOrient === 'landscape' ? 'cover'")
   })
 

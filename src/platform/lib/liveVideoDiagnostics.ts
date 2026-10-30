@@ -84,7 +84,7 @@ function previewDimensions(video: HTMLVideoElement | null): HostVideoDiagnostics
   let elementFilterActive = false
   try {
     const style = getComputedStyle(video)
-    if (['contain', 'cover', 'fill', 'none', 'scale-down'].includes(style.objectFit)) objectFit = style.objectFit as typeof objectFit
+    if (['contain', 'cover', 'fill', 'none', 'scale-down'].includes(style.objectFit)) objectFit = style.objectFit as VideoObjectFit
     elementFilterActive = Boolean(style.filter && style.filter !== 'none')
   } catch { /* Non-DOM consumers can still read the intrinsic dimensions. */ }
   return { width: number(video.videoWidth), height: number(video.videoHeight), elementWidth: number(video.clientWidth), elementHeight: number(video.clientHeight), objectFit, elementFilterActive }
