@@ -28,7 +28,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // heartbeat_timeout cleanup is atomic with start/end and also scheduled by separately approved SQL.
       const { data, error } = await sb.rpc('expire_direct_live_leases')
       if (error) throw error
-      res.status(200).json({ ok: true, expired: data }); return
+      const { data: stale, error: readError } = await sb.from('direct_live_leases')
+        .select('id,performer_id,heartbeat_at').is('ended_at', null).eq('lifecycle_state', 'live')
+        .lt('heartbeat_at', new Date(Date.now() - STALE_SECONDS * 1000).toISOString()).limit(50)
+      if (readError) throw readError
+      let ended = 0
+      for (const lease of stale || []) {
+        let hostConnected: boolean
+        try {
+          const participants = await roomService().listParticipants(sessionRoomName(lease.performer_id, lease.id))
+          hostConnected = participants.some((p) => p.identity === lease.performer_id)
+        } catch (error) {
+          const failure = error as { code?: string; status?: number }
+          if (failure.code === 'not_found' || failure.status === 404) hostConnected = false
+          else continue // Unknown/outage is NOT evidence that the host is absent.
+        }
+        const { data: result, error: observeError } = await sb.rpc('observe_direct_live_host', {
+          p_performer_id: lease.performer_id, p_session_id: lease.id,
+          p_expected_heartbeat: lease.heartbeat_at, p_host_connected: hostConnected,
+        })
+        if (observeError) throw observeError
+        if (result === 'ended') ended++
+      }
+      res.status(200).json({ ok: true, expired: data, ended }); return
     }
     if (req.body?.action === 'force-end') {
       if (!await requireAdmin(req, res)) return
@@ -55,8 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await roomService().deleteRoom(sessionRoomName(performerId, sessionId))
       res.status(200).json({ ok: true }); return
     }
-    if (session.ended_at || session.operation_id !== operationId || !session.heartbeat_at
-      || Date.parse(session.heartbeat_at) < Date.now() - STALE_SECONDS * 1000) {
+    if (session.ended_at || session.operation_id !== operationId) {
       res.status(409).json({ error: 'No active owned live session' }); return
     }
     const [{ data: performer }, { data: profile }] = await Promise.all([
@@ -75,18 +96,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!participants.some((p) => p.identity === performerId)) {
       res.status(409).json({ error: 'Host is not connected' }); return
     }
-    const heartbeatAt = new Date().toISOString()
-    const { data, error } = await sb.from('direct_live_leases').update({ heartbeat_at: heartbeatAt })
-      .eq('id', sessionId).eq('operation_id', operationId).is('ended_at', null).select('id')
+    const { data: renewed, error } = await sb.rpc('renew_direct_live_lease', {
+      p_performer_id: performerId, p_session_id: sessionId, p_operation_id: operationId,
+    })
     if (error) throw error
-    if (!data?.length) { res.status(409).json({ error: 'No active live session' }); return }
-    await sb.from('live_sessions').update({ heartbeat_at: heartbeatAt }).eq('id', sessionId).is('ended_at', null)
+    if (!renewed) { res.status(409).json({ error: 'No active live session' }); return }
     const viewerCount = countAudienceParticipants(participants, performerId)
     await sb.from('live_sessions').update({ viewer_peak: viewerCount }).eq('id', sessionId).lt('viewer_peak', viewerCount)
     if (process.env.ENABLE_LIVE_VIEWER_SAMPLES === 'true' && session.lifecycle_state === 'live') {
-      await sb.from('live_viewer_samples').insert({ live_session_id: sessionId, sampled_at: heartbeatAt, viewer_count: viewerCount })
+      await sb.from('live_viewer_samples').insert({ live_session_id: sessionId, sampled_at: new Date().toISOString(), viewer_count: viewerCount })
         .then(() => undefined, () => undefined)
     }
-    res.status(200).json({ ok: true, heartbeatAt, viewerCount })
+    res.status(200).json({ ok: true, viewerCount })
   } catch { res.status(503).json({ error: 'Live presence is temporarily unavailable' }) }
 }

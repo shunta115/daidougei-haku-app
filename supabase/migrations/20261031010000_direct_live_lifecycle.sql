@@ -1,7 +1,10 @@
 -- APPROVAL REQUIRED: not applied to TEST or production by this change.
 -- Preflight is intentionally non-destructive: resolve duplicates explicitly.
 begin;
-do $$ begin
+select pg_advisory_xact_lock(hashtextextended('haku.direct-live.migration',0));
+-- Close the preflight/DDL race with an old client starting between the two.
+lock table public.performers, public.live_sessions in access exclusive mode;
+do $$ declare busy boolean; begin
   if exists (select 1 from public.live_sessions where ended_at is null group by performer_id having count(*) > 1) then
     raise exception 'Duplicate open LIVE sessions: review before applying lifecycle migration';
   end if;
@@ -10,6 +13,10 @@ do $$ begin
   end if;
   if exists (select 1 from public.live_sessions where ended_at is null) then
     raise exception 'Stop active LIVE sessions before applying lifecycle migration';
+  end if;
+  if to_regclass('public.direct_live_leases') is not null then
+    execute 'select exists(select 1 from public.direct_live_leases where ended_at is null)' into busy;
+    if busy then raise exception 'Stop prepared LIVE leases before reapplying lifecycle migration'; end if;
   end if;
 end $$;
 -- TEST was originally a minimal merch schema; add the LIVE prerequisites idempotently.
@@ -30,6 +37,8 @@ create table if not exists public.direct_live_leases (
   lifecycle_state text not null check(lifecycle_state in ('preparing','live','ended')),
   title text, started_at timestamptz not null default now(), heartbeat_at timestamptz not null default now(), ended_at timestamptz
 );
+alter table public.direct_live_leases add column if not exists host_absent_since timestamptz;
+alter table public.direct_live_leases add column if not exists host_last_absent_at timestamptz;
 alter table public.direct_live_leases enable row level security;
 drop policy if exists direct_live_lease_owner_read on public.direct_live_leases;
 create policy direct_live_lease_owner_read on public.direct_live_leases for select to authenticated using(performer_id=auth.uid());
@@ -50,7 +59,7 @@ begin
   if not found then raise exception 'LIVE_APPROVAL_REQUIRED' using errcode='42501'; end if;
   select * into s from public.direct_live_leases where performer_id=p_performer_id and ended_at is null;
   if found then
-    if coalesce(s.heartbeat_at,s.started_at) < now()-interval '90 seconds'
+    if (s.lifecycle_state='preparing' and coalesce(s.heartbeat_at,s.started_at) < clock_timestamp()-interval '90 seconds')
       or (s.lifecycle_state='live' and not exists(select 1 from public.live_sessions where id=s.id and ended_at is null)) then
       perform public.close_direct_live_session(p_performer_id,s.id,'heartbeat_timeout');
     else
@@ -61,7 +70,7 @@ begin
   insert into public.direct_live_leases(performer_id,operation_id,lifecycle_state,title)
     values(p_performer_id,p_operation_id,'preparing',nullif(left(trim(p_title),200),''))
     on conflict(performer_id) do update set id=gen_random_uuid(),operation_id=excluded.operation_id,lifecycle_state='preparing',
-      title=excluded.title,started_at=now(),heartbeat_at=now(),ended_at=null returning id into s.id;
+      title=excluded.title,started_at=clock_timestamp(),heartbeat_at=clock_timestamp(),ended_at=null,host_absent_since=null,host_last_absent_at=null returning id into s.id;
   return s.id;
 end $$;
 
@@ -77,8 +86,12 @@ begin
   select * into s from public.direct_live_leases where id=p_session_id and performer_id=p_performer_id
     and operation_id=p_operation_id and ended_at is null for update;
   if not found then raise exception 'LIVE_SESSION_EXPIRED'; end if;
-  if s.heartbeat_at is null or s.heartbeat_at < now()-interval '90 seconds' then raise exception 'LIVE_SESSION_EXPIRED'; end if;
-  if s.lifecycle_state='live' then return s.id; end if;
+  if s.lifecycle_state='live' then
+    if not exists(select 1 from public.live_sessions where id=s.id and ended_at is null)
+      or not exists(select 1 from public.performers where id=p_performer_id and is_live) then raise exception 'LIVE_SESSION_EXPIRED'; end if;
+    return s.id;
+  end if;
+  if s.heartbeat_at is null or s.heartbeat_at < clock_timestamp()-interval '90 seconds' then raise exception 'LIVE_SESSION_EXPIRED'; end if;
   -- Event binding is optional; only a slot belonging to this performer/event is accepted.
   if p_event_slot_id is not null then
     if not exists (select 1 from public.event_slots e where e.id=p_event_slot_id and e.performer_id=p_performer_id
@@ -121,18 +134,72 @@ begin
   return public.close_direct_live_session(p_performer_id,p_session_id,'host_ended');
 end $$;
 
--- Bounded, lock-ordered cleanup; a renewed lease is rechecked under the same lock as start/end.
+-- The service has verified the SFU host. Never use a caller timestamp or reopen an ended lease.
+create or replace function public.renew_direct_live_lease(p_performer_id uuid,p_session_id uuid,p_operation_id uuid)
+returns boolean language plpgsql security definer set search_path = '' as $$
+declare s public.direct_live_leases%rowtype; stamp timestamptz;
+begin
+  perform 1 from public.performers p join public.profiles pr on pr.id=p.id
+    where p.id=p_performer_id and p.is_approved and pr.status::text='active' and pr.role::text='performer' for update of p;
+  if not found then return false; end if;
+  select * into s from public.direct_live_leases where performer_id=p_performer_id and id=p_session_id
+    and operation_id=p_operation_id and ended_at is null for update;
+  if not found then return false; end if;
+  if s.lifecycle_state='live' and (not exists(select 1 from public.live_sessions where id=s.id and ended_at is null)
+    or not exists(select 1 from public.performers where id=p_performer_id and is_live)) then return false; end if;
+  stamp:=greatest(clock_timestamp(),s.heartbeat_at+interval '1 microsecond');
+  update public.direct_live_leases set heartbeat_at=stamp,host_absent_since=null,host_last_absent_at=null where id=s.id;
+  if s.lifecycle_state='live' then
+    update public.live_sessions set heartbeat_at=stamp where id=s.id and ended_at is null;
+    if not found then raise exception 'LIVE_SESSION_EXPIRED'; end if;
+  end if;
+  return true;
+end $$;
+
+-- CAS guards an SFU observation made outside the DB transaction. A newer heartbeat wins.
+-- Active LIVE is ended only after repeated verified absence spanning >=120s, not elapsed heartbeat alone.
+create or replace function public.observe_direct_live_host(p_performer_id uuid,p_session_id uuid,
+  p_expected_heartbeat timestamptz,p_host_connected boolean)
+returns text language plpgsql security definer set search_path = '' as $$
+declare s public.direct_live_leases%rowtype; stamp timestamptz;
+begin
+  perform 1 from public.performers where id=p_performer_id for update;
+  select * into s from public.direct_live_leases where performer_id=p_performer_id and id=p_session_id
+    and ended_at is null and lifecycle_state='live' for update;
+  if not found or s.heartbeat_at is distinct from p_expected_heartbeat then return 'stale'; end if;
+  if p_host_connected is true then
+    if public.renew_direct_live_lease(p_performer_id,s.id,s.operation_id) then return 'healthy'; end if;
+    return 'stale';
+  end if;
+  if p_host_connected is null then
+    update public.direct_live_leases set host_absent_since=null,host_last_absent_at=null where id=s.id;
+    return 'unknown';
+  end if;
+  stamp:=clock_timestamp();
+  if s.heartbeat_at > stamp-interval '90 seconds' then return 'fresh'; end if;
+  if s.host_absent_since is null or s.host_last_absent_at is null or s.host_last_absent_at<stamp-interval '45 seconds' then
+    update public.direct_live_leases set host_absent_since=stamp,host_last_absent_at=stamp where id=s.id;
+    return 'grace';
+  end if;
+  update public.direct_live_leases set host_last_absent_at=stamp where id=s.id;
+  if s.host_absent_since > stamp-interval '120 seconds' then return 'grace'; end if;
+  perform public.close_direct_live_session(p_performer_id,s.id,'host_absent_timeout');
+  return 'ended';
+end $$;
+
+-- SQL cron cannot observe the SFU: expire unpublished preparation ONLY.
+-- Active sessions are reconciled by presence.ts using verified SFU observations and CAS above.
 create or replace function public.expire_direct_live_leases()
 returns integer language plpgsql security definer set search_path = '' as $$
 declare s record; n integer:=0;
 begin
-  for s in select id,performer_id from public.direct_live_leases where ended_at is null
-      and heartbeat_at<now()-interval '90 seconds' order by performer_id limit 100 loop
+  for s in select id,performer_id from public.direct_live_leases where ended_at is null and lifecycle_state='preparing'
+      and heartbeat_at<clock_timestamp()-interval '90 seconds' order by performer_id limit 100 loop
     perform 1 from public.performers where id=s.performer_id for update;
-    perform 1 from public.direct_live_leases where id=s.id and ended_at is null and heartbeat_at<now()-interval '90 seconds' for update;
+    perform 1 from public.direct_live_leases where id=s.id and ended_at is null and lifecycle_state='preparing'
+      and heartbeat_at<clock_timestamp()-interval '90 seconds' for update;
     if found then
-      perform public.close_direct_live_session(s.performer_id,s.id,'heartbeat_timeout');
-      n:=n+1;
+      perform public.close_direct_live_session(s.performer_id,s.id,'heartbeat_timeout'); n:=n+1;
     end if;
   end loop;
   return n;
@@ -161,6 +228,13 @@ drop trigger if exists direct_live_guard on public.performers;
 create trigger direct_live_guard before update on public.performers for each row execute function public.guard_direct_live_lifecycle();
 drop trigger if exists direct_live_guard on public.live_sessions;
 create trigger direct_live_guard before insert or update or delete on public.live_sessions for each row execute function public.guard_direct_live_lifecycle();
+-- Notification is internal to atomic activation; PUBLIC previously inherited EXECUTE.
+alter function public.notify_followers_live_start(uuid,text,text) set search_path = '';
+revoke all on function public.notify_followers_live_start(uuid,text,text) from public,anon,authenticated,service_role;
+revoke all on function public.guard_direct_live_lifecycle() from public,anon,authenticated;
+revoke all on function public.renew_direct_live_lease(uuid,uuid,uuid) from public,anon,authenticated;
+revoke all on function public.observe_direct_live_host(uuid,uuid,timestamptz,boolean) from public,anon,authenticated;
+grant execute on function public.renew_direct_live_lease(uuid,uuid,uuid),public.observe_direct_live_host(uuid,uuid,timestamptz,boolean) to service_role;
 revoke all on function public.reserve_direct_live(uuid,uuid,text) from public,anon;
 revoke all on function public.activate_direct_live(uuid,uuid,uuid,uuid,text,uuid,text) from public,anon;
 revoke all on function public.finish_direct_live(uuid,uuid) from public,anon;

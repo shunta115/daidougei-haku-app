@@ -58,6 +58,9 @@ describe('atomic DIRECT lifecycle SQL (ephemeral local Postgres, no connected DB
   await expect(db.query(`update public.performers set is_live=false where id='${owner}'`)).rejects.toThrow('LIVE_ATOMIC_RPC_REQUIRED')
   await expect(db.query(`update public.live_sessions set ended_at=now() where id='${id}'`)).rejects.toThrow('LIVE_ATOMIC_RPC_REQUIRED')
   await expect(db.query(`select public.close_direct_live_session('${owner}','${id}','x')`)).rejects.toThrow('permission denied')
+  for (const fn of ['expire_direct_live_leases()', `renew_direct_live_lease('${owner}','${id}','${op}')`, `observe_direct_live_host('${owner}','${id}',now(),false)`, `notify_followers_live_start('${other}','spoof',null)`]) {
+    await expect(db.query(`select public.${fn}`)).rejects.toThrow('permission denied')
+  }
  })
  it('ends atomically, clears location, and a delayed old end cannot stop the next LIVE',async()=>{
   const old=await reserve();await finish(old);await finish(old)
@@ -66,12 +69,17 @@ describe('atomic DIRECT lifecycle SQL (ephemeral local Postgres, no connected DB
   expect(await state()).toEqual({is_live:true,open:1})
   expect((await db.query(`select share_location,lat,lng from public.performers where id='${owner}'`)).rows[0]).toEqual({share_location:false,lat:null,lng:null})
  })
- it('lease expiry closes abandoned LIVE and rejects resurrection',async()=>{
+ it('does not expire a LIVE just because a browser heartbeat is late',async()=>{
   const id=await reserve(op2)
   await db.exec(`reset role; update public.direct_live_leases set heartbeat_at=now()-interval '91 seconds' where id='${id}'`)
-  expect((await db.query('select public.expire_direct_live_leases() as n')).rows[0]).toEqual({n:1});await user()
-  expect(await state()).toEqual({is_live:false,open:0})
-  await expect(activate(id,op2)).rejects.toThrow('LIVE_SESSION_EXPIRED')
+  expect((await db.query('select public.expire_direct_live_leases() as n')).rows[0]).toEqual({n:0})
+  expect(await state()).toEqual({is_live:true,open:1})
+  const old=(await db.query<{heartbeat_at:string}>(`select heartbeat_at::text from public.direct_live_leases where id='${id}'`)).rows[0].heartbeat_at
+  expect((await db.query(`select public.observe_direct_live_host('${owner}','${id}','${old}',true) as result`)).rows[0]).toEqual({result:'healthy'})
+  await user();await finish(id)
+  await db.exec('reset role')
+  expect((await db.query(`select public.renew_direct_live_lease('${owner}','${id}','${op2}') as ok`)).rows[0]).toEqual({ok:false})
+  await user()
  })
  it('cannot activate an expired preparing lease',async()=>{
   const id=await reserve()
@@ -85,11 +93,11 @@ describe('atomic DIRECT lifecycle SQL (ephemeral local Postgres, no connected DB
 it('duplicate preflight fails without deleting or modifying existing sessions',async()=>{
  const isolated=new PGlite()
  try {
-  await isolated.exec(`create table public.live_sessions(id uuid,performer_id uuid,ended_at timestamptz); insert into public.live_sessions values(gen_random_uuid(),'${owner}',null),(gen_random_uuid(),'${owner}',null)`)
+  await isolated.exec(`create table public.performers(is_live boolean); create table public.live_sessions(id uuid,performer_id uuid,ended_at timestamptz); insert into public.live_sessions values(gen_random_uuid(),'${owner}',null),(gen_random_uuid(),'${owner}',null)`)
   await expect(isolated.exec(migration)).rejects.toThrow('Duplicate open LIVE sessions')
   await isolated.exec('rollback')
   expect((await isolated.query('select count(*)::int as n from public.live_sessions')).rows[0]).toEqual({n:2})
-  await isolated.exec(`update public.live_sessions set ended_at=now(); create table public.performers(is_live boolean); insert into public.performers values(true)`)
+  await isolated.exec(`update public.live_sessions set ended_at=now(); insert into public.performers values(true)`)
   await expect(isolated.exec(migration)).rejects.toThrow('Stop active LIVE flags')
   await isolated.exec('rollback')
   expect((await isolated.query('select count(*)::int as n from public.live_sessions')).rows[0]).toEqual({n:2})

@@ -73,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (sessionError) { res.status(503).json({ error: 'Safe LIVE lifecycle is unavailable' }); return }
     if (!session || (host && (session.id !== sessionId || session.operation_id !== operationId || (session.lifecycle_state === 'live' && !performer.is_live)))
       || (!host && session.lifecycle_state !== 'live')
-      || !session.heartbeat_at || Date.parse(session.heartbeat_at) < Date.now() - 90_000) {
+      || (session.lifecycle_state === 'preparing' && (!session.heartbeat_at || Date.parse(session.heartbeat_at) < Date.now() - 90_000))) {
       res.status(409).json({ error: 'LIVE session expired or owned by another operation' }); return
     }
     const { data: profile } = user

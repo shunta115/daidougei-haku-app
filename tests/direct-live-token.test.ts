@@ -15,7 +15,7 @@ it('requires authentication and the exact host reservation before signing',async
 })
 it('rejects a different performer and expired lease',async()=>{
  f.user='other';expect((await call({performerId:'owner',asHost:true},'Bearer mock')).status).toBe(403)
- f.user='owner';f.session.heartbeat_at=new Date(Date.now()-91_000).toISOString()
+ f.user='owner';f.session.lifecycle_state='preparing';f.session.heartbeat_at=new Date(Date.now()-91_000).toISOString()
  expect((await call({performerId:'owner',asHost:true,sessionId:'session-1',operationId:'op-1'},'Bearer mock')).status).toBe(409)
 })
 it('signs a publisher only for the owned session room',async()=>{
@@ -32,4 +32,9 @@ it('preparation is invisible to viewers; viewer identity never collides with hos
 it('does not disclose a viewer email in public participant metadata when the display name is empty',async()=>{
  f.name='';expect((await call({performerId:'owner',asHost:false},'Bearer mock')).status).toBe(200)
  expect(f.token).toHaveBeenCalledWith(expect.objectContaining({name:'Guest',canPublish:false}))
+})
+it('does not treat a late browser timestamp as an ended LIVE for token renewal',async()=>{
+ f.session.heartbeat_at=new Date(Date.now()-300_000).toISOString();f.session.lifecycle_state='live'
+ expect((await call({performerId:'owner',asHost:false})).status).toBe(200)
+ expect((await call({performerId:'owner',asHost:true,sessionId:'session-1',operationId:'op-1'},'Bearer mock')).status).toBe(200)
 })
