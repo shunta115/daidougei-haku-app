@@ -5,6 +5,12 @@ do $$ begin
   if exists (select 1 from public.live_sessions where ended_at is null group by performer_id having count(*) > 1) then
     raise exception 'Duplicate open LIVE sessions: review before applying lifecycle migration';
   end if;
+  if exists (select 1 from public.performers where is_live) then
+    raise exception 'Stop active LIVE flags before applying lifecycle migration';
+  end if;
+  if exists (select 1 from public.live_sessions where ended_at is null) then
+    raise exception 'Stop active LIVE sessions before applying lifecycle migration';
+  end if;
 end $$;
 -- TEST was originally a minimal merch schema; add the LIVE prerequisites idempotently.
 alter table public.live_sessions add column if not exists heartbeat_at timestamptz;

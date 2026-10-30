@@ -89,5 +89,9 @@ it('duplicate preflight fails without deleting or modifying existing sessions',a
   await expect(isolated.exec(migration)).rejects.toThrow('Duplicate open LIVE sessions')
   await isolated.exec('rollback')
   expect((await isolated.query('select count(*)::int as n from public.live_sessions')).rows[0]).toEqual({n:2})
+  await isolated.exec(`update public.live_sessions set ended_at=now(); create table public.performers(is_live boolean); insert into public.performers values(true)`)
+  await expect(isolated.exec(migration)).rejects.toThrow('Stop active LIVE flags')
+  await isolated.exec('rollback')
+  expect((await isolated.query('select count(*)::int as n from public.live_sessions')).rows[0]).toEqual({n:2})
  } finally {await isolated.close()}
 },30000)
