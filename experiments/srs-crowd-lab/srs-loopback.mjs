@@ -1,7 +1,9 @@
 // Loopback-only SRS control. Never expose SRS HTTP API to a public network.
-const BASE = 'http://127.0.0.1:1985';
+export function makeSrsLoopback({ port = 1985, fetcher = fetch } = {}) {
+if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('invalid_srs_port');
+const BASE = 'http://127.0.0.1:' + port;
 const request = async (path, options = {}) => {
-  const response = await fetch(BASE + path, { redirect: 'error', signal: AbortSignal.timeout(5000), ...options });
+  const response = await fetcher(BASE + path, { redirect: 'error', signal: AbortSignal.timeout(5000), ...options });
   if (!response.ok) throw new Error('srs_http_' + response.status);
   const body = await response.json();
   if (body.code !== 0) throw new Error('srs_api_rejected');
@@ -9,11 +11,11 @@ const request = async (path, options = {}) => {
 };
 const validStream = stream => /^haku-lab-[a-z0-9]{1,80}$/.test(stream);
 
-export async function openSrsWhip({ stream, sdp }) {
+async function openSrsWhip({ stream, sdp }) {
   if (!validStream(stream) || typeof sdp !== 'string' || !sdp.startsWith('v=0') || sdp.length > 128 * 1024) {
     throw new Error('invalid_whip_request');
   }
-  const response = await fetch(BASE + '/rtc/v1/whip/?app=live&stream=' + stream, {
+  const response = await fetcher(BASE + '/rtc/v1/whip/?app=live&stream=' + stream, {
     method: 'POST', headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
     body: sdp, redirect: 'error', signal: AbortSignal.timeout(10000),
   });
@@ -30,7 +32,7 @@ async function publisherFor(stream) {
   return matches[0] || null;
 }
 
-export async function closeSrsWhip({ stream }) {
+async function closeSrsWhip({ stream }) {
   if (!validStream(stream)) throw new Error('invalid_stream');
   const current = await publisherFor(stream);
   if (!current) return;
@@ -40,3 +42,8 @@ export async function closeSrsWhip({ stream }) {
   const remaining = await publisherFor(stream);
   if (remaining) throw new Error('srs_disconnect_unconfirmed');
 }
+
+return { openSrsWhip, closeSrsWhip };
+}
+
+export const { openSrsWhip, closeSrsWhip } = makeSrsLoopback();
