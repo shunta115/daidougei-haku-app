@@ -64,6 +64,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const performerId = performer?.id
   const { mode, isOverlayChrome, orientation: deviceOrient } = useLiveLayout()
   const [liveSettingsOpen, setLiveSettingsOpen] = useState(false)
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false)
+  const [previewFit, setPreviewFit] = useState<'contain' | 'cover'>('contain')
   const [orientationMode, setOrientationMode] = useState<LiveOrientationMode>(() =>
     readLiveOrientationMode(liveOrientationStorage()),
   )
@@ -712,7 +714,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       data-video-orientation={displayOrientation}
       style={{
         '--video-aspect': String(displayOrientation === 'portrait' ? 9 / 16 : 16 / 9),
-        '--video-fit': 'contain',
+        '--video-fit': previewFit,
       } as CSSProperties}
     >
       <div className="pl-live__stage">
@@ -836,6 +838,11 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </button>
           {liveSettingsOpen ? <div id="pl-live-settings" className="pl-live__settings-popover">
             {orientationPicker(true)}
+            <div className="pl-live__fit-control" role="group" aria-label="プレビュー表示">
+              <button type="button" aria-pressed={previewFit === 'contain'} onClick={() => setPreviewFit('contain')}>全画角</button>
+              <button type="button" aria-pressed={previewFit === 'cover'} onClick={() => setPreviewFit('cover')}>全画面</button>
+              <small>全画面では端が切れる場合があります。送信映像は変わりません。</small>
+            </div>
             <div className="pl-live__prefs">
               <label><input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} /> MAP位置共有</label>
               <label><input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} /> ギフト音</label>
@@ -872,11 +879,19 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             </button>
           </div>
 
-          <button type="button" className="pl-btn pl-btn--block pl-btn--danger pl-live__end-live" disabled={busy || mediaBusy || switchingCamera} onClick={() => void stopLive()}>
+          <button type="button" className="pl-btn pl-btn--block pl-btn--danger pl-live__end-live" disabled={busy || mediaBusy || switchingCamera} onClick={() => setEndConfirmOpen(true)}>
             ライブ終了
           </button>
         </div>
       )}
+      {endConfirmOpen ? <div className="pl-live__confirm-backdrop" role="presentation">
+        <div className="pl-live__confirm" role="alertdialog" aria-modal="true" aria-labelledby="pl-live-end-title" aria-describedby="pl-live-end-desc">
+          <h2 id="pl-live-end-title">LIVEを終了しますか？</h2>
+          <p id="pl-live-end-desc">終了すると視聴者への映像と音声が止まります。</p>
+          <div><button type="button" className="pl-btn pl-btn--ghost" onClick={() => setEndConfirmOpen(false)}>配信を続ける</button>
+          <button type="button" className="pl-btn pl-btn--danger" disabled={busy} onClick={() => { setEndConfirmOpen(false); void stopLive() }}>LIVEを終了</button></div>
+        </div>
+      </div> : null}
       {error ? <p className="pl-error">{error}</p> : null}
       {cameraRecoveryNeeded ? (
         <button type="button" className="pl-btn pl-btn--block" disabled={mediaBusy} onClick={() => void retryCamera()}>
