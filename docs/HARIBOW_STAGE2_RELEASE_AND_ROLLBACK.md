@@ -1,5 +1,7 @@
 # HARIBOW 第2段階の反映・ロールバック手順（未実行）
 
+> 追加監査でheartbeat/失効・権限・cronの仕様を修正しました。適用前に `docs/HARIBOW_PR100_CONCURRENCY_AUDIT_20261031.md` を参照してください。配信中LIVEの自動終了にはSFU watchdogが必要で、SQL cronだけでは保証しません。
+
 ## 現在の状態
 
 本番もTESTもmigration未適用。本番デプロイ・mainマージ未実行。前回b705eb4を継承した独立ブランチで修復。両方式の実iPhone映像/音声/再接続/終了が未確認のためGOは出さない。
@@ -13,7 +15,7 @@
    - 既存セッションを削除しない。重複open sessionがあれば適用を中止する。
 2. `supabase/migrations/20261031010100_direct_live_expiry_schedule.sql`
    - Supabase同梱のpg_cron拡張を有効化し、毎分の失効処理を登録する。外部サービス契約・Egressなし。
-   - heartbeatが90秒止まった配信を終了する。通常のscheduler遅延を除けば90〜150秒程度。即時終了/厳密な90秒保証ではない。
+   - SQL cronはheartbeatが90秒止まった未公開準備だけを終了する。配信中LIVEの自動終了にはSFU watchdogの継続実行が別途必要。DB時刻だけでは正常LIVEを終了しない。
    - 終了履歴は保持する。LIVE以外の台帳・送金・投票は変更しない。
 
 TESTの現行live_sessionsにはheartbeat/event binding等の列が不足し、pg_cronは未導入。migration 1は列をidempotentに追加する。TEST/本番とも重複open sessionは読み取り時点で0だった。適用直前にもう一度確認する。
@@ -30,7 +32,7 @@ Vercel PreviewのSUPABASE_URL/VITE_SUPABASE_URLはTESTホストを指すこと�
 - 対象RPCの権限がauthenticated本人に限定され、内部close/expiry RPCはservice_roleだけ実行できることを確認。
 - 新しいTESTユーザー/専用演者が必要なら作成対象を明示。HARIBOWの本番ユーザーを使わない。既存データを削除しない。
 - publish準備→LIVE公開→視聴→通信断/復帰→終了をTEST接続で確認。複数実DB接続から同時予約・終了を実行し、open sessionが1以下、古い終了要求が新配信を止めないことを確認。
-- schedulerのjob/run_details、90秒lease失効、閉じたsessionへのtoken拒否を確認。
+- schedulerのjob/run_details、未公開準備の90秒失効、SFU不在の連続確認と猶予、閉じたsessionへのtoken拒否を確認。
 - 別端末の実iPhone Safariで音・映像・ミュート/再開・カメラ切替・回転・画面ロックを確認。ローカルモック成功で代用しない。
 - StripeはTESTキーとTESTアカウントだけを使い、Checkout/成功/失敗/キャンセル/Webhook重複を確認。本番キー/送金/返金は使わない。
 
@@ -48,8 +50,9 @@ TESTと実機の確認後に、具体的なリリースcommit・本番migration�
 
 1. 新しい配信開始を止め、現行配信を本人操作で終了。open session=0を確認。更新前/更新後の画面を混在させない。
 2. pg_cronの `haku-direct-live-expiry` ジョブだけをunscheduleする。拡張自体は削除しない。他ジョブは変更しない。
-3. この変更で追加した `direct_live_guard` triggerをperformers/live_sessionsから外す。必要なら追加した `live_sessions_one_open_performer` 索引のみを外す。旧クライアントを使う前に実行する必要がある。
-4. 本番deploymentを反映前の正常deploymentへ戻す（これも個別承認）。DBの追加列と関数は残してよい。公開RPCを使う新画面は閉じて更新する。
-5. HARIBOWの公開プロフィール、DIRECT/YouTube、投げ銭への導線を確認。Stripe処理/送金/返金はロールバック対象にしない。
+3. 旧クライアントへ戻す場合、通知関数のauthenticated EXECUTEも復元が必要（元の本人チェックは維持、これも別承認）。追加監査でPUBLIC/anonへの実行許可を閉じているため、戻す権限を明示して承認する。
+4. この変更で追加した `direct_live_guard` triggerをperformers/live_sessionsから外す。必要なら追加した `live_sessions_one_open_performer` 索引のみを外す。旧クライアントを使う前に実行する必要がある。
+5. 本番deploymentを反映前の正常deploymentへ戻す（これも個別承認）。DBの追加列と関数は残してよい。公開RPCを使う新画面は閉じて更新する。
+6. HARIBOWの公開プロフィール、DIRECT/YouTube、投げ銭への導線を確認。Stripe処理/送金/返金はロールバック対象にしない。
 
 復旧にbusiness rowの削除や本番決済を使わない。不整合が見つかった場合、修正対象のsession/performer IDと更新内容を提示し、別承認を得る。
