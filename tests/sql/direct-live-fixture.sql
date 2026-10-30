@@ -13,4 +13,3 @@ create schema auth; create role anon; create role authenticated; create role ser
    insert into public.profiles values('10000000-0000-4000-8000-000000000001','performer','active'),('20000000-0000-4000-8000-000000000002','performer','active');
    insert into public.performers(id,stage_name,is_approved) values('10000000-0000-4000-8000-000000000001','HARIBOW TEST',true),('20000000-0000-4000-8000-000000000002','OTHER',false);
    grant select,insert,update,delete on all tables in schema public to authenticated;
-
