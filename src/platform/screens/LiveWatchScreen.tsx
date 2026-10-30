@@ -110,7 +110,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
   const fs = useFullscreen(stageRef)
-  const commentScroll = useLiveCommentScroll(comments.length)
+  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id)
 
   useEffect(() => {
     getPerformer(performerId, allowPublicTest)

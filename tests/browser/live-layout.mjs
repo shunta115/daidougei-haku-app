@@ -124,6 +124,21 @@ try {
     assert.deepEqual(errors, [])
     await context.close()
   }
+  {
+    const { page, context, errors } = await pageFor(390, 844)
+    await page.goto(`${base}/experiments/live-ui/browser-harness.html?screen=viewer&comments=80`)
+    await page.waitForFunction(() => document.querySelectorAll('.pl-live__comment').length === 80)
+    await page.locator('.pl-live__comments').evaluate((element) => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')) })
+    await page.locator('.pl-live__composer input').fill('新着コメントの追従テスト')
+    await page.locator('.pl-live__composer input').press('Enter')
+    await page.getByRole('button', { name: '最新コメント', exact: true }).waitFor()
+    assert.equal(await page.locator('.pl-live__comment').count(), 80)
+    await page.getByRole('button', { name: '最新コメント', exact: true }).click()
+    await page.waitForFunction(() => { const list = document.querySelector('.pl-live__comments'); return list.scrollHeight - list.scrollTop - list.clientHeight <= 32 })
+    results.checks.push({ type: 'bounded-comment-follow', count: 80, manualScrollPreserved: true, latestButton: true })
+    assert.deepEqual(errors, [])
+    await context.close()
+  }
   const { page, context, errors } = await pageFor(390, 844)
   await page.goto(`${base}/experiments/live-ui/browser-harness.html?screen=host&phase=ready`)
   await page.getByRole('heading', { name: 'LIVE配信の設定', exact: true }).waitFor()

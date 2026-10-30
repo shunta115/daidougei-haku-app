@@ -125,7 +125,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const appliedOrientationRef = useRef(videoOrientation)
   const failedAutoOrientationRef = useRef<string | null>(null)
   const hiddenAtRef = useRef<number | null>(null)
-  const commentScroll = useLiveCommentScroll(comments.length)
+  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id)
   const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
   useEffect(() => saveLiveDisplayPreference('comments', commentsVisible), [commentsVisible])
   useEffect(() => saveLiveDisplayPreference('gift-effects', giftEffects), [giftEffects])

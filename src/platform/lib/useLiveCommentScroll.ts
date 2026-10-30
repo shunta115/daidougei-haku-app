@@ -14,14 +14,15 @@ export function isNearCommentEnd(element: Pick<HTMLElement, 'scrollHeight' | 'sc
   return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold
 }
 
-export function hasIncomingLiveComment(previousCount: number, currentCount: number) {
-  return currentCount > previousCount
+export function hasIncomingLiveComment(previousCount: number, currentCount: number, latestChanged = false) {
+  return currentCount > previousCount || (currentCount === previousCount && latestChanged)
 }
 
-export function useLiveCommentScroll(commentCount: number) {
+export function useLiveCommentScroll(commentCount: number, latestCommentId?: string) {
   const listRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const previousCountRef = useRef(commentCount)
+  const previousLatestRef = useRef(latestCommentId)
   const [hasNewComments, setHasNewComments] = useState(false)
 
   const scrollToLatest = (behavior: ScrollBehavior = 'smooth') => {
@@ -35,13 +36,15 @@ export function useLiveCommentScroll(commentCount: number) {
   useLayoutEffect(() => {
     const list = listRef.current
     const previousCount = previousCountRef.current
+    const latestChanged = latestCommentId != null && latestCommentId !== previousLatestRef.current
     previousCountRef.current = commentCount
+    previousLatestRef.current = latestCommentId
     if (!list) return
     if (pinnedRef.current) scrollToLatest('auto')
-    else if (hasIncomingLiveComment(previousCount, commentCount)) setHasNewComments(true)
-    // commentCount is the event that drives the scroll; scrollToLatest is intentionally local.
+    else if (hasIncomingLiveComment(previousCount, commentCount, latestChanged)) setHasNewComments(true)
+    // The latest ID changes even when the bounded 80-comment list stays full.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commentCount])
+  }, [commentCount, latestCommentId])
 
   const onScroll = () => {
     const list = listRef.current

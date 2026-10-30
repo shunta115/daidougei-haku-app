@@ -42,6 +42,8 @@ describe('LIVE comment session and scrolling', () => {
     expect(hasIncomingLiveComment(12, 13)).toBe(true)
     expect(hasIncomingLiveComment(12, 11)).toBe(false)
     expect(hasIncomingLiveComment(12, 12)).toBe(false)
+    expect(hasIncomingLiveComment(80, 80, true)).toBe(true)
+    expect(hasIncomingLiveComment(80, 79, true)).toBe(false)
   })
 
   it('scopes reads, writes, and realtime inserts to the active LIVE session', () => {
