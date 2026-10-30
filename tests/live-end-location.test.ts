@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const fake = vi.hoisted(() => ({
+  sessionError: null as Error | null,
   performerPatch: null as Record<string, unknown> | null,
   sessionPatch: null as Record<string, unknown> | null,
 }))
@@ -14,7 +15,7 @@ vi.mock('../src/platform/lib/supabase', () => ({
           return { eq: async () => ({ error: null }) }
         }
         fake.sessionPatch = patch
-        return { eq: () => ({ is: async () => ({ error: null }) }) }
+        return { eq: () => ({ is: async () => ({ error: fake.sessionError }) }) }
       },
     }),
   }),
@@ -26,6 +27,7 @@ vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
 import { endLive } from '../src/platform/lib/api'
 
 beforeEach(() => {
+  fake.sessionError = null
   fake.performerPatch = null
   fake.sessionPatch = null
 })
@@ -41,4 +43,10 @@ it('clears public location sharing and coordinates when a LIVE ends', async () =
     location_updated_at: null,
   })
   expect(fake.sessionPatch).toEqual(expect.objectContaining({ ended_at: expect.any(String) }))
+})
+
+ it('surfaces a session-close failure so ending can be retried', async () => {
+  fake.sessionError = new Error('session close unavailable')
+  await expect(endLive('performer-1')).rejects.toThrow('session close unavailable')
+  expect(fake.performerPatch).toMatchObject({ is_live: false })
 })

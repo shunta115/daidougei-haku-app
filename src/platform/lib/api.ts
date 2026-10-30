@@ -372,11 +372,12 @@ export async function endLive(performerId: string) {
     .eq('id', performerId)
   if (uerr) throw uerr
   // Close every open session (guards against duplicates from older builds).
-  await sb
+  const { error: sessionError } = await sb
     .from('live_sessions')
     .update({ ended_at: now })
     .eq('performer_id', performerId)
     .is('ended_at', null)
+  if (sessionError) throw sessionError
 }
 
 export async function listEventLiveSessions(eventId: string): Promise<LiveSession[]> {

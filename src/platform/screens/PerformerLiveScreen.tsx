@@ -73,6 +73,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const [schedules, setSchedules] = useState<LiveSchedule[]>([])
   const [scheduleFeatureAvailable, setScheduleFeatureAvailable] = useState(false)
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
+  const [transportState, setTransportState] = useState('connected')
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [method, setMethod] = useState<'direct' | 'youtube'>(() => performer?.youtube_live_enabled && !performer?.is_live ? 'youtube' : 'direct')
   const [previewState, setPreviewState] = useState<'idle' | 'preparing' | 'ready' | 'denied' | 'ended'>('idle')
@@ -310,6 +311,17 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
 
   const wireRoom = (room: Room) => {
     roomRef.current = room
+    setTransportState('connected')
+    room.on(RoomEvent.Reconnecting, () => { if (roomRef.current === room) setTransportState('reconnecting') })
+    room.on(RoomEvent.SignalReconnecting, () => { if (roomRef.current === room) setTransportState('reconnecting') })
+    room.on(RoomEvent.Reconnected, () => { if (roomRef.current === room) setTransportState('connected') })
+    room.on(RoomEvent.Disconnected, () => {
+      if (roomRef.current === room && !endingRef.current) {
+        roomRef.current = null
+        setTransportState('disconnected')
+        setError('配信接続が切れました。通信を確認して「配信に再接続」を押してください。')
+      }
+    })
     setCameraFacing(hostCameraTrack(room)?.mediaStreamTrack.getSettings().facingMode === 'environment' ? 'environment' : 'user')
     void canSwitchHostCamera()
       .then((available) => { if (roomRef.current === room) setCameraSwitchAvailable(available) })
@@ -441,6 +453,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       const room = roomRef.current
       roomRef.current = null
       if (room) void room.disconnect()
+      if (phase === 'live') setTransportState('disconnected')
       if (e instanceof LiveKitClientError) setError(e.message)
       else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : 'LIVEを開始できませんでした。通信を確認してもう一度お試しください。'))
     } finally {
@@ -829,6 +842,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
+          {transportState === 'reconnecting' ? <p role="status">配信を再接続しています…</p> : null}
+          {transportState === 'disconnected' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void goLive()}>配信に再接続</button> : null}
           {orientationPicker(true)}
           <div className="pl-live__comments-wrap">
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
