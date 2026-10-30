@@ -41,7 +41,11 @@ export function makeSrsCrowdGate({
       dailyStarts.set(key, (dailyStarts.get(key) || 0) + 1);
       return room;
     },
-    consent: (...args) => authority.consent(...args),
+    async consent(actor, roomId, allowed) {
+      const state = authority.consent(actor, roomId, allowed);
+      if (state.phase === 'ended') await close(roomId);
+      return state;
+    },
     qr: (...args) => authority.qr(...args),
     request: (...args) => authority.request(...args),
     direct: (...args) => authority.direct(...args),
