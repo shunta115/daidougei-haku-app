@@ -1,6 +1,8 @@
 import { beforeAll,afterAll,it,expect,vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import { readFileSync } from 'node:fs'
+// Metadata tests use the source HTML shell so test execution does not depend on a prior build.
+vi.mock('node:fs/promises', async()=>{const {readFileSync}=await import('node:fs');return {readFile:async()=>readFileSync('index.html','utf8')}})
 vi.mock('../api/stripe/_shared.js',async()=>import('./fixtures/official-home/backend'))
 import { officialHome } from '../server/officialHome'
 import { db,ready,OWNER,OTHER,ADMIN,objects } from './fixtures/official-home/backend'
