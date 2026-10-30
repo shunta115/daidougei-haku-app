@@ -22,6 +22,8 @@ async function body(req) {
 
 export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ openMedia: openSrsWhip, closeMedia: closeSrsWhip }) } = {}) {
   if (typeof resolveActor !== 'function') throw new Error('authenticated_actor_resolver_required');
+  const owners = new Map();
+  let timer;
   const server = createServer(async (req, res) => {
     try {
       const address = server.address();
@@ -35,7 +37,9 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const roomId = url.searchParams.get('room');
       if (req.method === 'POST' && url.pathname === '/rooms') {
         const data = JSON.parse(await body(req) || '{}');
-        json(res, 201, gate.create(actor, data.title)); return;
+        const room = gate.create(actor, data.title);
+        owners.set(room.id, actor);
+        json(res, 201, room); return;
       }
       if (!roomId || url.searchParams.size !== 1) { json(res, 404, { error: 'not_found' }); return; }
       if (req.method === 'GET' && url.pathname === '/state') { json(res, 200, gate.state(actor, roomId)); return; }
@@ -68,5 +72,10 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       json(res, error?.status || 403, { error: error?.code || error?.message || 'request_failed' });
     }
   });
+  server.on('listening', () => {
+    timer = setInterval(() => { void gate.sweep(roomId => owners.get(roomId)).catch(() => {}); }, 2000);
+    timer.unref();
+  });
+  server.on('close', () => clearInterval(timer));
   return { server, gate };
 }
