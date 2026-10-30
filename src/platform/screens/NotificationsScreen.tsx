@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { disableAppearancePush, enableAppearancePush, getNotificationPreference, listNotifications, markNotificationRead } from '../lib/api'
+import { disableAppearancePush, disableLiveStartPush, enableAppearancePush, enableLiveStartPush, getLivePushPreference, getNotificationPreference, listNotifications, liveStartWebPushEnabled, markNotificationRead } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { NotificationRow } from '../lib/types'
 import { AppBackButton } from '../components/AppBackButton'
@@ -36,6 +36,9 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
   const [error, setError] = useState<string | null>(null)
   const [pushOn, setPushOn] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
+  const [livePushAvailable, setLivePushAvailable] = useState(false)
+  const [livePushOn, setLivePushOn] = useState(false)
+  const [livePushBusy, setLivePushBusy] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -47,6 +50,15 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
     return startNotificationRefresh(() => load().catch((e) => {
       setError(e instanceof Error ? e.message : 'Failed')
     }))
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !liveStartWebPushEnabled) return
+    let active = true
+    void getLivePushPreference(user.id).then((value) => {
+      if (active) { setLivePushAvailable(value.available); setLivePushOn(value.enabled) }
+    }).catch(() => { if (active) setLivePushAvailable(false) })
+    return () => { active = false }
   }, [user])
 
   useEffect(() => {
@@ -67,7 +79,7 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
   }
 
   const togglePush = async () => {
-    if (!user || pushBusy) return
+    if (!user || pushBusy || livePushBusy) return
     setPushBusy(true); setError(null)
     try {
       if (pushOn) await disableAppearancePush(user.id, lang)
@@ -80,15 +92,39 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
         : lang === 'zh-TW'
           ? { denied: '通知權限已被拒絕。請在iPhone設定中允許HAKU通知。', unsupported: 'iPhone請先從Safari將HAKU加入主畫面，再開啟通知。', failed: '無法設定Push通知。' }
           : { denied: '通知が許可されていません。iPhoneの設定からHAKUの通知を許可してください。', unsupported: 'iPhoneではSafariからホーム画面に追加したHAKUで通知を有効にしてください。', failed: 'Push通知を設定できませんでした。' }
-      setError(code === 'push_denied' ? messages.denied : code === 'push_unsupported' ? messages.unsupported : messages.failed)
+      setError(code === 'push_denied' ? messages.denied : code === 'push_unsupported' || code === 'push_home_screen_required' ? messages.unsupported : messages.failed)
     } finally { setPushBusy(false) }
+  }
+
+  const toggleLivePush = async () => {
+    if (!user || !livePushAvailable || livePushBusy || pushBusy) return
+    setLivePushBusy(true); setError(null)
+    try {
+      if (livePushOn) await disableLiveStartPush(user.id, lang)
+      else await enableLiveStartPush(user.id, lang)
+      setLivePushOn(!livePushOn)
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : ''
+      if (code === 'live_push_unavailable') {
+        setLivePushAvailable(false)
+        setError(lang === 'en' ? 'LIVE Push is not available in this environment. In-app alerts are still available.' : lang === 'zh-TW' ? '此環境暫時無法使用直播Push通知，仍可查看HAKU內通知。' : 'この環境ではLIVEのPush通知を利用できません。HAKU内通知をご利用ください。')
+      } else {
+        setError(lang === 'en' ? 'Allow notifications in Settings. On iPhone, open HAKU from the Home Screen before enabling Push.' : lang === 'zh-TW' ? '請在設定允許通知。iPhone請從主畫面開啟HAKU後設定Push通知。' : '通知の許可を確認してください。iPhoneではホーム画面に追加したHAKUからPush通知を設定してください。')
+      }
+    } finally { setLivePushBusy(false) }
   }
 
   return (
     <>
       {onBack ? <AppBackButton onClick={onBack} label="戻る" /> : null}
       <h1 className="pl-h1">Notifications</h1>
-      {user ? <section className="pl-registration__section pl-notification-settings"><h2 className="pl-h2">{lang === 'en' ? 'Performance alerts' : lang === 'zh-TW' ? '演出通知' : '出演予定の通知'}</h2><p className="pl-muted">{lang === 'en' ? 'In-app alerts are available without Push. On iPhone, add HAKU to the Home Screen before enabling Push.' : lang === 'zh-TW' ? '即使未開啟Push，也可在HAKU內查看通知。iPhone請先將HAKU加入主畫面。' : 'Pushを許可しなくてもHAKU内通知は確認できます。iPhoneでは先にSafariからホーム画面へ追加してください。'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={pushBusy} aria-pressed={pushOn} onClick={() => void togglePush()}>{pushOn ? (lang === 'en' ? 'Disable Push' : lang === 'zh-TW' ? '關閉Push通知' : 'Push通知をオフ') : (lang === 'en' ? 'Enable Push' : lang === 'zh-TW' ? '開啟Push通知' : 'Push通知をオン')}</button></section> : null}
+      {user ? <section className="pl-registration__section pl-notification-settings"><h2 className="pl-h2">{lang === 'en' ? 'Performance alerts' : lang === 'zh-TW' ? '演出通知' : '出演予定の通知'}</h2><p className="pl-muted">{lang === 'en' ? 'In-app alerts are available without Push. On iPhone, add HAKU to the Home Screen before enabling Push.' : lang === 'zh-TW' ? '即使未開啟Push，也可在HAKU內查看通知。iPhone請先將HAKU加入主畫面。' : 'Pushを許可しなくてもHAKU内通知は確認できます。iPhoneでは先にSafariからホーム画面へ追加してください。'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={pushBusy || livePushBusy} aria-pressed={pushOn} onClick={() => void togglePush()}>{pushOn ? (lang === 'en' ? 'Disable Push' : lang === 'zh-TW' ? '關閉Push通知' : 'Push通知をオフ') : (lang === 'en' ? 'Enable Push' : lang === 'zh-TW' ? '開啟Push通知' : 'Push通知をオン')}</button></section> : null}
+      {user && liveStartWebPushEnabled ? <section className="pl-registration__section pl-notification-settings">
+        <h2 className="pl-h2">{lang === 'en' ? 'LIVE start alerts' : lang === 'zh-TW' ? '直播開始通知' : 'LIVE開始の通知'}</h2>
+        <p className="pl-muted">{lang === 'en' ? 'Get a Push when a performer you follow starts LIVE. On iPhone, use HAKU added to the Home Screen and allow notifications.' : lang === 'zh-TW' ? '追蹤的表演者開始直播時接收Push通知。iPhone請使用已加入主畫面的HAKU並允許通知。' : 'フォロー中のパフォーマーがLIVEを始めたらPushでお知らせします。iPhoneではホーム画面に追加したHAKUで通知を許可してください。'}</p>
+        {!livePushAvailable ? <p className="pl-muted" role="status">{lang === 'en' ? 'LIVE Push is unavailable here. In-app alerts remain available.' : lang === 'zh-TW' ? '此環境暫時無法使用直播Push，仍可查看HAKU內通知。' : 'この環境ではLIVEのPush通知を利用できません。HAKU内通知は確認できます。'}</p> : null}
+        <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={!livePushAvailable || livePushBusy || pushBusy} aria-pressed={livePushOn} onClick={() => void toggleLivePush()}>{livePushOn ? (lang === 'en' ? 'Disable LIVE Push' : lang === 'zh-TW' ? '關閉直播Push' : 'LIVEのPush通知をオフ') : (lang === 'en' ? 'Enable LIVE Push' : lang === 'zh-TW' ? '開啟直播Push' : 'LIVEのPush通知をオン')}</button>
+      </section> : null}
       {error ? <p className="pl-error">{error}</p> : null}
       {rows.length === 0 && !error ? <div className="pl-empty">No notifications.</div> : null}
       {rows.map((n) => (
