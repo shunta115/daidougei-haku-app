@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - codex/haku-srs-crowd-integration-20261030
+      - codex/haku-crowd-iphone-auth-whip-20261030
     paths:
       - 'experiments/srs-crowd-lab/**'
       - 'experiments/free-live/haku-auth.mjs'
