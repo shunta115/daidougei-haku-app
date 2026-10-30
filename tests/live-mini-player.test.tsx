@@ -50,11 +50,12 @@ const props = { performerId: 'performer-1', onBack: vi.fn(), onTip: vi.fn() }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
   state.onPerformer = null
   state.getPerformer.mockResolvedValue({ id: 'performer-1', stage_name: 'TEST LIVE', is_live: true, live_started_at: null })
   state.connect.mockResolvedValue({ disconnect: state.disconnect, on: vi.fn(), localParticipant: { connectionQuality: 1 } })
 })
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('persistent HAKU DIRECT viewer', () => {
   it('keeps one Room and the same media elements when mini is toggled, then disconnects on close', async () => {
