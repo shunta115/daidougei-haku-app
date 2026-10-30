@@ -26,5 +26,5 @@ jobs:
       - run: npm ci
       - run: node --test experiments/srs-crowd-lab/*.test.mjs
       - run: npm run typecheck
-      - run: npm test -- --run
+      - run: npx vitest run
       - run: npm run build
