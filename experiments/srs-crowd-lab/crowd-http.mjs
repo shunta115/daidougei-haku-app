@@ -69,7 +69,8 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       }
       json(res, 200, result);
     } catch (error) {
-      json(res, error?.status || 403, { error: error?.code || error?.message || 'request_failed' });
+      const safeCode = error?.code || (/^(request_too_large|srs_disconnect_unconfirmed|invalid_whip_request)$/.test(error?.message || '') ? error.message : 'request_failed');
+      json(res, error?.status || 403, { error: safeCode });
     }
   });
   server.on('listening', () => {
