@@ -22,6 +22,17 @@ describe('LIVE comment session and scrolling', () => {
     expect(removeLiveComment(appended, '80').some((row) => row.id === '80')).toBe(false)
   })
 
+  it.each([100, 1000])('keeps the video layout independent of %i incoming comments', (total) => {
+    const comments = Array.from({ length: total }, (_, index) => comment(String(index)))
+      .reduce<LiveComment[]>((rows, next) => appendLiveComment(rows, next), [])
+    expect(comments).toHaveLength(80)
+    expect(comments[0].id).toBe(String(total - 80))
+    expect(comments.at(-1)?.id).toBe(String(total - 1))
+    const css = readFileSync('src/platform/screens/live.css', 'utf8')
+    expect(css).toMatch(/pl-live--performer\[data-phase='live'\]\[data-layout='phone-portrait'\] \.pl-live__stage\s*\{[^}]*position: absolute/)
+    expect(css).toMatch(/pl-live--performer\[data-phase='live'\]\[data-layout='phone-portrait'\] \.pl-live__comments-wrap\s*\{[^}]*position: absolute/)
+  })
+
   it('only treats the comment list as pinned when it is near the latest entry', () => {
     expect(isNearCommentEnd({ scrollHeight: 500, scrollTop: 300, clientHeight: 180 })).toBe(true)
     expect(isNearCommentEnd({ scrollHeight: 500, scrollTop: 120, clientHeight: 180 })).toBe(false)

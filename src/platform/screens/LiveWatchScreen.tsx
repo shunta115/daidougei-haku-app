@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
-import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, UserX, Users } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, UserX, Users, X } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
@@ -48,6 +48,11 @@ type Props = {
   onTip: () => void
   onRequireAuth?: () => void
   allowPublicTest?: boolean
+  mini?: boolean
+  onMinimize?: () => void
+  onRestore?: () => void
+  onClose?: () => void
+  onEnded?: () => void
 }
 
 function formatDuration(sec: number) {
@@ -56,7 +61,7 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false }: Props) {
+export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false, mini = false, onMinimize, onRestore, onClose, onEnded }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
@@ -93,6 +98,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     else void navigator.clipboard?.writeText(url)
   }
   const roomRef = useRef<Room | null>(null)
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
   const fs = useFullscreen(stageRef)
@@ -108,6 +115,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     return subscribePerformerLive(performerId, (row) => {
       setP((prev) => (prev ? { ...prev, ...row } : prev))
       if (row.is_live === false) {
+        onEndedRef.current?.()
         setLiveSessionId(null)
         setComments([])
         setError(t('liveEndedMsg'))
@@ -312,7 +320,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
 
   return (
     <div
-      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}`}
+      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}${mini ? ' pl-live--mini' : ''}`}
+      data-mini={mini}
       data-layout={mode}
       style={
         {
@@ -325,11 +334,16 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         ref={stageRef}
         className={stageClass}
         onClick={() => {
+          if (mini) { onRestore?.(); return }
           if (isOverlayChrome) bumpChrome()
         }}
       >
         <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay />
         <audio ref={audioRef} autoPlay />
+        {mini ? <div className="pl-live__mini-actions">
+          <button type="button" className="pl-live__mini-restore" onClick={(event) => { event.stopPropagation(); onRestore?.() }} aria-label="LIVE画面に戻る">{p?.stage_name || 'LIVE'} · 視聴に戻る</button>
+          <button type="button" className="pl-live__mini-close" onClick={(event) => { event.stopPropagation(); onClose?.() }} aria-label="小窓を閉じる"><X size={18} /></button>
+        </div> : null}
         <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
         <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} />
 
@@ -337,6 +351,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
             <ArrowLeft size={19} />
           </button>
+          {onMinimize ? <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onMinimize} aria-label="小窓で視聴を続ける"><Minimize2 size={19} /></button> : null}
           <div className="pl-live__hud-actions">
             <div className="pl-live__stats">
               {p?.is_live ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}

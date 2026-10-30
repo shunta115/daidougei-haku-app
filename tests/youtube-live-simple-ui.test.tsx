@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { YouTubeLiveSetup } from '../src/platform/components/YouTubeLiveSetup'
 import { ConnectedLiveWatchScreen } from '../src/platform/screens/ConnectedLiveWatchScreen'
 import type { Performer } from '../src/platform/lib/types'
 
 const api = vi.hoisted(() => ({ updatePerformer: vi.fn(), getPerformer: vi.fn() }))
+const directLifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
 vi.mock('../src/platform/lib/api', () => api)
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
 vi.mock('../src/platform/components/YouTubeLivePlayer', () => ({
   YouTubeLivePlayer: ({ videoId }: { videoId: string }) => <div data-testid="youtube-preview">preview:{videoId}</div>,
 }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({
-  LiveWatchScreen: () => <div data-testid="direct-live">HAKU DIRECT</div>,
+  LiveWatchScreen: ({ mini }: { mini?: boolean }) => {
+    useEffect(() => { directLifecycle.mounts += 1; return () => { directLifecycle.unmounts += 1 } }, [])
+    return <div data-testid="direct-live" data-mini={Boolean(mini)}>HAKU DIRECT</div>
+  },
 }))
 
 const performer: Performer = {
@@ -83,7 +88,24 @@ describe('YouTube LIVE simple registration UI', () => {
 })
 
 describe('viewer routing', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks(); directLifecycle.mounts = 0; directLifecycle.unmounts = 0 })
+
+  it('keeps one DIRECT viewer mounted while switching between full and mini views', async () => {
+    api.getPerformer.mockResolvedValue({ ...performer, is_live: true })
+    const props = { performerId: 'performer-1', onBack: vi.fn(), onTip: vi.fn() }
+    const view = render(<ConnectedLiveWatchScreen {...props} mini={false} />)
+    expect(await screen.findByTestId('direct-live')).toBeTruthy()
+    expect(directLifecycle.mounts).toBe(1)
+    view.rerender(<ConnectedLiveWatchScreen {...props} mini />)
+    expect(screen.getByTestId('direct-live').getAttribute('data-mini')).toBe('true')
+    expect(directLifecycle.mounts).toBe(1)
+    expect(directLifecycle.unmounts).toBe(0)
+    view.rerender(<ConnectedLiveWatchScreen {...props} mini={false} />)
+    expect(directLifecycle.mounts).toBe(1)
+    view.unmount()
+    expect(directLifecycle.unmounts).toBe(1)
+    expect(api.getPerformer).toHaveBeenCalledTimes(1)
+  })
 
   it('keeps HAKU DIRECT ahead of YouTube when both are active', async () => {
     api.getPerformer.mockResolvedValue({ ...performer, is_live: true, youtube_live_enabled: true, youtube_live_video_id: 'abcdefghijk', youtube_live_url: 'https://www.youtube.com/watch?v=abcdefghijk' })

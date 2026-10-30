@@ -13,6 +13,11 @@ type Props = {
   onTip: () => void
   onRequireAuth?: () => void
   allowPublicTest?: boolean
+  mini?: boolean
+  onMinimize?: () => void
+  onRestore?: () => void
+  onClose?: () => void
+  onEnded?: () => void
 }
 
 export function ConnectedLiveWatchScreen(props: Props) {
@@ -49,6 +54,7 @@ export function ConnectedLiveWatchScreen(props: Props) {
       <div><strong>HAKUでパフォーマーを応援</strong><span>YouTubeのSuper Chat等とは別の、HAKU独自の投げ銭です。</span></div>
       <button type="button" className="pl-btn pl-btn--tip" onClick={() => {
         trackProductEvent('tip_cta_click', { performerId: props.performerId, props: { surface: 'youtube_live_companion' } })
+        props.onClose?.()
         props.onTip()
       }}><Gift size={19} /> ❤️ HAKUで応援する</button>
     </section>
