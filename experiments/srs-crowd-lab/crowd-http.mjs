@@ -44,7 +44,7 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const mediaUrl = new URL(req.url, origin);
       const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
       const hlsQuery = !mediaUrl.search || (
-        mediaUrl.pathname.endsWith('.m3u8') && mediaUrl.searchParams.size === 1 &&
+        mediaUrl.searchParams.size === 1 &&
         /^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')
       );
       if (req.method === 'GET' && hlsPath && hlsQuery) {
