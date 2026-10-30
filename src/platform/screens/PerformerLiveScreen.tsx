@@ -822,19 +822,19 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       {phase === 'ready' ? (
         <div className="pl-live__panel pl-live__setup-panel">
           <header className="pl-live__setup-heading"><h1>LIVE配信の設定</h1><button type="button" aria-label="設定を閉じて戻る" onClick={onBack}><X size={22} /></button></header>
-          <div className="pl-live-methods" role="radiogroup" aria-label="配信方法">
+          <details className="pl-live__setup-more"><summary>配信方法：HAKU DIRECT / YouTube連携</summary><div className="pl-live-methods" role="radiogroup" aria-label="配信方法">
             <button type="button" role="radio" aria-checked="true" data-selected="true">
               <Video aria-hidden="true" /><span><strong>HAKU DIRECT LIVE</strong><small>HAKUのカメラ・マイクで直接配信</small></span>
             </button>
             <button type="button" role="radio" aria-checked="false" onClick={() => setMethod('youtube')}>
               <span aria-hidden="true">▶</span><span><strong>YouTube LIVE連携</strong><small>YouTubeのURLを貼ってHAKUで公開</small></span>
             </button>
-          </div>
+          </div></details>
           {orientationPicker()}
           <section className="pl-live__quality-setting" aria-label="画質設定"><h2>画質設定</h2><strong>自動 <small>通信状況に応じて調整</small></strong><p>手動の1080p・720p・480p固定は現在未対応です。実際の映像サイズは配信設定の診断で確認できます。</p></section>
           <label className="pl-live__setting-toggle"><span>コメントを表示</span><input type="checkbox" checked={commentsVisible} onChange={(event) => setCommentsVisible(event.target.checked)} /></label>
           <label className="pl-live__setting-toggle"><span>ギフト演出<small>投げ銭の受付は継続します</small></span><input type="checkbox" checked={giftEffects} onChange={(event) => setGiftEffects(event.target.checked)} /></label>
-          <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
+          <details className="pl-live__setup-more"><summary>タイトル・LIVE予約（任意）</summary>
           <label>
             <span className="pl-label">タイトル（任意）</span>
             <input
@@ -852,6 +852,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             <button type="button" className="pl-btn pl-btn--ghost" disabled={busy || !title.trim() || !scheduleAt} onClick={() => void scheduleLive()}>この内容で予約を公開</button>
             {schedules.slice(0, 3).map((schedule) => <p key={schedule.id} className="pl-muted">{new Date(schedule.scheduled_start_at).toLocaleString('ja-JP')} · {schedule.title}</p>)}
           </div> : null}
+          </details>
           <label className="pl-live__location-consent">
             <input
               type="checkbox"
@@ -860,10 +861,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             />
             <span><strong>現在地を共有してMAPに表示</strong><small>LIVE中だけ現在地を更新します。いつでもOFFにできます。</small></span>
           </label>
-          {previewState !== 'ready' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void preparePreview()}>{busy ? 'カメラを準備中…' : 'カメラ・マイクを準備する'}</button> : <p className="pl-registration__notice" role="status">映像の準備ができました。画面を確認してから配信を開始してください。</p>}
-          <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy || previewState !== 'ready'} onClick={() => void goLive()}>
+          {previewState !== 'ready' ? <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy} onClick={() => void preparePreview()}>{busy ? 'カメラを準備中…' : 'カメラ・マイクを準備する'}</button> : <><p className="pl-registration__notice" role="status">映像を確認してから配信を開始してください。</p>
+          <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy} onClick={() => void goLive()}>
             {busy ? 'LIVE開始処理中…' : 'LIVE配信を開始'}
-          </button>
+          </button></>}
         </div>
       ) : (
         <div className="pl-live__panel pl-live__panel--live">

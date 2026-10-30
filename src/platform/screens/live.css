@@ -1354,6 +1354,12 @@
 .pl-live__quality-setting p { color: #aebdc7; font-size: 11px; line-height: 1.5; }
 .pl-live__setup-panel { background: linear-gradient(160deg,#101c26,#080c12); border-color: #ffffff22; }
 .pl-live__setup-heading h1 { font-size: 20px; margin: 0; color: #fff; }
+.pl-live__setup-more { margin: 8px 0; border-bottom: 1px solid #ffffff1f; padding: 8px 0; }
+.pl-live__setup-more > summary { min-height: 32px; cursor: pointer; font-size: 12px; color: #d5e3e8; }
+.pl-live__setup-more .pl-live-methods { display: grid; gap: 8px; }
+.pl-live__setup-panel .pl-live-methods button { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 10px; background: #17252d; color: #fff; border: 1px solid #ffffff2e; border-radius: 12px; text-align: left; }
+.pl-live__setup-panel .pl-live-methods button[data-selected='true'] { border-color: var(--live-neon); }
+.pl-live__setup-panel .pl-live-methods button small { display: block; color: #b7cbd4; }
 .pl-live__setup-panel .pl-live__orientation-picker { padding: 0; border: 0; background: transparent; }
 .pl-live__setup-panel .pl-live__orientation-picker button { min-height: 92px; border-radius: 16px; background: #ffffff08; }
 .pl-live__setup-panel .pl-live__orientation-picker button[data-selected='true'] { border: 2px solid var(--live-neon); color: var(--live-neon); background: #45f0d414; }
