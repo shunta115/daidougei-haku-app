@@ -31,7 +31,7 @@ export async function requireAdmin(req: VercelRequest, res: VercelResponse): Pro
     res.status(403).json({ error: 'admin not allowlisted' })
     return null
   }
-  return Object.assign(user, { adminPermission: bootstrapSuperAdmin ? 'super_admin' : member.permission as AdminPermission })
+  return Object.assign(user, { adminPermission: bootstrapSuperAdmin ? 'super_admin' : member!.permission as AdminPermission })
 }
 
 export function requireSuperAdmin(admin: AdminPrincipal, res: VercelResponse): boolean {

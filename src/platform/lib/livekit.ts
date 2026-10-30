@@ -128,7 +128,7 @@ export async function fetchLiveKitStatus() {
   }
 }
 
-export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
+export async function fetchLiveKitToken(performerId: string, asHost: boolean, sessionId?: string, operationId?: string) {
   let res: Response
   try {
     const headers = {
@@ -138,7 +138,7 @@ export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
     res = await fetch('/api/livekit/token', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ performerId, asHost }),
+      body: JSON.stringify({ performerId, asHost, sessionId, operationId }),
     })
   } catch {
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', 'トークンAPIに到達できませんでした'))
