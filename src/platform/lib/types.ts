@@ -182,6 +182,8 @@ export type NotificationPreference = {
   user_id: string
   appearance_in_app_enabled: boolean
   appearance_push_enabled: boolean
+  /** Optional until the separate LIVE Web Push migration is approved/applied. */
+  live_push_enabled?: boolean
   locale: 'ja' | 'en' | 'zh-TW'
   updated_at: string
 }

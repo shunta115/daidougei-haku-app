@@ -1,0 +1,562 @@
+[
+  {
+    "number": 114,
+    "title": "draft: #105 LIVE・予約と #113 活動順・公開出演予定順を統合",
+    "head": "codex/home-105-113-integration",
+    "sha": "2a3d7d81b326fac9eab8f73e37719aa2989e5801",
+    "merged": false,
+    "body": "#105のLIVE／LIVE予約と、#113の活動順位／公開出演予定順を統合する独立Draftです。main 4403bd7基点、#105 b63b0b2・#113 9904f75を採用。元PRへpush／rebase／上書きしていません。\n\n- #105: heartbeatで確認したLIVE、クイック予約、LIVE予定一覧、予約管理と解除確認、二重送信・古い読取・アカウント切替の保護を維持。既存予約API／機能フラグを使用。\n- #113: 注目は本人の最終サインイン／操作日時→Stripe登録完了→プロフィール完成度。まもなく出演は公開予定の進行中→開催時刻順。予定なしは同じ活動優先順の専用枠で、日時を生成しません。\n- 全枠のLIVEバッジを確認済みセッションに統一。元アカウントのフォロー関係も切替後に表示しないよう保護。表示中30秒＋復帰／online更新、順位APIの非公開履歴保護を維持。\n- 実競合3ファイル（FanHomeScreen、discovery-loading test、vercel.json）を手動解消。旧活動ローテーションを新順位へ置き換え、LIVE・予約・応援・プロフィール／フォロー・MAP／検索の導線を残しています。セッション履歴は500件固定から全ページへ。\n- 決済／配信開始終了／予約API／DB migration／共有環境変数は変更なし。通常Git Previewは統合ブランチだけ追加停止し、両元ブランチの停止設定も保持。\n\nPreview（READY / target=null / Vercel認証あり）:\nhttps://daidougei-haku-3bco5un22-daidougei-s-projects.vercel.app/\n実統合コンポーネント・順位・取得処理を使う架空データの静的QAです。予約はメモリ内、応援／視聴等はcallback確認。API・cron・資格情報なし、CSPで外部接続／media／frame／formを遮断。HTML 200、CSS/JSは検証成果物と完全一致。接続済みTESTアプリとは区別します。\n\n検証:\n- アプリ／サーバー型チェック、app build成功（既存chunk警告）。\n- 統合コード 6ed4267 の [GitHub CI #319](https://github.com/shunta115/daidougei-haku-app/actions/runs/41186381616) で TypeScript・全94ファイル523テスト・buildがすべて成功。ローカル全体93ファイル522件と追加PGlite試験1件も成功。新fixtureの初期化猶予のみ60秒（負荷時startup timeoutの記録あり）。追補は検証証跡のみ。\n- iPhone 13相当WebKit 26項目成功。LIVE初期画面、予約・解除確認、活動／出演順、予定なし、30秒更新、応援／フォロー／MAP、匿名、横画面／320px。runtime error0・外部request0。最終スクリーンショット目視済み。\n- 既存の隔離TEST aeqskxxykzapgaudbeqaで、公開／非公開RLS、auth履歴読取拒否、本人／他人編集、JST、時刻変更、中止除外等8項目成功。fixtureをROLLBACKし、Auth・LIVE・出演・通知等10テーブルの前後件数／全行ハッシュ一致。\n\n残存リスク／未実施:\n1. 接続済みTESTにlive_schedules・live_reservations・product_eventsがなく、通常Auth→操作→順位API→実予約／視聴の結合受入は未実施。永続DDL／フラグ変更を無断で適用していません。ローカルSQLとfixture WebKitはこの代わりにはなりません。\n2. 物理iPhone Safari、画面ロック・バックグラウンド、別端末の実LIVE映像／音声、実予約通知・フォロー・決済は未検証。\n3. #105由来のLIVE予約取得30件上限、120秒heartbeat表示判定、#113由来の最大60秒順位キャッシュを維持。独立YouTube on-air判定は未実装。\n4. このPRは#105/#113を含む代替統合候補。両元PRと重ねて自動mergeしないこと。現mainへの追加統合には再確認が必要。\n\n本番DB変更、mainマージ、Productionデプロイ、元PR上書き、新規有料サービスはすべて未実施。Draft維持。\n\n監査・採用表・再現・境界: docs/home-integration/README.md\n証跡: validation.json / webkit-result.json / test-db-result.json / preview-assets.json"
+  },
+  {
+    "number": 113,
+    "title": "draft: ホームを本人の活動順・公開出演予定順で優先表示",
+    "head": "codex/home-activity-ranking",
+    "sha": "9904f758b9742afdbc3435c44e1a42723faad491",
+    "merged": false,
+    "body": "HAKUの公開ホームを、本人の最終サインイン／操作日時による注目順と、実際の公開出演予定による出演順に変更します。main 4403bd7基点の独立Draftです。\n\n- 注目: 最新活動 → Stripe onboarding完了 → プロフィール完成度。閲覧対象performer_idではなく操作したuser_idを使用し、ログイン回数と閲覧回数は集計しません。\n- まもなく出演: 公開予定の出演中 → 開催日時順。JSTで本日／明日／今週を表示。予定のない人には日時を付けず別DISCOVER枠へ。未承認・private test・非activeを除外し、枠内と注目／DISCOVERの重複を抑制。\n- 60秒の可視時更新＋復帰／online更新。サーバーで順位を計算し、ログイン日時・履歴・メール・操作ログ・回数をブラウザへ返しません。\n- DB変更・追加計測・新規有料サービスなし。既存LIVE／フォロー／投げ銭／MAP実装を変更しません。本番DBはスキーマ・ポリシー・件数等の読み取りのみ。\n\nPreview（READY / target=null / Vercel認証あり）:\nhttps://daidougei-haku-9q65xqj17-daidougei-s-projects.vercel.app/\n実ホーム／順位関数／クライアント取得処理を使った、架空データの静的QAです。CSPで外部接続を遮断し、API・cron・資格情報なし。配置HTML/CSS/JSは200、CSS/JSは検証成果物と完全一致。実TEST接続のPreviewとは扱いません。通常Git Previewは当ブランチだけ停止し共有環境変数・保護設定は変更していません。\n\n検証:\n- アプリ／サーバーTypeScript・アプリbuild成功（既存chunk警告）。\n- 新規順位／公開範囲APIテスト13件、ホームloading／障害復旧3件成功。\n- iPhone 13相当WebKitで活動順、実予定ラベル、60秒更新、LIVE／プロフィール／MAP導線、横画面／320px、外部通信0・runtime error0の14項目成功。\n- アプリコード f86e1b8 の [GitHub CI #317](https://github.com/shunta115/daidougei-haku-app/actions/runs/41182294580) で TypeScript・全90ファイル507テスト・buildがすべて成功。追補は証跡のみ。ローカルの既存DB／投票テストtimeoutは単独再実行で成功、timeout設定や品質ゲートは変更していません。\n\n競合: open PR全36件を照合。#105はFanHomeScreen・discovery-loading test・vercel.jsonが重なり、画面と順位方針の統合判断が必要。#106/#112/#103/#100/#87/#71はvercel.jsonが重なります。他PRの内容は取り込んでいません。\n\n未完了: 実機iPhone Safari、隔離TESTでのAuth→本人操作→順位API→画面の結合受入。本番DB変更・mainマージ・本番デプロイは未実施、別途個別承認まで禁止。Draftを維持します。\n\n監査・不足計測案・再現・証跡: docs/home-activity-ranking/README.md / validation.json / webkit-result.json"
+  },
+  {
+    "number": 112,
+    "title": "draft: 匿名応援の共通修復・再読込対策とtips権限是正（TEST検証）",
+    "head": "codex/common-anonymous-tip-audit",
+    "sha": "b6e96108aab0b84ac1ec8ca66cb8d7cf8edeab7a",
+    "merged": false,
+    "body": "全パフォーマー共通の匿名応援修復を継続しました。**Draft維持・本番公開候補は未確定**です。最新main 4403bd7を統合し、コード競合なし。最新head b6e96108aab0b84ac1ec8ca66cb8d7cf8edeab7a。\n\n修正:\n- #107の共通LIVEタップ遮断と匿名ログイン強制を修復。出演者の名前/IDによる実装分岐なし。\n- 送信の同期ロック、金額操作停止、古い出演者応答の破棄/ID照合。\n- 実アプリ初回Service Worker更新後に消費済みwatch/tipToが失われる問題も再現し、宛先snapshotの保存/復元を修復。\n- public.tipsのTRUNCATEだけをPUBLIC/anon/authenticatedから除去するSQLを追加。RLS/既存DML/金融処理は維持。\n\nTESTで完了:\n- aeqskxxykzapgaudbeqa / haku-merch-validationを確認。JWT refとStripe test modeを検証してから試験。\n- 4出演者の合成fixture × 匿名/ログイン済み × LIVE/プロフィール × iPhone縦/横、**実アプリ→実TEST DB→実Sandbox Checkout表示32/32成功**。支援先/payer/金額/Stripe livemode=falseを照合。この32件ではカード提出なし。\n- 別途1件のテストカード決済成功、真正署名Webhookによりtips.succeeded/guest/対象出演者/100円を確認。\n- 実APIの同一Checkout再利用・金額/出演者/payer改ざん・偽造Webhook等10チェック成功。\n- TESTでTRUNCATE権限是正適用・再適用成功。既存3台帳の内容hashとRLS policy hashは前後一致。TRUNCATE/データ削除は実行していない。\n- TypeScript・本番相当build成功（既存chunk警告）。全91ファイル516テスト成功＋最終権限ガード4件成功（全体後に1ケース追加）。最新SHA b6e96108のGitHub CI成功: https://github.com/shunta115/daidougei-haku-app/actions/runs/41217340179 。\n\n未完了・公開阻害:\n- 一時Sandbox未claimキーの実手数料読取が403。Webhookは台帳成功化後に既存精算でfailed、settlement未確定。精算を省略/推定値で代替していない。完全な支払→Webhook processed→手数料/分配確定を32ケースで実証するには、claim後または既存の権限を持つTEST認証が必要。\n- 初回CLI出力のマスキングが新形式テストキーを取りこぼした。キーはPR/ソース/Previewに含めず、完全E2E再開前に一時キーの無効化/ローテーションが必要。\n- TEST service-role/StripeキーのVercel Preview限定Secret保存は自動承認レビューで拒否。具体的な秘密情報と送信先への明示承認をユーザーへ提示済み。迂回なし。\n- 物理iPhone Safari、実LiveKit映像/音声は未検証。WebKit emulationと区別。\n\nPreview:\nhttps://daidougei-haku-94jzg3rp8-daidougei-s-projects.vercel.app\nREADY / target=null / 配置HTML HTTP200。**静的QAのみ**、合成データ・模擬Checkout。API/Functions/cron/環境ファイル/秘密キーなし、CSPで外部通信を拒否。実決済可能なPreviewとは扱わない。通常ブランチの自動デプロイ抑止は維持。\n\n本番未変更。送金/返金/Payoutなし。TEST合成出演者のis_liveは試験後falseへ戻し、全TEST監査/台帳データを保持。\n必要なTEST認証で完全E2Eと実機受入を終えた後、本番DBの権限是正・PR #112 mainマージ・Productionデプロイを個別承認として提示します。現指示では実行しません。\n\n証跡・正確な本番提案SQLとSHA256:\ndocs/common-anonymous-tip-20261031/README.md / validation.json / production-proposed.sql / sandbox-checkout-matrix.json / sandbox-security.json / truncate-test-verification.json"
+  },
+  {
+    "number": 111,
+    "title": "fix: 出演予定とMAPを整合し、位置未確定の予定を保持",
+    "head": "codex/map-appearance-consistency-20261031",
+    "sha": "523475f25bf7c0c3e4b2f14e40ac91292a81ac7d",
+    "merged": true,
+    "body": "HARIBOWの10/31 12:00–20:00の公開予定が15:57にMAPから見つからない原因は、座標なし＋静岡駅が概略位置lookup未対応であり、MAPのマーカーと近隣一覧が両方その位置フィルターから作られていたためです。匿名RLSと既存時刻クエリは通過。取得対象は6件で距離・件数上限ではありません。PR #104は本番main 1b01ba2に反映済みであることをread-onlyで確認しました。\n\n位置未確定の公開予定をMAP内の専用一覧に残し、会場・時刻・プロフィールとGoogle Maps会場検索を表示します。架空のピン、距離、経路、座標の書戻しはありません。終了時刻なしの予定は開催日の終わり（予定のtimezone）まで出演予定として保持し、LIVE/出演中とは判定しません。共有の取得条件・時刻判定を揃え、MAP側にも取得エラーを表示します。概略位置は既存どおり明示し、未知の場所は位置未確定のまま扱います。\n\n検証:\n- 全体87ファイル492テスト通過。追加したAPIページングテストを含む最終関連5ファイル22テストも通過。\n- TypeScript、最終build通過（既存のchunkサイズ警告あり）。GitHub HAKU quality gate成功。\n- WebKit iPhone13相当8チェック通過: 15:57のHARIBOW、架空ピンなし、会場検索、予定画面との一致、終了未登録、LIVEフィルター、キャンセル後のfocus再取得、ランタイムエラーなし。画像も目視確認。\n- 最終Preview READY / target=null / commit 523475f25bf7c0c3e4b2f14e40ac91292a81ac7d:\n  https://daidougei-haku-1s9c0vndm-daidougei-s-projects.vercel.app\n\n調査証跡: docs/map-appearance-incident-20261031/README.md、validation.json、browser-result.json。\n\n未検証: ブラウザ回帰はAPI/Mapsをoffline fixtureに置換。物理iPhone、実Google Maps、承認後の本番動作は未検証。元の15:57のクライアントキャッシュは復元できません。PreviewはVercelでREADYとコミット一致を確認済みですが、ページのHTTP smokeは接続ツールがdeployment not found/access unavailableを返し、CLIも未インストールのため未完了。保護設定・認証・環境変数は変更していません。\n\nmain 1b01ba2基点の独立Draft PR。本番DB/既存データ/環境変数/マイグレーション変更なし。mainマージ・本番デプロイは実施せず、個別承認待ちです。"
+  },
+  {
+    "number": 110,
+    "title": "fix(live): PC横型シアター・映像比率監視・向き補正",
+    "head": "codex/live-pc-theater-20261031",
+    "sha": "11a57bc229874cd8a16c209b1d895d38cfc2ee6f",
+    "merged": true,
+    "body": "## 変更内容\nPCのHAKU DIRECT視聴を16:9の大きな映像枠＋右側コメント欄へ変更します。縦映像は初期状態で全体表示し、横倒しの元映像はPC限定の90度回転・リセットで補正できます。スマートフォンの既存CSS・配信側の縦横選択・決済は変更しません。\n\n非同期取得後に動画がマウントされると `useVideoAspect` が監視を開始せず9:16に固定される不具合を修正しました。90度回転の実配信原因は未確定です。映像サイズだけで上下は判断できないため自動回転は行いません。\n\nYouTube公式プレーヤーはAPIによるマウント要素の置換後も16:9枠を維持し、PCでは既存の応援・コメント案内を右側に配置します。YouTubeのコメント・いいねは引き続きYouTube側です。\n\n## 検証\n- TypeScript / Vite build 通過（既存のchunk-size警告のみ）\n- 対象58テスト通過（カメラ30、fever3、非同期video監視1、YouTube登録UI6・URL/埋め込み4・コメント6・release gate3、最新mainのMAP発見5）\n- Chrome / Playwright WebKitの隔離fixture: 13チェック通過、page errorなし。縦横メタデータ・16:9枠・独立コメント欄・回転/reset・コメント/フォロー/シェア・いいね・応援金額画面・native fullscreen/fallback・resize・80コメントのスクロール・YouTube API置換・iPhoneエミュレーションを確認。\n- 本番DB・Stripe・決済・Production公開なし。外部通信を遮断したfixtureで検証。\n\n## 競合・残存リスク\nmain 5ea9392 (#109) まで取り込み済み。専用チェックアウト `/private/tmp/haku-pc-theater-20261031` で作業し、既存作業フォルダの変更を保護。#81 / #99 / #106 / #107 は git merge-tree でテキスト競合なしを確認。#106のLIVE設定・全画面変更と本PRのCSSは統合時に再検証が必要です。#100はYouTubeLivePlayer全面書き換えとの競合が残り、package.jsonにも既存mainとの差分由来の競合があります。#100統合時は16:9の外枠を保持して再検証してください。本PRに#100の変更は混入させていません。\n\nPC Safari実機・iPhone Safari実機、実LiveKit送受信/RTP回転メタデータ、YouTube実映像・ネイティブ全画面、複数端末のコメント・いいね同期は未検証です。このためDraft PRとして提出します。\n\n## Preview\n\nhttps://daidougei-haku-5fhiy9a90-daidougei-s-projects.vercel.app/\n\nVercel Git integrationのPreview（Productionではありません）。Vercel認証保護が有効で、未認証HTTPはSSOへ302。保護設定は変更せず、Preview上の実配信テストは未実施です。\n\n証跡: `docs/live-pc-theater-20261031/browser-result.json` / `STATUS.md`。実機・実配信の受入試験が残るためDraftを維持します。\n"
+  },
+  {
+    "number": 109,
+    "title": "fix: GPS未取得のHARIBOW LIVEをMAPの配信中一覧に表示",
+    "head": "codex/live-map-discovery",
+    "sha": "8747b0e4904b6e2cc6ae1aa79a3bd2a7543fd931",
+    "merged": true,
+    "body": "HARIBOWの公開LIVEがGPS未取得でMAPから消える問題を修正します。main dc6fd1fc（#104公開済み）基点の独立ブランチで、既存PR・既存作業フォルダは変更していません。\n\n## 根本原因（本番READ ONLYで確認）\n13:46 JST時点でHARIBOWは承認済み・is_live=true・is_private_test=false。13:24開始のセッションは終了せずheartbeatも更新中、performer_idも一致。匿名SELECTでLIVE一覧の取得条件を満たし、本番iPhone Safariのperformers GETも200でした。一方share_location=trueでもlat/lng/location_updated_atはNULL、公開出演予定も0件。#101/#104後もMAPは90秒以内の共有GPS必須の配列をマーカーとLIVE一覧に共用しており、位置不明のLIVEを両方から除外していました。GPS未取得自体の端末側理由は未確定です。\n\n## 修正\n- 公開LIVEの一覧を位置判定から分離し、MAP直下の「配信中一覧」に表示。GPS拒否・欠落・期限切れでも既存HAKU視聴ルートへ進めます。\n- 新鮮な共有GPSは赤い🔴 LIVEマーカーに表示。マーカーもタップで視聴へ遷移。\n- GPS不明時は、現在開催中の公開出演場所が一つに特定できる場合だけ、既存の確認済み位置解決を利用し「概略位置・現在地未確認」を明記。未来/過去/終了未登録/非公開/中止/競合会場は位置根拠にしません。HARIBOWには場所の根拠がないため座標を作りません。\n- Realtime・20秒poll・focus/visibility/online更新を維持。非公開化/承認解除時に即除外。既存出演予定マーカーを維持。位置の書戻しなし。\n\n## 検証\n最終commit 8747b0e4904b6e2cc6ae1aa79a3bd2a7543fd931:\n- GitHub CI成功: 85ファイル・487テスト、TypeScript、build。既存LIVE/投げ銭/フォロー/予約/出演予定を含む全スイート。[CI](https://github.com/shunta115/daidougei-haku-app/actions/runs/41170307808)\n- WebKit 26.4 / iPhone 13相当: 新規LIVE開始→MAP一覧/マーカー→正しい視聴callback→終了、GPSなしHARIBOW・別出演者・Realtime欠落時のfocus・非公開除外の10チェック通過。\n- 既存Safari MAP/出演予定/位置登録44チェック通過。QR共有18チェック通過（初回描画timeout後、単独再実行で成功）。\n- 位置判定/MAP関連の追加最終実行: 3ファイル10テスト成功。ローカル全件のPGlite起動timeoutはCI全487件成功で切り分け、該当DBテストの単独再実行も4件すべて成功。\n- 実Previewを既存認証の短期OIDCでiPhone WebKitから表示。HTTP200、配信中一覧、TEST Supabase読取、実行時エラーなしの4チェック成功。共有設定の変更なし。\n\nPreview READY / target=null / commit一致:\nhttps://daidougei-haku-gl5dl6303-daidougei-s-projects.vercel.app/map\n\n既存Preview環境のserver/browser Supabase URLは両方TEST aeqskxxykzapgaudbeqa。環境設定変更なし。Previewは本番HARIBOWを読む構成ではありません。\n\n## 境界と承認\n本番DB/スキーマ/データ変更、mainマージ、本番デプロイ、決済変更、データ削除なし。自動E2Eの配信状態/API/Mapsはfixtureで、視聴遷移先IDを検証。実配信・実決済・物理iPhoneの成功とは区別します。実PreviewではTESTへのGETのみ、server APIと外部地図は遮断しています。\n\n証拠: docs/live-map-incident/README.md、webkit-live-map.json。mainマージと本番デプロイは別途承認待ちです。"
+  },
+  {
+    "number": 108,
+    "title": "fix: YouTube LIVE公開時の23514制約違反・本人確認・エラー表示を修正",
+    "head": "codex/fix-youtube-live-publish",
+    "sha": "b272bffc8206da129f17afee6ad231294e5fe166",
+    "merged": false,
+    "body": "YouTube LIVEの正しいURLが、Productionの `performers_youtube_live_url_check` の過剰エスケープにより保存時に拒否されます。動画 `yk6Kjl0WHWs` で旧マイグレーションの失敗を再現し、本番の読み取り専用ログでも SQLSTATE `23514` を確認しました。調査基点は Production commit `850424a5` です。\n\n修正はURL制約のforward migration、YouTube設定だけのDB本人制限、HAKUセッション・対象ID・active profileの確認、認証／権限／DB／通信エラーの表示分離です。保存済みの画面更新失敗を保存失敗と誤表示せず、連打と再試行も扱います。Google OAuth、YouTube API、ストリームキーは不要です。\n\n検証：全85ファイル・500テスト成功、YouTube関連5ファイル・37テスト成功、最終DB回帰8テスト成功、iPhone 13相当WebKitの11チェック成功、型チェック・ビルド成功。WebKitはローカルSupabase代替環境で外部通信を遮断し、実機Safari・本番書き込み・実際のYouTube再生は未検証です。DIRECTの代理操作と他人のYouTube設定変更拒否をDBで確認しています。\n\nHAKU DIRECT、決済、フォロー、LIVE予約、通知、MAPの実装は変更していません。本番DB変更・mainマージ・本番デプロイ・決済変更は未実施です。**本番は未復旧であり、別途承認後に対象SQLだけを適用する必要があります。無差別な db push は行わないでください。**\n\n詳細な原因、フロー、証跡、残存リスクは `docs/youtube-live-publish/README.md` と `validation.json` に記載しています。"
+  },
+  {
+    "number": 107,
+    "title": "fix: iPhone SafariのLIVE応援タップ遮断と匿名ユーザーの金額選択を修正",
+    "head": "codex/live-support-safari-tap",
+    "sha": "2b278c92dcef841cebc1c0dc4938715f97be8978",
+    "merged": false,
+    "body": "iPhone縦向きLIVEでは、コメントパネルの透明な余白が独立したstacking context内の右側応援ボタンより上でタップを受け取っていました。WebKitのelementFromPointで修正前の遮断と修正後の到達を再現しています。パネルの透明領域だけをタップ透過にし、子要素のコメント・入力操作を維持します。下部の応援ボタンも匿名ユーザーを既存の金額選択画面へ進めるよう統一しました。\n\n既存のStripe決済・送金・返金・Webhook・DBロジックは変更していません。mainマージ、本番公開、本番DB操作、実決済は行っていません。main 850424aからの独立ブランチです。\n\n検証:\n- TypeScript、ビルド: 成功（既存のチャンクサイズ警告あり）\n- 既存の決済安全性・応援受付条件・完了確認・ルーティング: 83テスト成功\n- iPhone 13設定のWebKit: 匿名・ログイン済みで、右側ボタンの実タップ→実際の金額選択→既存形式のAPIリクエスト→モック決済画面への遷移が成功。横向き下部ボタンも双方で金額選択が表示。ブラウザ例外0。\n- テスト結果: artifacts/live-support-safari-20261031/result.json\n- 原因・再現方法・検証範囲: docs/LIVE_SUPPORT_SAFARI_FIX_20261031.md\n\n未完了（Draft維持）:\nStripe Sandboxと本番から分離されたテストDBの接続情報が未確認のため、実際のStripeテストカード決済、署名付きWebhookによるテストDB更新、確定済み領収結果までのE2Eは未検証です。ブラウザの決済エンドポイントはモックであり、決済完了の証拠ではありません。実機iPhone Safariでの確認も必要です。テスト専用接続の保管場所をユーザーへ確認中です。これらの受入確認が終わるまで完了扱いにしないでください。"
+  },
+  {
+    "number": 106,
+    "title": "draft: LIVEのいいね累計・配信者反映、Safari共有とコメント復帰を修復",
+    "head": "codex/live-repair-20261031",
+    "sha": "6cb894e09f9965b10e57d012a8a1d77a5932ef25",
+    "merged": false,
+    "body": "LIVEのいいねが端末内加算/Broadcastだけで失われ、Safariで共有ボタンがコメント領域に遮られる問題を修復する候補です。JWT本人に紐づくセッション別累計、同一batchの重複排除、12/秒制限、同一ID再送、Realtimeとpollによる復旧を追加。配信者と視聴者の両方で確認済み累計の差分からハート/FEVERを更新します。未ログイン時はログイン案内です。\n\n共有はタップ内Web Share→失敗/非対応時コピー→選択可能URL。時刻付き共有URLは終了後に次回LIVEへ接続しません。コメントはsnapshot競合・再接続・80件後のスクロール・二重送信/IMEを修復。視聴側設定、コメント表示切替、ミュート、全画面と横画面分離を追加しました。\n\n## 検証\n- 対象Vitest 9ファイル50件成功。別途PGlite SQL3件、独立PostgreSQL17の同時送信/重複/終了競合3ケース成功。\n- WebKit iPhone13相当の隔離操作13項目成功。実際のLiveWatchScreen/PerformerLiveScreenで、視聴者2人→配信者のハート/累計/コメントまで確認。通信はoffline adapterで、実Supabase/LiveKitではありません。\n- 最新 `6cb894e` のGitHub CIで TypeScript・全86ファイル487テスト・production相当buildがすべて成功。ローカル全体実行には負荷由来のtimeout/停止があったため、最終全件結果は[GitHub CI #301](https://github.com/shunta115/daidougei-haku-app/actions/runs/41164888082)を参照。旧設定toggleの文字列に固定された既存test 1件を新しい明示checkboxへ更新しました。\n\n## 未完了・公開禁止ゲート\n物理iPhone Safari、LINE実受渡し、実Supabase JWT/RLS/Realtime、実LiveKit映像/音声の端末間E2Eは未実施。完成とは報告しません。新規SQLは本番/既存TESTとも未適用。UIだけ先行公開しないこと。ページを閉じる前の未送信タップ永続化、コメントの応答消失後の手動再投稿冪等化、音質実測も残っています。\n\n## 安全性・競合\nHARIBOWの稼働セッションに接続/操作せず、本番DB/配信設定/決済/送金/返金/API開始終了/LiveKit設定は変更していません。元Desktopの117件の変更を保護し別worktreeで実装。mainマージ・本番デプロイ禁止。修復ブランチのGit自動デプロイのみ抑止し、静的QA Previewだけを配置しました。\n\n#99はuseLiveCommentScroll・両LIVE画面・CSS、#100は両LIVE画面・CSSと既存main/package.jsonの変更に実競合あり。自動mergeせず統合再検証が必要です。両PRは変更していません。\n\n[機能別分類・設計・検証境界](docs/live-repair-20261031/STATUS.md) / [物理iPhone受入](docs/live-repair-20261031/IPHONE_ACCEPTANCE.md) / [WebKit証跡](docs/live-repair-20261031/webkit-result.json)\n\n## Preview（READY・Vercel認証が必要）\nhttps://daidougei-haku-ddcjjttii-daidougei-s-projects.vercel.app/\n\n本番へ接続しない静的QAです。配信者表示は `/?host=1`、視聴者は `/?actor=qa-a` / `/?actor=qa-b` を同じブラウザ環境で開けます。API/Functions/cron/環境ファイルなし。CSPで外部通信を拒否。接続済みVercelツールでHTMLと `/qa-build.json` のHTTP 200、UIソースcommit `60b3dde` / tree `7009fba`を照合済み。最新 `6cb894e` はtest 1行だけの追補で、UIは同じです。物理iPhone/実Supabase/実LiveKitの受入とは区別します。\n\n操作試験13項目は最終UIでも再成功し、スクリーンショットでフォロー/FEVER/入力欄の重なりを目視確認しました。mainマージ、本番デプロイ、SQL適用は一切実施していません。\n\n### 配置済みPreviewのブラウザ検証\nVercelのdevelopment OIDCを保存/表示せず、当該Preview originだけへ付与し、その他の通信を遮断してWebKit iPhone13相当で確認しました。配置済み視聴者→配置済み配信者の累計、共有URL、コメント反映、runtime errorなしの4項目成功。Vercel保護設定は変更していません。これは引き続き静的offline adapterの試験であり、実Supabase/LiveKit/物理iPhoneの試験ではありません。"
+  },
+  {
+    "number": 105,
+    "title": "draft: ホームをLIVE・予約・実際の活動が主役の画面へ刷新",
+    "head": "codex/home-activity-20261031",
+    "sha": "b63b0b268e2d845de1fba5ccddca1ecf55d7cc2c",
+    "merged": false,
+    "body": "ホームでLIVE予約が埋もれ、非配信者が今後の出演者として並ぶ表示を、確認できたLIVE → 実際のLIVE予定 → 活動実績 → 新規 → 全出演者の順へ変更します。独立ブランチ。mainマージ・Productionデプロイ・DB変更・実配信/通知/決済操作は行っていません。\n\nPreview（READY / target=null、Vercel認証保護あり）:\nhttps://daidougei-haku-q66izf6xf-daidougei-s-projects.vercel.app/\nこれは実際のホームコンポーネントを使った**通信遮断済みの静的サンプル**です。画面上にもサンプルと明示。予約はメモリ内だけで変化し、視聴・フォロー・応援は導線確認だけです。接続済みTESTアプリの完成や実iPhone検証の成功とは扱いません。API/cron/資格情報/Supabase clientは成果物に含めず、CSPでconnect/media/frame/formを遮断。ホスト応答200・CSP・静的10ファイルを確認済み。\n\n変更内容:\n- LIVEは承認済み公開出演者のis_liveと未終了セッション、120秒以内のheartbeat（未記録時は開始時刻）を照合。YouTube設定や予定時刻だけでLIVEにしません。表示の判定だけで配信状態は変更しません。再接続/証拠取得失敗では一時的に非表示となり得ます。\n- 写真・名前・配信タイトル・今すぐ視聴・既存プロフィール/フォロー/投げ銭導線。複数LIVEは横スクロール。\n- 最短の公開LIVE予定を表示し、既存予約API/機能フラグを再利用。予約済みボタンでは解除不可、別管理操作と確認で解除。二重送信・古い読取による上書き・別アカウントの状態流用を防止。\n- 活動は公開LIVE予定、公開出演予定、過去30日の終了LIVEから判断。一般updated_at/ログイン/人気/金額を使いません。新規30日枠と日替わりJSTローテーション。既存検索の100件・履歴500件という取得上限は残ります。\n- 可視時30秒更新、重複loadなし、復帰/onlineで更新、Realtimeなし。副作用のあるpresence reconciliationは呼びません。\n\n検証:\n- TypeScript、変更アプリ4ファイルのESLint、app build成功（既存chunkサイズ警告あり）。Lint依存不足は一時prefixだけに導入し、package/lockfileは未変更。\n- 最終ホーム関連3ファイル11テスト成功。全体85ファイル484テストでは483成功、無関係のmerch-ui予約1件が既定5秒でtimeout。対象ファイル3件を単独再実行し設定変更なしで全件成功。当該テストは再実行639ms。単一の全件クリーン成功とは表記しません。\n- localhost静的サンプル＋WebKit iPhone 13相当17項目成功。LIVEあり/なしの予約と視聴の初期表示、予約解除確認、視聴/プロフィールcallback、横画面/320px、page error 0・外部request 0。物理iPhone・実TEST Auth/予約/配信/フォローは未検証。\n\n並行PR #96–#103を監査。#101/#102は既にmainに統合済みのためbaseへ含まれます。他のDraftは取り込まず、LIVE/API/通知/決済/DBは変更しません。#100/#103とはvercel.jsonだけが重なり、今回の差分は当ブランチだけのGit自動デプロイ停止1行です。共通Previewには本番共用LIVE資格情報があるため、通常のGit Previewは停止し静的成果物を直接配置。共有環境変数・保護設定は変更なし。\n\n公開前の残件・承認:\n- 120秒の表示閾値と公平性ロジックをレビューし、別途承認された隔離TEST環境でAuth→予約→開始→視聴→フォローを結合確認。\n- 実機iPhone Safari確認。独立したYouTube on-air確認と厳密なプロフィール編集実績は未実装。\n- 必要なDB/フラグ/外部サービス変更、mainマージ、Production公開はそれぞれ個別承認が必要。このPRはDraftを維持します。\n\n説明・制限・再現手順: docs/HOME_ACTIVITY_REFRESH.md\n証跡: docs/validation/home-activity-checks.json / home-activity-webkit.json"
+  },
+  {
+    "number": 104,
+    "title": "feat: 出演予定の概略位置表示と地図での位置確認",
+    "head": "codex/appearance-approx-locations",
+    "sha": "dd5b4271a61f1cdd509a559ef220cfce231a1d7b",
+    "merged": true,
+    "body": "座標未登録の公開出演予定がMAPから消える問題に対応し、確認済みの会場/住所/地域代表地点だけを「概略位置」として表示します。main `850424a`（#101公開済み）基点の独立PRです。\n\n- 有効な登録座標を優先。座標なしの場合だけ、審査済みの4種類（大須の提供住所周辺、横浜ランドマークタワー周辺、横浜市代表点、南相馬市代表点）を表示時に解決。DBへの補完・書戻しなし。\n- 概略位置をマーカー/詳細/近隣一覧に明記。距離は目安、Google Mapsは会場検索へ誘導し、代表点を正確な出演地点への経路として渡しません。\n- 不明・矛盾する場所、過去・非公開・中止・延期・無効日時をMAPから除外。終了未登録は開始後に残しません。LIVEの判定・位置・配信処理は変更なし。\n- 近隣選択でMAPを該当地点へ移動。GPS拒否時は、既存LIVE/会場/共有位置がない場合だけ代表地点へ初期移動。\n- 登録画面で会場名/住所/地域を入力し、地図上の選択→確認チェック→「この位置を使う」で座標を採用できます。地図は明示操作でだけ読み込み、現在地や自動ジオコーディングは使いません。\n- 位置不明・不完全な座標ペア・地図障害があっても予定の登録は継続可能。会場情報を変更した時は古い座標をクリアし再確認を案内。\n- 位置入力には固定版Leaflet 1.9.4とOpenStreetMap標準タイルを使用。新しいGoogleキー/有料Geocoding API/契約なし。帰属/Referer/ブラウザキャッシュを維持し、prefetch/一括取得なし。公共タイルに可用性保証はありません。\n\n検証: 全84ファイル482テスト通過、最終位置/MAP関連5ファイル22テスト通過、TypeScript、Production build、iPhone13相当WebKit E2E **62項目（統合44＋QR共有18）通過**。初回のPGlite起動timeoutはbuild/browser負荷と分離し、全件再実行で通過。既存chunkサイズ警告あり。\n\nE2EはAPI/Google Maps/OS処理/タイルをfixtureに置換しています。物理iPhoneと実外部タイルのブラウザ描画を合格扱いしていません。実機では、概略ラベル、地図タップ/確認、Google Maps検索/経路の受渡し、圏外時登録の確認が残ります。\n\n一次資料・代表点の限界・費用/利用条件: `docs/appearance-location/README.md`\n検証記録: `docs/appearance-location/validation.json`\n\nPreview（READY / target=null / dd5b427）:\\nhttps://daidougei-haku-2z1wb1wn5-daidougei-s-projects.vercel.app\\n\\n通常Git連携で作成。既存global Previewのserver/browser URLがTEST `aeqskxxykzapgaudbeqa`であることを確認。環境変数・秘密設定の変更なし。\n\n本番DB変更/既存データ更新/新規migration/mainマージ/本番デプロイ/決済/送金/返金/LiveKit Egress/有料契約は実施していません。api/、server/、shared/、supabase/、QR共有helperは差分なし。公開は個別承認待ちです。\n\n最終確認: GitHub CI「TypeScript, Vitest, build」成功。Preview READY、commit dd5b427、target=null（Preview）で一致。PRは競合なしのdraft。検証済みローカルとGitHubのtree SHAは8db57d3f0f3fcd1818cb00152205c6b9b27e30e7で完全一致。mainマージ・本番デプロイは未実施。\n"
+  },
+  {
+    "number": 103,
+    "title": "draft: パフォーマー公式ホームページ・写真/PDF管理・事務局出演依頼",
+    "head": "codex/performer-official-home-20261031",
+    "sha": "50476470e3481da345ba8cfe15e4e42a7b47ccff",
+    "merged": false,
+    "body": "パフォーマーの既存URLを公式ホームページへ拡張し、写真20枚・複数YouTube/PDF・詳細プロフィール・HAKU事務局専用の出演依頼と案件管理を提供するDraftです。新機能はHOME_ENABLED=falseのまま。TEST/本番への永続変更は未承認・未実施です。\n\n## READ ONLY監査後の修正\n- performers行のFOR UPDATEを廃止し、新規private asset_locksだけで排他。既存performersのUPDATE権限は拡大しません。\n- service_roleにadmin_membersのuser_id/permission/statusのSELECTのみ追加するレビュー用SQL。一般ユーザーの参照やプロフィール/メンバー変更権限は追加しません。既存requireAdmin/allowlist/requireSuperAdminは変更なし。\n- 事務局通知はactive admin profile＋active office memberに限定。受信者なしでは受付全体が失敗。出演者への転送なし。\n- 論理削除時は新機能データだけを削除し、実ファイルをprivate削除待ちキューへ。物理削除の新規FKはmedia/home/locks CASCADE、booking performer SET NULL。案件payloadにperformer_idを重複保存しません。\n- 削除済みpathはhash tombstoneで再利用禁止。Storage障害/ack失敗はlease付き再試行。既存bucketやstorage.objectsへSQL DELETEしません。\n- 通常問い合わせ180日、見送りは90日以内へ短縮する運用初期値。見積/成約は保存義務確認hold、法定保存/紛争holdは30日ごとに再確認。保全中は消去不可。super_adminだけが明示確認で保全/消去/保守を実行。監査にはPIIや検索語を複製しません。\n- TEST事務局準備スクリプトは既定offline dry run。将来の明示承認・厳密なTEST URL/JWT条件を満たす場合だけ新規Auth fixtureを作り、期限付きの個別昇格SQLを別途レビューする方式。今回実行したのはdry runだけで、既存アカウント変更なし。\n\n## SQLと再監査\nmigration: supabase/migrations/20261030213928_performer_official_home.sql\nSHA-256: 4401704ddaa3e11217916145ae8068b3fd7841b0f5cd38cadc1d12cbcb2b053a\n\n未適用migrationを改訂。既存private schemaがあればpreflightで停止し、再適用/履歴書換えを行いません。\n指定TEST aeqskxxykzapgaudbeqaをBEGIN READ ONLYで再確認：schema・relations・9関数・2trigger・bucketは競合なし、migration未適用。既存Storage policyはavatars/merch限定。既存の親UPDATE制限とmember参照制限はリモートでは未変更です。\nローカルでは新規7テーブルのRLS、9個のservice-only invoker RPC、private trigger権限、列限定grant、他人のアクセス拒否、削除・保全・Storage障害を再監査済み。\n\n## 検証\n- 最終：79ファイル・488テスト成功。app/API/maintenance TypeScript、production相当build成功。\n- 独立PostgreSQL 17の実2接続試験5項目成功：写真最終枠は片方だけ成功、同時メイン指定後は1件、並び替え、親UPDATEなし、メンバーemail参照拒否。\n- localhost実API＋制限付きPGlite＋memory StorageでWebKit16項目成功。\n- 最初の並行実行ではDB初期化hookの30秒timeoutが発生。上限を60秒にし、最終serial全回帰とDB単独17項目を再実行して成功。実機iPhone・ホストSupabase Storage/Authの成功とは扱いません。\n- GitHub側の新コミットCIは別途ステータス参照。旧コミットのCI成功を新コミットの成功として扱いません。\n\n## 残存ゲート\nTEST migration/新規専用fixture/実DB試験に改めて明示承認が必要。通常問い合わせと法定保存対象は同一視せず、対象資料を事務局の承認済み記録保管先へ保存・確認してからhold解除。日次retention/Storage queue運用、バックアップ復元時の再消去手順は本番有効化前に確定が必要。cronは設定していません。\n参考画像3枚との比較、実機Safari、実ホストのStorage/認証は未検証。追加固定費なし・既存Storage/API転送の従量費はあり得ます。\n\n本番DB/既存データ削除/mainマージ/Productionデプロイ/Stripe・LIVE設定変更は未実施。コード・ローカル検証・Draft更新だけで停止します。\n\n## 今回の変更ファイル（19）\n- SQL/API: supabase/migrations/20261030213928_performer_official_home.sql、supabase/preflight_performer_official_home_readonly.sql、server/officialHome.ts、server/homeMaintenance.ts\n- UI: src/haku-admin/BookingCases.tsx、src/platform/components/official-home/PublicHome.tsx\n- 準備/検証: scripts/prepare-home-test-office.mjs、scripts/test-home-concurrency.py、package.json、tests/fixtures/official-home/backend.ts、tests/fixtures/official-home/schema.sql、tests/home-test-office-preparation.test.ts、tests/official-home-api.test.ts、tests/official-home-db.test.ts\n- 記録: docs/PERFORMER_OFFICIAL_HOME.md、docs/PR103_PRIVACY_AND_TEST_PLAN.md、docs/validation/official-home-concurrency.json、docs/validation/official-home-revision.json、docs/validation/official-home-sql-sha256.txt\n\n設計・法令根拠・TEST承認手順: docs/PR103_PRIVACY_AND_TEST_PLAN.md\n検証記録: docs/validation/official-home-revision.json\n"
+  },
+  {
+    "number": 102,
+    "title": "feat: QR印刷・予定のSNS共有をDB変更なしで先行公開準備",
+    "head": "codex/qr-share-only",
+    "sha": "2d9bde17f52153fff5ad818bd2d9dc53832464e3",
+    "merged": true,
+    "body": "PR #101から切り出したDB変更不要のQR保存・A4印刷・LINE/X/共有シート/URLコピーです。main `398d05b`基点、今回の最終監査は `93ee236` → `2d9bde1`。\n\nSafari修正:\n- PNG保存時のBlob URLの即時破棄をやめ、DOM接続済みリンクと60秒保持へ変更。長い出演者名の横はみ出しを抑止。\n- Clipboard拒否時のfallbackをプロフィール共有にも適用。失敗時の入力欄除去・フォーカス復帰、別realmのAbortErrorによるキャンセルを処理。\n- QR画像の読み込み完了後に印刷。読込エラー/15秒timeout/ポップアップ拒否はエラー表示して再操作可能。自動印刷が抑止されても手動印刷ボタンを残す。\n- 狭い画面でもQRを正方形に保ち、A4 portrait/18mm余白・印刷時操作ボタン非表示。保存/印刷の連打を抑止し、長押し保存を案内。\n\nローカル最終検証: **TypeScript、全78ファイル460テスト、Production build、iPhone13相当WebKit E2E 17項目すべて通過**。buildの既存chunkサイズ警告は残存。PNG実ダウンロード（720×900）、匿名共有リンク着地、LINE/Xリンク・共有payload、キャンセル、Clipboard拒否、印刷再操作・ポップアップ拒否を確認。印刷画像error/timeout、コピー例外時cleanupも単体テストで確認。\n\nE2EのAPIはread-only fixture、native share/clipboard/printはcapture adapterです。物理iPhoneのOS動作に合格したとは扱いません。\n\n| 機能 | 公開判断 / 残件 |\n| --- | --- |\n| QR保存 | 自動検証通過、実機で保存先の画像を開く・QR読み取り待ち |\n| A4印刷 | 自動検証通過、iOSのA4プレビューで1ページ・欠けなしを確認待ち |\n| LINE / X / 共有シート | 自動検証通過、実アプリ/OS作成画面へのURL受渡し待ち（送信・投稿せずキャンセル） |\n\nPreview（READY確認済み）: https://daidougei-haku-gld266ejd-daidougei-s-projects.vercel.app\ncommit `2d9bde17f52153fff5ad818bd2d9dc53832464e3`。非mainブランチの通常Git連携、target=null（Preview）、既存のVercel認証保護と環境設定を維持。実DB接続フローのE2E完了とは区別します。\n\n影響監査: mainに対して2 commits / 22 files。DB migration/SQL、api/、server/、shared/、supabase/、DBアクセス層、型定義、GoogleVenueMap、通知RPC、LIVE/Stripe/投げ銭の処理変更なし。予定一覧は共有部品のimportと配置のみ。既存LIVE、決済保護、出演予定、MAP関連の回帰テスト通過。実決済・実配信は未実行。\n\n最短公開手順:\n1. このPreviewをiPhone Safariで開き、上の3操作を実施（Vercel認証あり）。\n2. 機種/iOS/Safari/日時/合否を記録し、PRを最終レビュー。\n3. mainマージと本番デプロイを承認してから、このPRだけ公開。mainのGit連携で自動公開される場合は両方の判断を先に確定。\n4. 公開後、匿名プロフィール・共有リンク・QRを再確認。問題時はアプリの前版へ戻し、DBは操作しない。\n\n**現時点は実機確認待ちのため公開保留・draft維持。mainマージ・本番デプロイは未実施。**\n本番DB変更・既存データ削除・実決済・新規有料サービス契約なし。追加の有料リソース、秘密設定の複製/書き込みは行っていません。\n\n詳細: docs/QR_SHARE_RELEASE.md、docs/QR_SHARE_VALIDATION.json。PR #101のDB/MAP/通知統合は今回の公開対象外です。\n\n最終CI: GitHub Actions「TypeScript, Vitest, build」成功（2d9bde1）。Preview READY、target=null、同じcommitであることを確認。本番deploymentはmain 398d05bのままです。\n"
+  },
+  {
+    "number": 101,
+    "title": "公開準備: MAP・近隣検索・出演予定改善・当日通知（main #102取込済み）",
+    "head": "codex/release-integration-90-95",
+    "sha": "34913e4c6ad506a92f480dd9a2f11c6a793f3215",
+    "merged": true,
+    "body": "出演予定を登録・変更しても開いたままの予定一覧・MAP・共有先に反映されない問題を修正します。最新main `e2a7078`（#102公開済み）を統合済み。候補HEADは **34913e4c6ad506a92f480dd9a2f11c6a793f3215**。#96–#100は含みません。\n\n## Phase B 本番DB適用完了（2026-10-31 11:06 JST）\n\nユーザーの限定承認に基づき、本番 **pmmtijwswzwhuriqhlep** に指定3件のみをまとめたSQLを1トランザクションで適用しました。\n\n1. `20261029085105_add_appearance_map_coordinates.sql`\n2. `20261029090008_add_day_of_appearance_reminders.sql`\n3. `20261030182434_harden_notification_client_inserts.sql`\n\n適用SQL: [production-proposed.sql](https://github.com/shunta115/daidougei-haku-app/blob/34913e4c6ad506a92f480dd9a2f11c6a793f3215/docs/release-90-95/production-proposed.sql)\nSHA256: `2e12bea6214f444f10bc74d868a538f646ffe9a794a8a5e00ab37f9f7ce27745`\nDB履歴: **20261031020614 / pr101_map_day_of_notification_hardening**。3ファイル分を1つのbundle履歴として記録。履歴SQL本文と承認済みSQLは完全一致。TEST用前提migrationの再適用なし。\n\n直前確認: 接続先一致・ACTIVE_HEALTHY、稼働中フラグ/未終了LIVE/待機lock/長時間transactionは0。COMPLETED物理バックアップ7件、最新2026-10-31 02:27 JST、PITR無効。lock_timeout=5秒 / statement_timeout=60秒を維持。初回ツール確認は期限切れだったためDB未変更を読み取り確認後、同一SQLの確認要求を一度だけ更新して成功。追加・修正DDLなし。\n\n適用後の実DB検証（全てREAD ONLY）:\n- 座標2列・座標CHECK・公開MAP indexが作成され、constraint/indexはvalid。\n- 対象4テーブルのRLS有効を維持。通知INSERT policyは0件、anon/authenticatedのINSERT権限=false、service_role=true。\n- 当日通知RPCはauthenticated実行可、anon実行不可。実anonロールの呼出し拒否と、authenticatedでもUIDなしの呼出し拒否を確認。本人IDをauth.uidから取得する関数定義・固定search_pathを確認。\n- 既存LIVE通知関数の本文hash・ACLは前後一致。\n- 予定8件、通知175件、通知イベント9件、プロフィール67件、出演者24件、LIVEセッション78件、通知設定0件の件数/内容hashが前後一致。予定の比較は新規null座標列を除外。既存データUPDATE/DELETEなし。\n- 本番で通知発火や偽造INSERTの試行はしていません。正常な本人通知生成・重複拒否・他人宛て拒否・LIVE通知生成は既存TESTのROLLBACK試験で検証済み。本番では書込みなしの権限/定義検査と区別。\n- 適用後もDBはACTIVE_HEALTHY、LIVE/待機lockは0。\n\n## アプリ変更と既存検証\n\nMAPの予定・LIVEを可視時20秒pollとfocus/online/visibility復帰で更新。中止・延期は一覧に残してMAPから除外。簡単登録・複製・複数日登録・当日アプリ内通知を統合しています。\n\n公開済みQR/SNS共通helper・コンポーネント・保存/印刷処理はmainと同一。旧inline共有と不要CSSを除去。QR画面のカードが閉じるボタンを覆う問題だけを余白/重なり順で修正し、タップE2E通過。\n\nTypeScript、全83ファイル476テスト、Production build、WebKit/iPhone13相当E2E 46項目（統合28＋QR共有18）、GitHub CI成功。既に成功した検証を繰り返していません。既存chunkサイズ警告あり。api/、server/、shared/、LIVE開始終了・Stripe Connect/投げ銭・送金ロジックにmainとの差分なし。\n\nPreview（READY、34913e4、target=null）:\nhttps://daidougei-haku-p6snkf5cn-daidougei-s-projects.vercel.app\n既存TEST限定設定とVercel保護を維持。新規秘密設定の書込みなし。\n\n## 残存リスク・未確認\n\n- 通常TESTログイン→登録→一覧→MAP→共有先のブラウザ実接続、実Google Maps、物理iPhone、隔離物理バックアップ復元実証は未完了。認証緩和・トークン抽出・Productionキー複製・有料契約はしていません。ユーザーはPhase B承認時にこれらを認識済み。\n- 座標未設定の予定はMAP対象外。既存8予定の新規座標は全てNULLであり、自動ジオコード/データ補完は行っていません。\n- 当日通知は通知画面を開く/表示中pollで生成するHAKU内通知。未起動端末への定時Push/LINE通知は範囲外。\n- 本番の実配信・実決済・通知発火を伴う試験は未実施。API/Maps/OSのoffline E2Eを実機・本番接続試験の成功とは扱いません。\n\n## 次の承認\n\n**mainマージと本番デプロイは未承認・未実施。** 両方の個別承認取得後に限り、この候補をmergeしてGit連携Productionを確認します。現main/Productionは **e2a7078** のまま。draftを維持しています。\n\n公開後は一覧・MAP/近隣・共有・LIVE視聴/投げ銭画面を確認し、実決済はしません。データ登録/変更など書込みを伴う本番受入は、指定された許可範囲に従います。問題時はアプリを現mainへ戻し、DBデータを削除したり通知偽造対策を解除したりしません。\n\n証跡: `artifacts/pr101-main-refresh-20261031/phase-B-result.json`（ローカル）。repo内の `MAIN_REFRESH_20261031.md` / `main-refresh-validation.json` は適用前の審査・検証記録であり、本番適用の最新状態はこのPhase B結果を優先します。\n"
+  },
+  {
+    "number": 100,
+    "title": "draft: HARIBOW LIVEの開始・終了を原子化し、Safari・YouTubeの復旧を修復",
+    "head": "codex/haribow-live-stage2-20261031",
+    "sha": "262535450660cef833e5fb9f8950a6696a832a80",
+    "merged": false,
+    "body": "配信開始の途中失敗でis_liveだけが残る問題を原子的な予約/公開/終了へ置き換え、Safari・YouTubeの復旧を補強します。b705eb4を継承し、d0a8b3bへの追加指令を反映しました。\n\n## 緊急追加監査の修正\n- heartbeatをperformer→leaseの同一ロック順の単一RPCへ統合。leaseとlive_sessionsを同じDB時刻で更新し、ミラー失敗は全rollback。終了が先なら遅いrenewはfalse/API 409で、復活させません。\n- DB時刻だけで配信中LIVEを終了する処理を撤廃。SFUの接続確認、120秒以上の連続不在猶予、観測間隔45秒以内、元heartbeatとのCASを必須にし、正常接続・不明・新しいheartbeat・短い再接続を誤終了させない。\n- 内部close/renew/observe/expireと通知関数のPUBLIC/anon/authenticated EXECUTEを拒否。本人用reserve/activate/finishは所有権を関数内で検証。\n- migration 1→2の順序を検査。advisory lockと事前のtable lock、配信/準備中の中止、同名cronの重複・別owner・停止中・想定外commandの停止を追加。既存データ/ジョブを削除しない。\n\n## 検証\nローカルPostgreSQL 17.11の独立した実接続で12ケース成功（両競合順序、終了後renew、CAS、正常SFU観測、再接続猶予、不明、観測空白、権限、mirror rollback、再適用拒否）。接続済みTEST/本番は使っていません。\n全Vitest 80ファイル478件成功（15秒上限）。アプリ/LIVEサーバーTypeScript、本番相当build成功。cron順序/重複/再適用はカタログスタブ試験で、実daemonの稼働成功とは扱いません。\n前段のChrome模擬14項目・横画面操作は成功。実LiveKitの映像/音声、iPhone、実YouTube、実決済は未検証。WebKitはlaunch timeoutで未検証。\n\n## 重要な残存ゲート\nSQL cronは未公開preparingだけを失効させます。配信中の自動終了にはSFU-aware presence watchdogの20〜30秒程度の継続実行が必要で、まだ運用設定していません。watchdogが呼ばれない間は時刻だけでLIVEを閉じないため、無人時の自動終了を保証できません。両方式ともNO-GOを維持します。\nSFU観測直後の再接続まで含む分散システム全体の絶対的な誤終了ゼロは主張しません。実機/SFUの確認が必要です。\n\n## 未実行\nDraft維持。TEST/本番migration、pg_cron有効化、mainマージ、本番デプロイ、実決済/送金/返金は未実行。PreviewはStripeモード未確認のため作成せず、当ブランチのGit自動デプロイを停止しています。金融コードへの変更なし。\n\n[追加競合監査とSQLハッシュ](docs/HARIBOW_PR100_CONCURRENCY_AUDIT_20261031.md) / [適用・ロールバック](docs/HARIBOW_STAGE2_RELEASE_AND_ROLLBACK.md) / [当日操作](docs/HARIBOW_LIVE_OPERATOR_20261031.md)"
+  },
+  {
+    "number": 99,
+    "title": "draft: HAKU LIVE immersive studio, persistent mini player and opt-in alerts",
+    "head": "codex/haku-live-immersive-ui-lab-20261030",
+    "sha": "1c6ea661f2bb7538b384ab8fbcdbd63a549efa29",
+    "merged": false,
+    "body": "HAKU LIVEの映像を縮めずにコメント・操作を重ね、配信中の設定をコンパクトなシートへ移しました。視聴中は同じLiveKit Roomとvideo/audio要素をアプリ上位で保持し、小窓へ切り替えてHAKU内を移動・復帰できます。\n\n## 変更\n- 視聴: 本人アイコン/名前/フォロー、LIVE/時間/人数、いいね・シェア・音声・ギフト、FEVER、下部コメント入力。横画面の680px幅制限をLIVEだけ解除し、844×390を使用\n- 配信: 既存カメラ/マイク/前後切替を再利用、設定は初期閉じ、終了確認、通信状態、端末に表示設定を保存。配信前の補助項目を折りたたみ\n- コメント: 100/1000件でも映像領域を維持。80件上限到達後の新着追従を修正し、削除/ミュートを操作メニューへ整理\n- ぼかし: 映像上UIのbackdrop-filterを除去。原カメラ・Canvas後の送信入力・実エンコード・表示を識別する安全な診断を追加。カメラ/Canvas/エンコード設定は変更していない\n- 通知: 既存HAKU内通知/出演予定Pushを保全。LIVE専用同意・送信キュー・session重複防止を未適用migrationと既定OFFのclient/server flagsで準備\n\n## 検証\nコミット `1c6ea66`: TypeScript、Vitest 480件、本番build成功。独立WebKit 26.0のlocalhost fixture試験18項目成功（390×844/844×390、0/100/1000コメント、cover/contain、模擬キーボード、小窓の同一video/接続1回/終了切断、カメラ/マイク/方向操作、コメント削除/ミュート、新着追従）。実iPhone・実LiveKit映像/音声の成功とは扱わない。\n\nPreviewはTEST Supabaseへの接続を照合済み。最新Preview: https://daidougei-haku-r86o6o2hv-daidougei-s-projects.vercel.app/\n\n## 公開前ゲート\n- iPhone実機のカメラ画角・モザイク再現・音声・小窓中の実際のページ移動・通知受信は未検証\n- 手動1080p/720p/480p固定とアーカイブ保存は未対応。現Canvas送信経路は720系であり、対応済みとして表示しない\n- LIVE Push migrationはTEST/本番とも未適用、flagsは未設定OFF、実Push未送信。適用・有効化・実機同意確認が必要\n- Draft維持。mainマージ・本番Vercel・本番DB・Stripe/Connect/AWPへの操作は未実施\n\n[参考画像との比較と残項目](https://github.com/shunta115/daidougei-haku-app/blob/1c6ea661f2bb7538b384ab8fbcdbd63a549efa29/experiments/live-ui/IMPLEMENTATION-PLAN.md) / [通知の適用・停止方法](https://github.com/shunta115/daidougei-haku-app/blob/1c6ea661f2bb7538b384ab8fbcdbd63a549efa29/experiments/live-ui/LIVE-PUSH-README.md)\n"
+  },
+  {
+    "number": 98,
+    "title": "draft: CROWD HLS視聴認可とHTTPS試験準備",
+    "head": "codex/haku-crowd-https-persistent-test-20261030",
+    "sha": "19ff99772002f7db5738c34bd40efa6ff0618001",
+    "merged": false,
+    "body": "PR #97を基点とする独立Draft。main、本番DB、Stripe、既存LiveKit、本番デプロイは変更しない。\n\n## 実装\n- HLSのマスタープレイリスト、メディアプレイリスト、TSセグメントに署名付き視聴チケットを要求。本人または現在の撮影者だけがログイン済みでチケットを取得できる。\n- チケットはroom・actor・epoch・期限に結合。LIVE終了・撮影者交代・期限切れで取得済みURLも拒否する。iPhone SafariのネイティブHLS再生用にSRSの `hls_ctx` を保持して全参照へチケットを付ける。\n- PR #97の本人承認、QR、短寿命一回限りWHIP権限、SRS切断確認を再利用。\n\n## 検証\n[隔離CI成功](https://github.com/shunta115/daidougei-haku-app/actions/runs/41002844390): QR→Chrome疑似映像・音声→WHIP→SRS→署名付きHLSでH.264/AACを識別し6秒デコード。本人停止後のSRS切断とHLSチケット拒否を確認。Node 16件、Vitest 443件、TypeScript、production build成功。\n[Preview画面](https://daidougei-haku-gajw0gxl7-daidougei-s-projects.vercel.app/haku-crowd-live.html)はREADYだが、HTTPSメディアゲート未接続のため配信はできない。\n\n## 未完了\nTEST実アカウントでのAuth・iPhone Safari・別端末・外部ICE/UDP経路は未検証。現行SRSは127.0.0.1専用。Cloudflareのメール制限付きQuick TunnelはHTTPS HTTP経路には使えるが、SRS WebRTCのICE/UDPを通さない。利用可能な安全な外部メディアサーバーまたは同一LANのiPhone試験環境が必要。現行権限状態は単一プロセスMapであり、複数サーバーの永続的原子管理は未実装。本番・一般公開不可。"
+  },
+  {
+    "number": 97,
+    "title": "draft: CROWD iPhone WHIP実映像とTEST Auth接続",
+    "head": "codex/haku-crowd-iphone-auth-whip-20261030",
+    "sha": "dd02b91bb754b05e59cd0d56924513bec6959b78",
+    "merged": false,
+    "body": "PR #96を基点にした独立Draft。PR #87のHAKU Auth本人照合と、PR #88のSRS/WHIP/HLSを再利用する。main、本番DB、Stripe、既存LiveKitには変更なし。\n\n## 実装\n- TEST Supabase AuthのユーザーID・出演者承認を照合するアダプター。サービスロールキー不要。\n- 本人の事前許可→QR→観客同意→短寿命・一回限りの権限→ゲート経由WHIP。本人停止と撮影者交代ではSRS切断を要求し、切断未確認なら次の配信を拒否。\n- スマホ向けCROWD画面。既存TESTセッションからQRを表示し、観客はボタンでカメラ・マイクを起動。HLS視聴、カメラ切り替え、非表示時停止、パフォーマー本人へのプロフィール・投げ銭導線。\n- SRSとゲートは隔離CIの127.0.0.1に限定。未認証SRSを外部公開しない。\n\n## 検証\n[隔離CI](https://github.com/shunta115/daidougei-haku-app/actions/runs/41000416501) 成功。Chrome疑似カメラ・マイク→QR認可→WHIP→SRS→ゲート経由HLSでH.264/AACを識別・6秒デコード。ブラウザ送信RTPは映像330,197バイト、音声45,154バイト（同試行10秒時点）。本人停止後のSRS publisher消失を確認。Node 14件、Vitest 443件、TypeScript、本番ビルド成功。\n\n## 公開前の阻害要因\niPhone Safari実機、別端末、TEST実アカウントでのログイン、所有者限定HTTPSメディアゲート、複数サーバー共有の原子的セッション状態、500実端末×1時間は未検証。現在のVercel PreviewにはTESTメディアゲートURLがなく、画面表示のみ。ゲートは単一プロセスの試験実装で本番公開不可。Draftを維持する。"
+  },
+  {
+    "number": 96,
+    "title": "draft: SRS WHIPとCROWD代理配信の認可統合ラボ",
+    "head": "codex/haku-srs-crowd-integration-20261030",
+    "sha": "3efdebaae3958f00842caa3b032d64c4079cd93c",
+    "merged": false,
+    "body": "PR #88（SRS WHIP/HLS）を基点に、PR #87 の代理撮影の本人承認・QR・一回限りの配信権限を再利用する独立Draftです。\n\n- SRS WHIP の手前に認証済み actor を要求する loopback 専用 HTTP ゲートを追加\n- QR/本人ID/撮影者ID/room/peer/epoch を結合し、grant を一回だけ消費\n- 本人停止・許可撤回・撮影者交代・lease 失効で SRS publisher の実切断を試み、切断未確認時は次の撮影者を許可しない\n- Node、Vitest、TypeScript、build の隔離CIを追加\n- 既存LiveKit、本番DB、Stripe、Connect、本番デプロイ、mainは未変更\n\n**公開禁止のDraft。** HAKU TEST Authと永続状態、HTTPS/公開WHIP認可、HLSセグメント認可、iPhone Safari実機、1時間継続は未完成。PR #88の500人は localhost の10秒疑似HLSクライアント実測で、500台実機や本番帯域の保証ではありません。追加契約・課金は行っていません。\n\n詳細: `experiments/srs-crowd-lab/README.md`\n"
+  },
+  {
+    "number": 95,
+    "title": "feat(appearances): 出演予定のSNS共有導線",
+    "head": "codex/appearance-social-share",
+    "sha": "96ede88807872692b02c39041e1ed5895002fd48",
+    "merged": false,
+    "body": "## 変更\n- LINE公式共有URL\n- X Web Intent\n- iPhone共有シート（Instagram等は共有シート経由）\n- URLコピーと古いSafari向けフォールバック\n- 共有リンクは出演予定ID付き公開プロフィールへ着地\n\n## セキュリティ\n公開予定の表示情報と公開URLだけを共有。非公開情報・認証情報は送信しません。\n\n## 検証\n- TypeScript ✅\n- 予定・ルーティング関連61テスト ✅\n- Production build ✅\n\n## DB・費用\nDB変更なし。追加費用なし。"
+  },
+  {
+    "number": 94,
+    "title": "feat(appearances): スマホ出演予定登録を高速化",
+    "head": "codex/appearance-registration-ux",
+    "sha": "f57685707c3261d64bf7e6467f746378ecfc405d",
+    "merged": false,
+    "body": "## 変更\n- 前回会場（住所・地域・座標・タイムゾーン）の再利用\n- 既存予定／過去予定の複製\n- カンマ区切りによる複数日一括登録\n- 複数日は単一insertで送信し、途中作成を防止\n- 端末内下書き保存を維持\n- 未保存入力がある場合の離脱警告\n\n## 検証\n- TypeScript ✅\n- 登録・migration回帰11テスト ✅\n- Production build ✅\n\n## DB・費用\nPR-Aの既存`performer_appearances`拡張を利用。追加migration・有料サービスなし。"
+  },
+  {
+    "number": 93,
+    "title": "feat(qr): パフォーマーQRカードの印刷対応",
+    "head": "codex/performer-qr-print",
+    "sha": "8fd4794bf9bdff850625fef435a633dca23d37a9",
+    "merged": false,
+    "body": "## 監査結果\nプロフィールQR、フォロー・出演予定・投げ銭への着地、共有シート、URLコピー、PNG保存は既存実装済みでした。\n\n## 追加\n- A4向けQRカード印刷導線\n- 公開プロフィールURLと公開名・ハンドルだけを印刷\n- 認証情報・個人秘密情報はQRに含めない\n\n## 検証\n- TypeScript ✅\n- QR・ルーティング55テスト ✅\n- Production build ✅\n\n## DB・費用\nDB変更なし。追加費用なし。"
+  },
+  {
+    "number": 92,
+    "title": "feat(map): 近くの公開出演予定を距離順で発見",
+    "head": "codex/nearby-appearances",
+    "sha": "ec69c78143f66924652c325488edb4254a641484",
+    "merged": false,
+    "body": "## 概要\nPR-Aの公開予定座標を使い、近くの大道芸を探せる導線を追加します。\n\n## 変更\n- 現在地許可時は会場までの距離順\n- 日時・出演者・会場・地域を表示\n- プロフィール相当の出演カード選択とGoogle Maps経路案内\n- 位置情報拒否・未対応時は地域／会場名検索へフォールバック\n- 現在地はブラウザのメモリ内のみで、DB保存なし\n\n## 検証\n- TypeScript ✅\n- 近隣・MAP関連10テスト ✅\n- Production build ✅\n\n## 費用\n既存ブラウザGeolocationとGoogle Mapsリンクのみ。追加費用なし。"
+  },
+  {
+    "number": 91,
+    "title": "feat(notifications): フォロー中出演者の当日通知",
+    "head": "codex/appearance-notifications",
+    "sha": "01d3559407e3f0f7b2fd990fa347911ff1be66dc",
+    "merged": false,
+    "body": "## 概要\n既存の公開・変更・中止・延期通知を維持し、フォロー中出演者の公演当日にHAKU内通知を冪等生成します。\n\n## 安全性\n- ログインユーザー本人のフォローだけを対象\n- 公開予定だけを対象\n- 予定ごとのタイムゾーンで「当日」を判定\n- 通知設定OFFを尊重\n- `(user_id, notification_event_id)` で重複防止\n- Push配信や追加インフラは増やさない\n\n## 検証\n- TypeScript ✅\n- 通知関連9テスト ✅\n- Production build ✅\n\n## DB\nadditive migrationファイルのみ。本番未適用。\n\n## 費用\n追加月額費用なし。"
+  },
+  {
+    "number": 90,
+    "title": "feat(map): 公開出演予定とHAKU MAPを連動",
+    "head": "codex/map-appearance-link",
+    "sha": "d0df471ef6c9a733fc3a27030e29c5c1fc79843a",
+    "merged": false,
+    "body": "## 概要\n公開済みの出演予定をHAKU MAPへ連動し、LIVE中と出演予定時刻を区別して表示します。\n\n## 変更\n- 公開・座標ありの出演予定だけを緑色マーカーで表示\n- 開始・終了時刻内は「出演予定時刻」と表示（実演中とは断定しない）\n- 終了時刻未登録は出演中判定をしない\n- LIVEと予定が重なる場合は二重状態を表示し、LIVE視聴導線を維持\n- プロフィール・Google Maps経路案内を表示\n- 任意の会場座標列を追加するadditive migrationを同梱（本番未適用）\n- 中止・非公開・期限切れ・座標なしをMAPから除外\n\n## 検証\n- `npm run typecheck` ✅\n- MAP関連テスト 13件 ✅\n- `npm run build` ✅\n\n## DB\nmigrationファイルのみ。本番DBへの適用はしていません。\n\n## 費用\n既存Google Maps設定を再利用。新規有料サービスなし。"
+  },
+  {
+    "number": 89,
+    "title": "スケジュールを公開プロフィール出演予定へ刷新",
+    "head": "codex/schedule-refresh",
+    "sha": "5c25bfe75fced97e42bf97eb2893aa1f2d0628ed",
+    "merged": true,
+    "body": "## 概要\n- 既存の `performer_appearances` を再利用し、公開済み・未来の出演予定を全パフォーマー横断で集約\n- 表示モードを「🌏 すべて / ♡ フォロー中」に分離し、初期値を「すべて」に固定\n- 期間を「すべて / 今日 / 明日 / 今週 / 今月」に拡張し、各予定の登録タイムゾーンで分類\n- 日時、写真、出演者、タイトル、会場・地域、プロフィール、Google Mapsをカード表示\n- 下部ナビを「ホーム / 予定 / LIVE / MAP / マイページ」に変更し、既存イベント一覧は予定画面内から維持\n\n## 不具合修正\n- MAP/会場取得と出演予定取得を別Effect・別エラー状態へ分離\n- MAP取得失敗時も出演予定を表示する回帰テストを追加\n- 200件固定上限を廃止し、1000件単位の安定ページングへ変更\n- 予定0件、取得エラー、未ログインのフォロー表示を別々のUIで案内\n- 公開予定の出演者IDを既存の承認済みプロフィールへ関連付け\n- Preview DBで `performer_appearances` 未適用（PGRST205）を確認。DB変更は行わず、プロフィールでも使う公開済み未来イベント枠へ互換フォールバック\n- AWPの過去 `event_slots` は保存したまま日付条件で通常予定一覧から除外\n\n## 検証\n- `npm run typecheck` ✅\n- 関連テスト: 8/8 ✅\n- 全テスト: 73スイート / 436テスト成功。DBエミュレーター1スイートは全体実行時30秒制限でタイムアウトしたため単独再実行し9/9成功 ✅\n- `npm run build` ✅\n- Vercel最終コミット `b8987d7`: READY ✅\n- iPhone Safari相当 390×844: 初期「すべて」、期間「すべて」、フォロー時ログイン案内、イベント導線、下部「予定」、空状態を確認 ✅\n- 本番DB変更・本番デプロイ・データ削除なし\n- LIVE・投げ銭・Stripe変更なし\n\n## Preview\nhttps://daidougei-haku-app-git-codex-schedu-bfb7ae-daidougei-s-projects.vercel.app/event"
+  },
+  {
+    "number": 88,
+    "title": "draft: HAKU LIVE SRS/WHIPワンタップ試作と500人配信検証ラボ",
+    "head": "codex/haku-live-ovh-srs-500-lab-20261029",
+    "sha": "d14c36a949cab3cc7fd10f53d884de4ddb4fe8da",
+    "merged": false,
+    "body": "## 状態（Draft・本番導入禁止）\n追加費用0円の隔離CIで、Chrome疑似カメラ/マイク → WHIP → SRS v7 → HLSのH.264映像・AAC音声を生成し、ffmpegで6秒間両トラックをデコードしました。RTMPハンドシェイクとRTMP→HLS基準経路も成功しました。\n\n## 実測\n- WHIP入力: HLS H.264/AACデコード成功、5疑似視聴者がセグメント受信。\n- RTMP入力の別ジョブ: localhostのSRS HLSを1/10/50/100/500疑似クライアントで各10秒。全段階で初回受信成功・取得エラー0。500人段階は約597Mbps（受信セグメントの集計）、応答p95 332ms。CPU/メモリ/累積NETはCIログに記録。\n- TypeScript・447件Vitest・本番ビルド成功。\n- 証拠: https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764234 と https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764189\n\n## 修正\nSRS設定を明示し、RTC→RTMP→HLSを有効化。SRS v7のmaster playlistからhls_ctx付きmedia playlistを安全に辿り、HLSの実セグメントを確認。負荷プローブはライブ端から読み、クエリが変わっても同一セグメントを重複取得しない。WHIPの単なる接続/HTTP 200を成功条件にせず、映像・音声の実デコードをCIで必須化。\n\n## 未検証・公開阻害\n500人の試験は単一CIランナーのlocalhostで10秒間、RTMP入力。WHIP入力500人、iPhone Safari、実VPS/外部回線、日本向け品質、長時間配信は未検証です。PR #87のQR発行・本人承認などは再利用予定ですが、SRS publish認可・実HAKU認証との連携は未実装。ローカルSRSはTLS/認証なしで外部公開不可です。\n\n500人×(映像800kbps+音声48kbps)×1.15 ≈ 487.6Mbps、約219.42GB/時は計画値。OVHcloud VPS-3の表示価格は月$12.32からですが、リージョン/税/契約条件/帯域制限は要確認。追加運用費0円での本番運営は保証できません。有料契約、本番DB/Stripe/Connect、mainマージ、本番Vercelデプロイ、LiveKit Egressは行っていません。Draft維持。\n\n詳細: experiments/ovh-srs-lab/README.md"
+  },
+  {
+    "number": 87,
+    "title": "draft: HAKU無料LIVE試作・所有者限定の別端末PreviewとCROWD交代",
+    "head": "codex/haku-free-live-20261028",
+    "sha": "71acd19278e06ab928ddc393d526ca225ba2c3eb",
+    "merged": false,
+    "body": "HAKU DIRECTとQR経由のCROWD LIVEを、既存HAKUから独立した最大5視聴のWebRTC P2P試作として追加します。所有者限定の別端末テスト用Previewを発行済みです。\n\nPreview: https://haku-live-device-check.eb-shimada409.chatgpt.site/haku-free-live\n\n- 全端末で同じ所有者のChatGPTログインが必要な非公開テスト。テスト役割の選択はHAKUのパフォーマー認証とは別です。\n- 本人配信、事前許可付きQR参加、撮影者の交代、本人の同一画面での観客カメラ視聴、緊急停止、再接続と通信量表示を実装。\n- 独立D1の版番号付きsnapshotを比較更新し、Workerが分かれても視聴席・nonce・epoch・失効・メッセージを原子的に管理。テストsessionは訪問者IDとpeerに結合し、再試行の重複や古い成功応答も拒否。\n- 上限は同時1配信・視聴5人・1回15分・日次10,000操作。TURN/SFU/録画/LiveKit Egressを呼ばず、有料経路へ切り替えません。改造P2Pクライアント両端の中央強制停止は保証できないため一般公開しません。\n- 従来の端末内カメラ/5組loopbackも /device-check に保全。投げ銭・フォローは未接続。通報は試作内の隔離停止と限定記録のみ。\n- 全288条件の上り/下り/TURN/参加者分/固定費/従量費と接続管理負荷を収録。\n- Vercel現契約Hobbyの商用制約から同サービスは使用せず、このブランチの自動deploymentを停止。現在のChatGPTプランに含まれるSites betaを使用し、追加契約・クレジット購入・従量課金有効化なし。アプリ上限を事業者の請求ハードキャップとは扱いません。\n\n検証: HAKUの型チェック・Vite build、Sitesの型チェック・Vinext build、Vitest 76ファイル/473件成功。追加9件は実SQLiteで権限、同時更新、5席と6人目拒否、交代ACK、終了後の失効、再試行、日次上限を確認。Miniflareの実D1 bindingでも27操作のフローが成功。公開先D1のhealth 200、訪問者IDなし通常API 401、公開HTMLとpushしたsourceのSHA-256一致を確認しました。\n\n初期のローカルChromium偽カメラ/マイクでは5個の独立browser contextsで映像・音声RTP、6人目拒否、再接続、CROWD交代、緊急停止を確認済みです。今回の公開先について、所有者ログイン後のiPhone同士の実映像・音声、携帯回線、発熱・長時間配信・実画面ロックは未検証です。API/SQLite検証を実機配信の成功とは扱いません。\n\n一般公開には、本物のHAKU認証・既存応援導線との接続、費用遮断の確認、強い配信停止制御と通報対応、実機確認が残っています。HAKU側の api/free-live.ts は503のままで、本番環境にはこの試作サーバーを出しません。\n\n調査/確認手順: docs/free-live/README.md\n検証詳細: docs/free-live/verification.md\n全条件表: docs/free-live/simulation-matrix.md\n公開先証跡: artifacts/free-live/sites-hosted-evidence.json\n\nHAKU本番DB・AWP2026データ・main・HAKU本番公開・決済/送金/返金・有料契約・課金設定・本番シークレットは変更していません。Preview専用の独立D1だけを追加しました。Sites側のdeployment区分はproductionですが、HAKU本番とは接続しない所有者限定の試作です。mainマージとHAKU本番公開には個別承認が必要です。"
+  },
+  {
+    "number": 86,
+    "title": "test: integrate PR #81 camera, #84 privacy stop and #83 studio UI",
+    "head": "codex/live-integrated-test",
+    "sha": "bda84ccd1b5fd7a6dca4a564280e5f734fd7a9bc",
+    "merged": false,
+    "body": "TEST integration branch only. Depends on #81 and incorporates the reviewed changes from #84 and #83 without modifying either PR. Do not merge to main or deploy to production without separate approval and iPhone validation.\n\nAdditional P0 safety changes in this integration: per-live-session LiveKit room names derived from existing live_sessions.id (no migration); separate host preview room; token API refuses active-room tokens without an open live session; on end, server-side close attempts to revoke known host/connected participant tokens and delete only that session room. Existing presence checks now target the session room. No Egress, DB migration, Stripe, Connect or paid service added.\n\nVerification: app TypeScript passed; targeted server API TypeScript passed; Vitest 480/480 passed; local production build passed. GitHub Actions and Preview pending.\n\nRelease blockers: iPhone Safari and second-device checks have not been run on this integrated build. LiveKit Cloud token revocation must be confirmed in TEST; the session room isolation prevents an old token from entering a *new* broadcast, but an unconnected old viewer token may still enter the ended empty room until expiry. Safari forced-quit cleanup is traffic-driven by the existing presence endpoint, not a fixed-time guarantee. Do not treat P0 as fully complete or publish until these constraints are resolved/accepted."
+  },
+  {
+    "number": 85,
+    "title": "Preview: HAKU home refresh concept (isolated HTML)",
+    "head": "preview/home-refresh-concept-20261028",
+    "sha": "815d709d75ebd9601b96c188f5ed11063e09027e",
+    "merged": false,
+    "body": "Independent mobile-first concept at `/haku-home-concept.html`. Mock content only, no production route changes, no API/Stripe/Supabase/LIVE connections. Do not merge without approval."
+  },
+  {
+    "number": 84,
+    "title": "fix: pause HAKU DIRECT media immediately when Safari leaves foreground",
+    "head": "codex/live-safety-stop",
+    "sha": "1df0f125545437b4b78690b765ce2832946453f7",
+    "merged": false,
+    "body": "Depends on #81. This is the P0 safety-stop slice only; do not merge to production until iPhone validation and separate approval.\n\n- Stop physical camera/mic tracks synchronously on visibility loss or pagehide; preserve the room for explicit resume only.\n- Guard in-flight camera/orientation/microphone switches against hidden-page republishing.\n- Stop local tracks and request live-end sync on unexpected LiveKit room disconnect.\n- Add two camera-stop regression tests and enable this dependent PR's quality gate.\n\nLocal verification: TypeScript passed, Vitest 472/472 passed, production build passed. No DB, Stripe, Connect, YouTube, Egress, or paid-service changes.\n\nKnown remaining P0 gap: a previously issued LiveKit host token can reconnect until TTL because #81 uses a fixed performer room. Session-scoped room/token revocation needs a separate reviewed change. Forced Safari termination relies on existing presence reconciliation and is not guaranteed to end after a fixed timeout without traffic. iPhone Safari behavior remains unverified."
+  },
+  {
+    "number": 83,
+    "title": "HAKU LIVE: 配信者スタジオの横持ちレイアウトと反応表示を改善",
+    "head": "codex/live-studio-ui",
+    "sha": "b4fe603ac4498c519cd4130ce3d5465ef6d120de",
+    "merged": false,
+    "body": "PR #81 に依存するP1 UI変更です。横持ちでは映像を上、コメントと操作を下に分け、出演者名・視聴者数・経過時間をコンパクトに表示します。縦持ちの半透明コメント、FEVER・ギフト、設定内診断、LiveKit映像処理は既存実装を維持します。\\n\\n検証: TypeScript型チェック成功、Vitest 471件成功、本番ビルド成功。iPhone Safari実機と別端末視聴は未検証です。PR #81とともに実機確認完了までマージ・本番公開しません。\\n\\nDB、Stripe、Connect、投票、投げ銭台帳、有料Egressの変更はありません。"
+  },
+  {
+    "number": 81,
+    "title": "Fix HAKU DIRECT camera framing and performer studio layout",
+    "head": "codex/live-studio-camera-fix",
+    "sha": "3c2034f6453b4198919a542a631eb74804280500",
+    "merged": false,
+    "body": "## 変更\n- LiveKit送信映像を固定比率Canvasで再描画せず、実際のカメラ画角を配信・表示\n- ネイティブ9:16がクロップなしで取得可能なら優先。不可なら3:4または元の全画角を維持し、ズーム・引き伸ばしをしない\n- 取得/送信/プレビュー寸法の診断、切り替え時のフレーム継続確認と復旧\n- 縦横の配信者スタジオをセーフエリア対応の映像・操作分離レイアウトへ変更。コメント、反応表示、終了確認を維持\n- YouTube CONNECT、DB、Stripe、Egressは変更なし\n\n## 検証\n- TypeScript成功、Vitest全448件成功（最終追加テスト単独38件成功）、production build成功。最新コミットのGitHub Actionsを確認中\n- Headless Chromeで縦横レイアウト確認済み。iPhone Safari実機・別端末視聴は未確認\n- PreviewのSupabase接続先/公開キーは本番と別のTESTプロジェクトに一致。LiveKit status configured=true\n\n## Previewログイン\nTEST Supabase Authログはログインを `400 Invalid login credentials` として拒否。TEST Performerユーザーは存在し、メール確認済み・パスワード設定済みだが、現行入力のTEST用認証情報の一致は未確認。Auth/RLSを緩めたり本番Supabaseへ向けたりしない。TEST用アカウントで再試行、必要ならPreviewから通常のパスワード再設定を行う。\n\n## 本番公開ゲート\nPR #80由来のiPhone Safari不具合を避けるため、Previewで縦/横/自動、前後カメラ、視聴端末映像・音声、コメント/ギフト、終了を実機確認するまでマージしない。TESTの該当パフォーマーが配信承認済みかも確認する。\n\n## 最終確認（2026-10-25）\n最新コミット `3063ea93` のGitHub ActionsはTypeScript・Vitest 449件・production buildすべて成功。Vercel PreviewはREADY（`dpl_6xeV1MVsdR8NNHRmnGtVJofHGZQc`）。PreviewのLIVEページとLiveKit statusは200。TEST SupabaseのTest Performerはプロフィール `pending`・未承認で、そのままでは配信テスト不可。TESTには承認済みでログイン準備済みのパフォーマーが1件存在するが、本人の認証情報・実機アクセスは未確認。権限変更は実施しない。"
+  },
+  {
+    "number": 80,
+    "title": "HAKU DIRECT: 縦型・横型・自動切り替えの配信方向選択",
+    "head": "codex/live-orientation-ui",
+    "sha": "2c41b2d3efe3a5ff16ba8fc7391200800c9cdffa",
+    "merged": true,
+    "body": "## 内容\n- HAKU DIRECTの開始前・配信中に縦型9:16／横型16:9／自動を選択可能にする\n- 初期値は縦型、選択は端末のlocalStorageに保存\n- LiveKit接続を維持したままカメラトラックのみ安全に再取得し、失敗時は元の向きへ復旧\n- 送信映像の向きとプレビュー表示を合わせ、全画角をcontain表示\n- HAKU CONNECT、決済、DB、LiveKit Egressは変更なし\n\n## 検証\n- npm run typecheck: 成功\n- npx vitest run --silent: 72ファイル／434テスト成功\n- npm run build: 成功\n- iPhone Safari実機での映像・音声・回転・前後カメラの確認は未実施。公開判断における残余リスクとして明示します。"
+  },
+  {
+    "number": 79,
+    "title": "feat: YouTube LIVEをURL貼り付けだけで公開できるUI",
+    "head": "codex/youtube-live-simple-ui",
+    "sha": "cff857aa90f6533edf3b00372a4839dfff31d9b7",
+    "merged": true,
+    "body": "## 概要\nマージ済みPR #78 の YouTube LIVE視聴機能に、パフォーマー向けスマートフォン簡単登録UIを追加します。\n\n## 利用手順\n1. YouTubeでLIVE配信\n2. 共有URLを貼り付け\n3. 「HAKUで公開する」\n\n## 実装\n- LIVE管理画面に HAKU DIRECT LIVE / YouTube LIVE連携 の明確な選択UI\n- URL貼り付け、厳格な動画ID抽出、正規URL変換、プレビュー\n- 公開ON/OFF、URL変更、連携解除、視聴画面への導線\n- iPhoneセーフエリア、16px入力、50px以上の操作領域、モバイル1カラム\n- PR #78の3列と既存更新APIを再利用（新規migrationなし）\n- HAKU DIRECT配信中はLiveKitを優先\n- 既存のHAKU投げ銭導線とパフォーマーIDを維持\n\n## 検証\n- `npm run typecheck` ✅\n- `npx vitest run` ✅ 72 files / 438 tests\n- `npm run build` ✅\n- `git diff --check` ✅\n- 本番Supabaseの既存3列を読み取り専用で確認 ✅\n\nDB・Stripe・送金ロジックの変更はありません。"
+  },
+  {
+    "number": 78,
+    "title": "feat: YouTube LIVEをHAKU内で視聴・応援可能にする",
+    "head": "codex/youtube-live-companion",
+    "sha": "da910eacfab3c7707c36dc21f26de6284c0c26b4",
+    "merged": true,
+    "body": "Closes #73\n\n## 概要\n- パフォーマー本人がYouTube LIVE URL/動画IDを登録・公開・解除可能\n- YouTube公式IFrame Player API（privacy-enhanced host）でHAKU内再生\n- 終了、非公開、削除、埋め込み拒否をプレーヤーイベントから判定し公式画面へフォールバック\n- プレーヤー直下に既存TipScreenへの「❤️ HAKUで応援する」導線\n- HAKU DIRECT配信中は既存LiveKit画面を必ず優先\n- YouTube機能とHAKUコメント・投げ銭台帳の分離を明示\n- LiveKit Egress、Stripe、送金ロジックは変更なし\n\n## DB\n追加列のみの後方互換migrationです。動画IDは11文字形式、URLはcanonical YouTube watch URL、表示ON時は両方必須というDB制約があります。既存行はすべてOFFで変化しません。\n\n## 検証\n- 最新main `480a1c82` 上へ載せ直し済み\n- `npm run typecheck` ✅\n- `npx vitest run` ✅ 71 files / 431 tests\n- `npm run build` ✅\n- GitHub Actions HAKU quality gate #122 ✅\n- Vercel Preview READY ✅\n- 追加テスト: URL拒否、公式URL正規化、youtube-nocookie/playsinline、埋め込み拒否・非公開表示、migration制約\n\n## Preview\nhttps://daidougei-haku-q2cift63g-daidougei-s-projects.vercel.app/live\n\n## 公開順\n1. 本番additive migration（個別承認待ち）\n2. Previewで登録→視聴→TipScreenを確認\n3. merge/deploy\n\n追加費用、有料Egress、YouTube Data APIキーは不要です。"
+  },
+  {
+    "number": 77,
+    "title": "fix: Stripe Connect分配を自動化し最低出金額を撤廃",
+    "head": "codex/stripe-payout-repair",
+    "sha": "1a761caa3e291195a39be42d3888b56609f0d141",
+    "merged": true,
+    "body": "Closes #76\n\n## 実装\n- HAKU独自の10,000円最低出金額をUI/API/RPC/DB制約から撤廃（0円Transferは拒否）\n- 新規決済だけを対象に、決済1件＝送金債務1件の `performer_transfer_payables` 台帳を追加\n- 実手数料確定後のperformer shareを `source_transaction` 付きStripe Connect Transferへ自動分配\n- DB unique + `FOR UPDATE SKIP LOCKED` + 15分claim lease + Stripe idempotency keyで再送・同時実行・timeoutを保護\n- Connect未登録はholdし、公式 `account.updated` で登録完了後に自動解放・再処理\n- 返金／dispute後はTransfer reversalを別状態・別idempotency keyで管理\n- Webhook即時処理 + Hobby対応の日次fallback retry、失敗コード、次回retry、alert期限、Transfer IDを運営画面に表示\n- Stripe bank PayoutとHAKU内部Transferを別台帳のまま維持\n\n## AWP保護\n- 過去売上は自動対象フラグをNULLのまま維持し、backfillしません\n- 条件付き承認済み5人5,550円・未承認2人2,694円を含む既存AWP台帳を自動送金しません\n- 本番DB、本番deploy、本番Transfer／Payoutは未実行です\n\n## 検証\n- TypeScript（client + financial API）成功\n- Vitest: 68 files / 417 tests passed\n- production build成功\n- GitHub Actions quality gate成功\n- Vercel Preview READY\n- TEST Supabase `haku-merch-validation` に3 migrations適用\n- TEST DB transaction: 409円債務、同一sale再実行1行、rollback後残存0件を確認\n- Stripe TEST実資金E2Eは、利用可能なローカル環境に `sk_test_` がなく、Vercel接続も対象teamの読取権限がないため未実行。コードはlive keyでfail closed\n\n## Production approval required\n- 3 migrationsの本番適用\n- `CRON_SECRET` 設定（日次fallback。毎時化はVercel Pro承認が必要）\n- `ENABLE_LIVE_PERFORMER_TRANSFERS=true`\n- 本番deploy\n- AWP過去分の個別照合・資金移動（本PRの自動処理対象外）"
+  },
+  {
+    "number": 75,
+    "title": "feat: TikTok LIVE公式外部視聴＋HAKU応援導線",
+    "head": "codex/tiktok-live-companion",
+    "sha": "5e1cfbc17847e5f253268c4d1dcf3de3c816e6dd",
+    "merged": false,
+    "body": "## 概要\n\nIssue #74の公式仕様検証に基づき、TikTok LIVEの非公式埋め込み・映像抽出を行わず、公式TikTok LIVEへ開く導線と既存HAKU投げ銭を組み合わせたCONNECT LIVEフォールバックを実装しました。\n\nCloses #74\n\n## 実装\n\n- `/live?tiktokLive=<handle>&performerId=<approved-id>` の公開導線\n- TikTokハンドルを厳格検証し、公式LIVE URLをアプリ側で生成（open redirect防止）\n- 公式TikTokを `noopener noreferrer external` 付き別タブで起動\n- 承認済みHAKUパフォーマーのみ既存TipScreenへ接続\n- TikTok GiftsとHAKU投げ銭が別サービス・別台帳であることを明示\n- JA/EN/繁中UI、iPhone向け復帰手順\n- 公式Embed/oEmbed検証結果と実機手順を文書化\n\n## 公式検証結果\n\n- 公式Embed Playerは投稿video/imageのpost IDのみを仕様化し、LIVE対応記載なし\n- 対象 `https://www.tiktok.com/@quest_tcg/live` の公式oEmbedは2026-10-20にHTTP 400\n- したがってiframe、Cookie流用、非公開API、映像抽出は不採用\n- HAKU内LIVE再生は「未完成」。TikTok公式外部視聴＋HAKU投げ銭導線は完成\n\n## 検証\n\n- TypeScript: pass\n- Vitest: 64 files / 390 tests pass\n- Vite production build: pass\n- Supabase/Stripe migration: なし\n- 本番デプロイ・本番DB変更: なし\n\n## TEST URL形式\n\n`/live?tiktokLive=quest_tcg&performerId=29bd1d83-f8a1-47a3-acd7-c9a4f27bffe1`\n\n実配信中の映像・音声・コメント・Gifts確認は、@quest_tcgがLIVE中にiPhone/Mac Safariで実施してください。"
+  },
+  {
+    "number": 71,
+    "title": "HAKU MULTI LIVE: YouTube同時配信・OAuthコメント統合を完成",
+    "head": "codex/haku-multi-live-complete",
+    "sha": "f5aef9dfd1088a9b4e2866e8d626d0a570aa96b0",
+    "merged": false,
+    "body": "## 概要\nPR #70 の基盤を実運用可能な実装へ進めます。既存HAKU LIVEを主系として維持し、YouTube側の開始・接続・停止失敗を分離しました。\n\n## 実装\n- LiveKit Room Composite EgressからYouTube RTMPSへ同時配信\n- 承認済みパフォーマー専用の配信先CRUDとEgress開始・状態取得・停止API\n- ストリームキー/OAuthトークンをAES-256-GCMでサーバー暗号化\n- 秘密テーブルをRLS強制、anon/authenticatedから権限剥奪、service role限定\n- 配信画面に同時配信先、公開/限定公開/非公開、独立した接続状態を追加\n- HAKU開始後にYouTubeを非同期開始し、YouTube失敗時もHAKUを継続\n- 通常終了と60秒バックグラウンド終了でEgress停止を先行実行\n- Google公式OAuth (`youtube.force-ssl`) とYouTube Live Chat取得・返信\n- Super Chat/Super Stickerを外部会計として表示し、Stripe/HAKU台帳へは未書き込み\n- TikTokは公式権限確認まで無効。非公式API/セッションCookie不使用\n\n## 検証\n- `npm run typecheck` 成功\n- server API TypeScript strict check 成功\n- `npm run build` 成功\n- 全テスト: 66 files / 413 tests passed\n- Multi LIVE: 19 tests passed（暗号化、秘密非露出、RLS、危険入力拒否を含む）\n\n## 本番反映前に必要（このPRでは未実施）\n- migration適用\n- `MULTI_LIVE_ENCRYPTION_KEY` とGoogle OAuth server secrets設定\n- Google Cloudのredirect URI/API設定\n- LiveKit Egress entitlement/費用の承認とTEST環境実機確認\n- iPhone配信端末 + HAKU/YouTube視聴端末で映像音声・再接続・終了を確認\n\n本番環境変更、有料Egress有効化、Stripe Connect/売上/送金データ変更はありません。"
+  },
+  {
+    "number": 70,
+    "title": "HAKU MULTI LIVE: 配信先能力定義・YouTube RTMPS安全検証の実装基盤",
+    "head": "codex/haku-multi-live-foundation",
+    "sha": "6d1f8053c0660e8dea73e901f66b3f6b31c1b617",
+    "merged": false,
+    "body": "## 今回の実装\n- HAKU/YouTube/TikTok/カスタム配信先の機能・公式API制約を型定義\n- YouTube RTMPSの配信先ホスト検証と不正URL拒否\n- 単体テストを追加\n- 現行LiveKit構成の実現可能性とEgress/YouTube OAuth/収益分離/TikTok制約の実装順序を記録\n\n## 未完了（重要）\n- Egress起動API・ストリームキー保管・UI・YouTube OAuthコメント統合は**未実装**\n- CI/実機動作は未検証。本番デプロイなし。\n- TikTok LIVEの公式権限がないアカウントでの外部配信は保証できない。\n\n次は認証付きEgress APIとYouTube接続UIを実装し、TEST環境でiPhone一台のHAKU+YouTube配信を確認する。"
+  },
+  {
+    "number": 69,
+    "title": "HAKU再構築: 4つの必須機能と行動科学ベースUXの実装基準",
+    "head": "codex/haku-core-rebuild-ux-blueprint",
+    "sha": "20efb65317aa789faa5c346a591e8e08ec95a75e",
+    "merged": false,
+    "body": "HAKUの既存データを保護し、Stripe Connect・投げ銭分配・LIVE・出演予定通知を縦断フロー単位で完成させる実装基準を追加。ファン/パフォーマー別の情報設計、認知負荷・Hick/Fitts・自己決定理論・WCAGを具体的UI要件に落とし込み。**このPRは設計ドキュメントのみで、機能実装・本番反映は未実施。** 次の作業はP0-1の実装差分とプレビュー検証。"
+  },
+  {
+    "number": 68,
+    "title": "HAKU LIVE: 非公開Test Performerをs.s限定で視聴可能にする",
+    "head": "codex/private-live-viewer-allowlist",
+    "sha": "cd5a6f2f270450b5ecf511461db9ca7dcf3305a3",
+    "merged": false,
+    "body": "## 概要\n- Supabase Authで照合済みのUUIDを使い、Test Performerの各LIVEセッションへs.sだけを自動allowlist登録\n- performers/live_sessions/comments/tips/reactionsのRLSを同じ視聴判定へ統一\n- LiveKitトークンAPIでopen session・fan role・active status・allowlistをサーバー検証\n- 終了時にallowlist viewerを含む既発行トークンをrevokeし、roomを削除\n- 非公開LIVEの一般通知・MAP/検索露出・公開Broadcastを抑止\n\n## 検証\n- 対象エントリ6件のesbuild bundle: 成功\n- private access matrix: 成功\n- git diff --check: 成功\n- Supabase Auth UUID/role/status照合: 成功（read-only）\n- 本番DB migration / deploy: 未実施\n- ローカルNode 26環境ではtypescript読込時に停止し、tsc/Vite/Vitestは開始前にタイムアウト。GitHub CIで再確認する\n\n## 本番反映手順\n1. CI成功とレビューを確認\n2. DBバックアップ/復旧手順を確認\n3. migrationを順番に適用（特に20261018102007_private_live_viewer_allowlist.sql）\n4. security/performance advisorsを再実行\n5. アプリをデプロイ\n6. Test Performer開始→s.s表示/視聴、第三者・未ログイン拒否、終了後の旧token再接続拒否を実機確認\n\nStripe Connect・決済・送金データおよび本番デプロイには変更を加えていません。"
+  },
+  {
+    "number": 66,
+    "title": "feat(live): prepare secure reservations and audience analytics",
+    "head": "codex/live-reservation-analytics",
+    "sha": "5be44c74d79ba1eafdef7fcbc7447438a52f4993",
+    "merged": true,
+    "body": "## Summary\n- prepare performer LIVE scheduling, viewer reservations, and in-app start notifications behind an explicit disabled-by-default frontend flag\n- protect private Test Performer schedules with server-side RLS: only owner Auth UUID, admin, or an active UUID assignment in live_navigator_assignments can read/reserve\n- protect public lists, direct UUID reservation attempts, notification recipients, and reservation data\n- prepare viewer time-series sampling behind a separate server flag that remains OFF\n- add an additive Supabase migration, SELECT-only verifier, and production approval document\n- align the local 20261014065602 migration file exactly with the existing remote history entry without changing production history\n\n## Production DB approval gate\n- DO NOT MERGE until the exact migration below is explicitly approved and successfully verified\n- DO NOT use db push --include-all or repair old migration history\n- default deployments issue zero requests to new tables because feature flags remain false\n- no Stripe, Connect, tip, vote, or existing performer-data changes\n\n## Exact approval unit\n- project: pmmtijwswzwhuriqhlep\n- migration: supabase/migrations/20261018092439_live_reservations_and_viewer_analytics.sql\n- SHA-256: 2e1e4dad9d3b22cae48030fb8fcd6ba1028a9350952a5756790da8cbb5281b93\n- approval document: docs/HAKU_LIVE_RESERVATIONS_PRODUCTION_APPROVAL.md\n\n## Verification\n- reservation/migration and history tests passed\n- LIVE regression: 85 passed\n- TypeScript passed\n- production build passed (existing chunk-size warning only)\n\nAfter DB verification, merge and enable only VITE_ENABLE_LIVE_RESERVATIONS. ENABLE_LIVE_VIEWER_SAMPLES remains OFF."
+  },
+  {
+    "number": 65,
+    "title": "feat(live): record server-authoritative viewer peak",
+    "head": "codex/live-viewer-peak",
+    "sha": "59664e5150b2b5219406ad03628d1d4d9cc9a1bf",
+    "merged": true,
+    "body": "## Summary\n- count current audience from LiveKit RoomService on the authenticated host heartbeat\n- exclude the performer identity from audience counts\n- update the existing live_sessions.viewer_peak only when the new value is higher\n- keep heartbeat working when the LiveKit management API is temporarily unavailable\n\n## Safety\n- no schema or migration change\n- no unapproved table access\n- no Stripe, Connect, tip, voting, or performer-data change\n- monotonic conditional update prevents competing host tabs from lowering the peak\n\n## Verification\n- focused viewer/presence tests: 12 passed\n- full regression from implementation track: 60 files / 381 tests passed\n- npm run typecheck\n- npm run build"
+  },
+  {
+    "number": 64,
+    "title": "feat(live): add realtime HAKU FEVER and likes",
+    "head": "codex/haku-live-fever-ui",
+    "sha": "0d5a6340f6e74b3713a3f5d4f23192bb1a06bd5e",
+    "merged": true,
+    "body": "## Summary\n- add best-effort session-scoped free likes over existing Supabase Realtime Broadcast\n- add HAKU FEVER meter and bounded heart animation for viewers and performers\n- feed server-verified existing live_tip_events into FEVER by gift tier\n- harden THANK YOU event validation, queue bounds, timers, and subscription cleanup\n\n## Scope and safety\n- no database, RLS, migration, Stripe, Connect, tip creation, voting, or performer-data changes\n- connection-session count only; persistent totals, reconnect recovery, and rankings are intentionally excluded\n- client-side anti-abuse bounds malformed/duplicate/excess broadcast display but is not a billing or security boundary\n\n## Verification\n- full regression: 61 files / 381 tests passed\n- new FEVER/gift integration: 10 tests passed\n- LIVE camera: 30 tests passed\n- npm run typecheck\n- npm run build\n- React review: effect cleanup, versioned localStorage key, bounded maps/queues/hearts, meter accessibility checked\n\n## Device validation\n- iPhone Safari and Android Chrome remain unverified on real devices"
+  },
+  {
+    "number": 63,
+    "title": "fix(live): ignore comment deletes for new badge",
+    "head": "codex/haku-live-track-a",
+    "sha": "9b19b1645dd0d9c6f4267e97ac3eb2676a79358d",
+    "merged": true,
+    "body": "## Summary\n- keep the current auto-scroll/manual-scroll behavior\n- show the latest-comment affordance only when comment count increases\n- prevent Realtime DELETE events from being misidentified as new comments\n\n## Safety\n- no database, LiveKit track, Stripe, Connect, tip, voting, or performer-data changes\n- two-file focused change\n\n## Verification\n- npm run test:live: 9 files / 85 tests passed\n- npm run typecheck\n- npm run build\n- iPhone Safari and Android Chrome remain device-verification items"
+  },
+  {
+    "number": 62,
+    "title": "feat(live): refresh notifications on app resume",
+    "head": "codex/haku-live-notification-refresh",
+    "sha": "c9d94c626cf147bd50263073df229b76e0343db4",
+    "merged": true,
+    "body": "## Summary\n- refresh LIVE notifications immediately when an iPhone/browser returns to the foreground\n- refresh on focus and network recovery while preserving the existing 5-second visible polling\n- coalesce overlapping wakeups and clean up all timers/listeners\n\n## Safety\n- no database, migration, RLS, or Realtime publication changes\n- no Stripe, Connect, tip, voting, or performer-data changes\n- existing notification API only\n\n## Verification\n- full regression: 58 files / 373 tests passed\n- notification resume tests: 2 passed\n- LIVE camera: 30 tests passed\n- npm run typecheck\n- npm run build"
+  },
+  {
+    "number": 61,
+    "title": "docs(db): add P3 production approval safeguards",
+    "head": "codex/p3-db-approval-pack",
+    "sha": "cf682a3f79eb84f407b8772c3c946fa09d7654d1",
+    "merged": true,
+    "body": "## Summary\n- add full logical backup and integrity verification procedure for P3\n- add isolated restore-test runbook with localhost guard\n- add strictly read-only production migration/catalog audit SQL\n- document migration-history drift and a no-repair forward-only safety path\n- add executable backup archive verifier and focused tests\n\n## Production safety\n- no production DB write or migration application\n- no migration history repair\n- no Stripe, Connect, tips, voting, or performer-data changes\n- P3 remains NO-GO until backup and isolated restore evidence exist\n\n## Verification\n- P3 approval/moderation/comment tests: 14 passed\n- npm run typecheck\n- npm run build"
+  },
+  {
+    "number": 60,
+    "title": "feat(live): add THANK YOU gift presentation",
+    "head": "codex/haku-thank-you-ui",
+    "sha": "75e43863b490c714d7526e5bcb0244edccd172b2",
+    "merged": true,
+    "body": "## Summary\n- add tier-aware THANK YOU messaging to the existing server-verified LIVE gift overlay\n- preserve reduced-motion behavior and existing gift queue/audio behavior\n- add focused message mapping tests\n\n## Safety\n- no database or migration changes\n- no Stripe, Connect, tip creation, voting, or performer-data changes\n- presentation-only change using existing verified live_tip_events\n\n## Verification\n- npx vitest run tests/live-thank-you.test.tsx (3 passed)\n- npm run typecheck\n- npm run build"
+  },
+  {
+    "number": 59,
+    "title": "P3: 本番DB適用前のコメント権限強化",
+    "head": "codex/haku-live-p3-db-hardening",
+    "sha": "cfa569912ee32140875c57b5c8d307b8e63c1a87",
+    "merged": true,
+    "body": "## 概要\nPR #57の本番DB適用前監査で判明した本番driftを安全側へ修正します。DBへの適用はこのPRでは実行しません。\n\n## 安全強化\n- 既存のlive_comments_delete_ownを明示撤去\n- anon/authenticatedの過剰なUPDATE/TRUNCATE等の権限を最小化\n- モデレーターによる配信者・別モデレーターへの操作を禁止\n- Realtime publication、ポリシー式、GRANT、FK、索引の読み取り検証を追加\n- 非破壊ロールバック手順を拡充\n\n## 検証\n- P3/LIVE: 9 files / 84 tests passed\n- 全回帰: 56 files / 368 tests passed\n- TypeScript: passed\n- production build: passed\n\n## 変更禁止範囲\nStripe、Connect、投げ銭、投票、出演者データは変更していません。本番Supabaseには未適用です。"
+  },
+  {
+    "number": 58,
+    "title": "P4: HAKU LIVE回帰ゲートと実機リリース手順",
+    "head": "codex/haku-live-p4-regression",
+    "sha": "d41bb4f4a0c342a28d55f98a4c4aec75c6d2dd3b",
+    "merged": true,
+    "body": "## 概要\n- LIVE専用の npm run test:live リリースゲートを追加\n- iPhone Safari / Android Chrome / PCの二端末検証マトリクスを追加\n- 前後10回切替、連続フレーム、縦横回転、カメラ/マイク、再接続、コメント、ギフト、長時間配信を証跡付きで判定\n- P0症状と安全なVercelロールバック条件を明文化\n\n## 安全性\n- ランタイム、DB、Stripe、Connect、Supabase、LiveKitコードは変更なし\n- 実機未確認項目はすべて未検証と明記\n\n## 検証\n- npm run typecheck\n- npm run test:live\n- npm run test:registration（全スイート成功）\n- npm run build\n"
+  },
+  {
+    "number": 57,
+    "title": "P3: LIVEコメント操作・セッション単位モデレーション",
+    "head": "codex/haku-live-p3-comments",
+    "sha": "18a1fc6ee128db7fd8f6ff8ad24f5a4dcbc66b8b",
+    "merged": true,
+    "body": "## 概要\n- コメントをアクティブなLIVEセッション単位で取得・送信・購読\n- 新着時の自動スクロール、手動閲覧中の停止、最新コメント復帰ボタン\n- 配信者/登録モデレーターによる即時削除と、そのLIVE限定ミュート\n- DELETEをRealtime反映して視聴者側からも即時除去\n\n## 安全性\n- 既存コメントの更新・削除を行わない追加マイグレーション\n- Stripe / Connect / ギフト / LiveKit映像処理は変更なし\n- RLSと権限変更を含むため、マージ前にSupabase migrationレビューと適用承認が必要\n\n## 検証\n- npm run typecheck\n- npm run test:registration（全スイート成功）\n- npm run build\n- LIVE関連35テスト成功（コメント5、カメラ30）\n\n## 実機\n- iPhone Safari / Android Chromeのコメントスクロール・削除同期は未検証\n"
+  },
+  {
+    "number": 56,
+    "title": "fix(live): isolate responsive stage layout",
+    "head": "codex/haku-live-p2-mobile-layout",
+    "sha": "79f5a49bdac4bd8d8f402c980f08839c9bcc14b6",
+    "merged": true,
+    "body": "## Summary\n- remove duplicated LIVE screen rules from global experience.css so import order cannot override rotation layouts\n- make live.css the single owner of broadcaster/viewer stage, controls, comments, and safe-area placement\n- scope portrait full-screen viewer chrome and landscape action rails by data-layout\n- preserve a single video element and contain-first rendering\n\n## Safety\n- CSS/layout and regression-test scope only\n- no camera track, LiveKit Room, audio, comments data, gifts, Stripe, Connect, or Supabase changes\n\n## Verification\n- npm run typecheck\n- npx vitest run tests/live-camera.test.ts (30 tests)\n- npm run test:registration (53 files, 354 tests)\n- npm run build\n- local real-browser startup verified; LIVE rendering unavailable locally because Supabase env is intentionally absent\n- iPhone/Android physical-device rotation remains required"
+  },
+  {
+    "number": 55,
+    "title": "fix(live): harden media device recovery",
+    "head": "codex/haku-live-p1-media-stability",
+    "sha": "36e6358bc2a977bcc9671a37762b73bf23f88fd4",
+    "merged": true,
+    "body": "## Summary\n- classify camera/microphone failures with LiveKit MediaDeviceFailure and show actionable recovery guidance\n- expose non-identifying camera diagnostics for facing mode, dimensions, aspect ratio, FPS, zoom, ready state, muted, and enabled state\n- preserve existing restartTrack publication flow and show retry when the active camera track ends\n\n## Safety\n- camera/media scope only\n- no Stripe, Connect, Supabase schema/data, comments, gifts, or payment changes\n- no device IDs or labels are logged\n\n## Verification\n- npm run typecheck\n- npx vitest run tests/live-camera.test.ts (29 tests)\n- npm run test:registration (53 files, 353 tests)\n- npm run build\n- iPhone/Android physical-device matrix remains required after production deployment"
+  },
+  {
+    "number": 54,
+    "title": "docs(live): establish P0 architecture baseline",
+    "head": "codex/haku-live-p0-audit",
+    "sha": "0d36cb0ab768fcf1dde4fe4c5643ab0b0a2a3fef",
+    "merged": true,
+    "body": "## Summary\n- audit the existing HAKU LIVE capture, processing, LiveKit publication, viewer rendering, comments, and presence paths\n- compare current behavior with official LiveKit SDK APIs and public service design references\n- define ownership boundaries, regression invariants, P1-P4 rollout plan, device test matrix, and rollback policy\n\n## Safety\n- documentation-only change\n- no runtime, Stripe, Connect, Supabase schema, production data, or payment changes\n\n## Verification\n- npm run typecheck\n- npm run test:registration (53 files, 351 tests)\n- npm run build"
+  },
+  {
+    "number": 53,
+    "title": "fix(live): correct iPhone portrait and landscape layouts",
+    "head": "codex/haku-live-layout",
+    "sha": "f91293d105b60eab07abe05f9bf738fc4453113e",
+    "merged": true,
+    "body": "## 概要\n- Canvas processorの拡大・半透明な背景映像を撤廃し、カメラ映像を1回だけ描画\n- 短辺と物理向きを使って、844x390等の横向きiPhoneをphone-landscapeとして判定\n- 縦向きステージを9:16で中央配置し、不自然な引き伸ばしを回避\n- 横向きのコメント、操作ボタン、LIVE終了ボタンを非重複のセーフエリアへ配置\n\n## 退行防止\n- PR #52のLiveKit track再開、連続フレーム確認、前後カメラ切り替え処理は変更なし\n- 既存の音声、コメント、ギフト、視聴者数、Stripe、Connect、Supabase、DB処理は変更なし\n\n## 検証\n- 全回帰: 53 files / 351 tests passed\n- LIVE関連: 27 tests passed\n- TypeScript: passed\n- Production build: passed\n- git diff --check: passed\n- Chrome DOM実測: portrait passed / landscape passed\n  - 9:16ステージ\n  - コメント領域と右操作列が非交差\n  - 横向きのLIVE終了ボタンがviewport内\n\n## 実機確認\niPhone Safari実機は未確認。公開後に縦横回転、前面・背面切替、二重背景消失、横向きの操作領域を確認します。"
+  },
+  {
+    "number": 52,
+    "title": "fix(live): keep iPhone video moving across camera switches",
+    "head": "codex/haku-live-frame-continuity",
+    "sha": "0f6f23502920f5de9a504e74b23d80b39cab3f7b",
+    "merged": true,
+    "body": "## 概要\n- Safari のカメラ再取得後に processor video の再生と実フレーム更新を確認\n- Canvas captureStream の出力サイズを processor ごとに固定し、縦 720x1280 / 横 1280x720 を維持\n- 端末向きに応じた前面・背面カメラ取得条件を適用\n- 復旧不能時に、音声・Room 接続を維持したままカメラ再試行を表示\n\n## 検証\n- npm run test:registration: 53 files / 348 tests passed\n- LIVE camera tests: 25 passed（前後10回、縦横×前後、連続フレーム、OFF/ON、復旧）\n- npm run typecheck: passed\n- npm run build: passed\n- git diff --check: passed\n\n## 影響範囲\nカメラ映像、向き検知、配信者のカメラ復旧UI、関連テストのみ。Stripe / Connect / Supabase / DB / コメント / ギフト処理は変更していません。\n\n## 実機確認\niPhone Safari 実機は未確認。公開後に縦横、前面→背面→前面、10往復、視聴者側連続更新、音声・コメント・ギフト継続を確認します。"
+  },
+  {
+    "number": 51,
+    "title": "feat: add HAKU LIVE media and privacy controls",
+    "head": "codex/haku-live-controls",
+    "sha": "143bb0aa756139ff3e05c7add976c4a45e1af4f8",
+    "merged": true,
+    "body": "## Stage 1: camera, microphone, and lifecycle controls\\n\\n### Published behavior\\n- Keep natural iPhone field of view: portrait input remains uncropped and is composed into 9:16.\\n- Switch the published Canvas and camera capture automatically between portrait 9:16 and landscape 16:9.\\n- Keep the existing one-tap front/rear camera switch.\\n- Add independent microphone stop/resume and camera stop/resume controls.\\n- Support audio-only LIVE and a connected-room state with both media tracks stopped.\\n- Stop the physical microphone track while muted.\\n- Keep 30fps as the baseline and preserve existing LiveKit simulcast/dynacast/network adaptation.\\n- On background/page hide, immediately stop camera and microphone for privacy and never auto-resume them.\\n- If background time reaches 60 seconds, end the LIVE when Safari resumes execution; existing server presence heartbeat/disconnect detection remains active.\\n\\n### Safety\\n- LiveKit Room, comments, gifts, viewer count, and presence stay separate from media track state.\\n- No database migration or production data operation.\\n- No Stripe, Connect, tips, authentication, or Supabase schema changes.\\n- Canvas processing has a raw-track fallback if unavailable.\\n\\n### Verification\\n- Full Vitest suite: 53 files, 342 tests passed.\\n- LIVE camera suite: 18 tests passed.\\n- TypeScript: passed.\\n- Production build: passed.\\n- Diff check: passed.\\n- iPhone Safari physical-device checks are explicitly pending after production deployment.\\n\\n### iPhone Safari acceptance checks\\n1. Start portrait LIVE; confirm natural front-camera field of view and 9:16 output.\\n2. Rotate to landscape; confirm 16:9 output, then rotate back to portrait.\\n3. Switch front → rear → front in both orientations.\\n4. Stop microphone; confirm video continues and viewers receive no audio. Resume it.\\n5. Stop camera; confirm audio-only LIVE. Resume it.\\n6. Stop both; confirm comments/gifts/viewer count and Room connection continue. Resume each independently.\\n7. Background for under 60 seconds; confirm both tracks stop and stay stopped after return until manually resumed.\\n8. Background for over 60 seconds; confirm LIVE ends after Safari resumes and server presence converges."
+  },
+  {
+    "number": 50,
+    "title": "fix: preserve natural field of view in portrait LIVE",
+    "head": "codex/haku-live-natural-portrait",
+    "sha": "6295c5d07ec6d307f4344936df06d9ed6384784a",
+    "merged": true,
+    "body": "## Summary\\n\\n- Replace exact 9:16 camera capture and crop-and-scale with a natural portrait 4:3 camera request.\\n- Publish a stable 720x1280 LiveKit track through a Canvas processor that contains the complete camera frame without stretching.\\n- Retain the processor across LiveKit front/rear restartTrack switches and fall back to the raw camera without dropping the LIVE room.\\n- Remove host/viewer cover fallbacks that could crop the image a second time.\\n- Keep supported camera zoom at optical 1x (or the minimum exposed value).\\n\\n## Root cause\\n\\nThe previous exact 9:16 constraint combined with resizeMode crop-and-scale could crop iPhone camera sensor output before publication. A conditional object-fit cover fallback could crop the preview/viewer again, making the front camera appear severely zoomed.\\n\\n## Verification\\n\\n- npm run test:registration -- --run tests/live-camera.test.ts (14 passed)\\n- npm run typecheck\\n- npm run build\\n- React review: no new component state/effects; camera composition is isolated in a TrackProcessor.\\n- Diff is limited to camera/LiveKit screens and regression tests; no Stripe, Connect, Supabase, gift, database, or authentication changes.\\n\\n## Device follow-up\\n\\nAfter production deployment, verify on an actual iPhone Safari:\\n\\n1. Start portrait LIVE with the front camera and confirm a natural selfie field of view.\\n2. Switch front → rear → front and confirm portrait output, natural field of view, and uninterrupted audio.\\n3. Verify the viewer receives each camera update and comments/gifts/viewer count continue."
+  },
+  {
+    "number": 49,
+    "title": "fix: enforce portrait tracks for iPhone LIVE",
+    "head": "codex/haku-live-portrait-regression",
+    "sha": "98e144bae5867b26bcb03f333998716fd8cfa024",
+    "merged": true,
+    "body": "## Root cause\nPR #47 removed the portrait cover fallback, revealing that some iPhone Safari camera tracks remained landscape because width/height/aspectRatio were only ideal constraints.\n\n## Fix\n- enforce an exact 9:16 aspect ratio on the actual MediaStreamTrack when its effective settings are landscape\n- request crop-and-scale only when Safari reports support\n- apply the portrait normalization on initial host camera startup and every front/rear switch\n- re-read effective width/height/aspectRatio after applying constraints\n- use cover only as an explicit host/viewer fallback when the actual video remains landscape\n- retain natural contain rendering when the actual track is portrait\n- preserve optional zoom normalization without allowing it to break camera use\n\n## Safety\n- no audio, comments, gifts, viewers, Stripe, Connect, Supabase, database, or LiveKit Room lifecycle changes\n- pre-existing .gitignore change excluded\n\n## Verification\n- camera regression tests: 13 passed\n- npm run typecheck: passed\n- npm run build: passed (existing chunk-size warning only)"
+  },
+  {
+    "number": 48,
+    "title": "Stripe Connect送金台帳を本番公開前の安全状態へ統合",
+    "head": "codex/haku-stripe-connect-release",
+    "sha": "d469913e5be5be4fd234a6ab996016a098d1015a",
+    "merged": false,
+    "body": "## 概要\n\n現行mainを基準に、HAKUのStripe Connect送金安全化だけを統合します。本番Transferは `ENABLE_LIVE_PERFORMER_TRANSFERS=true` が明示されない限り403で停止します。\n\n## 主な変更\n\n- Stripe実手数料控除後の投げ銭15% / パフォーマー残額、グッズ8%を維持\n- 最低出金額10,000円を維持\n- DBロック付き出金予約、冪等キー再利用、通信結果不明時の `needs_reconciliation`\n- test決済・direct chargeをplatform Transfer対象外に固定\n- 返金・紛争を未送金残高へ反映\n- Transfer状態と銀行Payoutを分離\n- 銀行Payoutを独立した `connected_account_payouts` 台帳へ冪等記録\n- READ ONLY本番監査スクリプトと公開・復旧runbookを追加\n- PR #45の10,000円例と総額保存テストを取り込み。説明文はmainに既に多言語で同内容があるため日本語固定行は重複追加しない\n\n## Migration順序\n\n1. `20261013_payout_reservation_and_audit.sql`\n2. `20261016101802_connect_bank_payout_ledger.sql`\n\nどちらも加算型で、既存売上・残高のUPDATE/DELETE/TRUNCATEはしません。障害時は先にアプリを直前版へ戻し、監査証跡を保持したまま追加列・テーブルを残します。\n\n## 検証\n\n- Vitest: 55 files / 347 tests passed\n- TypeScript typecheck: passed\n- Production build: passed（既存のchunk size警告のみ）\n- PostgreSQL 17: 2 migrationを順番に適用、pg_dump、別DBへのpg_restore、復元後照合まで成功\n- `git diff --check`: passed\n\n## 本番前の停止条件\n\n- 本番DB監査・Stripe照合が未完了なら送金しない\n- DB migration、本番deploy、返金、Transfer、PR mergeは管理者承認まで実行しない\n- `ENABLE_LIVE_PERFORMER_TRANSFERS` は未設定またはfalseを維持\n"
+  },
+  {
+    "number": 47,
+    "title": "fix: preserve natural LIVE camera field of view",
+    "head": "codex/haku-live-natural-fov",
+    "sha": "3ee7c158737ad2b500a914d18e89f80acc0c8e25",
+    "merged": true,
+    "body": "## Summary\n- remove the forced phone-portrait crop-to-fill that enlarged both front and rear camera previews\n- retain the 9:16 LIVE stage and portrait capture while showing the complete captured frame with contain\n- inspect supported camera zoom capabilities and reset unwanted digital zoom to optical 1x (or the lowest supported value)\n- keep zoom normalization optional so unsupported Safari versions and camera switching continue safely\n- apply the same uncropped display path to host and viewer screens through the shared LIVE CSS\n\n## Safety\n- no Stripe, Connect, Supabase, database, gift, comment, viewer-count, or audio changes\n- existing LiveKit Room/publication and camera fallback behavior remain intact\n- pre-existing .gitignore change excluded\n\n## Verification\n- camera regression tests: 12 passed\n- npm run typecheck: passed\n- npm run build: passed (existing chunk-size warning only)"
+  },
+  {
+    "number": 46,
+    "title": "fix: keep iPhone LIVE portrait when switching cameras",
+    "head": "codex/haku-live-camera-portrait",
+    "sha": "7c34b216a2daee38bc694280f79216e8d9b4bfac",
+    "merged": true,
+    "body": "## Summary\n- request 720x1280 (9:16) capture for portrait LIVE startup and camera switches\n- inspect effective width/height/aspectRatio/facingMode after each switch and retry portrait constraints when Safari returns landscape settings\n- lock phone portrait host/viewer stages to 9:16 with cover as a display guard\n- keep the existing LiveKit publication, audio, comments, gifts, viewer count, Stripe, Connect, and Supabase paths unchanged\n\n## Verification\n- npm run test:registration -- --run tests/live-camera.test.ts (9 passed)\n- npm run typecheck (passed)\n- npm run build (passed; existing chunk-size warning only)\n\n## Production\nSafe to merge after required checks. Vercel Git production deployment should be verified before iPhone Safari re-test."
+  },
+  {
+    "number": 45,
+    "title": "Clarify HAKU tip distribution: 15% / 85% after Stripe fees",
+    "head": "fix/tip-net-15-85-consistency",
+    "sha": "9058b989b89f6114340029376b7cf2ac4f0773bc",
+    "merged": false,
+    "body": "Preserves existing settlement formula: Stripe fee first, then HAKU 15% (floor to JPY), performer remainder 85%. Adds explicit performer-facing explanation and regression assertions for ¥10,000 / ¥360 fee. No historical ledger edits, Stripe transfers, or production deploy. Requires CI verification and review of historical tip settlement reconciliation before merge."
+  },
+  {
+    "number": 44,
+    "title": "chore: expose LIVE camera state for release verification",
+    "head": "codex/haku-live-camera-release",
+    "sha": "f02feb34e4936087c0d185a17fc60402259bbd5c",
+    "merged": true,
+    "body": "## Summary\n- expose current camera facing and switch availability as non-sensitive data attributes on the LIVE camera control\n- allow production smoke tests to verify the released control state\n- trigger a fresh Vercel Git deployment from a new main commit after PR #43 merged with an identical tree to its preview\n\n## Safety\n- 2 files changed\n- no database, Stripe, Connect, payment, auth, permission, or deployment configuration changes\n- focused camera tests, TypeScript, and production build pass\n\nThis PR is the production release follow-up for #43."
+  },
+  {
+    "number": 43,
+    "title": "feat: HAKU LIVE camera switching",
+    "head": "codex/haku-live-camera-switch",
+    "sha": "23ed4a831b19f65cbfdee144d4cfbd8ea77439d9",
+    "merged": true,
+    "body": "## Summary\n- add front/rear camera switching to the existing LiveKit host stream\n- render a persistent 58px camera control over the bottom-right of the LIVE video on iPhone portrait and landscape\n- keep the LiveKit room, audio publication, comments, tips, and viewer state intact while switching video\n- restore the previous camera when switching fails and disable (but keep visible) the control on single-camera devices\n- mirror only the local front-camera preview; rear-camera preview is not mirrored\n\n## Production status\n- Not currently in production: production deployment is main commit a76a185; the production JavaScript does not contain the camera-switch code.\n- This PR is intentionally not merged or deployed.\n\n## Scope safety\n- 4 files changed: camera helper, host screen, LIVE CSS, and focused tests\n- no Stripe, Connect, Supabase, tip, payment, migration, or deployment files changed\n- no production deployment or database operation performed\n\n## Verification\n- focused camera tests: 6 passed\n- local TypeScript check: passed\n- local production build: passed\n- GitHub quality gate (TypeScript, Vitest, build): passed\n- Vercel preview: passed\n- PR is mergeable with latest main and has no conflicts\n\n## Required iPhone Safari verification before merge\n1. Open the Vercel preview using an approved performer test account on an iPhone with front and rear cameras.\n2. Join the same LIVE from a second device as a viewer and speak continuously at the host.\n3. Confirm the 58px camera button is visible over the bottom-right of the LIVE video.\n4. Start on the front camera, then switch front -> rear -> front at least three cycles.\n5. On every switch, confirm host preview orientation, viewer video update, continuous audio, unchanged viewer count, comments, and tip UI.\n6. Confirm the rear preview is not mirrored and the front preview is mirrored only locally.\n7. Confirm a single-camera device/browser leaves the control visible but disabled.\n\nDo not merge or deploy until the iPhone Safari two-device checklist passes and production release approval is given."
+  },
+  {
+    "number": 42,
+    "title": "Complete safe mobile Stripe Connect onboarding",
+    "head": "codex/issue-41-stripe-connect-onboarding",
+    "sha": "daa6313335375ba7dc72ee6353c2368b5597f847",
+    "merged": false,
+    "body": "## Summary\n\nCompletes Issue #41 by building on all commits from draft PR #40. This PR supersedes #40 for final review; neither PR is merged or deployed.\n\n- keeps HAKU signup at three required fields and allows Stripe setup later\n- safely resumes the same connected account and automatically refreshes expired Account Links\n- never silently replaces a stored Stripe account on environment/account mismatch\n- distinguishes missing information, review, restriction, transfer readiness, and bank settlement\n- fails closed if `account.updated` cannot persist readiness\n- blocks live Stripe keys in non-production Vercel environments\n- adds Japanese performer guide and staging manual checklist\n\n## Safety\n\n- no production DB changes\n- no schema migrations\n- no payment, transfer, payout, or refund operations\n- no production deployment\n- no credential changes\n- existing 13,100 JPY ledger is untouched\n\n## Verification\n\n- `npm run typecheck` ✅\n- `npm run test:registration` ✅ (54 files, 333 tests)\n- `npm run build` ✅\n- `npm audit --omit=dev --audit-level=high` ✅ (0 production vulnerabilities)\n- Preview Supabase project ref differs from production ✅\n- Preview Stripe secret mode: **not verified** because Vercel does not reveal encrypted secret values; Stripe TEST-mode manual onboarding was intentionally not run\n- mobile-width Preview registration page inspected ✅\n\n## Manual release gate\n\nBefore inviting performers, verify the Preview `STRIPE_SECRET_KEY` begins with `sk_test_` without disclosing it, then complete every unchecked item in `docs/stripe-connect-staging-checklist.md`. Production release remains blocked pending explicit approval.\n\nCloses #41 after verified staging sign-off.\nRelated: #40"
+  },
+  {
+    "number": 40,
+    "title": "Improve Stripe Connect onboarding return guidance (draft, no deployment)",
+    "head": "fix/stripe-connect-onboarding-ux-20261016",
+    "sha": "ecdce6b93d41c1cad14c03dad61093dc3a68195f",
+    "merged": false,
+    "body": "## Scope\n- Explain incomplete Stripe onboarding after return or refresh\n- Show pending requirement count and next action\n- Preserve existing connected accounts, payments, fees and payouts\n\n## Safety\n- Draft only. Do not merge or deploy.\n- Not yet typechecked or integration-tested.\n- Further work required: expired-link recovery, granular Stripe errors, readiness tests.\n"
+  },
+  {
+    "number": 39,
+    "title": "主催者プロフィール・出演依頼管理を追加",
+    "head": "codex/haku-organizer-offers",
+    "sha": "84ec3531b6dfc77c4d443521e37bfd36309da404",
+    "merged": false,
+    "body": "## 概要\n- PR #37を親に主催者プロフィール管理を追加\n- 構造化した出演依頼の下書き・送信・確認中・承諾・辞退・取消状態を追加\n- 出演者本人向けの依頼一覧と回答画面を追加\n- 既存OrganizerHomeScreenとbooking_inquiriesは削除・変更せず維持\n\n## 権限\n- 主催者は自分の依頼だけ作成・送信・取消可能\n- 出演者本人だけが確認中・承諾・辞退可能\n- 主催者による代理承諾と送信後の条件改変をDB triggerで拒否\n- 契約締結・決済・送金は実装対象外\n\n## 検証\n- TypeScript成功\n- Vitest 53ファイル／327件成功\n- Production build成功\n- PGliteでmigration再適用、遷移制約、不正な代理承諾・条件改変拒否を確認\n\n## 依存\n- baseは codex/haku-schedule-notifications（PR #37）\n- 本番DB migration未適用、main自動統合なし"
+  },
+  {
+    "number": 38,
+    "title": "出演予定カレンダー・お気に入り・リマインダーを追加",
+    "head": "codex/haku-calendar-reminders",
+    "sha": "88711021ea97ddc915fd776b9f894588d24a1ee0",
+    "merged": false,
+    "body": "## 概要\n- PR #37を親に、出演予定カレンダーと日付・地域・出演者検索を追加\n- ログインユーザー向けのお気に入りと前日・1時間前・30分前・開始時刻リマインダーを追加\n- ICS出力、Google Maps導線、フォロー中／保存済みフィルターを追加\n- 複数出演者の招待・承諾関係を追加（本人以外は承諾不可）\n\n## 安全策\n- 本番DB migration未適用\n- リマインダー自動配信ジョブは未実装・無効\n- 本番通知・Stripe・投票・ランキングへの変更なし\n- mainへの自動統合なし\n\n## 検証\n- TypeScript成功\n- Vitest 53ファイル／329件成功\n- Production build成功\n- PGliteでmigration初回・再適用、日時再計算、中止・延期時停止、出演者本人承諾を確認\n\n## 依存\n- baseは `codex/haku-schedule-notifications`（PR #37）\n- PR #37より先にmainへ統合しないこと"
+  }
+]

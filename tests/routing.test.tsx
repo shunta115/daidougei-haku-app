@@ -23,6 +23,7 @@ vi.mock('../src/platform/screens/MerchScreens', () => ({
   PerformerMerchScreen: () => null,
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
+vi.mock('../src/platform/screens/ConnectedLiveWatchScreen', () => ({ ConnectedLiveWatchScreen: () => <p>live-watch</p> }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath, spaGo } from '../src/app/routes'
@@ -269,4 +270,20 @@ it('restores the correct merchandise product through Back and Forward', async ()
   await screen.findByText('merch-list')
   act(() => window.history.forward())
   await screen.findByText('product:product-1')
+})
+
+it.each(['watch', 'tipTo'])('preserves the selected recipient after consuming %s and reloading', async parameter => {
+  window.history.replaceState({}, '', `/live?${parameter}=performer-1`)
+  const first = render(<PlatformApp />)
+  await act(async () => {})
+  expect(new URLSearchParams(window.location.search).has(parameter)).toBe(false)
+  expect(window.history.state.hakuSnapshot).toMatchObject({
+    screen: parameter === 'watch' ? 'live-watch' : 'tip', performerId: 'performer-1',
+  })
+  first.unmount()
+  const { initialGuestScreen } = await import('../src/platform/PlatformApp')
+  expect(initialGuestScreen()).toBe(parameter === 'watch' ? 'live-watch' : 'tip')
+  render(<PlatformApp />)
+  await act(async () => {})
+  expect(window.history.state.hakuSnapshot.performerId).toBe('performer-1')
 })

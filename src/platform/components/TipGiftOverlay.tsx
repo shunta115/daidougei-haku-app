@@ -8,6 +8,7 @@ type Props = {
   performerId: string
   soundEnabled: boolean
   reducedMotion: boolean
+  effectsEnabled?: boolean
   onGift?: (tier: TipGiftTier) => void
 }
 
@@ -38,7 +39,7 @@ function playChime(tier: TipGiftTier) {
   }
 }
 
-export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion, onGift }: Props) {
+export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion, effectsEnabled = true, onGift }: Props) {
   const [current, setCurrent] = useState<LiveTipEvent | null>(null)
   const queueRef = useRef<LiveTipEvent[]>([])
   const busyRef = useRef(false)
@@ -110,7 +111,7 @@ export function TipGiftOverlay({ performerId, soundEnabled, reducedMotion, onGif
     }
   }, [performerId])
 
-  if (!current) return null
+  if (!current || !effectsEnabled) return null
 
   const name = current.is_anonymous ? '匿名ファン' : current.display_name
   const tier = current.tier

@@ -1,0 +1,22 @@
+{
+  "browser": "WebKit desktop with iPhone 13 emulation",
+  "physicalIPhone": false,
+  "transport": "offline adapters; not Supabase or LiveKit",
+  "results": [
+    "two viewers send taps to host cumulative total",
+    "portrait FEVER leaves LIVE stats readable",
+    "host renders received heart animation",
+    "share passes direct performer and session URL",
+    "unsupported sharing copies URL and displays feedback",
+    "settings opens without cropping video",
+    "comments can be hidden",
+    "audio mute changes actual audio element",
+    "viewer comment appears on actual performer screen and another viewer over isolated browser channel",
+    "80-comment cap still scrolls to newest entry",
+    "landscape separates video from comments",
+    "fullscreen leaves live actions reachable",
+    "old shared session does not join a newer LIVE",
+    "no browser runtime errors"
+  ],
+  "errors": []
+}

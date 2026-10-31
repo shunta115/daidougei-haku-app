@@ -23,12 +23,6 @@ async function requestFs(el: HTMLElement) {
     await anyEl.webkitRequestFullscreen()
     return
   }
-  // iOS video-only fullscreen
-  const video = el.querySelector('video') as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
-  if (video?.webkitEnterFullscreen) {
-    video.webkitEnterFullscreen()
-    return
-  }
   throw new Error('Fullscreen API unavailable')
 }
 

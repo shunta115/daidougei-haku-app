@@ -1,0 +1,58 @@
+name: SRS CROWD isolated proof
+
+on:
+  pull_request:
+    branches:
+      - codex/haku-live-ovh-srs-500-lab-20261029
+    paths:
+      - 'experiments/srs-crowd-lab/**'
+      - 'experiments/free-live/policy.mjs'
+      - 'tests/srs-crowd-lab.test.ts'
+      - '.github/workflows/srs-crowd-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test experiments/srs-crowd-lab/*.test.mjs
+      - run: npm run typecheck
+      - run: npx vitest run
+      - run: npm run build
+
+  srs-disconnect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Install test encoder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start isolated SRS
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-disconnect up -d
+          for i in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:1985/api/v1/versions > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Publish test stream and confirm physical disconnect
+        run: |
+          ffmpeg -nostdin -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=320x180:rate=15 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -f flv rtmp://127.0.0.1:1935/live/haku-lab-revokeproof > /tmp/haku-srs-disconnect.log 2>&1 &
+          node experiments/srs-crowd-lab/srs-disconnect-proof.mjs
+      - name: Clean up
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-disconnect down --remove-orphans

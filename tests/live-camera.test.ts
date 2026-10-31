@@ -206,15 +206,17 @@ describe('LIVE camera switch', () => {
     expect(liveMediaDeviceErrorMessage(new Error('unknown'))).toContain('端末の状態')
   })
 
-  it('locks the phone portrait stage without a crop-to-fill fallback', () => {
+  it('keeps an uncropped portrait default with an explicit preview-only crop option', () => {
     const css = readFileSync('src/platform/screens/live.css', 'utf8')
     const screen = readFileSync('src/platform/screens/PerformerLiveScreen.tsx', 'utf8')
     const viewer = readFileSync('src/platform/screens/LiveWatchScreen.tsx', 'utf8')
     expect(css).toMatch(/phone-portrait'\] \.pl-live__stage\s*\{[\s\S]*aspect-ratio: 9 \/ 16;[\s\S]*max-height: none;/)
     expect(css).not.toMatch(/phone-portrait'\] \.pl-live__video\s*\{[^}]*object-fit: cover;/)
-    expect(screen).toContain("'--video-fit': 'contain'")
+    expect(screen).toContain("readLiveDisplayPreference('cover-host', false)")
+    expect(screen).toContain("'--video-fit': previewFit")
+    expect(css).toContain('object-fit: var(--video-fit, contain)')
     expect(viewer).toContain("'--video-fit': objectFit")
-    expect(screen).not.toContain("? 'cover' : 'contain'")
+    expect(screen).not.toContain("displayOrientation === 'landscape' ? 'cover'")
     expect(viewer).not.toContain("videoOrient === 'landscape' ? 'cover'")
   })
 

@@ -1,0 +1,25 @@
+5508835809301f59edff5f213f4406d8facffcd0
+100644 2f38304b57c6c8071f15558d6406f279056a42c9 1	src/platform/lib/useLiveCommentScroll.ts
+100644 6db94fa00699a6694ff98309544a73460df00f19 2	src/platform/lib/useLiveCommentScroll.ts
+100644 514a66ec1cdf82ea5617d1101f4fac14ee379cf2 3	src/platform/lib/useLiveCommentScroll.ts
+100644 2b1bdad164f4a94bb2fc77fd645c6fd0c963b7fc 1	src/platform/screens/LiveWatchScreen.tsx
+100644 0cc8f1268f178e68acd5144a3c00bded72d64ae4 2	src/platform/screens/LiveWatchScreen.tsx
+100644 ba2ae0536f62757da385138b45c0f9b269b4fe05 3	src/platform/screens/LiveWatchScreen.tsx
+100644 9ef0403309f4359f8d68efcbcc33edbd921bf825 1	src/platform/screens/PerformerLiveScreen.tsx
+100644 cd97dee38f0cbf030d2f6caa43ce7809a18579a0 2	src/platform/screens/PerformerLiveScreen.tsx
+100644 7908a3c24bbc46710ddd5f254d78cd50a581ebe4 3	src/platform/screens/PerformerLiveScreen.tsx
+100644 36d297bd97ef33828e7bae4746a9c9c3b26e6101 1	src/platform/screens/live.css
+100644 a0439f54ee6d58100a1f0467cad0d8856fb10fd8 2	src/platform/screens/live.css
+100644 a7cb5c85424c1ec69a80a16a0677697d3672b997 3	src/platform/screens/live.css
+
+Auto-merging src/platform/lib/api.ts
+Auto-merging src/platform/lib/types.ts
+Auto-merging src/platform/lib/useLiveCommentScroll.ts
+CONFLICT (content): Merge conflict in src/platform/lib/useLiveCommentScroll.ts
+Auto-merging src/platform/screens/LiveWatchScreen.tsx
+CONFLICT (content): Merge conflict in src/platform/screens/LiveWatchScreen.tsx
+Auto-merging src/platform/screens/NotificationsScreen.tsx
+Auto-merging src/platform/screens/PerformerLiveScreen.tsx
+CONFLICT (content): Merge conflict in src/platform/screens/PerformerLiveScreen.tsx
+Auto-merging src/platform/screens/live.css
+CONFLICT (content): Merge conflict in src/platform/screens/live.css

@@ -1,0 +1,52 @@
+{
+  "commit": "39480be5ba023c424c1567a3209d25a2971affb4",
+  "run": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41221070988",
+  "job": 124596222617,
+  "boundary": "RTMP input to real localhost SRS HLS; synthetic HTTP viewers for 10 seconds each; not 500 physical devices or external network",
+  "samples": [
+    {
+      "viewers": 1,
+      "receivedFirstSegment": 1,
+      "errors": 0,
+      "bytes": 1385560,
+      "throughputMbps": 1.11,
+      "p95Ms": 54
+    },
+    {
+      "viewers": 10,
+      "receivedFirstSegment": 10,
+      "errors": 0,
+      "bytes": 18200280,
+      "throughputMbps": 14.56,
+      "p95Ms": 39
+    },
+    {
+      "viewers": 50,
+      "receivedFirstSegment": 50,
+      "errors": 0,
+      "bytes": 90606600,
+      "throughputMbps": 72.49,
+      "p95Ms": 89
+    },
+    {
+      "viewers": 100,
+      "receivedFirstSegment": 100,
+      "errors": 0,
+      "bytes": 181833600,
+      "throughputMbps": 145.47,
+      "p95Ms": 168
+    },
+    {
+      "viewers": 500,
+      "receivedFirstSegment": 500,
+      "errors": 0,
+      "bytes": 743238448,
+      "throughputMbps": 594.59,
+      "p95Ms": 582
+    }
+  ],
+  "localNode26": {
+    "initialSegments": 500,
+    "error": "ECONNRESET on follow-up requests; failed; not waived"
+  }
+}

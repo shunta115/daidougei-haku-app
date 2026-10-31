@@ -25,11 +25,13 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const checkoutRequestId = useRef('')
+  const checkoutInFlight = useRef(false)
   // Tips are Platform charges. Connected Account onboarding is required only
   // before a later transfer, not before a guest can support an approved artist.
-  const supportReady = Boolean(p?.is_approved)
+  const supportReady = Boolean(p?.is_approved && p.id === performerId)
 
   const setSafeAmount = (value: number) => {
+    if (checkoutInFlight.current) return
     setAmount(Math.min(100000, Math.max(100, Math.floor(value) || 100)))
     checkoutRequestId.current = ''
   }
@@ -40,14 +42,25 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
   }
 
   useEffect(() => {
-    getPerformer(performerId).then(setP).catch(() => setP(null))
-  }, [performerId])
+    let cancelled = false
+    setP(null)
+    checkoutRequestId.current = ''
+    getPerformer(performerId).then(value => { if (!cancelled) setP(value) }).catch(() => {
+      if (!cancelled) {
+        setP(null)
+        setError(paymentErrorMessage('performer_support_unavailable', lang))
+      }
+    })
+    return () => { cancelled = true }
+  }, [performerId, lang])
 
   const pay = async () => {
+    if (checkoutInFlight.current) return
     if (!supportReady) {
       setError(paymentErrorMessage('performer_support_unavailable', lang))
       return
     }
+    checkoutInFlight.current = true
     setBusy(true)
     setError(null)
     trackProductEvent('tip_checkout_start', { performerId, props: { amount_yen: amount } })
@@ -69,6 +82,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
       window.location.href = json.url
     } catch (e) {
       setError(paymentErrorMessage(e instanceof Error ? e.message : 'checkout_failed', lang))
+      checkoutInFlight.current = false
       setBusy(false)
     }
   }
@@ -103,6 +117,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
             key={yen}
             type="button"
             className="pl-tip-preset"
+            disabled={busy}
             data-on={amount === yen}
             onClick={() => selectAmount(yen, 'preset')}
           >
@@ -117,6 +132,7 @@ export function TipScreen({ performerId, onBack, returnToLive, onRequireAuth }: 
         <span className="pl-label">{t('customAmount')}</span>
         <input
           className="pl-input"
+          disabled={busy}
           type="number"
           min={100}
           max={100000}
