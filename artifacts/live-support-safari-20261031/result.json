@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "guest: existing checkout request contract",
+    "guest: WebKit touch → real amount screen → mock checkout",
+    "guest: landscape bottom support opens amount screen",
+    "signed-in: existing checkout request contract",
+    "signed-in: WebKit touch → real amount screen → mock checkout",
+    "signed-in: landscape bottom support opens amount screen"
+  ],
+  "errors": [],
+  "passed": true,
+  "boundary": "Offline adapters and mock checkout; no Stripe payment, webhook, real DB or physical iPhone verified."
+}
