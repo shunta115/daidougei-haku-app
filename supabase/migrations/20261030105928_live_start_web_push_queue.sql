@@ -181,6 +181,14 @@ begin
 end;
 $$;
 revoke all on function public.notify_followers_live_start(uuid, text, text) from public, anon;
-grant execute on function public.notify_followers_live_start(uuid, text, text) to authenticated;
+-- In the unified lifecycle this helper is called inside activate_direct_live.
+-- Applying optional Push after lifecycle must not reopen direct browser execution.
+do $$ begin
+  if to_regprocedure('public.reserve_direct_live(uuid,uuid,text)') is null then
+    grant execute on function public.notify_followers_live_start(uuid, text, text) to authenticated;
+  else
+    revoke all on function public.notify_followers_live_start(uuid, text, text) from authenticated, service_role;
+  end if;
+end $$;
 
 commit;

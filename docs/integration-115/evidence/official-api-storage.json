@@ -1,0 +1,27 @@
+{
+  "checks": [
+    "verified owner saves official home through real API and DB",
+    "other real JWT cannot edit owner homepage",
+    "anonymous upload denied",
+    "real Storage photo and thumbnail upload with DB registration",
+    "real PDF validation Storage upload and DB registration",
+    "unpublished PDF cannot be fetched anonymously",
+    "owner publishes photo through real API",
+    "owner publishes pdf through real API",
+    "published PDF round trips through protected API and real Storage",
+    "public API returns only published assets"
+  ],
+  "passed": 10,
+  "backend": "actual local API, real TEST Auth/JWT/DB/Storage; no Stripe",
+  "retainedNewTestAssets": [
+    {
+      "id": "2925b47b-fd91-4712-9998-2059f6a01222",
+      "kind": "photo"
+    },
+    {
+      "id": "bdbb94e3-132f-4023-acbb-0d95e5a25306",
+      "kind": "pdf"
+    }
+  ],
+  "deletedExistingData": false
+}

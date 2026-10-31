@@ -1,0 +1,13 @@
+{
+  "supabase/migrations/20261031010000_direct_live_lifecycle.sql": "f19b110d2537cba130c2025672e69a7ec1ffb4c764a55ddcdb0a9ca73e1d03b1",
+  "supabase/migrations/20261031010100_direct_live_expiry_schedule.sql": "d947fbf337b23faf0f21a8ff8e8f98365996b26ebda51422237e1ae888076697",
+  "supabase/migrations/20261031030528_durable_live_likes.sql": "5d7864ece5c07e71b67e7bd1ee4126418ae0d27553cfcc9318afd1f636d43c40",
+  "supabase/migrations/20261031042340_fix_youtube_live_url_constraint.sql": "e572c2c5313f3b204b71ab29ffa020012953c64fe72e6ba7bdd09abf4ef710af",
+  "supabase/migrations/20261031092522_revoke_public_tip_truncate.sql": "421f2938cb27bb1b32ae6c24fdf68bb13467533a304eb526b51aacf4390ed0cf",
+  "supabase/migrations/20261030213928_performer_official_home.sql": "4401704ddaa3e11217916145ae8068b3fd7841b0f5cd38cadc1d12cbcb2b053a",
+  "supabase/migrations/20261030105928_live_start_web_push_queue.sql": "01e0e8a92462645735c548f18ed62379d0902ce91960920d1377132c30cb3469",
+  "supabase/test/integration115-rollback.sql": "8f82cdd8f594c165d3996263a713b3f96bdb47005cb7aada2fb5649d2a85be28",
+  "supabase/test/integration115-reservation-prerequisite.sql": "c542e461031640fa0ba0254dd781c4775a34884ea61bde8c6ce42087c10393df",
+  "supabase/test/integration115-home-ranking-grants.sql": "88f14542cdeb65ef337378328f207ad67b64957a5ca00fb3467a04baf0c0e9eb",
+  "supabase/test/integration115-product-events.sql": "3db3f9e74df207347a3bff43e5d777b39e94e8638ec3f3c0eb6ba99c0e81a721"
+}

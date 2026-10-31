@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "anonymous booking reaches real TEST office workflow",
+    "performer or fan cannot inspect private booking cases",
+    "new TEST office admin reads the booking case through real authenticated API",
+    "TEST office updates new case status",
+    "ordinary office admin cannot erase private case data",
+    "real home ranking API succeeds without exposing auth/action timestamps"
+  ],
+  "passed": 6,
+  "backend": "actual local API, real TEST Auth/JWT/DB/Storage; no Stripe",
+  "retainedNewTestAssets": [],
+  "deletedExistingData": false
+}

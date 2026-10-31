@@ -108,4 +108,11 @@ describe('optional LIVE start Push migration', () => {
     await db.exec(`update public.notification_preferences set live_push_enabled=true where user_id='${fan}'; update public.live_push_deliveries set status='queued'; update public.live_sessions set ended_at=now() where id='${live}'`)
     expect((await db.query(`select * from public.claim_live_start_push_deliveries('${eventId}',100)`)).rows).toHaveLength(0)
   })
+  it('does not reopen browser notification execution when optional Push follows atomic lifecycle', async () => {
+    await db.exec('create function public.reserve_direct_live(uuid,uuid,text) returns uuid language sql as $$ select null::uuid $$;')
+    await db.exec(migration)
+    const result = await db.query<{allowed:boolean}>("select has_function_privilege('authenticated','public.notify_followers_live_start(uuid,text,text)','execute') as allowed")
+    expect(result.rows[0].allowed).toBe(false)
+  })
+
 })

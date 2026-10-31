@@ -13,14 +13,14 @@ GitHub Issue #115、取得できたPR #38〜114の70件、ローカルmain、関
 
 | 機能 | main/Productionの状況 | 統合した実装 | 残る分類・公開阻害 |
 |---|---|---|---|
-| LIVE開始/終了・heartbeat | 旧開始/終了方式 | #100 原子的reserve/activate/finish、session room、SFU観測・CAS・再接続 | 要DB変更、継続watchdog未起動、実SFU・画面ロック・実機待ち |
+| LIVE開始/終了・heartbeat | 旧開始/終了方式 | #100 原子的reserve/activate/finish、session room、SFU観測・CAS・再接続 | 本番DB変更が必要。TESTの実JWT開始終了は検証済み。継続watchdog未起動、実SFU・画面ロック・実機待ち |
 | 縦横/全画面/音声/小窓 | #110 PCシアター等は本番済み | #99 小窓と同一media保持、設定/診断、#106共有/全画面を手動統合。横画面を映像/コメント別列に統一 | WebKit fixture検証、実音声/別端末待ち |
-| いいね/FEVER/THANK YOU/コメント | FEVERとgift等の基礎は既存 | #106 JWT集計・12/秒・batch冪等・Realtime/poll。送信中batchをタブ内sessionStorageへ保存し再読込再送。コメントの応答不明時は同一UUIDで再試行 | 要likes SQL。実JWT/Realtime受入待ち。ブラウザ終了で未送信タップ消失の可能性は残る |
+| いいね/FEVER/THANK YOU/コメント | FEVERとgift等の基礎は既存 | #106 JWT集計・12/秒・batch冪等・Realtime/poll。送信中batchをタブ内sessionStorageへ保存し再読込再送。コメントの応答不明時は同一UUIDで再試行 | 本番likes SQLが必要。TESTの実JWT/Realtimeと実画面の配信者受信・FEVERは検証済み。ブラウザ終了で未送信タップ消失の可能性は残る |
 | 匿名応援/Stripe | 既存決済・分配を保持 | #112を採用（#107を含む）。宛先復元・ロック・古い応答の破棄・タップ透過 | TEST既存32ケースは元PR証跡。統合版Sandbox実精算は未検証・権限ある隔離認証待ち。本番tips TRUNCATE是正必要 |
-| ホーム・LIVE予約・活動順 | 旧ホーム。予約DBは本番に存在 | #114のみ採用（#105/#113を含む）。本人操作/公開予定由来の順位 | TESTに予約DBなし。実Auth→予約/通知/順位受入待ち |
+| ホーム・LIVE予約・活動順 | 旧ホーム。予約DBは本番に存在 | #114のみ採用（#105/#113を含む）。本人操作/公開予定由来の順位 | TESTに不足schema/権限を追加。実JWT予約/通知・実順位APIは通過。全ホーム導線の実機受入待ち |
 | MAP・出演予定 | #104/#109/#110/#111/#101/#102はmain統合済み | mainを継承。予定・実LIVE・位置なしを分離、座標を捏造しない | 統合版WebKit回帰。実GPS・地図接続・実機待ち |
 | YouTube公開 | URL CHECKの過剰escapeを本番read-onlyで再確認 | #108 本人専用保存・エラー・forward SQL、#100プレーヤー復旧と#110枠を両立 | 本番SQL未適用。実YouTube再生/終了検証待ち。HAKU公開操作はYouTube配信開始ではない |
-| 公式ページ | 既存プロフィール | #103 写真20枚/動画/PDF/公開予定/SNS/事務局案件/Storage。HOME_ENABLED既定OFF | 要専用SQL/Storage/Auth/office/retention受入。実ホストでの権限試験待ち |
+| 公式ページ | 既存プロフィール | #103 写真20枚/動画/PDF/公開予定/SNS/事務局案件/Storage。HOME_ENABLED既定OFF | 本番専用SQL/office/retention運用が必要。TEST実Auth/Storage/API/事務局案件は検証済み。物理iPhone待ち |
 | QR代理/CROWD | HAKU公開導線には未提供 | #98（#96/#97/#88成果）を同一ブランチに回収、認可/一回grant/交代/停止/HLS署名。実験は本番配信へ接続しない | 未実装: 永続共有の原子状態、一般視聴者認可、公開HTTPS/ICE経路、既存HAKUへのセッション接続。500実端末未測定 |
 | 通知/フォロー/音声画質 | 既存通知/当日出演通知/フォローを維持 | #99 opt-in LIVE PushをOFFのまま回収、#114活動順位と予約、#106復帰 | LIVE Push SQL/同意/実通知、実音声・品質計測待ち |
 
@@ -38,7 +38,7 @@ GitHub Issue #115、取得できたPR #38〜114の70件、ローカルmain、関
 - 同一コメントの応答消失後再試行は同じUUIDを使用。23505時はRLS下で本人/対象/本文/セッションを照合し、既存内容を上書きしない。
 - いいねの未送信batchをタブ内保存。別ユーザー/別セッションへ再送せず、6時間で破棄。永続タップ受付やブラウザ終了後の配達保証はしない。
 
-## DB環境差（今回read-only確認）
+## 監査開始時のDB環境差（read-only確認）
 
 Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_eventsあり、direct_live_leasesなし。tips RLS有効だがanon TRUNCATE=true。YouTube CHECKに過剰escapeあり。
 隔離TEST `aeqskxxykzapgaudbeqa`: direct_live_leasesあり、live_schedules/live_reservations/product_eventsなし。tips RLS有効、anon TRUNCATE=false。過去のTEST migration番号と今回のlifecycle migrationは異なるため、存在だけで適用済みと見なさない。
@@ -63,7 +63,7 @@ Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_even
 
 受入: 同じ照明/動き/端末でWi-Fiと携帯回線を比較し、原カメラ・Canvas・送信実解像度/fps/bitrate・受信解像度を同時記録。原映像から悪いなら撮影、Canvasだけなら加工負荷、エンコードで低下しbandwidthなら回線/適応、CPUなら端末、受信だけなら下り/選択層を切り分ける。ビットレート固定増加は低速回線の破綻と費用増になるため未実施。
 
-#88既存実測はlocalhost・RTMP入力・500疑似HTTP clients・10秒、約597Mbps・p95 332ms。今回は新たな500人実測を達成したとは扱わない。計画値: 500×(800+48)kbps×1.15 = 487.6Mbps、219.42GB/時。既存無料帯域の残量/契約が未確定のため費用0円は保証不能。有料契約・Egress・従量課金の有効化はしない。
+#88既存実測はlocalhost・RTMP入力・500疑似HTTP clients・10秒、約597Mbps・p95 332ms。その後、統合コード39480beのCIでも実SRS HLSを1/10/50/100/500疑似HTTPクライアントで各10秒再測定し、全段階の初回受信・エラー0を確認。500段階は594.59Mbps、p95 582ms。新たな500実端末/外部回線の検証とは扱わない。`evidence/srs-500-ci.json`参照。計画値: 500×(800+48)kbps×1.15 = 487.6Mbps、219.42GB/時。既存無料帯域の残量/契約が未確定のため費用0円は保証不能。有料契約・Egress・従量課金の有効化はしない。
 
 ## 公開前の個別承認とロールバック
 
@@ -78,3 +78,31 @@ Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_even
 ## 検証結果
 
 最新の件数・SHA・Preview・失敗/未検証は `validation.json` と統合Draft PRに記録する。個別PRの過去の成功を統合版の成功に読み替えない。Previewが静的QAの場合、実Auth/DB/LiveKit/Stripe接続の成功とは扱わない。
+
+
+## 今回の接続済みTEST整備・結合結果
+
+本番ではなく `aeqskxxykzapgaudbeqa` だけに、durable likes、official home、予約前提navigator判定、既存予約migration、product_events、不足するサーバー専用公開予定読取grantを適用。SQLは本体migrationと`supabase/test/`に保存。一般ユーザーの権限は広げていない。
+
+- 実TEST PostgreSQLのSQL role/claims試験14項目通過。全fixtureはROLLBACK。
+- 新規TESTユーザー3人で実Auth JWT/PostgREST/Realtime14項目通過。配信者本人が2視聴者の合計8いいねとコメント1件を実Realtime受信。重複UUID、他人の終了拒否、予約分離、2人への通知、終了後のいいね拒否を確認。
+- 実際のReact配信者/視聴者画面3つを実Auth/DB/Realtimeに接続したWebKit試験5項目通過。2人からの合計4いいね→配信者の累計/FEVER、コメント→配信者と他視聴者、runtime error 0。LiveKit statusだけは明示的に未構成とし、実映像/音声成功とは扱わない。
+- ローカルの実公式API→実TEST Auth/DB/Storageで10項目通過。本人保存、他人編集拒否、匿名upload拒否、写真/thumbnail/PDF保存、非公開PDF拒否、公開・実バイト一致を確認。
+- 事務局API/ホーム順位API6項目通過。匿名依頼→新規TEST事務局の案件受取→確認中へ変更、ファン/出演者の案件参照拒否、通常管理者の消去拒否、Auth履歴を漏らさない実順位API。
+- 一時TEST事務局は既存管理者とは別に新規作成し、終了後にmemberをdisabled、profileをfan/suspendedへ戻した。管理権限は残さない。Authユーザー/試験用問い合わせ/Storageファイル/履歴は削除せず保全。
+- 既存14 profiles/9 performers/41 tips/6 live_sessionsの件数・全行hashは試験前と一致（新規fixtureを除外）。試験LIVEのis_live/open session/open leaseは0を確認。最終証跡参照。
+
+実API試験で、Auth履歴取得の一件失敗がホーム全体を503にする問題を追加修正。取得不能なログイン履歴は使わず、確認済み操作履歴・公開予定・プロフィール情報を維持する。架空の活動日時を生成しない。DB/公開候補取得の障害は引き続き503で隠さない。
+
+optional Push SQLをlifecycle後に適用すると、通知helperのauthenticated EXECUTEが再び開く競合も修正。原子的lifecycleが存在する場合はブラウザ/直接service-role実行を閉じ、activateからの内部呼出を維持。順序の回帰テストを追加。TEST/本番のPush有効化・送信はしていない。
+
+## 検証境界と未完了（公開NO-GO）
+
+1. 実LiveKitの端末間映像/音声、Safariの画面ロック・バックグラウンド・復帰・長時間、実カメラ品質/音質は未検証。HARIBOWモザイクの根本原因は未確定。watchdogはスクリプトのみで運用未起動。
+2. 現Stripe接続で列挙されたアカウントはlivemode=trueだけ。実決済操作なし。統合版のclaim済みSandbox Checkout→真正Webhook→実手数料→台帳/分配の完走は未検証。#112の過去32ケースは参考証跡で、統合版の成功には数えない。必要なTEST接続を用意し、以前の一時キー露出・未claim手数料403も解消してから再検証する。
+3. CROWDの共有永続認可/セッション原子管理、一般視聴者認可、公開HTTPS/ICE/メディア経路、既存HAKUの公開LIVE一覧への安全な接続は未完成。実験を有効化して完成扱いにしない。
+4. 物理iPhone/LINE実受渡し、実YouTube視聴と終了検知、500実端末/外部回線/長時間の受入は未検証。公式ページの実機受入・本番office/retention運用も必要。
+5. 本番migration・main merge・Production deployは個別承認前で未実施。これらの承認だけで上の未完成・未検証を免除しない。
+
+Preview: https://daidougei-haku-314h4sxoa-daidougei-s-projects.vercel.app/ （READY / target=null / Vercel認証あり）
+UI source: 39480be。架空データ・模擬通信の静的QAだけを配置。実TESTの認証・Storage・Realtimeの試験はlocalhostで別途実施し、この公開Previewとは分離。API/Functions/cron/環境ファイル/秘密キーなし、CSPで外部接続・media・frame・formを拒否。

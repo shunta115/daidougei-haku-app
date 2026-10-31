@@ -25,6 +25,12 @@ describe('private server aggregation',()=>{
     expect(state.calls).toContainEqual({table:'event_slots',op:'eq',args:['events.status','published']})
     expect(JSON.stringify(result)).not.toMatch(/PRIVATE|2026|last_sign|created_at|user_id/)
   })
+  it('keeps verified activity when an optional Auth lookup fails without inventing a login',async()=>{
+    db.auth.admin.getUserById.mockRejectedValueOnce(new Error('PRIVATE AUTH FAILURE'))
+    const result=await readHomeRanking(db as any,Date.parse('2026-10-31T03:00:00Z'))
+    expect(result.featured).toEqual(['a'])
+    expect(JSON.stringify(result)).not.toMatch(/PRIVATE|last_sign|created_at/)
+  })
   it('returns a generic error with no stale ranking or raw DB error on failure',async()=>{
     state.fail=true
     const res=response();await handler({method:'GET'} as any,res)

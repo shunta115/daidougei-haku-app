@@ -22,12 +22,14 @@ export async function readHomeRanking(sb: DB, now = Date.now()): Promise<HomeRan
   for (let i = 0; i < performers.length; i += 4) {
     candidates.push(...await Promise.all(performers.slice(i, i + 4).map(async p => {
       const [auth, events] = await Promise.all([
-        sb.auth.admin.getUserById(p.id),
+        // Auth history is an optional ranking signal. A single failed lookup must
+        // not hide all public performers; retain only independently verified actions.
+        sb.auth.admin.getUserById(p.id).then(result => result.error ? null : result.data.user).catch(() => null),
         sb.from('product_events').select('created_at').eq('user_id', p.id)
           .lte('created_at', new Date(now).toISOString()).order('created_at', { ascending: false }).limit(1),
       ])
-      if (auth.error || events.error) throw auth.error || events.error
-      return { ...p, lastSignIn: auth.data.user?.last_sign_in_at, lastAction: events.data?.[0]?.created_at }
+      if (events.error) throw events.error
+      return { ...p, lastSignIn: auth?.last_sign_in_at, lastAction: events.data?.[0]?.created_at }
     })))
   }
   const [appearances, slots] = await Promise.all([
