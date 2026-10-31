@@ -1,3 +1,4 @@
+import { pushEnvironment } from './pushEnvironment'
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
@@ -921,14 +922,15 @@ function pushKey(value: string) {
   return Uint8Array.from(bytes, (char) => char.charCodeAt(0))
 }
 
-export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+export async function ensurePushSubscription(userId: string) {
   const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY
   if (!publicKey) throw new Error('push_not_configured')
+  if (pushEnvironment().needsInstall) throw new Error('push_unsupported')
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('push_unsupported')
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('push_denied')
   const registration = await navigator.serviceWorker.ready
-  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
+  const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
   const json = subscription.toJSON()
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('push_invalid_subscription')
   const sb = requireSupabase()
@@ -937,20 +939,15 @@ export async function enableAppearancePush(userId: string, locale: NotificationP
     disabled_at: null, last_error: null, updated_at: new Date().toISOString(),
   }, { onConflict: 'endpoint' })
   if (error) throw error
+}
+
+export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+  await ensurePushSubscription(userId)
   await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: true, locale })
 }
 
 export async function disableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
-  if ('serviceWorker' in navigator) {
-    const registration = await navigator.serviceWorker.ready
-    const subscription = await registration.pushManager.getSubscription()
-    if (subscription) {
-      const sb = requireSupabase()
-      const { error } = await sb.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', subscription.endpoint)
-      if (error) throw error
-      await subscription.unsubscribe()
-    }
-  }
+  // Categories share one subscription. Turning off appearances must not revoke LIVE.
   await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: false, locale })
 }
 
