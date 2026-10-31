@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { getLiveLikeTotal, sendLiveLikeBatch, subscribeLiveLikeTotal } from './liveLikes'
+import { likeOutboxKey, readLikeOutbox, saveLikeOutbox } from './liveLikeOutbox'
 import { createLiveFeverId } from './liveFever'
 import type { TipGiftTier } from './tipGifts'
 
@@ -26,7 +27,11 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
     }
     let alive = true, currentLevel = 0, knownTotal: number | null = null
     let pending = 0, sending = false, reading = false, tapStart = 0, taps = 0, nextRetry = 0, failures = 0
-    let batch: { id: string; count: number } | null = null
+    const outboxKey = userId ? likeOutboxKey(performerId, liveStartedAt, userId) : null
+    const restored = outboxKey ? readLikeOutbox(outboxKey) : { pending: 0, batch: null }
+    pending = restored.pending
+    let batch = restored.batch
+    const persist = () => { if (outboxKey) saveLikeOutbox(outboxKey, { pending, batch }) }
     const addHearts = (count: number) => {
       const now = Date.now()
       setHearts(previous => [...previous.filter(heart => heart.expiresAt > now),
@@ -52,18 +57,18 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
     void hydrate()
     const flush = async () => {
       if (!alive || !userId || sending || Date.now() < nextRetry) return
-      if (!batch && pending) { batch = { id: createLiveFeverId(), count: Math.min(12, pending) }; pending -= batch.count }
+      if (!batch && pending) { batch = { id: createLiveFeverId(), count: Math.min(12, pending) }; pending -= batch.count; persist() }
       if (!batch) return
       sending = true
       try {
         const total = await sendLiveLikeBatch(performerId, liveStartedAt, batch.id, batch.count)
         if (!alive) return
-        receive(total, true); batch = null; failures = 0; nextRetry = 0; setDeliveryError(null)
+        receive(total, true); batch = null; persist(); failures = 0; nextRetry = 0; setDeliveryError(null)
       } catch (error) {
         if (!alive) return
         const code = (error as { code?: string })?.code
         if (code === '55000' || code === '42501' || code === '22023') {
-          batch = null; pending = 0
+          batch = null; pending = 0; persist()
           setDeliveryError('いいねを送信できません。LIVEの状態とログインを確認してください。')
         } else {
           nextRetry = Date.now() + Math.min(8000, 1000 * 2 ** Math.min(++failures, 3))
@@ -76,7 +81,7 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
       const now = Date.now()
       if (now - tapStart >= 1000) { tapStart = now; taps = 0 }
       if (++taps > LIVE_FEVER_CONFIG.maxLikesPerSecond || pending >= 120) return
-      pending++; addHearts(1)
+      pending++; persist(); addHearts(1)
     }
     addGiftRef.current = tier => gain(LIVE_FEVER_CONFIG.giftGain[tier])
     const flushTimer = window.setInterval(() => void flush(), LIVE_FEVER_CONFIG.flushMs)

@@ -400,17 +400,26 @@ export async function postLiveComment(input: {
   displayName: string
   body: string
   liveSessionId?: string | null
+  requestId?: string
 }) {
   const sb = requireSupabase()
   const text = input.body.trim().slice(0, 200)
   if (!text) throw new Error('Comment is empty')
   const { error } = await sb.from('live_comments').insert({
+    ...(input.requestId ? { id: input.requestId } : {}),
     performer_id: input.performerId,
     user_id: input.userId,
     display_name: input.displayName || 'Fan',
     body: text,
     live_session_id: input.liveSessionId ?? null,
   })
+  if (error?.code === '23505' && input.requestId) {
+    // An acknowledgement may have been lost. RLS still governs this read; never overwrite.
+    const { data: existing, error: readError } = await sb.from('live_comments')
+      .select('performer_id,user_id,live_session_id,body').eq('id', input.requestId).maybeSingle()
+    if (!readError && existing?.performer_id === input.performerId && existing.user_id === input.userId
+      && existing.live_session_id === (input.liveSessionId ?? null) && existing.body === text) return
+  }
   if (error) throw error
 }
 

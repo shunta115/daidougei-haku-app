@@ -39,6 +39,7 @@ import { removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentSc
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
+import { nextCommentAttempt, type CommentAttempt } from '../lib/liveCommentAttempt'
 import { useLiveFever } from '../lib/useLiveFever'
 import { useLiveViewportHeight } from '../lib/useLiveViewport'
 import { readHostVideoDiagnostics, type HostVideoDiagnostics } from '../lib/liveVideoDiagnostics'
@@ -107,6 +108,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const { comments, setComments, commentError } = useLiveComments(performerId, liveSessionId, phase === 'live')
   const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
+  const commentAttempt = useRef<CommentAttempt | null>(null)
   const commentBusy = useRef(false)
   const [commentSending, setCommentSending] = useState(false)
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
@@ -758,14 +760,17 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     if (phase !== 'live' || !draft.trim() || !liveSessionId || commentBusy.current) return
     commentBusy.current = true; setCommentSending(true)
     const sentDraft = draft
+    commentAttempt.current = nextCommentAttempt(commentAttempt.current, profile.id, performer.id, liveSessionId, draft)
     try {
       await postLiveComment({
+        requestId: commentAttempt.current.id,
         performerId: performer.id,
         userId: profile.id,
         displayName: profile.display_name || performer.stage_name,
         body: draft,
         liveSessionId,
       })
+      commentAttempt.current = null
       setDraft(current => current === sentDraft ? '' : current)
     } catch (e) {
       setError('コメントを送信できませんでした。通信を確認して、もう一度お試しください。')

@@ -25,6 +25,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const sb = getAdminSupabase()
     if (req.method === 'GET') {
+      // SFU queries and lifecycle mutation are reserved for the configured watchdog.
+      const secret = process.env.CRON_SECRET
+      if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+        res.status(401).json({ error: 'Watchdog authorization required' }); return
+      }
       // heartbeat_timeout cleanup is atomic with start/end and also scheduled by separately approved SQL.
       const { data, error } = await sb.rpc('expire_direct_live_leases')
       if (error) throw error

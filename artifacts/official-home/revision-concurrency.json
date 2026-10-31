@@ -1,0 +1,11 @@
+{
+  "scope": "new isolated PostgreSQL cluster, Unix socket only; no remote DB",
+  "checks": [
+    "service_role still has no performers UPDATE privilege",
+    "two real sessions race for final photo slot: exactly one succeeds, count stays 20",
+    "concurrent main selection serializes without uniqueness errors; exactly one main",
+    "reorder succeeds under restricted service_role",
+    "office membership lookup works; membership email stays denied"
+  ],
+  "passed": 5
+}

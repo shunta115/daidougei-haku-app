@@ -27,3 +27,4 @@ export async function startLive() {throw new Error('QA cannot start LIVE')}
 export async function endLive() {throw new Error('QA cannot end LIVE')}
 export async function updatePerformer() {throw new Error('QA cannot update performer')}
 export function qaEnd() {performer.is_live=false;bus.postMessage({kind:'ended'})}
+export async function reserveLive() {throw new Error('QA cannot reserve LIVE')}

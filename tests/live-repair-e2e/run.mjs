@@ -4,6 +4,7 @@ import { webkit, devices } from 'playwright'
 const output = process.env.HAKU_LIVE_QA_OUTPUT || '/private/tmp/haku-live-repair-evidence'
 await mkdir(output,{recursive:true})
 const results=[],errors=[]
+const deadline=setTimeout(()=>{console.error('WebKit integration timeout');process.exit(1)},180_000)
 const check=(name,pass)=>{assert.ok(pass,name);results.push(name);console.log('PASS',name)}
 console.log('Launching isolated WebKit')
 const browser=await webkit.launch({headless:true,timeout:30000})
@@ -36,14 +37,14 @@ try {
  await a.getByRole('status').filter({hasText:'LIVEのURLをコピーしました。'}).waitFor()
  check('unsupported sharing copies URL and displays feedback',await a.evaluate(()=>window.__copied.includes('watch=')))
  await a.getByLabel('共有結果を閉じる').tap()
- await a.getByLabel('LIVE設定',{exact:true}).tap()
- check('settings opens without cropping video',await a.getByLabel('LIVE設定パネル').isVisible()&&await a.locator('video').evaluate(el=>getComputedStyle(el).objectFit)==='contain')
- await a.getByRole('button',{name:'コメントを非表示',exact:true}).tap()
+ await a.getByLabel('視聴設定',{exact:true}).tap()
+ check('settings opens without cropping video',await a.getByRole('dialog',{name:'視聴設定',exact:true}).isVisible()&&await a.locator('video').evaluate(el=>getComputedStyle(el).objectFit)==='contain')
+ await a.getByLabel('コメントを表示',{exact:true}).uncheck()
  check('comments can be hidden',await a.locator('.pl-live__comments-wrap').isHidden())
- await a.getByRole('button',{name:'コメントを表示',exact:true}).tap()
- await a.getByRole('button',{name:'音声をミュート',exact:true}).tap()
+ await a.getByLabel('コメントを表示',{exact:true}).check()
+ await a.getByRole('button',{name:'視聴設定を閉じる',exact:true}).tap()
+ await a.getByLabel('音声をオフ',{exact:true}).tap()
  check('audio mute changes actual audio element',await a.locator('audio').evaluate(el=>el.muted))
- await a.getByRole('button',{name:'設定を閉じる',exact:true}).tap()
  const input=a.locator('.pl-live__composer input')
  await input.fill('視聴者から相手へ届くコメント')
  await a.locator('.pl-live__composer button').tap()
@@ -58,9 +59,9 @@ try {
  await a.waitForTimeout(400)
  check('landscape separates video from comments',await a.evaluate(()=>{const v=document.querySelector('.pl-live__stage').getBoundingClientRect(),p=document.querySelector('.pl-live__panel').getBoundingClientRect();return v.right<=p.left+1&&p.right<=innerWidth+1}))
  await a.screenshot({path:output+'/landscape.png'})
- await a.getByLabel('全画面表示',{exact:true}).tap()
- check('fullscreen leaves live actions reachable',await a.getByLabel('全画面を終了',{exact:true}).isVisible()&&await a.getByLabel('無料のいいねを送る',{exact:true}).first().isVisible())
- await a.getByLabel('全画面を終了',{exact:true}).tap()
+ await a.getByLabel('プレーヤーを全画面表示',{exact:true}).tap()
+ check('fullscreen leaves live actions reachable',await a.getByLabel('全画面表示を終了',{exact:true}).isVisible()&&await a.getByLabel('無料のいいねを送る',{exact:true}).first().isVisible())
+ await a.getByLabel('全画面表示を終了',{exact:true}).tap()
  const old=await context.newPage();await old.goto(url+'?liveStartedAt=2026-10-30T00%3A00%3A00Z')
  await old.getByText('このLIVEは終了しました。',{exact:true}).waitFor()
  check('old shared session does not join a newer LIVE',await old.getByLabel('無料のいいねを送る',{exact:true}).first().isDisabled())
@@ -68,5 +69,6 @@ try {
  await context.close()
 } finally {
  await writeFile(output+'/result.json',JSON.stringify({browser:'WebKit desktop with iPhone 13 emulation',physicalIPhone:false,transport:'offline adapters; not Supabase or LiveKit',results,errors},null,2))
+ clearTimeout(deadline)
  await browser.close()
 }

@@ -15,9 +15,9 @@ vi.mock('../api/ops/_guard',()=>({requireAdmin:async()=>({id:'admin'})}))
 vi.mock('../api/livekit/_shared',()=>({getLiveKitConfig:()=>({url:'wss://test.invalid',apiKey:'test',apiSecret:'test'}),sessionRoomName:(p:string,s:string)=>`live-${p}-${s}`}))
 vi.mock('livekit-server-sdk',()=>({RoomServiceClient:class{async listParticipants(){if(f.roomError)throw new Error('outage');return f.host?[{identity:'owner'},{identity:'viewer'}]:[{identity:'viewer'}]}deleteRoom=f.deleteRoom}}))
 import handler from '../api/livekit/presence'
-async function call(body:any,method='POST'){const res:any={setHeader:vi.fn(),status:vi.fn().mockReturnThis(),json:vi.fn()};await handler({method,headers:{},query:{},body} as any,res);return res.status.mock.calls.at(-1)?.[0]}
+async function call(body:any,method='POST'){const res:any={setHeader:vi.fn(),status:vi.fn().mockReturnThis(),json:vi.fn()};await handler({method,headers:method==='GET'?{authorization:'Bearer watchdog-test'}:{},query:{},body} as any,res);return res.status.mock.calls.at(-1)?.[0]}
 const heartbeat={performerId:'owner',sessionId:'session',operationId:'op'}
-beforeEach(()=>{f.user='owner';f.operation='op';f.ended=false;f.host=true;f.open=true;f.roomError=false;f.heartbeat='';f.stale=[];f.updates=[];f.filters=[];f.rpc.mockReset();f.rpc.mockResolvedValue({error:null,data:true});f.deleteRoom.mockReset();f.deleteRoom.mockResolvedValue(undefined)})
+beforeEach(()=>{process.env.CRON_SECRET='watchdog-test';f.user='owner';f.operation='op';f.ended=false;f.host=true;f.open=true;f.roomError=false;f.heartbeat='';f.stale=[];f.updates=[];f.filters=[];f.rpc.mockReset();f.rpc.mockResolvedValue({error:null,data:true});f.deleteRoom.mockReset();f.deleteRoom.mockResolvedValue(undefined)})
 it('does not mutate anything for an unauthenticated host',async()=>{f.user=null;expect(await call(heartbeat)).toBe(401);expect(f.updates).toEqual([]);expect(f.rpc).not.toHaveBeenCalled()})
 it('does not renew a different or ended operation',async()=>{f.operation='other';expect(await call(heartbeat)).toBe(409);f.operation='op';f.ended=true;expect(await call(heartbeat)).toBe(409);expect(f.updates).toEqual([])})
 it('does not keep a ghost host or an operator-ended session alive',async()=>{f.host=false;expect(await call(heartbeat)).toBe(409);f.host=true;f.open=false;expect(await call(heartbeat)).toBe(409);expect(f.updates).toEqual([])})
@@ -50,3 +50,5 @@ it('passes the original microsecond timestamp as CAS, and never closes LIVE dire
  expect(f.rpc).toHaveBeenCalledWith('observe_direct_live_host',{p_performer_id:'owner',p_session_id:'session',p_expected_heartbeat:stamp,p_host_connected:true})
  expect(f.rpc.mock.calls.some(c=>c[0]==='close_direct_live_session')).toBe(false)
 })
+
+it('rejects a watchdog with no configured secret before DB or SFU calls',async()=>{delete process.env.CRON_SECRET;expect(await call(null,'GET')).toBe(401);expect(f.rpc).not.toHaveBeenCalled()})

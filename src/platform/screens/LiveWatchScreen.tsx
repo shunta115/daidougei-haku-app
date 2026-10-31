@@ -36,6 +36,7 @@ import { useFullscreen } from '../lib/useFullscreen'
 import { useLiveLayout } from '../lib/useLiveLayout'
 import { removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
+import { nextCommentAttempt, type CommentAttempt } from '../lib/liveCommentAttempt'
 import { useLiveFever } from '../lib/useLiveFever'
 import { useLiveViewportHeight } from '../lib/useLiveViewport'
 import { readLiveDisplayPreference, saveLiveDisplayPreference } from '../lib/liveDisplayPreferences'
@@ -71,7 +72,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const viewportHeight = useLiveViewportHeight()
   const [p, setP] = useState<Performer | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [commentsVisible, setCommentsVisible] = useState(true)
+  const [commentsVisible, setCommentsVisible] = useState(() => readLiveDisplayPreference('comments'))
   const [shareStatus, setShareStatus] = useState('')
   const [copyUrl, setCopyUrl] = useState<string | null>(null)
   const shareBusy = useRef(false)
@@ -89,6 +90,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const { comments, setComments, commentError } = useLiveComments(performerId, liveSessionId, liveActive)
   const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
+  const commentAttempt = useRef<CommentAttempt | null>(null)
   const commentBusy = useRef(false)
   const [commentSending, setCommentSending] = useState(false)
   const [following, setFollowing] = useState(false)
@@ -98,7 +100,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const [audioBlocked, setAudioBlocked] = useState(false)
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
   const [connectionAttempt, setConnectionAttempt] = useState(0)
-  const [chromeVisible, setChromeVisible] = useState(true)
   const [audioMuted, setAudioMuted] = useState(false)
   const [giftEffects, setGiftEffects] = useState(() => readLiveDisplayPreference('gift-effects'))
   // Keep the full broadcast visible by default on narrow phones. Viewers can
@@ -148,7 +149,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const roomRef = useRef<Room | null>(null)
   const onEndedRef = useRef(onEnded)
   onEndedRef.current = onEnded
-  const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
   const fs = useFullscreen(screenRef)
   const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id, liveSessionId)
@@ -359,14 +359,17 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     if (!user || !profile || !liveActive || !draft.trim() || !liveSessionId || commentBusy.current) return
     commentBusy.current = true; setCommentSending(true)
     const sentDraft = draft
+    commentAttempt.current = nextCommentAttempt(commentAttempt.current, user.id, performerId, liveSessionId, draft)
     try {
       await postLiveComment({
+        requestId: commentAttempt.current.id,
         performerId,
         userId: user.id,
         displayName: profile.display_name,
         body: draft,
         liveSessionId,
       })
+      commentAttempt.current = null
       setDraft(current => current === sentDraft ? '' : current)
     } catch {
       setError('コメントを送信できませんでした。このLIVEでのコメント権限または通信状態を確認してください。')
