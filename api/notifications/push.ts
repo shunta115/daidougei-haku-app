@@ -1,3 +1,4 @@
+import testApi from '../../server/notifications/testApi.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import webpush from 'web-push'
 import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
@@ -38,6 +39,7 @@ function message(locale: Delivery['locale'], payload: Delivery['payload']) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query?.mode === 'qa-smart-push') return testApi(req, res)
   if (req.query?.mode === 'live-start') return liveStart(req, res)
   if (req.query.mode === 'self-test') return selfTest(req, res)
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
