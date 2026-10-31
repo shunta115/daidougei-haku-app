@@ -41,5 +41,6 @@
         }
       ]
     }
-  ]
+  ],
+  "git": { "deploymentEnabled": { "codex/live-repair-20261031": false } }
 }

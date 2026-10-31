@@ -10,14 +10,12 @@ import {
   endLive,
   deleteLiveComment,
   getActiveLiveSessionId,
-  listLiveComments,
   listPerformerLiveSchedules,
   liveReservationsEnabled,
   muteLiveCommentUser,
   notifyLiveReservationStarted,
   postLiveComment,
   startLive,
-  subscribeLiveComments,
   updateLiveViewerPeak,
   updatePerformer,
 } from '../lib/api'
@@ -36,11 +34,12 @@ import {
   setHostMicrophoneEnabled,
 } from '../lib/livekit'
 import { useLiveLayout } from '../lib/useLiveLayout'
-import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
+import { removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { canSwitchHostCamera, hostCameraTrack, switchHostCamera, type CameraFacing } from '../lib/liveCamera'
 import { liveOrientationStorage, readLiveOrientationMode, resolveLiveOrientation, writeLiveOrientationMode, type LiveOrientationMode } from '../lib/liveOrientationPreference'
 import { useLiveFever } from '../lib/useLiveFever'
+import { useLiveComments } from '../lib/useLiveComments'
 import type { LiveComment } from '../lib/types'
 import type { LiveSchedule } from '../lib/types'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -91,10 +90,12 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const [cameraRecoveryNeeded, setCameraRecoveryNeeded] = useState(false)
   const cameraSwitchRef = useRef(false)
   const orientationSwitchRef = useRef(false)
-  const [comments, setComments] = useState<LiveComment[]>([])
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+  const { comments, setComments, commentError } = useLiveComments(performerId, liveSessionId, phase === 'live')
   const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
+  const commentBusy = useRef(false)
+  const [commentSending, setCommentSending] = useState(false)
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
     () =>
@@ -114,8 +115,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const appliedOrientationRef = useRef(videoOrientation)
   const failedAutoOrientationRef = useRef<string | null>(null)
   const hiddenAtRef = useRef<number | null>(null)
-  const commentScroll = useLiveCommentScroll(comments.length)
-  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live')
+  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id, liveSessionId)
+  const fever = useLiveFever(performerId, performer?.live_started_at, phase === 'live', profile?.id)
 
   useEffect(() => {
     if (!liveReservationsEnabled || !performerId || phase !== 'ready') {
@@ -277,22 +278,20 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   }, [phase, performer])
 
   useEffect(() => {
-    if (!performerId || phase !== 'live' || liveSessionId) return
-    let active = true
-    void getActiveLiveSessionId(performerId)
-      .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
-      .catch(() => undefined)
-    return () => { active = false }
-  }, [liveSessionId, performerId, phase])
-
-  useEffect(() => {
-    if (!performerId || phase !== 'live' || !liveSessionId) return
-    listLiveComments(performerId, liveSessionId).then(setComments).catch(() => undefined)
-    return subscribeLiveComments(performerId, liveSessionId, {
-      onInsert: (row) => setComments((prev) => appendLiveComment(prev, row)),
-      onDelete: (commentId) => setComments((prev) => removeLiveComment(prev, commentId)),
-    })
-  }, [liveSessionId, performerId, phase])
+    setLiveSessionId(null)
+    if (!performerId || phase !== 'live') return
+    let active = true, reading = false
+    const refresh = async () => {
+      if (reading) return
+      reading = true
+      try { const id = await getActiveLiveSessionId(performerId); if (active) setLiveSessionId(id) }
+      catch { if (active) setError('コメントのLIVEセッションを確認できません。再接続後に再取得します。') }
+      finally { reading = false }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 5000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [performerId, phase, performer?.live_started_at])
 
   useEffect(() => {
     if (!liveSessionId || !profile?.id) {
@@ -664,7 +663,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   )
 
   const sendComment = async () => {
-    if (!draft.trim() || !liveSessionId) return
+    if (phase !== 'live' || !draft.trim() || !liveSessionId || commentBusy.current) return
+    commentBusy.current = true; setCommentSending(true)
+    const sentDraft = draft
     try {
       await postLiveComment({
         performerId: performer.id,
@@ -673,10 +674,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         body: draft,
         liveSessionId,
       })
-      setDraft('')
+      setDraft(current => current === sentDraft ? '' : current)
     } catch (e) {
       setError('コメントを送信できませんでした。通信を確認して、もう一度お試しください。')
-    }
+    } finally { commentBusy.current = false; setCommentSending(false) }
   }
 
   const removeComment = async (commentId: string) => {
@@ -726,7 +727,8 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
         {phase === 'live' && performer ? (
           <TipGiftOverlay performerId={performer.id} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
         ) : null}
-        {phase === 'live' ? <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} /> : null}
+        {fever.deliveryError || commentError ? <p className="pl-live__delivery" role="status">{fever.deliveryError || commentError}</p> : null}
+        {phase === 'live' ? <LiveFeverOverlay level={fever.level} likes={fever.likes} synced={fever.synced} hearts={fever.hearts} reducedMotion={calmMotion} /> : null}
         {phase === 'ready' && previewState !== 'ready' ? <div className="pl-live__placeholder">{previewState === 'preparing' ? 'カメラ・マイクの許可を待っています…' : previewState === 'denied' ? 'カメラ・マイクを許可してください' : previewState === 'ended' ? 'LIVE配信を終了しました' : 'ここにカメラ映像が表示されます'}</div> : null}
         <div className="pl-live__hud-top">
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack}>
@@ -848,14 +850,14 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
             <input
               className="pl-input"
               style={{ marginBottom: 0 }}
-              placeholder="コメント"
+              placeholder="コメント" maxLength={200} disabled={!liveSessionId || commentSending}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void sendComment()
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendComment()
               }}
             />
-            <button type="button" className="pl-btn" onClick={() => void sendComment()}>
+            <button type="button" className="pl-btn" disabled={!liveSessionId || commentSending} onClick={() => void sendComment()}>
               送信
             </button>
           </div>

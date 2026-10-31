@@ -1,0 +1,28 @@
+
+ RUN  v3.2.7 /private/tmp/haku-live-repair-20261031
+
+ ✓ tests/live-fever.test.tsx (4 tests) 1388ms
+   ✓ durable LIVE likes across viewers and host > animates taps immediately, counts only acknowledged totals, and delivers to host and another viewer  913ms
+   ✓ durable LIVE likes across viewers and host > restores totals after missing realtime; bounds taps and keeps verified gift gain  411ms
+ ✓ tests/live-comments-recovery.test.tsx (3 tests) 927ms
+   ✓ does not replace a realtime insert with a stale initial snapshot; recovers missing events on reconnect  599ms
+ ✓ tests/live-gift-fever-integration.test.tsx (2 tests) 2925ms
+   ✓ verified gift to HAKU FEVER integration > shows THANK YOU and raises FEVER once for each verified gift  2331ms
+   ✓ verified gift to HAKU FEVER integration > cleans queued presentation timers and the Realtime subscription  589ms
+(node:32256) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/live-share.test.ts (4 tests) 49ms
+ ✓ tests/live-comments.test.ts (6 tests) 441ms
+   ✓ LIVE comment session and scrolling > keeps realtime inserts unique and bounded, and applies realtime deletes  356ms
+ ✓ tests/tip-approval.test.ts (3 tests) 343ms
+ ✓ tests/tip-confirmation.test.ts (15 tests) 345ms
+ ✓ tests/payment-safety.test.ts (11 tests) 442ms
+   ✓ payment safety boundaries > holds new sales on the platform and transfers only after payout eligibility  332ms
+ ✓ tests/live-fever-safety.test.ts (2 tests) 373ms
+   ✓ HAKU FEVER safety > rejects malformed and oversized broadcast payloads  340ms
+
+ Test Files  9 passed (9)
+      Tests  50 passed (50)
+   Start at  12:21:32
+   Duration  171.21s (transform 4.48s, setup 0ms, collect 23.09s, tests 7.23s, environment 64.45s, prepare 22.50s)
+

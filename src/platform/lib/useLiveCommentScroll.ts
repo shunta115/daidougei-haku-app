@@ -18,10 +18,12 @@ export function hasIncomingLiveComment(previousCount: number, currentCount: numb
   return currentCount > previousCount
 }
 
-export function useLiveCommentScroll(commentCount: number) {
+export function useLiveCommentScroll(commentCount: number, latestId?: string, sessionKey?: string | null) {
   const listRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const previousCountRef = useRef(commentCount)
+  const previousLatestRef = useRef(latestId)
+  const previousSessionRef = useRef(sessionKey)
   const [hasNewComments, setHasNewComments] = useState(false)
 
   const scrollToLatest = (behavior: ScrollBehavior = 'smooth') => {
@@ -35,13 +37,17 @@ export function useLiveCommentScroll(commentCount: number) {
   useLayoutEffect(() => {
     const list = listRef.current
     const previousCount = previousCountRef.current
+    const incoming = hasIncomingLiveComment(previousCount, commentCount) || Boolean(latestId && latestId !== previousLatestRef.current)
+    if (sessionKey !== previousSessionRef.current) { pinnedRef.current = true; setHasNewComments(false) }
+    previousSessionRef.current = sessionKey
+    previousLatestRef.current = latestId
     previousCountRef.current = commentCount
     if (!list) return
     if (pinnedRef.current) scrollToLatest('auto')
-    else if (hasIncomingLiveComment(previousCount, commentCount)) setHasNewComments(true)
+    else if (incoming) setHasNewComments(true)
     // commentCount is the event that drives the scroll; scrollToLatest is intentionally local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commentCount])
+  }, [commentCount, latestId, sessionKey])
 
   const onScroll = () => {
     const list = listRef.current
