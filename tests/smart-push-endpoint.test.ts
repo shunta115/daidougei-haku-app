@@ -9,7 +9,7 @@ vi.mock('../api/stripe/_shared.js',()=>({
   const b:any={select:()=>b,eq:()=>b,is:()=>b,maybeSingle:async()=>({data:mock.session,error:null}),update:(patch:any)=>{mock.updates.push({table,patch});return b},then:(resolve:any)=>resolve({error:null})};return b
  }})
 }))
-import handler,{liveHostHealthy} from '../server/notifications/liveStart'
+import handler,{liveHostHealthy,validPushEndpoint} from '../server/notifications/liveStart'
 const id='30000000-0000-4000-8000-000000000001'
 async function run(method='POST',body:any={liveSessionId:id}){const r:any={code:0,body:null,setHeader:vi.fn(),status(n:number){this.code=n;return this},json(b:any){this.body=b;return this}};await handler({method,body} as any,r);return r}
 beforeEach(()=>{
@@ -17,7 +17,7 @@ beforeEach(()=>{
  for(const key of ['ENABLE_SMART_PUSH','ENABLE_LIVE_START_WEB_PUSH'])vi.stubEnv(key,'true')
  for(const key of ['WEB_PUSH_SUBJECT','WEB_PUSH_VAPID_PUBLIC_KEY','WEB_PUSH_VAPID_PRIVATE_KEY'])vi.stubEnv(key,'fake')
  mock.send.mockResolvedValue({statusCode:201});mock.participants.mockResolvedValue([{identity:'owner',tracks:[{type:1,muted:false}]}])
- mock.rpc.mockImplementation(async(name:string)=>({data:name==='enqueue_live_start_push'?'event':name==='live_push_delivery_eligible'?mock.eligible:[{delivery_id:'delivery',subscription_id:'sub',endpoint:'https://push.example.test/fake',p256dh:'fake',auth:'fake',payload:{stageName:'Performer'}}],error:null}))
+ mock.rpc.mockImplementation(async(name:string)=>({data:name==='enqueue_live_start_push'?'event':name==='live_push_delivery_eligible'?mock.eligible:[{delivery_id:'delivery',subscription_id:'sub',endpoint:'https://web.push.apple.com/fake',p256dh:'fake',auth:'fake',payload:{stageName:'Performer'}}],error:null}))
 })
 afterEach(()=>vi.unstubAllEnvs())
 it('defaults off without touching optional queue',async()=>{vi.stubEnv('ENABLE_SMART_PUSH','');expect((await run()).code).toBe(202);expect(mock.rpc).not.toHaveBeenCalled();expect(mock.send).not.toHaveBeenCalled()})
@@ -38,4 +38,9 @@ it('does not claim or send when enqueue fails',async()=>{mock.rpc.mockResolvedVa
 it('permanently cancels the event if publisher disappears after claim',async()=>{
   mock.participants.mockResolvedValueOnce([{identity:'owner',tracks:[{type:1,muted:false}]}]).mockResolvedValueOnce([])
   expect((await run()).body.sent).toBe(0);expect(mock.send).not.toHaveBeenCalled();expect(mock.updates.some(u=>u.table==='live_push_events'&&u.patch.cancelled_at)).toBe(true)
+})
+
+it('permits only supported public push providers, never arbitrary/internal targets',()=>{
+ expect(validPushEndpoint('https://web.push.apple.com/fake')).toBe(true);expect(validPushEndpoint('https://fcm.googleapis.com/fcm/send/fake')).toBe(true)
+ for(const url of ['http://web.push.apple.com/fake','https://127.0.0.1/fake','https://web.push.apple.com.attacker.test/fake','https://user:pass@web.push.apple.com/fake','https://web.push.apple.com:8080/fake'])expect(validPushEndpoint(url)).toBe(false)
 })

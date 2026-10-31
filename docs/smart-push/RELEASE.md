@@ -40,7 +40,7 @@ No specific performer, show date or event is hardcoded.
 
 Approval, active account, public non-test ongoing LIVE, a real unmuted publisher
 video track, follow, independent LIVE consent, master permission and active Push
-subscription are required. Queue claim and pre-send checks both recheck consent,
+subscription are required. Only HTTPS Apple Push and Google FCM endpoints are accepted; arbitrary/internal URLs are suppressed. Queue claim and pre-send checks both recheck consent,
 unfollow, public state and session end. If LiveKit inspection fails or the host
 has no active video, the event is cancelled rather than recovered later.
 

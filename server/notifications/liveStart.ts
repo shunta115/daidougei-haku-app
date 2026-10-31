@@ -8,6 +8,14 @@ export function liveHostHealthy(participants: { identity: string; tracks?: { mut
   return participants.some(p => p.identity === owner && p.tracks?.some(t => !t.muted && t.type === 1))
 }
 
+export function validPushEndpoint(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && !url.port && !url.username && !url.password
+      && (url.hostname === 'fcm.googleapis.com' || /^[a-z0-9-]+\.push\.apple\.com$/.test(url.hostname))
+  } catch { return false }
+}
+
 // Host heartbeats drive a bounded batch. No sleeping functions, new cron or retry loop.
 export default async function liveStart(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
@@ -51,7 +59,7 @@ export default async function liveStart(req: VercelRequest, res: VercelResponse)
       // Revalidate immediately before every send, including consent/unfollow changes
       // that happened after claim. No claim of a processing row is ever retried.
       const { data: eligible, error: eligibleError } = await sb.rpc('live_push_delivery_eligible', { p_delivery_id: delivery.delivery_id })
-      if (eligibleError || !eligible) {
+      if (eligibleError || !eligible || !validPushEndpoint(delivery.endpoint)) {
         await sb.from('live_push_deliveries').update({ status: 'suppressed', last_error: 'eligibility_changed' }).eq('id', delivery.delivery_id).eq('status', 'processing')
         continue
       }
