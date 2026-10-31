@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "checks": [
+    "chromium: 1920x1080 source, 16:9 theater and separate comments, contain",
+    "chromium: 720x1280 source, 16:9 theater and separate comments, contain",
+    "chromium: comment/follow/share adapters, like click, support opens amount screen (no payment)",
+    "chromium: fullscreen API attempt (native), bounded comment scrolling",
+    "chromium: fullscreen fallback, resize PC/phone portrait/landscape",
+    "chromium: YouTube official iframe and right support rail (external playback blocked)",
+    "webkit: 1920x1080 source, 16:9 theater and separate comments, contain",
+    "webkit: 720x1280 source, 16:9 theater and separate comments, contain",
+    "webkit: comment/follow/share adapters, like click, support opens amount screen (no payment)",
+    "webkit: fullscreen API attempt (native), bounded comment scrolling",
+    "webkit: fullscreen fallback, resize PC/phone portrait/landscape",
+    "webkit: YouTube official iframe and right support rail (external playback blocked)",
+    "WebKit iPhone emulation: existing portrait UI and composer; desktop controls hidden"
+  ],
+  "errors": [],
+  "boundary": "Offline API/media fixtures. Chrome actual browser; WebKit is not Safari/iPhone hardware. Real LiveKit capture, RTP orientation and YouTube playback are unverified."
+}
