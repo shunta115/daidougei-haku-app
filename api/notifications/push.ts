@@ -44,7 +44,7 @@ function message(locale: Delivery['locale'], payload: Delivery['payload']) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.query.mode === 'self-test') return selfTest(req, res)
+  if (req.query?.mode === 'self-test') return selfTest(req, res)
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' })
   const user = await requireAuthUser(req, res)
   if (!user) return

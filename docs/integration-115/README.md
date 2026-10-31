@@ -49,7 +49,7 @@ Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_even
 
 一括 `db push` 禁止。各ファイルをhash固定し、現行schema/関数/権限/既存open sessionを照合して個別実行する。
 
-1. #100 `20261031010000_direct_live_lifecycle.sql` → `20261031010100_direct_live_expiry_schedule.sql`。全LIVE停止・重複openなし・既存lease差分確認。SQL cronは準備中だけ。配信中終了は継続SFU watchdogが別途必要。
+1. #100 `20261031010000_direct_live_lifecycle.sql` → `20261101010000_direct_live_server_grants.sql` → `20261031010100_direct_live_expiry_schedule.sql`。全LIVE停止・重複openなし・既存lease差分確認。追加grantはservice_roleにlive_sessions読取/列viewer_peak更新のみ。SQL cronは準備中だけ。配信中終了は継続SFU watchdogが別途必要。
 2. #106 `20261031030528_durable_live_likes.sql`。JWT/RLS・session別複数actor試験後にUIと同時公開。
 3. #108 `20261031042340_fix_youtube_live_url_constraint.sql`。既存データと本人保存制限を検査。
 4. #112 `20261031092522_revoke_public_tip_truncate.sql`。台帳内容・DML/RLS維持の照合。
@@ -113,5 +113,5 @@ UI source: 39480be。架空データ・模擬通信の静的QAだけを配置。
 - いいね/コメントはRealtime正常時60秒補正、切断時は従来の2/3秒取得と即時復帰を維持。対象9テスト通過。
 - Stripe Sandboxの事前権限検査、真正手数料照合/精算完了/金額保存則をE2E必須条件に変更。旧credential自動使用を廃止。新規無料Sandboxも手数料参照403のため決済を作成せず停止。
 - 標準Production相当build成功（CROWD非同梱を自動検査）。Production指定のCROWD lab buildは意図どおり拒否。実験だけは別コマンド/別出力。
-- 新規DB migrationなし。公開順は上記SQL個別承認→通常HAKU（CROWD除外）→既存承認済workerのwatchdog→公式home/Pushを各受入後に個別有効化。CROWD公開は独立判定。lifecycle未適用でアプリだけを先行公開しない。
+- 追加migrationは`20261101010000_direct_live_server_grants.sql`。実TESTのservice_roleでlive_sessions読取/peak更新不足を発見し最小権限を適用。別の出演者列の更新不可、open session/lease=0を確認。本番未適用。公開順は上記SQL個別承認→通常HAKU（CROWD除外）→既存承認済workerのwatchdog→公式home/Pushを各受入後に個別有効化。CROWD公開は独立判定。lifecycle未適用でアプリだけを先行公開しない。
 - ローカルSFU実RTPの専用CIを追加。合成カメラ/マイクと実HAKU media helperを利用するが、実端末/Safari/実Auth lifecycleの成功とは扱わない。

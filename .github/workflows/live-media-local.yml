@@ -27,7 +27,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Start free loopback SFU (no cloud or Egress)
         run: |
-          docker run --detach --name haku-local-sfu --network host livekit/livekit-server:v1.13.11 --dev --bind 127.0.0.1 --node-ip 127.0.0.1
+          docker run --detach --name haku-local-sfu --network host livekit/livekit-server:v1.13.11 --dev --bind 127.0.0.1 --node-ip 127.0.0.1 --config-body '{"rtc":{"stun_servers":["127.0.0.1:19302"]}}'
           for attempt in $(seq 1 30); do
             if curl --silent --fail http://127.0.0.1:7880 > /dev/null; then exit 0; fi
             sleep 1

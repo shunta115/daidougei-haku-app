@@ -10,7 +10,7 @@ const url='ws://127.0.0.1:7880', roomName=`haku-media-${randomUUID()}`
 const service=new RoomServiceClient(url,'devkey','secret',{requestTimeout:3,failover:false})
 const output=process.env.HAKU_MEDIA_OUTPUT || '/private/tmp/haku-live-media-evidence'
 await mkdir(output,{recursive:true})
-const results=[],errors=[]
+const results=[],errors=[],diagnostics=[]
 const token=async(identity,publish)=>{const t=new AccessToken('devkey','secret',{identity,ttl:300});t.addGrant({roomJoin:true,room:roomName,canPublish:publish,canSubscribe:true});return t.toJwt()}
 const server=await createServer({configFile:false,envDir:false,server:{host:'127.0.0.1',port:4198,strictPort:true},define:{'import.meta.env.VITE_SUPABASE_URL':'undefined','import.meta.env.VITE_SUPABASE_ANON_KEY':'undefined'}})
 server.middlewares.use('/media-test',(_req,res)=>{res.setHeader('Content-Type','text/html');res.end('<video playsinline autoplay muted style="width:640px;height:360px"></video><audio autoplay></audio>')})
@@ -20,12 +20,12 @@ const deadline=setTimeout(()=>{console.error('Local SFU media verification timeo
 const check=(name,value)=>{assert.ok(value,name);results.push(name);console.log('PASS',name)}
 try {
  await service.createRoom({name:roomName,emptyTimeout:10})
- browser=await chromium.launch({headless:true,...(process.env.HAKU_CHROME_PATH ? {executablePath:process.env.HAKU_CHROME_PATH} : process.platform==='darwin' ? {executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'} : {}),args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']})
- const hostContext=await browser.newContext({permissions:['camera','microphone']}), viewerContext=await browser.newContext()
+ browser=await chromium.launch({headless:true,...(process.env.HAKU_CHROME_PATH ? {executablePath:process.env.HAKU_CHROME_PATH} : process.platform==='darwin' ? {executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'} : {}),args:['--allow-loopback-in-peer-connection','--disable-features=WebRtcHideLocalIpsWithMdns','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']})
+ const hostContext=await browser.newContext({permissions:['camera','microphone']}), viewerContext=await browser.newContext({permissions:['camera','microphone']})
  // Block every remote destination; this harness must never touch cloud/production services.
  for(const context of [hostContext,viewerContext])await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort())
  const host=await hostContext.newPage(),viewer=await viewerContext.newPage()
- for(const page of [host,viewer]){page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:4198/media-test')}
+ for(const page of [host,viewer]){page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'||m.type()==='warning')diagnostics.push(m.text())});await page.goto('http://127.0.0.1:4198/media-test')}
  await host.evaluate(async({url,token})=>{const m=await import('/src/platform/lib/livekit.ts');window.room=await m.connectAsHost(url,token,'landscape')},{url,token:await token('local-host',true)})
  const join=async()=>viewer.evaluate(async({url,token})=>{const m=await import('/src/platform/lib/livekit.ts');window.room=await m.connectAsViewer(url,token);m.watchRemoteMedia(window.room,t=>m.attachRemoteTrack(t,document.querySelector('video'),document.querySelector('audio')));await window.room.startAudio()},{url,token:await token('local-viewer',false)})
  await join()
@@ -47,4 +47,5 @@ try {
  check('scoped SFU room termination disconnects host and viewer',true)
  check('no browser runtime errors',errors.length===0)
  await writeFile(output+'/result.json',JSON.stringify({transport:'real local LiveKit SFU',lifecycleApi:false,supabase:false,syntheticCapture:true,physicalIPhone:false,cloudLiveKit:false,results,media,sender,errors},null,2))
+} catch(error) {await writeFile(output+'/failure.json',JSON.stringify({transport:'real local LiveKit SFU',lifecycleApi:false,supabase:false,syntheticCapture:true,physicalIPhone:false,results,errors,diagnostics,error:error.stack||String(error)},null,2));throw error
 } finally {clearTimeout(deadline);await browser?.close();await service.deleteRoom(roomName).catch(()=>{});await server.close()}
