@@ -1,0 +1,327 @@
+{
+  "passed": true,
+  "checks": 32,
+  "results": [
+    {
+      "artist": "HARIBOW",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "HARIBOW",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "PAUL",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-A",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": false,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": false,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": true,
+      "surface": "live",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "portrait",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    },
+    {
+      "artist": "Other-B",
+      "signedIn": true,
+      "surface": "profile",
+      "orientation": "landscape",
+      "stripeTestMode": true,
+      "checkout": true,
+      "attribution": true,
+      "paid": false
+    }
+  ],
+  "boundary": "Real TEST Supabase auth/database and real Stripe Sandbox Checkout creation/display. No card submission in this 32-case matrix. Media/LiveKit not started; physical iPhone not tested."
+}

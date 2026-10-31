@@ -1,5 +1,5 @@
 {
-  "git": { "deploymentEnabled": { "codex/haribow-live-stage2-20261031": false } },
+  "git": { "deploymentEnabled": { "codex/haku-115-unified-integration": false, "codex/common-anonymous-tip-audit": false, "codex/haribow-live-stage2-20261031": false } },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],
