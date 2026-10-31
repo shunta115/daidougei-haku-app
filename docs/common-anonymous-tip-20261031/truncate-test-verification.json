@@ -11,6 +11,6 @@
   "anon_truncate_after": false,
   "authenticated_truncate_after": false,
   "service_role_dml_preserved": true,
-  "local_postgres_tests": 3,
+  "local_postgres_tests": 4,
   "no_truncate_executed": true
 }
