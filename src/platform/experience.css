@@ -380,7 +380,7 @@
 .pl-near-live > header h2 { margin-top: 2px; font-size: 19px; }
 .pl-near-live > header > span { color: var(--xp-muted); font-size: 10px; }
 .pl-near-live__rail { display: grid; gap: 7px; }
-.pl-near-live__rail > button { min-height: 72px; display: grid; grid-template-columns: 54px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--xp-line); border-radius: 16px; background: rgba(12,35,56,.78); color: white; text-align: left; }
+.pl-near-live__rail > button, .pl-near-appearance > button { min-height: 72px; display: grid; grid-template-columns: 54px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--xp-line); border-radius: 16px; background: rgba(12,35,56,.78); color: white; text-align: left; }
 .pl-near-live__portrait { position: relative; width: 52px; height: 52px; display: grid; place-items: center; border: 2px solid #ff3b89; border-radius: 50%; background: #0b263c; font-weight: 900; }
 .pl-near-live__portrait img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .pl-near-live__portrait i { position: absolute; right: -4px; bottom: -2px; padding: 2px 5px; border: 2px solid #0b263c; border-radius: 999px; background: #ff3b89; font-size: 7px; font-style: normal; }
@@ -1004,3 +1004,5 @@ html[lang='en'] .pl-page-intro h1 {
   }
 }
 
+
+.pl-near-appearance--unlocated > button { grid-template-columns: minmax(0, 1fr) auto; }
