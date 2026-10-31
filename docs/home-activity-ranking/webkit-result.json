@@ -1,0 +1,22 @@
+{
+  "results": [
+    "activity order beats LIVE status",
+    "ongoing, today, tomorrow in order",
+    "real performance labels",
+    "no unscheduled performer in upcoming",
+    "profile callback maintained",
+    "LIVE callback maintained",
+    "online refresh updates latest activity order",
+    "visible automatic refresh preserves rank",
+    "followed section maintained",
+    "MAP callback maintained",
+    "viewport 844 has no body overflow",
+    "viewport 320 has no body overflow",
+    "no browser runtime errors",
+    "no external requests"
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "physicalIPhone": false,
+  "backend": "isolated fixture"
+}
