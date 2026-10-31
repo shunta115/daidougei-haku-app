@@ -13,7 +13,6 @@ await mkdir(output,{recursive:true})
 const results=[],errors=[],diagnostics=[]
 const token=async(identity,publish)=>{const t=new AccessToken('devkey','secret',{identity,ttl:300});t.addGrant({roomJoin:true,room:roomName,canPublish:publish,canSubscribe:true});return t.toJwt()}
 const server=await createServer({configFile:false,envDir:false,server:{host:'127.0.0.1',port:4198,strictPort:true},define:{'import.meta.env.VITE_SUPABASE_URL':'undefined','import.meta.env.VITE_SUPABASE_ANON_KEY':'undefined'}})
-server.middlewares.use('/media-test',(_req,res)=>{res.setHeader('Content-Type','text/html');res.end('<video playsinline autoplay muted style="width:640px;height:360px"></video><audio autoplay></audio>')})
 await server.listen()
 let browser
 const deadline=setTimeout(()=>{console.error('Local SFU media verification timeout');process.exitCode=1;void browser?.close()},120000)
@@ -25,7 +24,7 @@ try {
  // Block every remote destination; this harness must never touch cloud/production services.
  for(const context of [hostContext,viewerContext])await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort())
  const host=await hostContext.newPage(),viewer=await viewerContext.newPage()
- for(const page of [host,viewer]){page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'||m.type()==='warning')diagnostics.push(m.text())});await page.goto('http://127.0.0.1:4198/media-test')}
+ for(const page of [host,viewer]){page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'||m.type()==='warning')diagnostics.push(m.text())});await page.goto('http://127.0.0.1:4198/tests/live-media-local/harness.html');await page.locator('video').waitFor({state:'attached'})}
  await host.evaluate(async({url,token})=>{const m=await import('/src/platform/lib/livekit.ts');window.room=await m.connectAsHost(url,token,'landscape')},{url,token:await token('local-host',true)})
  const join=async()=>viewer.evaluate(async({url,token})=>{const m=await import('/src/platform/lib/livekit.ts');window.room=await m.connectAsViewer(url,token);m.watchRemoteMedia(window.room,t=>m.attachRemoteTrack(t,document.querySelector('video'),document.querySelector('audio')));await window.room.startAudio()},{url,token:await token('local-viewer',false)})
  await join()

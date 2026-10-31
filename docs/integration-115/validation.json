@@ -59,5 +59,30 @@
     "CROWD durable shared authority/public media path",
     "physical iPhone/LINE/YouTube/long-running external 500-viewer acceptance",
     "production migration/main merge/deploy approval"
-  ]
+  ],
+  "resume116": {
+    "from": "9c62a47223a49550366d1044661e0f46ca73eaa7",
+    "coreCommit": "adb13b37f93fccef3639be2de5fc9793ed63ae72",
+    "qualityRun": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41228900233",
+    "typecheck": true,
+    "tests": 725,
+    "testFiles": 125,
+    "build": true,
+    "crowdExcludedFromRelease": true,
+    "webkitRun": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41228900228",
+    "realUiChecks": 5,
+    "crowdNodeTests": 24,
+    "watchdogTests": 18,
+    "stripePermissionPreflight": "new free Sandbox balance transaction read denied 403; no new payment",
+    "liveMedia": "local SFU CI harness corrected; latest run pending",
+    "testServerGrants": {
+      "select": true,
+      "viewerPeakUpdate": true,
+      "performerIdUpdate": false,
+      "openSessions": 0,
+      "openLeases": 0
+    },
+    "productionServerGrants": "read-only check: equivalent select/peak update already present; no production mutation",
+    "physicalIPhone": false
+  }
 }

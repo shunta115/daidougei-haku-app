@@ -9,5 +9,6 @@
   "supabase/test/integration115-rollback.sql": "8f82cdd8f594c165d3996263a713b3f96bdb47005cb7aada2fb5649d2a85be28",
   "supabase/test/integration115-reservation-prerequisite.sql": "c542e461031640fa0ba0254dd781c4775a34884ea61bde8c6ce42087c10393df",
   "supabase/test/integration115-home-ranking-grants.sql": "88f14542cdeb65ef337378328f207ad67b64957a5ca00fb3467a04baf0c0e9eb",
-  "supabase/test/integration115-product-events.sql": "3db3f9e74df207347a3bff43e5d777b39e94e8638ec3f3c0eb6ba99c0e81a721"
+  "supabase/test/integration115-product-events.sql": "3db3f9e74df207347a3bff43e5d777b39e94e8638ec3f3c0eb6ba99c0e81a721",
+  "supabase/migrations/20261101010000_direct_live_server_grants.sql": "acc76048583aa3099e9fab36cfeedabc448fdadae85e1643823a76522b78a4fe"
 }
