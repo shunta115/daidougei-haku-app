@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
-import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, UserX, Users } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Settings2, Share2, Trash2, UserX, Users, Volume2, VolumeX, X } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
@@ -39,6 +39,8 @@ import { useLiveLayout } from '../lib/useLiveLayout'
 import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { useLiveFever } from '../lib/useLiveFever'
+import { useLiveViewportHeight } from '../lib/useLiveViewport'
+import { readLiveDisplayPreference, saveLiveDisplayPreference } from '../lib/liveDisplayPreferences'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 import './live-theater.css'
@@ -49,6 +51,11 @@ type Props = {
   onTip: () => void
   onRequireAuth?: () => void
   allowPublicTest?: boolean
+  mini?: boolean
+  onMinimize?: () => void
+  onRestore?: () => void
+  onClose?: () => void
+  onEnded?: () => void
 }
 
 function formatDuration(sec: number) {
@@ -57,10 +64,11 @@ function formatDuration(sec: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false }: Props) {
+export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, allowPublicTest = false, mini = false, onMinimize, onRestore, onClose, onEnded }: Props) {
   const { user, profile } = useAuth()
   const { t } = useLang()
   const { mode, isOverlayChrome } = useLiveLayout()
+  const viewportHeight = useLiveViewportHeight()
   const [p, setP] = useState<Performer | null>(null)
   const fever = useLiveFever(performerId, p?.live_started_at, Boolean(p?.is_live))
   const reaction = fever.hearts.length > 0
@@ -75,9 +83,13 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [chromeVisible, setChromeVisible] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [audioMuted, setAudioMuted] = useState(false)
+  const [commentsVisible, setCommentsVisible] = useState(() => readLiveDisplayPreference('comments'))
+  const [giftEffects, setGiftEffects] = useState(() => readLiveDisplayPreference('gift-effects'))
   // Keep the full broadcast visible by default on narrow phones. Viewers can
   // still opt into the existing crop-to-fill control when they prefer it.
-  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>('contain')
+  const [objectFit, setObjectFit] = useState<'contain' | 'cover'>(() => readLiveDisplayPreference('cover-viewer', false) ? 'cover' : 'contain')
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem('pl-gift-sound') !== '0')
   const [calmMotion, setCalmMotion] = useState(
     () =>
@@ -94,10 +106,12 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     else void navigator.clipboard?.writeText(url)
   }
   const roomRef = useRef<Room | null>(null)
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
   const fs = useFullscreen(stageRef)
-  const commentScroll = useLiveCommentScroll(comments.length)
+  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id)
 
   useEffect(() => {
     getPerformer(performerId, allowPublicTest)
@@ -109,6 +123,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     return subscribePerformerLive(performerId, (row) => {
       setP((prev) => (prev ? { ...prev, ...row } : prev))
       if (row.is_live === false) {
+        onEndedRef.current?.()
         setLiveSessionId(null)
         setComments([])
         setError(t('liveEndedMsg'))
@@ -245,6 +260,19 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   useEffect(() => {
     localStorage.setItem('pl-gift-calm', calmMotion ? '1' : '0')
   }, [calmMotion])
+  useEffect(() => saveLiveDisplayPreference('comments', commentsVisible), [commentsVisible])
+  useEffect(() => saveLiveDisplayPreference('gift-effects', giftEffects), [giftEffects])
+  useEffect(() => saveLiveDisplayPreference('cover-viewer', objectFit === 'cover'), [objectFit])
+
+  const toggleAudio = () => {
+    const next = !audioMuted
+    setAudioMuted(next)
+    for (const element of [videoRef.current, audioRef.current]) {
+      if (!element) continue
+      element.muted = next
+      if (!next) void element.play().catch(() => setError('音声を再生できませんでした。音声ボタンをもう一度押してください。'))
+    }
+  }
 
   const bumpChrome = () => {
     setChromeVisible(true)
@@ -332,13 +360,15 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
 
   return (
     <div
-      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}`}
+      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}${mini ? ' pl-live--mini' : ''}`}
+      data-mini={mini}
       data-layout={mode}
       style={
         {
           '--viewer-rotation': `${desktopRotation}deg`,
           '--video-aspect': String(ratio),
           '--video-fit': objectFit,
+          '--live-viewport-height': viewportHeight,
         } as CSSProperties
       }
     >
@@ -347,18 +377,29 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         ref={stageRef}
         className={stageClass}
         onClick={() => {
+          if (mini) { onRestore?.(); return }
           if (isOverlayChrome) bumpChrome()
         }}
       >
-        <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay />
-        <audio ref={audioRef} autoPlay />
-        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn} reducedMotion={calmMotion} onGift={fever.addGift} />
+        <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay muted={audioMuted} />
+        <audio ref={audioRef} autoPlay muted={audioMuted} />
+        {mini ? <div className="pl-live__mini-actions">
+          <button type="button" className="pl-live__mini-restore" onClick={(event) => { event.stopPropagation(); onRestore?.() }} aria-label="LIVE画面に戻る">{p?.stage_name || 'LIVE'} · 視聴に戻る</button>
+          <button type="button" className="pl-live__mini-close" onClick={(event) => { event.stopPropagation(); onClose?.() }} aria-label="小窓を閉じる"><X size={18} /></button>
+        </div> : null}
+        <TipGiftOverlay performerId={performerId} soundEnabled={soundOn && !audioMuted && giftEffects} reducedMotion={calmMotion} effectsEnabled={giftEffects} onGift={fever.addGift} />
         <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} />
 
         <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
             <ArrowLeft size={19} />
           </button>
+          {onMinimize ? <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onMinimize} aria-label="小窓で視聴を続ける"><Minimize2 size={19} /></button> : null}
+          <div className="pl-live__identity">
+            {p?.photo_url ? <img src={p.photo_url} alt="" /> : <span aria-hidden="true">{p?.stage_name?.slice(0, 1) || 'H'}</span>}
+            <strong>{p?.stage_name || 'LIVE'}</strong>
+            <button type="button" onClick={() => void toggleFollow()} aria-pressed={following}>{following ? 'フォロー中' : '＋フォロー'}</button>
+          </div>
           <div className="pl-live__hud-actions">
             <div className="pl-live__rotation-controls" role="group" aria-label="映像の向きの補正">
               <button type="button" className="pl-btn pl-live__chip" aria-label="映像を左に90度回転" onClick={() => setViewerRotation((value) => (value + 270) % 360)}>↶</button>
@@ -373,16 +414,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
             <button
               type="button"
               className="pl-btn pl-btn--ghost pl-live__chip"
-              onClick={(e) => {
-                e.stopPropagation()
-                setObjectFit((f) => (f === 'contain' ? 'cover' : 'contain'))
-              }}
-            >
-              <SlidersHorizontal size={18} />
-            </button>
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost pl-live__chip"
+              aria-label={fs.active ? '全画面表示を終了' : 'プレーヤーを全画面表示'}
               onClick={(e) => {
                 e.stopPropagation()
                 void fs.toggle()
@@ -390,20 +422,15 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
             >
               {fs.active ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
+            <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" aria-label="視聴設定" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}><Settings2 size={18} /></button>
           </div>
         </div>
 
-        {!isOverlayChrome ? (
-          <div className="pl-live__titlebar">
-            <strong>{p?.stage_name}</strong>
-            <span>{p?.live_title || p?.genre || ''}</span>
-          </div>
-        ) : null}
-
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
           <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
-          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
+          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live--watch .pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
+          <button type="button" onClick={toggleAudio} aria-label={audioMuted ? '音声をオン' : '音声をオフ'}>{audioMuted ? <VolumeX size={23} /> : <Volume2 size={23} />}<small>{audioMuted ? '音声OFF' : '音声ON'}</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
         </aside>
       </div>
@@ -417,15 +444,17 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </div>
           {p?.is_live ? <em>LIVE</em> : null}
         </div>
-        <div className="pl-live__comments-wrap">
+        <div className="pl-live__comments-wrap" hidden={!commentsVisible}>
           <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
             {comments.map((c) => (
               <div key={c.id} className="pl-live__comment">
-                <span><strong>{c.display_name}</strong> {c.body}</span>
-                {canModerate ? <span className="pl-live__comment-actions">
+                <span className="pl-live__comment-content"><span className="pl-live__comment-avatar" aria-hidden="true">{c.display_name.slice(0, 1)}</span><span><strong>{c.display_name}</strong> {c.body}</span></span>
+                {canModerate ? <div className="pl-live__comment-actions">
+                  <details><summary aria-label={`${c.display_name}のコメント操作`}>•••</summary><span>
                   {c.user_id !== user?.id ? <button type="button" onClick={() => void muteCommenter(c)} aria-label={`${c.display_name}をこのLIVEでミュート`} title="このLIVEでミュート"><UserX size={14} /></button> : null}
                   <button type="button" onClick={() => void removeComment(c.id)} aria-label={`${c.display_name}のコメントを削除`} title="コメントを削除"><Trash2 size={14} /></button>
-                </span> : null}
+                  </span></details>
+                </div> : null}
               </div>
             ))}
           </div>
@@ -476,7 +505,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </button>
         </div>
         <div className="pl-live__prefs">
-          <span>{quality} · {videoOrient === 'landscape' ? '横映像' : videoOrient === 'portrait' ? '縦映像' : '映像'}</span>
+          <span>{quality === 'AUDIO+' ? '音声優先' : '画質は自動調整'} · {videoOrient === 'landscape' ? '横映像' : videoOrient === 'portrait' ? '縦映像' : '映像'}</span>
           <label>
             <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
             ギフト音
@@ -487,6 +516,18 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </label>
         </div>
       </div>
+      {settingsOpen && !mini ? <section className="pl-live__settings-popover pl-live__settings-popover--viewer" role="dialog" aria-label="視聴設定" onKeyDown={(event) => { if (event.key === 'Escape') setSettingsOpen(false) }}>
+        <header><strong>視聴設定</strong><button type="button" aria-label="視聴設定を閉じる" onClick={() => setSettingsOpen(false)}><X size={20} /></button></header>
+        <div className="pl-live__fit-control" role="group" aria-label="映像表示">
+          <button type="button" aria-pressed={objectFit === 'contain'} onClick={() => { setObjectFit('contain'); setSettingsOpen(false) }}>全画角</button>
+          <button type="button" aria-pressed={objectFit === 'cover'} onClick={() => { setObjectFit('cover'); setSettingsOpen(false) }}>全画面</button>
+          <small>全画面は映像の端が切れる場合があります。</small>
+        </div>
+        <label className="pl-live__setting-toggle"><span>コメントを表示</span><input type="checkbox" checked={commentsVisible} onChange={(event) => setCommentsVisible(event.target.checked)} /></label>
+        <label className="pl-live__setting-toggle"><span>ギフト演出</span><input type="checkbox" checked={giftEffects} onChange={(event) => setGiftEffects(event.target.checked)} /></label>
+        <label className="pl-live__setting-toggle"><span>演出を抑える</span><input type="checkbox" checked={calmMotion} onChange={(event) => setCalmMotion(event.target.checked)} /></label>
+        <button type="button" className="pl-btn pl-btn--block" onClick={() => setSettingsOpen(false)}>設定を閉じる</button>
+      </section> : null}
       {error ? (
         <p className="pl-error">
           {error}
