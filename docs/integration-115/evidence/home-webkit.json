@@ -5,6 +5,8 @@
     "quick reservation in initial viewport",
     "activity ordering independent from LIVE",
     "ongoing today tomorrow appearance order",
+    "appearance rail precedes activity and new registrations",
+    "new registration rail uses actual fixture registration dates",
     "real appearance labels",
     "no fabricated appearance for unscheduled performer",
     "reservation synchronized across both entry points",

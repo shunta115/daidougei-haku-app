@@ -1,0 +1,63 @@
+{
+  "dateJST": "2026-11-01",
+  "sourceCodeCommit": "8a324d97c43d46bbb5ea7e2a73e0f757fa680ade",
+  "productionBase": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
+  "releaseDecision": "NO-GO",
+  "fullCI": {
+    "commit": "39480be5ba023c424c1567a3209d25a2971affb4",
+    "qualityRun": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41221071021",
+    "status": "success",
+    "testFiles": 122,
+    "tests": 697,
+    "webkitRun": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41221071052",
+    "srsRun": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41221070988",
+    "latestSourceCI": "pending final push; consult PR #116 for current head results"
+  },
+  "additionalRegression": {
+    "lifecyclePushAuthRanking": 21,
+    "homeIntegration": 6,
+    "expectedFullSuite": 700
+  },
+  "realTEST": {
+    "sqlRoleClaimsRollback": 14,
+    "authJWTPostgrestRealtime": 14,
+    "actualReactWebKitAuthDBRealtime": 5,
+    "officialApiStorageCheckpoints": 10,
+    "officeApiAndRanking": 6,
+    "newAuthFixtures": 4,
+    "temporaryOfficePrivileges": "disabled; profile fan/suspended",
+    "existingCoreDataHash": "unchanged",
+    "openTestLiveFlagsSessionsLeases": 0,
+    "stripePayments": 0
+  },
+  "offlineWebKit": {
+    "live": 14,
+    "home": 28,
+    "map": "passed; see evidence/map-webkit.json",
+    "physicalIPhone": false
+  },
+  "srs500": {
+    "clients": 500,
+    "transport": "localhost real SRS HLS, RTMP input, synthetic HTTP clients",
+    "seconds": 10,
+    "initialRecipients": 500,
+    "errors": 0,
+    "throughputMbps": 594.59,
+    "p95Ms": 582,
+    "externalNetwork": false,
+    "physicalDevices": false,
+    "localNode26Regression": "ECONNRESET after all 500 initial segments; not counted as a pass"
+  },
+  "preview": {
+    "backend": "static offline fixtures; no connected APIs, real media or Stripe",
+    "sourceCommit": "final UI 8a324d9; URL in PR",
+    "target": "preview only"
+  },
+  "remaining": [
+    "real LiveKit media/device lifecycle/watchdog operation",
+    "claimed Stripe Sandbox full fees/webhook/ledger settlement",
+    "CROWD durable shared authority/public media path",
+    "physical iPhone/LINE/YouTube/long-running external 500-viewer acceptance",
+    "production migration/main merge/deploy approval"
+  ]
+}
