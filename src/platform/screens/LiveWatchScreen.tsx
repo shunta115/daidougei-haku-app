@@ -440,15 +440,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
             className="pl-btn pl-btn--tip pl-live__support-cta"
             onClick={() => {
               trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live_bottom_bar' } })
-              if (!user) {
-                window.sessionStorage.setItem('pl-tip-to', performerId)
-                if (onRequireAuth) {
-                  onRequireAuth()
-                  return
-                }
-                spaGo(`${PLATFORM_PATH}?auth=1&tipTo=${encodeURIComponent(performerId)}`)
-                return
-              }
               onTip()
             }}
           >

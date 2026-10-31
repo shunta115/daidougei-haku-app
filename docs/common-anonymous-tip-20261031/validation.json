@@ -1,0 +1,27 @@
+{
+  "base": "1b01ba21f89d6cb62c36cde2f75da4750d98b5e9",
+  "typecheck": "passed",
+  "build": "passed; existing chunk warning",
+  "full_suite": {
+    "files": 87,
+    "tests": 494,
+    "status": "passed"
+  },
+  "additional_api_suite": {
+    "files": 1,
+    "tests": 12,
+    "status": "passed",
+    "note": "Added after full suite started; separately verified"
+  },
+  "webkit": {
+    "checks": 40,
+    "status": "passed",
+    "physical_iphone": false,
+    "stripe": "mock checkout only"
+  },
+  "stripe_test_e2e": "not run; verified isolated credentials/accounts required",
+  "production_mutations": false,
+  "live_payments_transfers_refunds": false,
+  "preview": "not issued; branch automatic deployment disabled pending sandbox verification",
+  "financial_code_changes": false
+}
