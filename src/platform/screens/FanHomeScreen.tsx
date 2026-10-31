@@ -8,16 +8,16 @@ import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
   getFeaturedEvent,
   getTodayOfficialNavigator,
-  listEventLineup,
   listFollowedPerformers,
   listLivePerformers,
   listOshiPerformers,
-  searchPerformers,
   type OfficialNavigator,
 } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
 import { useLang } from '../../i18n/LangProvider'
+import { loadHomeRanking, appearanceLabel } from '../lib/homeRanking'
+import type { HomeRanking } from '../../../shared/homeRanking'
 import type { Performer } from '../lib/types'
 import './fanHome.css'
 
@@ -36,7 +36,8 @@ type FanHomeProps = {
   onOpenTitle?: () => void
 }
 
-function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }: {
+function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll, captions }: {
+  captions?: Record<string, string>
   title: string
   eyebrow: string
   performers: Performer[]
@@ -59,7 +60,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll }
               {performer.photo_url ? <img src={performer.photo_url} alt="" loading="lazy" /> : <span>{performer.stage_name.slice(0, 2)}</span>}
               <span className="pl-cinema-card__shade" aria-hidden="true" />
               {performer.is_live ? <em><Radio size={12} /> LIVE</em> : null}
-              <span className="pl-cinema-card__copy"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><small>{performer.is_live ? t('watchFree') : performer.city || t('eventSeeProfile')}</small></span>
+              <span className="pl-cinema-card__copy"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><small>{captions?.[performer.id] ?? (performer.is_live ? t('watchFree') : performer.city || t('eventSeeProfile'))}</small></span>
             </button>
           </article>
         ))}
@@ -106,6 +107,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const { user } = useAuth()
   const { t } = useLang()
   useTrackView('home_view')
+  const [ranking, setRanking] = useState<HomeRanking>({ ids: [], featured: [], upcoming: [], recent: [] })
   const [live, setLive] = useState<Performer[]>([])
   const [roster, setRoster] = useState<Performer[]>([])
   const [followed, setFollowed] = useState<Performer[]>([])
@@ -116,43 +118,51 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
 
   useEffect(() => {
     let cancelled = false
+    let running = false
     const load = async () => {
-      const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
-      if (cancelled) return
-      if (event) {
-        setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
-        const [lineup, officialNavigator] = await Promise.all([
-          listEventLineup(event.id).catch((): string[] => []),
-          getTodayOfficialNavigator(event.id).catch(() => null),
-        ])
-        if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
-        if (!cancelled) setNavigator(officialNavigator)
-      } else { setRoster(allRows); setNavigator(null) }
-      setLive(liveRows)
-      if (user) {
-        const favorites = await listOshiPerformers(user.id).catch(() => [])
-        const follows = favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])
-        if (!cancelled) setFollowed(follows)
-      } else setFollowed([])
-      setError(null)
+      if (running || document.visibilityState === 'hidden') return
+      running = true
+      try {
+        const [liveRows, home, event] = await Promise.all([listLivePerformers(), loadHomeRanking(), getFeaturedEvent()])
+        const officialNavigator = event ? await getTodayOfficialNavigator(event.id).catch(() => null) : null
+        const favorites = user ? await listOshiPerformers(user.id).catch(() => []) : []
+        const follows = user && !favorites.length ? await listFollowedPerformers(user.id).catch(() => []) : favorites
+        if (cancelled) return
+        const allowed = new Set(home.ranking.ids)
+        setRanking(home.ranking)
+        setRoster(home.performers)
+        setLive(liveRows.filter(p => allowed.has(p.id)))
+        setFollowed(follows.filter(p => allowed.has(p.id)))
+        setNavigator(officialNavigator && allowed.has(officialNavigator.performer.id) ? officialNavigator : null)
+        if (event) setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
+        setError(null)
+      } catch {
+        // Do not retain revoked/private performers after an unsuccessful refresh.
+        if (!cancelled) { setRoster([]); setLive([]); setFollowed([]); setNavigator(null); setError(t('homeLoadError')) }
+      } finally {
+        running = false
+        if (!cancelled) setLoading(false)
+      }
     }
     void load()
-      .catch(() => setError(t('homeLoadError')))
-      .finally(() => { if (!cancelled) setLoading(false) })
-    const timer = window.setInterval(() => void load().catch(() => undefined), 12000)
-    return () => { cancelled = true; window.clearInterval(timer) }
+    const timer = window.setInterval(() => void load(), 60_000)
+    const refresh = () => void load()
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('online', refresh)
+    }
   }, [t, user])
 
-  const hero = live[0] ?? followed[0] ?? roster[0] ?? null
-  const recommendations = useMemo(() => {
-    const seen = new Set<string>()
-    return [...live, ...roster].filter((performer) => {
-      if (seen.has(performer.id)) return false
-      seen.add(performer.id)
-      return true
-    }).slice(0, 10)
-  }, [live, roster])
-  const upcoming = useMemo(() => roster.filter((performer) => !performer.is_live).slice(0, 8), [roster])
+  const byId = useMemo(() => new Map(roster.map(p => [p.id, p])), [roster])
+  const recommendations = useMemo(() => ranking.featured.flatMap(id => byId.get(id) ? [byId.get(id)!] : []), [ranking, byId])
+  const upcoming = useMemo(() => ranking.upcoming.flatMap(p => byId.get(p.performerId) ? [byId.get(p.performerId)!] : []), [ranking, byId])
+  const recent = useMemo(() => ranking.recent.flatMap(id => byId.get(id) ? [byId.get(id)!] : []), [ranking, byId])
+  const captions = Object.fromEntries(ranking.upcoming.map(p => [p.performerId, appearanceLabel(p)]))
+  const hero = live[0] ?? followed[0] ?? recommendations[0] ?? null
 
   return (
     <main className="pl-experience pl-home-v7">
@@ -204,7 +214,9 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
       <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       {navigator ? <OfficialNavigatorCard navigator={navigator} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
       <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
-      <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
+      <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} captions={captions} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
+
+      <PerformerRail title="パフォーマーを探す" eyebrow="DISCOVER" performers={recent} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
 
       {onPerformerLive && onPerformerSchedule && onPerformerDesk ? (
         <section className="pl-performer-desk" aria-label={t('performerDeskTitle')}>

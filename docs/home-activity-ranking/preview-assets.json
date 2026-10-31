@@ -1,0 +1,10 @@
+{
+  "base": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
+  "branch": "codex/home-activity-ranking",
+  "mode": "static isolated sample",
+  "physicalIPhone": false,
+  "assets": {
+    "index-Csyeq3XJ.js": "4797148978c2f4681b7bd47c73550f6acb8bc078c2f6a41d14e6f1e113beb785",
+    "index-dFagVCXf.css": "9d0bb21e73438414762e09ffa63efc0ed0946945f8db2192e1bca87330deabb8"
+  }
+}
