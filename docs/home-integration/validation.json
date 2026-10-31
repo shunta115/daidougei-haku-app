@@ -36,12 +36,28 @@
     "deployment": "dpl_E2rzydPs7MYCGPtkQJ3kDAYBoJEz",
     "target": null,
     "mode": "isolated static fixture",
-    "files": 7
+    "files": 7,
+    "state": "READY",
+    "html_status": 200,
+    "css_js_exact_content_match": true,
+    "csp_verified": true
   },
   "production_database_changes": false,
   "production_deployment": false,
   "main_merge": false,
   "original_pr_overwrite": false,
   "new_paid_services": false,
-  "ci": "pending final source commit"
+  "ci": {
+    "source_commit": "6ed426719a32abb6e4329d753e2c9c7a1f0e31c9",
+    "url": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41186381616",
+    "result": "success",
+    "files": 94,
+    "tests": 523,
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "original_pr_heads_verified": {
+    "105": "b63b0b268e2d845de1fba5ccddca1ecf55d7cc2c",
+    "113": "9904f758b9742afdbc3435c44e1a42723faad491"
+  }
 }

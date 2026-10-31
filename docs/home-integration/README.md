@@ -57,3 +57,11 @@ Preview（READY / target=null / Vercel認証保護あり）:
 https://daidougei-haku-3bco5un22-daidougei-s-projects.vercel.app/
 
 ローカル全体実行は93ファイル522テスト成功。後追加のローカル予約DB試験1件も成功。最終全件はDraft PRのGitHub CIで再確認する。新DB試験はPGlite初期化が負荷下で10秒／30秒を超えたため、当該fixtureの初期化だけ60秒に設定（検証本体のassertionや既存テストのtimeoutは変更なし）。UI試験の並行実行時timeoutも記録し、最終CIで判断する。
+
+## 最終結果
+
+[Draft PR #114](https://github.com/shunta115/daidougei-haku-app/pull/114)。統合コード `6ed426719a32abb6e4329d753e2c9c7a1f0e31c9` の [GitHub CI #319](https://github.com/shunta115/daidougei-haku-app/actions/runs/41186381616) で、TypeScript・全94ファイル523テスト・buildがすべて成功。追加のPGlite予約SQL試験も全体実行に含む。
+
+PreviewはHTML/CSS/JSがHTTP 200、CSS/JS本文がローカルの最終成果物と完全一致。CSPも配置先で確認。WebKit 26項目、接続済みTESTのDBロール8項目、10テーブル保全を確認済み。物理iPhone・実JWTログインからの結合受入の未確認事項は上記のまま。
+
+#105・#113のheadは採用元SHAのままで、上書き／mergeされていないことを再取得して確認。本追補は検証証跡だけで、CI検証済みのアプリコードは変更しない。
