@@ -33,7 +33,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "stripe": "^22.3.2",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

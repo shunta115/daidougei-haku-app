@@ -105,3 +105,4 @@ export const switchHostCamera = async () => { facing = facing === 'user' ? 'envi
 export const restartHostCameraForOrientation = async () => true
 export const setHostMicrophoneEnabled = async (_room: unknown, enabled: boolean) => enabled
 export const setHostCameraEnabled = async (_room: unknown, enabled: boolean) => enabled
+export const reserveLive = async () => 'qa-session'

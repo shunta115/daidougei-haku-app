@@ -55,7 +55,7 @@ Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_even
 4. #112 `20261031092522_revoke_public_tip_truncate.sql`。台帳内容・DML/RLS維持の照合。
 5. #103 `20261030213928_performer_official_home.sql`。新private schema等の衝突時は停止。Storage/officeの専用準備・retention運用後にHOME_ENABLEDを有効化。
 6. 任意LIVE Push `20261030105928_live_start_web_push_queue.sql`。feature flagsはOFFを維持し、実同意/送信/停止検証を別判定。
-7. TESTだけに不足する予約/計測基礎schemaは、既存 `20261020121845_live_reservations_and_viewer_analytics.sql` 等の定義を個別照合。本番適用済み相当を再適用しない。
+7. TESTだけに不足する予約/計測基礎schemaは、既存 `20261018092439_live_reservations_and_viewer_analytics.sql` 等の定義を個別照合。本番適用済み相当を再適用しない。
 
 ## HARIBOW画質と500人
 

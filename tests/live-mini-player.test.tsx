@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { JSDOM } from 'jsdom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LiveWatchScreen } from '../src/platform/screens/LiveWatchScreen'
 
@@ -15,6 +16,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../src/platform/lib/api', () => ({
   getPerformer: state.getPerformer,
+  postLiveComment: vi.fn().mockResolvedValue(undefined),
   subscribePerformerLive: (_id: string, callback: (row: { is_live: boolean }) => void) => {
     state.onPerformer = callback
     return () => { state.onPerformer = null }
@@ -60,12 +62,15 @@ const props = { performerId: 'performer-1', onBack: vi.fn(), onTip: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  const storage = new JSDOM('', { url: 'http://localhost' }).window
+  vi.stubGlobal('localStorage', storage.localStorage)
+  vi.stubGlobal('sessionStorage', storage.sessionStorage)
   localStorage.clear()
   state.user = null
   state.comments = []
   state.onPerformer = null
   state.getPerformer.mockResolvedValue({ id: 'performer-1', stage_name: 'TEST LIVE', is_live: true, live_started_at: null })
-  state.connect.mockResolvedValue({ disconnect: state.disconnect, on: vi.fn(), localParticipant: { connectionQuality: 1 } })
+  state.connect.mockResolvedValue({ disconnect: state.disconnect, on: vi.fn(), canPlaybackAudio: true, startAudio: vi.fn().mockResolvedValue(undefined), localParticipant: { connectionQuality: 1 } })
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 

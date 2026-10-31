@@ -311,6 +311,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       stage.style.setProperty('--theater-video-height', `${stage.clientHeight}px`)
     }
     measure()
+    if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(stage)
     return () => observer.disconnect()

@@ -23,6 +23,7 @@ vi.mock('../src/platform/screens/MerchScreens', () => ({
   PerformerMerchScreen: () => null,
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
+vi.mock('../src/platform/screens/ConnectedLiveWatchScreen', () => ({ ConnectedLiveWatchScreen: () => <p>live-watch</p> }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath, spaGo } from '../src/app/routes'

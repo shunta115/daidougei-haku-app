@@ -30,22 +30,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Install isolated browser tools
-        run: |
-          npm install --prefix "$RUNNER_TEMP/haku-browser-tools" --no-save --package-lock=false playwright@1.56.1
-          node "$RUNNER_TEMP/haku-browser-tools/node_modules/playwright/cli.js" install --with-deps webkit
-      - name: Test actual LIVE components with localhost-only fixtures
+      - name: Install locked WebKit
+        run: npx playwright install --with-deps webkit
+      - name: Test integrated LIVE components with localhost-only fixtures
         env:
-          HAKU_PLAYWRIGHT_PACKAGE: ${{ runner.temp }}/haku-browser-tools/node_modules/playwright/index.mjs
-          HAKU_QA_OUTPUT: ${{ runner.temp }}/haku-ui-layout
-          HAKU_QA_BROWSER: webkit
+          HAKU_LIVE_QA_OUTPUT: ${{ runner.temp }}/haku-ui-layout
         run: |
-          node node_modules/vite/bin/vite.js --config tests/browser/vite.live.config.mjs > "$RUNNER_TEMP/haku-ui-vite.log" 2>&1 &
+          node node_modules/vite/bin/vite.js --config tests/live-repair-e2e/vite.config.ts > "$RUNNER_TEMP/haku-ui-vite.log" 2>&1 &
           for attempt in $(seq 1 30); do
-            if curl --silent --fail http://127.0.0.1:4179/experiments/live-ui/browser-harness.html > /dev/null; then break; fi
+            if curl --silent --fail http://127.0.0.1:4187/tests/live-repair-e2e/harness.html > /dev/null; then break; fi
             sleep 1
           done
-          node tests/browser/live-layout.mjs
+          node tests/live-repair-e2e/run.mjs
       - name: Save synthetic UI screenshots and results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
