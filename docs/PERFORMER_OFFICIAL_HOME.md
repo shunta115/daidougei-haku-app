@@ -1,5 +1,7 @@
 # Performer official homepage — development and release gate
 
+Revision: see [PR103_PRIVACY_AND_TEST_PLAN.md](PR103_PRIVACY_AND_TEST_PLAN.md) for corrected restricted-role locks, office grants, account deletion/Storage cleanup, retention/holds and TEST provisioning. This revision supersedes earlier assumptions about parent UPDATE permissions and office setup. Remote persistence is still NOT authorized.
+
 Base: GitHub main `398d05b9c51ed84ed0b1a3bb1c7beae62a52f616`, tree `da4b18d980dbe1690b2f1aff57d1c331588fc9c7`. The independent local snapshot was compared against the downloaded main archive and its Git tree verified. The original user's checkout, including its uncommitted work, is untouched.
 
 ## Audit and compatibility

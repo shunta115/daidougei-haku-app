@@ -13,9 +13,10 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-comments.test.ts tests/live-comment-moderation-migration.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts",
     "test:registration": "vitest run",
-    "test:official-home": "vitest run tests/official-home-db.test.ts tests/official-home-api.test.ts tests/official-home-ui.test.tsx tests/official-home-validation.test.ts",
+    "test:official-home": "vitest run tests/official-home-db.test.ts tests/official-home-api.test.ts tests/official-home-ui.test.tsx tests/official-home-validation.test.ts tests/home-test-office-preparation.test.ts",
     "test:official-home:host": "node scripts/test-official-home-host.mjs",
-    "test:official-home:browser": "node scripts/test-official-home-browser.mjs"
+    "test:official-home:browser": "node scripts/test-official-home-browser.mjs",
+    "test:official-home:concurrency": "python3 scripts/test-home-concurrency.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",

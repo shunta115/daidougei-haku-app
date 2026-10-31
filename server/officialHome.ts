@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream } from 'pdf-lib'
 import { getAdminSupabase, requireAuthUser } from '../api/stripe/_shared.js'
-import { requireAdmin } from '../api/ops/_guard.js'
+import { drainHomeStorage } from './homeMaintenance.js'
+import { requireAdmin, requireSuperAdmin } from '../api/ops/_guard.js'
 import { cleanDetails, validateBooking, CASE_STATUSES } from '../shared/officialHome.js'
 
 const BUCKET = 'performer-home-private'
@@ -105,14 +106,34 @@ export async function officialHome(req: VercelRequest, res: VercelResponse) {
       if (req.method !== 'GET' || action !== 'read') return res.status(405).end()
       return res.json({ home, assets })
     }
-    if (action === 'cases') {
+    if (['cases','case-privacy','retention','cleanup'].includes(action)) {
       const admin = await requireAdmin(req,res)
       if (!admin) return
       if (req.method !== 'POST') return res.status(405).end()
+      if (action === 'case-privacy') {
+        if (!requireSuperAdmin(admin,res)) return
+        if (!uuid(body.id) || !['hold','release_hold','erase'].includes(String(body.privacy_action))) return res.status(400).end()
+        if (body.privacy_action === 'hold' && !['statutory_record','dispute'].includes(String(body.basis))) return res.status(400).end()
+        if (body.confirm !== true) return res.status(400).json({error:'操作内容を確認してください。'})
+        const {error} = await sb.rpc('home_case_privacy',{p_id:body.id,p_actor:admin.id,p_action:body.privacy_action,p_basis:body.basis || null})
+        if(error) throw error
+        return res.json({ok:true})
+      }
+      if (action === 'retention') {
+        if (body.execute === true && !requireSuperAdmin(admin,res)) return
+        const {data,error} = await sb.rpc('home_retention',{p_actor:admin.id,p_execute:body.execute === true,p_limit:100})
+        if(error) throw error
+        return res.json(data)
+      }
+      if (action === 'cleanup') {
+        if (!requireSuperAdmin(admin,res)) return
+        if(body.confirm !== true) return res.status(400).end()
+        return res.json(await drainHomeStorage(sb))
+      }
       if (body.id && (!uuid(body.id) || !Object.hasOwn(CASE_STATUSES,String(body.status)))) return res.status(400).end()
-      const { data, error } = await sb.rpc('home_manage_cases',{ p_id:body.id || null,p_status:body.status || null,p_query:String(body.query || '').slice(0,120),p_filter: Object.hasOwn(CASE_STATUSES,String(body.filter)) ? body.filter : '' })
+      const { data, error } = await sb.rpc('home_manage_cases',{ p_id:body.id || null,p_status:body.status || null,p_query:String(body.query || '').slice(0,120),p_filter: Object.hasOwn(CASE_STATUSES,String(body.filter)) ? body.filter : '',p_actor:admin.id })
       if (error) throw error
-      return res.json({ cases:data })
+      return res.json({ cases:data,canManagePrivacy:admin.adminPermission==='super_admin' })
     }
     const user = await requireAuthUser(req,res)
     if (!user) return
@@ -179,9 +200,9 @@ export async function officialHome(req: VercelRequest, res: VercelResponse) {
       }
       const { data,error } = await sb.rpc('home_add_asset',{ p_row:row })
       if (error) { if(paths.length) await sb.storage.from(BUCKET).remove(paths); throw error }
-      const replaced = (data.replaced_paths || []).filter((path:unknown) => typeof path === 'string' && path.startsWith(`${user.id}/`))
-      if(replaced.length) await sb.storage.from(BUCKET).remove(replaced)
+      // Replacement/delete triggers queue retired objects transactionally.
       delete data.replaced_paths
+      await drainHomeStorage(sb,user.id).catch(()=>undefined)
       return res.status(201).json({ asset:data })
     }
     if (action === 'reorder') {
@@ -194,10 +215,9 @@ export async function officialHome(req: VercelRequest, res: VercelResponse) {
     const { data: asset } = await sb.from('performer_home_assets').select('*').eq('id',body.id).eq('performer_id',user.id).maybeSingle()
     if (!asset) return res.status(404).end()
     if (action === 'delete') {
-      const paths = [asset.object_path,asset.thumbnail_path].filter(Boolean) as string[]
-      if (paths.length) { const { error } = await sb.storage.from(BUCKET).remove(paths); if(error) throw error }
       const { error } = await sb.from('performer_home_assets').delete().eq('id',asset.id).eq('performer_id',user.id)
       if(error) throw error
+      await drainHomeStorage(sb,user.id).catch(()=>undefined)
       return res.json({ ok:true })
     }
     if (action === 'asset') {
@@ -211,7 +231,6 @@ export async function officialHome(req: VercelRequest, res: VercelResponse) {
       if (body.is_main === true) {
         const { error } = await sb.rpc('home_set_main',{p_performer:user.id,p_id:asset.id})
         if(error) throw error
-        patch.is_main = true
       }
       const { error } = await sb.from('performer_home_assets').update(patch).eq('id',asset.id).eq('performer_id',user.id)
       if(error) throw error

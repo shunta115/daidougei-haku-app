@@ -87,7 +87,7 @@ export function BookingForm({ performerId, name, onClose }: { performerId:string
         <label>希望パフォーマー<input value={name} readOnly/></label>
         {Object.entries(REQUEST_FIELDS).map(([key,label])=><label key={key}>{label}{key!=='notes'?' *':''}{key==='event'||key==='notes'?<textarea required={key!=='notes'} maxLength={4000} value={values[key]||''} onChange={e=>setValues(v=>({...v,[key]:e.target.value}))}/>:<input required maxLength={250} type={key==='email'?'email':key==='phone'?'tel':key==='date'?'date':'text'} autoComplete={key==='email'?'email':key==='phone'?'tel':key==='contact'?'name':key==='organization'?'organization':'off'} value={values[key]||''} onChange={e=>setValues(v=>({...v,[key]:e.target.value}))}/>}</label>)}
         <label className="oh-honeypot" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={values.website||''} onChange={e=>setValues(v=>({...v,website:e.target.value}))}/></label>
-        <p>入力情報は出演依頼への対応のために事務局で取り扱います。公開ページには掲載されません。</p>
+        <p>入力情報は出演依頼への対応のために事務局で取り扱い、公開しません。通常の問い合わせは受付から180日を目安に消去します。見積もり・成約等で保存義務や紛争対応の必要がある情報は、事務局の確認と保全の対象になります。</p>
         {error?<p role="alert" className="oh-error">{error}</p>:null}<button className="oh-button" disabled={busy}><Mail size={18}/>{busy?'送信中…':'HAKU事務局へ送信'}</button>
       </form>
     </>}

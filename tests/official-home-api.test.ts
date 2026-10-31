@@ -5,14 +5,14 @@ import { readFileSync } from 'node:fs'
 vi.mock('node:fs/promises', async()=>{const {readFileSync}=await import('node:fs');return {readFile:async()=>readFileSync('index.html','utf8')}})
 vi.mock('../api/stripe/_shared.js',async()=>import('./fixtures/official-home/backend'))
 import { officialHome } from '../server/officialHome'
-import { db,ready,OWNER,OTHER,ADMIN,objects } from './fixtures/official-home/backend'
+import { db,ready,OWNER,OTHER,ADMIN,SUPER,objects,storageState } from './fixtures/official-home/backend'
 async function call(action:string,{method='POST',user='',body={},query={}}:{method?:string;user?:string;body?:Record<string,unknown>;query?:Record<string,unknown>}={}){
  const result={status:200,body:undefined as any,headers:{} as Record<string,string>}
  const req={method,query:{resource:'official-home',homeAction:action,...query},body,headers:{host:'localhost','content-type':'application/json',...(user?{authorization:'Bearer '+user}:{})}}
  const res:any={status:(n:number)=>{result.status=n;return res},json:(data:unknown)=>{result.body=data;return res},send:(data:unknown)=>{result.body=data;return res},end:()=>res,setHeader:(key:string,value:string)=>{result.headers[key]=value;return res}}
  await officialHome(req as any,res);return result
 }
-beforeAll(async()=>{vi.stubEnv('HOME_ENABLED','true');vi.stubEnv('HOME_TEST_IP','127.0.0.1');vi.stubEnv('BOOKING_RATE_LIMIT_SECRET','local-only-test-secret-with-32-characters');vi.stubEnv('VERCEL','');vi.stubEnv('VERCEL_ENV','test');await ready},30000)
+beforeAll(async()=>{vi.stubEnv('HOME_ENABLED','true');vi.stubEnv('HOME_TEST_IP','127.0.0.1');vi.stubEnv('BOOKING_RATE_LIMIT_SECRET','local-only-test-secret-with-32-characters');vi.stubEnv('VERCEL','');vi.stubEnv('VERCEL_ENV','test');await ready},60000)
 afterAll(async()=>{vi.unstubAllEnvs();await db.close()})
 it('defaults disabled and rejects mismatched ownership and anonymous mutations',async()=>{
  vi.stubEnv('HOME_ENABLED','false');expect((await call('edit',{method:'GET',user:OWNER})).status).toBe(503);vi.stubEnv('HOME_ENABLED','true')
@@ -60,10 +60,36 @@ it('booking reaches only office; office case API rejects performers and anonymou
  expect((await call('booking',{body:{performer_id:OWNER,payload,started_at:Date.now()-5000,website:'bot'}})).status).toBe(400)
  const result=await call('booking',{body:{performer_id:OWNER,payload,started_at:Date.now()-5000,website:''}})
  expect(result.status).toBe(201);expect(result.body.id).toBeTruthy()
- expect((await db.query('select user_id from notifications')).rows).toEqual([{user_id:ADMIN}])
+ expect((await db.query('select user_id from notifications')).rows).toEqual([{user_id:ADMIN},{user_id:SUPER}])
  expect((await call('cases')).status).toBe(401);expect((await call('cases',{user:OWNER})).status).toBe(403)
  const cases=await call('cases',{user:ADMIN});expect(cases.status).toBe(200);expect(cases.body.cases[0].payload.email).toBe(payload.email)
  expect((await call('cases',{user:ADMIN,body:{id:result.body.id,status:'reviewing'}})).body.cases[0].status).toBe('reviewing')
+})
+it('enforces existing member disable/allowlist boundaries without exposing membership details',async()=>{
+ await db.exec(`update admin_members set status='disabled' where user_id='${ADMIN}'`)
+ expect((await call('cases',{user:ADMIN})).status).toBe(403)
+ vi.stubEnv('HAKU_ADMIN_IDENTIFIERS',ADMIN)
+ expect((await call('cases',{user:ADMIN})).status).toBe(200)
+ vi.stubEnv('HAKU_ADMIN_IDENTIFIERS','')
+ await db.exec(`update admin_members set status='active' where user_id='${ADMIN}'`)
+ expect((await call('cases',{user:ADMIN})).body.canManagePrivacy).toBe(false)
+ expect((await call('cases',{user:SUPER})).body.canManagePrivacy).toBe(true)
+ expect((await call('cases',{user:OWNER,body:{adminPermission:'super_admin'}})).status).toBe(403)
+})
+it('restricts privacy writes to super_admin and refuses erasure during legal hold',async()=>{
+ const caseId=(await call('cases',{user:ADMIN})).body.cases[0].id
+ expect((await call('case-privacy',{user:ADMIN,body:{id:caseId,privacy_action:'erase',confirm:true}})).status).toBe(403)
+ expect((await call('retention',{user:ADMIN,body:{execute:true}})).status).toBe(403)
+ expect((await call('cleanup',{user:ADMIN,body:{confirm:true}})).status).toBe(403)
+ expect((await call('case-privacy',{user:SUPER,body:{id:caseId,privacy_action:'hold',basis:'statutory_record',confirm:true}})).status).toBe(200)
+ expect((await call('case-privacy',{user:SUPER,body:{id:caseId,privacy_action:'erase',confirm:true}})).status).toBe(400)
+ expect((await call('retention',{user:ADMIN,body:{execute:false}})).status).toBe(200)
+ expect((await call('case-privacy',{user:SUPER,body:{id:caseId,privacy_action:'release_hold',confirm:true}})).status).toBe(200)
+ expect((await call('case-privacy',{user:SUPER,body:{id:caseId,privacy_action:'erase',confirm:true}})).status).toBe(200)
+ const row=(await call('cases',{user:ADMIN})).body.cases[0]
+ expect(row.payload).toEqual({});expect(row.performer_id).toBeNull();expect(row.anonymized_at).toBeTruthy()
+ expect((await call('cases',{user:ADMIN,body:{id:caseId,status:'booked'}})).status).toBe(400)
+ expect(JSON.stringify((await db.query('select * from haku_home_private.case_audit')).rows)).not.toContain('test@example.invalid')
 })
 it('server HTML contains escaped SEO metadata, canonical and structured data',async()=>{
  vi.stubEnv('PUBLIC_SITE_URL','https://example.invalid')
@@ -76,7 +102,17 @@ it('preview rejects any DB host except the designated TEST project',async()=>{
  expect((await call('read',{method:'GET',query:{performerId:OWNER}})).status).toBe(503)
  vi.stubEnv('VERCEL_ENV','test')
 })
-it('owner deletion removes stored bytes and metadata without affecting others',async()=>{
+it('deletion immediately revokes access, survives Storage outage and drains retries only as super_admin',async()=>{
+ storageState.failRemovals=true
+ const previousBytes=objects.size
  expect((await call('delete',{user:OWNER,body:{id:pdfId}})).status).toBe(200)
  expect((await call('file',{method:'GET',query:{performerId:OWNER,assetId:pdfId}})).status).toBe(404)
+ expect(objects.size).toBe(previousBytes)
+ storageState.failRemovals=false
+ await db.exec(`update haku_home_private.storage_cleanup set lease_until=now()-interval '1 second' where processed_at is null`)
+ const cleanup=await call('cleanup',{user:SUPER,body:{confirm:true}})
+ expect(cleanup.status).toBe(200);expect(cleanup.body.processed).toBe(1);expect(objects.size).toBe(previousBytes-1)
+ expect((await db.query('select object_path,performer_id from haku_home_private.storage_cleanup where processed_at is not null')).rows).toEqual([{object_path:null,performer_id:null}])
+ const pdf=await PDFDocument.create();pdf.addPage()
+ expect((await call('upload',{user:OWNER,body:{upload_id:pdfId,kind:'pdf',title:'forbidden reuse',base64:Buffer.from(await pdf.save()).toString('base64')}})).status).toBe(400)
 })
