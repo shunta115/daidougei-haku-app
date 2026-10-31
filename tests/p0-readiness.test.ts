@@ -79,7 +79,7 @@ describe('P0 migration safety', () => {
   it('shows the complete LIVE frame by default on narrow phones', () => {
     const viewer = read('src/platform/screens/LiveWatchScreen.tsx')
     expect(viewer).toMatch(/useState<'contain' \| 'cover'>\('contain'\)/)
-    expect(viewer).toMatch(/setObjectFit\(\(f\) => \(f === 'contain' \? 'cover' : 'contain'\)\)/)
+    expect(viewer).toContain("setObjectFit(event.target.checked ? 'cover' : 'contain')")
   })
 
   it('keeps guest tips server-priced and preserves Direct Charges', () => {
