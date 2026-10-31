@@ -1,5 +1,7 @@
 # PR #90–#95 統合・公開判定
 
+最新: main e2a7078 / PR #102公開後の再統合は [MAIN_REFRESH_20261031.md](MAIN_REFRESH_20261031.md) と [main-refresh-validation.json](main-refresh-validation.json) を参照。以下は旧検証時の記録。
+
 対象: shunta115/daidougei-haku-app。基点 main `398d05b9c51ed84ed0b1a3bb1c7beae62a52f616`。
 統合ブランチ: `codex/release-integration-90-95`。本番DB変更・mainマージ・本番デプロイは未実施。
 

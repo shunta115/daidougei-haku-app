@@ -1,0 +1,219 @@
+{
+  "date": "2026-10-31",
+  "base_main": "e2a7078365000ddc6132d44c3982343647a214bf",
+  "previous_head": "6c5eaddab203571ddb60c5c124a682999360994c",
+  "databases": {
+    "aeqskxxykzapgaudbeqa": {
+      "mode": "READ ONLY audit",
+      "counts": {
+        "auth": 8,
+        "profiles": 8,
+        "performers": 5,
+        "appearances": 1,
+        "live_sessions": 6
+      },
+      "rls": {
+        "notifications": true,
+        "performer_appearances": true,
+        "notification_preferences": true,
+        "appearance_notification_events": true
+      },
+      "notification_insert": {
+        "anon": false,
+        "service_role": true,
+        "authenticated": false
+      },
+      "coordinates": [
+        {
+          "data_type": "double precision",
+          "table_name": "performer_appearances",
+          "column_name": "venue_lat",
+          "is_nullable": "YES"
+        },
+        {
+          "data_type": "double precision",
+          "table_name": "performer_appearances",
+          "column_name": "venue_lng",
+          "is_nullable": "YES"
+        }
+      ],
+      "day_of_rpc_present": true,
+      "migration_history": [
+        {
+          "version": "20261014065602",
+          "name": "performer_appearances_and_notifications_20261014",
+          "statement_count": 1,
+          "sql_md5": "bd407e9a70968fcd46c85e3d7023384a"
+        },
+        {
+          "version": "20261029085105",
+          "name": "add_appearance_map_coordinates",
+          "statement_count": 1,
+          "sql_md5": "35d7b4e7f675784f77fdf47e80be90cc"
+        },
+        {
+          "version": "20261029090008",
+          "name": "add_day_of_appearance_reminders",
+          "statement_count": 1,
+          "sql_md5": "18f782a00c064188da29bfa941c10ac1"
+        },
+        {
+          "version": "20261030182434",
+          "name": "harden_notification_client_inserts",
+          "statement_count": 1,
+          "sql_md5": "b7de157f0b24f7b8448c079923554ac2"
+        }
+      ]
+    },
+    "pmmtijwswzwhuriqhlep": {
+      "mode": "READ ONLY audit",
+      "counts": {
+        "auth": 67,
+        "profiles": 67,
+        "performers": 24,
+        "appearances": 8,
+        "live_sessions": 78
+      },
+      "rls": {
+        "notifications": true,
+        "performer_appearances": true,
+        "notification_preferences": true,
+        "appearance_notification_events": true
+      },
+      "notification_insert": {
+        "anon": true,
+        "service_role": true,
+        "authenticated": true
+      },
+      "coordinates": [],
+      "day_of_rpc_present": false,
+      "migration_history": [
+        {
+          "version": "20261014065602",
+          "name": "performer_appearances_and_notifications_20261014",
+          "statement_count": 1,
+          "sql_md5": "4a01d7d68f08e355199589686e6e11d9"
+        }
+      ]
+    }
+  },
+  "test_role_regression": {
+    "passed": true,
+    "rollback": true,
+    "existing_data_preserved": true,
+    "before": {
+      "auth": "b27aac8a75541b5c6197b270ffe7d86c",
+      "profiles": "efbe955430e3b2ced028353a76ad4bcc",
+      "performers": "7feb87984e18e160afc937ef90fc88a2",
+      "appearances": "4a87213588f8dfaf80734e695e93a4e9",
+      "live_sessions": "4d4e802292ec3474d1051d5dec8f6b36",
+      "notifications": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "after": {
+      "auth": "b27aac8a75541b5c6197b270ffe7d86c",
+      "profiles": "efbe955430e3b2ced028353a76ad4bcc",
+      "performers": "7feb87984e18e160afc937ef90fc88a2",
+      "appearances": "4a87213588f8dfaf80734e695e93a4e9",
+      "live_sessions": "4d4e802292ec3474d1051d5dec8f6b36",
+      "notifications": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "scope": [
+      "direct notification INSERT denied for own/other recipient",
+      "caller-only idempotent reminders",
+      "private RLS",
+      "JST",
+      "time edit/postpone/cancel",
+      "existing internal LIVE writer"
+    ]
+  },
+  "preview_environment": {
+    "test_ref": "aeqskxxykzapgaudbeqa",
+    "server_url_matches": true,
+    "service_role_value_equals_public_anon": true,
+    "stripe_disabled": true,
+    "livekit_disabled": true,
+    "transfers_disabled": true,
+    "reservations_disabled": true,
+    "maps_branch_key_present": false
+  },
+  "limitations": {
+    "normal_authenticated_browser_e2e": "pending existing TEST login credentials/session; no tokens extracted or auth changes",
+    "real_google_maps": "Preview Maps key absent; no production key copying or new Maps API calls",
+    "physical_iphone": "not performed",
+    "backup_restore": "not newly verified; previous physical restore unavailable at zero additional fee",
+    "day_of_notifications": "in-app creation when Notifications screen opens/polls; not scheduled background Push"
+  },
+  "typecheck": "passed",
+  "vitest": {
+    "files": 83,
+    "passed": 476,
+    "failed": 0
+  },
+  "production_build": "passed; existing chunk-size warning",
+  "production_db_changed": false,
+  "main_merged": false,
+  "production_deployed": false,
+  "existing_data_deleted": false,
+  "real_payments": false,
+  "new_paid_services": false,
+  "safari_integration": {
+    "checks": [
+      "mobile registration saves",
+      "registered appearance appears in public schedule",
+      "LINE contains public profile and appearance IDs",
+      "X has an encoded appearance landing link",
+      "native share receives public appearance URL",
+      "clipboard receives public appearance URL",
+      "scheduled and LIVE markers coexist",
+      "GPS granted shows nearby distance",
+      "bounded time window is marked as scheduled performance time",
+      "open MAP polls changed appearance time without remounting",
+      "focus refresh removes an ended LIVE marker",
+      "online refresh restores the current LIVE marker",
+      "visible page resume removes a cancelled appearance without remounting",
+      "republished appearance returns on focus refresh",
+      "time change reaches schedule",
+      "shared appearance resolves to the public profile detail",
+      "QR image is generated by WebKit canvas",
+      "QR PNG downloads",
+      "QR print opens a printable card",
+      "QR dialog close remains reachable after saving and printing",
+      "cancelled appearance remains labelled in schedule",
+      "cancelled appearance is removed from MAP while LIVE remains",
+      "duplicate plus multiple dates reaches the schedule",
+      "private appearance is removed from the public schedule",
+      "postponed appearance remains labelled",
+      "private and postponed appearances are excluded from MAP",
+      "GPS denied offers region search without login",
+      "no browser runtime errors"
+    ],
+    "errors": [],
+    "passed": true,
+    "boundary": "Real React screens + offline API/Maps adapters; not a connected TEST DB E2E or physical iPhone test."
+  },
+  "safari_qr_share": {
+    "passed": true,
+    "checks": [
+      "main schedule renders the published appearance",
+      "LINE public URL identifies the performer and appearance",
+      "X receives the public URL and appearance text",
+      "native share payload uses the public URL",
+      "copy receives the public URL and confirms success",
+      "native share cancellation has no failure banner",
+      "Safari clipboard-denial fallback is invoked",
+      "anonymous shared URL resolves to the existing appearance detail",
+      "QR canvas renders in WebKit",
+      "QR card downloads as a 720x900 PNG",
+      "print card contains only the public name and QR image",
+      "print uses A4 layout",
+      "manual print button remains usable",
+      "QR print image remains square on a phone viewport",
+      "print controls are hidden in print media",
+      "blocked popup gives a visible error and allows retry",
+      "QR dialog closes by touch without forcing a click",
+      "no browser runtime errors"
+    ],
+    "errors": [],
+    "boundary": "Real QR/profile/schedule React components; offline read-only API fixtures; native share/clipboard/print capture adapters; physical iPhone OS actions remain manual."
+  }
+}

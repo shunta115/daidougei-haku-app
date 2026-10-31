@@ -500,10 +500,10 @@ body:has(.hp-page) { overflow-x: hidden; }
   inset: 0;
   z-index: 80;
   display: grid;
-  align-content: center;
+  align-content: start;
   justify-items: center;
   gap: 18px;
-  padding: 20px 18px calc(28px + env(safe-area-inset-bottom));
+  padding: calc(68px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom));
   overflow: auto;
   background: #050812;
 }
@@ -524,6 +524,7 @@ body:has(.hp-page) { overflow-x: hidden; }
   width: min(100%, 340px);
 }
 .hp-qr__top {
+  z-index: 2;
   position: absolute;
   top: calc(12px + env(safe-area-inset-top));
   left: 16px;

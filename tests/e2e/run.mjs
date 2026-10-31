@@ -61,6 +61,40 @@ try {
   await page.locator('.pl-google-marker--appearance').click()
   check('bounded time window is marked as scheduled performance time', await visible(page.getByText(/出演予定時刻/)))
   await page.screenshot({ path: `${output}/iphone-map.png`, fullPage: true })
+  const appearanceId = new URL(landing).searchParams.get('schedule')
+  await page.evaluate(async id => {
+    const api = await import('/tests/e2e/fixture-api.ts')
+    await api.updatePerformerAppearance(id, { start_time: '10:05' })
+  }, appearanceId)
+  await page.clock.runFor(20_000)
+  check('open MAP polls changed appearance time without remounting', await visible(page.getByText(/10:05/)))
+  await page.evaluate(async () => {
+    const api = await import('/tests/e2e/fixture-api.ts')
+    api.performer.is_live = false
+    window.dispatchEvent(new Event('focus'))
+  })
+  await page.locator('.pl-google-marker--live').waitFor({ state: 'detached' })
+  check('focus refresh removes an ended LIVE marker', true)
+  await page.evaluate(async () => {
+    const api = await import('/tests/e2e/fixture-api.ts')
+    api.performer.is_live = true
+    window.dispatchEvent(new Event('online'))
+  })
+  check('online refresh restores the current LIVE marker', await visible(page.locator('.pl-google-marker--live')))
+  await page.evaluate(async id => {
+    const api = await import('/tests/e2e/fixture-api.ts')
+    await api.updatePerformerAppearance(id, { status: 'cancelled' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }, appearanceId)
+  await page.locator('.pl-google-marker--appearance').waitFor({ state: 'detached' })
+  check('visible page resume removes a cancelled appearance without remounting', await visible(page.locator('.pl-google-marker--live')))
+  await page.evaluate(async id => {
+    const api = await import('/tests/e2e/fixture-api.ts')
+    await api.updatePerformerAppearance(id, { status: 'published' })
+    window.dispatchEvent(new Event('focus'))
+  }, appearanceId)
+  check('republished appearance returns on focus refresh', await visible(page.locator('.pl-google-marker--appearance')))
+
   await page.getByRole('button', { name: 'editor', exact: true }).click()
   await page.getByRole('button', { name: '編集', exact: true }).click()
   await page.getByLabel('開始時間', { exact: true }).fill('10:15')
@@ -80,12 +114,13 @@ try {
   await download.saveAs(`${output}/performer-qr.png`)
   check('QR PNG downloads', download.suggestedFilename().endsWith('.png'))
   const popupPromise = page.waitForEvent('popup')
-  await page.getByRole('button', { name: 'Print', exact: true }).click()
+  await page.getByRole('button', { name: '印刷', exact: true }).click()
   const popup = await popupPromise
   await popup.waitForFunction(() => window.__printed === true)
   check('QR print opens a printable card', true)
   await popup.close()
   await page.locator('.hp-qr__top button').click()
+  check('QR dialog close remains reachable after saving and printing', !(await page.getByRole('dialog').isVisible()))
   await page.getByRole('button', { name: 'editor', exact: true }).click()
   await page.getByRole('button', { name: '編集', exact: true }).click()
   await page.getByRole('button', { name: '中止', exact: true }).click()
