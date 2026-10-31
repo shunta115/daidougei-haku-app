@@ -6,7 +6,7 @@ export const supabaseAuthHeaders = async () => new URLSearchParams(location.sear
 export const trackProductEvent = () => {}
 export const useTrackView = () => {}
 export const getActiveLiveSessionId = async () => 'session-fixture'
-export const listLiveComments = async () => Array.from({ length: 8 }, (_, i) => ({ id: String(i), display_name: 'Fan', body: `Hello LIVE ${i}` }))
+export const listLiveComments = async () => Array.from({ length: 80 }, (_, i) => ({ id: String(i), display_name: 'Fan', body: `Hello LIVE ${i}` }))
 export const listRecentLiveTipEvents = async () => []
 let following = false
 export const isFollowing = async () => following

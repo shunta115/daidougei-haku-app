@@ -6,7 +6,7 @@ const output = process.env.HAKU_E2E_OUTPUT || '/private/tmp/haku-theater-evidenc
 await mkdir(output, { recursive: true })
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--config', 'tests/live-theater-e2e/vite.config.ts'], { stdio: 'pipe' })
 let logs = ''; server.stdout.on('data', x => logs += x); server.stderr.on('data', x => logs += x)
-const base = 'http://127.0.0.1:4187/tests/live-theater-e2e/harness.html'
+const base = `http://127.0.0.1:${process.env.HAKU_THEATER_PORT || 4187}/tests/live-theater-e2e/harness.html`
 const checks = [], errors = []
 const progress = (value) => { checks.push(value); console.log(value) }
 const timeout = setTimeout(() => { server.kill(); process.exit(1) }, 240000)
@@ -52,6 +52,15 @@ try {
     await page.locator('.pl-live__support-cta').click(); await page.locator('.pl-tip-presets').waitFor()
     progress(`${engine}: comment/follow/share adapters, like click, support opens amount screen (no payment)`)
     await page.goto(base + '?signedIn=1'); await page.locator('.pl-live__panel').waitFor()
+    const commentOverflow = await page.locator('.pl-live__comments').evaluate(el => el.scrollHeight > el.clientHeight)
+    assert.equal(commentOverflow, true, 'long comments scroll inside the bounded rail')
+    await page.locator('.pl-live__hud-actions > button').last().click()
+    await page.waitForTimeout(200)
+    const nativeMode = await page.evaluate(() => Boolean(document.fullscreenElement || document.webkitFullscreenElement))
+    const nativeBox = await page.locator('.pl-live__stage').boundingBox()
+    assert.ok(nativeBox.width >= 1438 && nativeBox.height >= 998)
+    progress(`${engine}: fullscreen API attempt (${nativeMode ? 'native' : 'fallback'}), bounded comment scrolling`)
+    await page.locator('.pl-live__hud-actions > button').last().click()
     // Force unsupported native API to cover the actual CSS fullscreen fallback.
     await page.locator('.pl-live__stage').evaluate(el => { el.requestFullscreen = async () => { throw new Error('fixture unsupported') }; el.webkitRequestFullscreen = undefined })
     await page.locator('.pl-live__hud-actions > button').last().click()
@@ -68,7 +77,7 @@ try {
     assert.ok(rail.x>=player.x+player.width)
     assert.equal(await page.locator('iframe').getAttribute('allowfullscreen'),'')
     progress(`${engine}: YouTube official iframe and right support rail (external playback blocked)`)
-    await context.close()
+    await context.close(); console.log('desktop context closed')
     if(engine==='webkit') {
       const phone=await browser.newContext({...devices['iPhone 13']})
       await phone.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort())
@@ -78,7 +87,7 @@ try {
       await mobile.screenshot({path:`${output}/webkit-iphone.png`}); await phone.close()
       progress('WebKit iPhone emulation: existing portrait UI and composer; desktop controls hidden')
     }
-    await browser.close(); browser=null
+    await browser.close(); browser=null; console.log('browser closed')
   }
   assert.deepEqual(errors,[])
 } catch(e) { console.error(e); process.exitCode=1 }
