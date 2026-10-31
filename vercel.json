@@ -1,4 +1,5 @@
 {
+  "git": { "deploymentEnabled": { "codex/common-anonymous-tip-audit": false } },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],
