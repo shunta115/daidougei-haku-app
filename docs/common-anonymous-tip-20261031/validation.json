@@ -1,27 +1,44 @@
 {
-  "base": "1b01ba21f89d6cb62c36cde2f75da4750d98b5e9",
+  "updated_jst": "2026-11-01",
+  "base": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
   "typecheck": "passed",
   "build": "passed; existing chunk warning",
   "full_suite": {
-    "files": 87,
-    "tests": 494,
+    "files": 91,
+    "tests": 516,
     "status": "passed"
   },
-  "additional_api_suite": {
-    "files": 1,
-    "tests": 12,
-    "status": "passed",
-    "note": "Added after full suite started; separately verified"
+  "final_permission_suite": {
+    "tests": 4,
+    "status": "see CI / truncate-final result"
   },
-  "webkit": {
-    "checks": 40,
-    "status": "passed",
-    "physical_iphone": false,
-    "stripe": "mock checkout only"
+  "real_checkout_matrix": {
+    "checks": 32,
+    "passed": true,
+    "paid": false
   },
-  "stripe_test_e2e": "not run; verified isolated credentials/accounts required",
-  "production_mutations": false,
+  "sandbox_card_payment": {
+    "succeeded": 1,
+    "signed_webhook_finalized_tip": true,
+    "correct_recipient": true,
+    "settlement_complete": false,
+    "webhook_processed": false,
+    "blocker": "unclaimed sandbox key cannot read Stripe actual fee"
+  },
+  "physical_iphone": false,
+  "test_truncate_applied": true,
+  "preexisting_test_ledger_digest": "924761675c17c86d80b482256d6dd28f",
+  "production_db_changed": false,
   "live_payments_transfers_refunds": false,
-  "preview": "not issued; branch automatic deployment disabled pending sandbox verification",
-  "financial_code_changes": false
+  "preview": {
+    "url": "https://daidougei-haku-94jzg3rp8-daidougei-s-projects.vercel.app",
+    "id": "dpl_HPkcongVCLLaPN895mxFYvpAUbLz",
+    "state": "READY",
+    "target": null,
+    "scope": "static offline QA; mock checkout; no API/secret",
+    "html_http_status": 200
+  },
+  "preview_secret_configuration": "automatic review rejected; explicit authorization pending; not bypassed",
+  "production_sql_sha256": "a462c71d8c969a302ea7fe24c430d049173b34976a0b38494b1427f10ddb442d",
+  "production_candidate": false
 }

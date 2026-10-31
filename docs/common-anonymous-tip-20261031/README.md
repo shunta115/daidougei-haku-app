@@ -1,68 +1,78 @@
-# 全パフォーマー共通・匿名投げ銭監査（2026-10-31）
+# 全員共通の匿名投げ銭修復 / PR #112
 
-状態: 修正候補。決済E2Eと実機確認未完了。公開不可。
-基点: main 1b01ba21f89d6cb62c36cde2f75da4750d98b5e9。
-既存Desktop作業フォルダは変更せず、独立コピーで実装。
+更新: 2026-11-01 JST。**公開不可・Draft継続**。完全なStripe精算E2Eと実機受入は未完了。
+PR: https://github.com/shunta115/daidougei-haku-app/pull/112
+最新main 4403bd7を統合済み。元Desktopの未コミット変更と他PRは変更していない。
 
-## 1. HARIBOW修正の特定
+## 完了した修正
 
-[Draft PR #107](https://github.com/shunta115/daidougei-haku-app/pull/107)、head 2b278c92dcef841cebc1c0dc4938715f97be8978、base 850424a5e3efdb17d7a9506a840288d4aeeb9955。監査時点でopen/draft/未マージ。
-変更対象は共通LiveWatchScreenとlive.css。HARIBOWの名前・IDの分岐はなく、専用修正ではない。一方、未マージのためmainに修正が存在しない。
-#100は配信ライフサイクル、#109/#111はMAP/出演予定で、匿名Checkout修正ではない。
-今回、#107のタップ透過・匿名導線修正を最新基点へ独立して取り込み、連打と非同期出演者切替を追加修正した。#107自体は変更していない。
+- 関連Draft #107（head 2b278c9）はHARIBOW専用ではなく共通画面の修正。監査時点で未マージであり、mainには欠陥が残っていた。
+- LIVE縦画面の透明なコメントpanelが右側の応援ボタンを覆う。旧CSSのhit testで遮断、新CSSで到達を確認し、透明paddingのみタップ透過。
+- 下部応援ボタンの匿名ログイン強制を撤去し、右側・プロフィールと同じTipScreen経路へ統一。コメント等の既存認証は維持。
+- Checkout送信前の同期ロック、送信中の金額変更停止、再試行で同じrequestIdを維持。
+- 出演者切替時の古いプロフィール応答を破棄し、表示プロフィールIDと支援先IDの一致を必須にした。
+- 実アプリ初回起動でService Worker更新→再読込すると、消費済みwatch/tipToが失われHOMEへ戻る共通欠陥を追加再現。宛先snapshotの保存・復元を追加。登録・イベント・既存グッズ導線の回帰も成功。
 
-## 2. 原因と証拠の限界
+特定出演者の名前/IDを実装で判定しない。Checkout API、台帳、手数料、精算、Transfer、返金の実装には差分なし。
 
-再現できた共通欠陥:
-- phone-portraitのstageは独立stacking contextで、その兄弟コメントpanelが上にある。透明なpaddingが応援ボタンを覆う。elementFromPointで旧CSSの遮断と新CSSの到達を確認。
-- 下部応援ボタンだけ未ログイン時に認証へ分岐。右側ボタンと同じonTip経路へ統一。
-- TipScreenはReact stateだけでbusyを管理し、同じイベントターンの連打に同期ロックがない。refで送信を一つにし、送信中の金額変更を止めた。
-- getPerformerの古い応答が別出演者へ切替後に反映され得た。cancelledフラグとID一致による受付判定を追加。
+## 障害原因の証拠範囲
 
-ポールの当該端末操作がどの欠陥に当たったかは未確定。障害時のVercelリクエストを取得できず、上記の再現だけで当該失敗を断定しない。
+本番READ ONLYではPAULとHARIBOWが承認済み/active、Connect紐付け/onboarding=trueで、実anon SELECTも成功。現在値であり障害時のStripe capabilitiesは証明しない。
+共通UI欠陥は再現済みだが、ポールの当該リクエストと対応するVercelログはHobby保存期間制限で取得不可。個別障害をログで最終断定していない。
+当日Supabaseのpath/status/role集計ではtipsの401が1件あったが、当該ファン/出演者との対応はないため原因としない。空roleをanonと断定しない。
 
-## 3. 本番READ ONLY監査
+## 実環境の分離と決済検証
 
-本番Supabaseの公開出演者は23名。PAUL(ポール)・HARIBOWは両方approved=true、profiles.status=active、Connect紐付けあり、onboarding_complete=true。現在値であり、障害時のStripe capabilitiesは証明しない。口座ID、顧客情報、金額明細、認証トークンは保存していない。
-実anonロールのREAD ONLYトランザクションで、両者の公開performers SELECTを確認。performers/profiles/live_sessions/tipsはRLS有効。匿名クライアントのtips INSERTは不要で、Vercel APIがservice-roleでpendingを作成する。Checkout生成にSupabase RPC/Edge Functionは介在しない。
+TEST DB: **aeqskxxykzapgaudbeqa / haku-merch-validation / ACTIVE_HEALTHY**。
+TESTのanon/service_role JWTのproject refを検証。Productionキーは取得/複製しない。
+Stripe接続ツールはliveアカウントのみだったため、そのツールから決済を実行していない。CLIの専用設定に無料一時Sandboxを作成し、liveキーなし、テストキー形式、実Checkoutのlivemode=falseを確認してからテストカードを使用。
+CLIの署名Webhookを127.0.0.1の検証サーバーへ転送。サーバーは本物のtip/webhook/confirm handlerと本物のアプリを使用し、実TEST Auth/DBへ接続。LiveKit等のメディアAPIは503で無効化。TESTの合成出演者はConnect未紐付けで、Transfer/Payout/返金は一切呼ばない。
+4出演者は「PR112 QA HARIBOW / PAUL / Other-A / Other-B」というTEST専用の合成ユーザー。実本番出演者のID/口座をTESTへ複製していない。
 
-JST 10/31（UTC 10/30 15:00–10/31 15:00）のSupabaseログをpath/status/role別に集計。performers/live_sessionsの多くは200。tipsに401が1件あったが、リクエスト識別子/出演者との対応は得られておらず、本件原因とは扱わない。空roleをanonと断定しない。
-Vercel当日ログはHobby保存期間制限で400。最近のログや他日のログを代替証拠としない。
+### 成功した範囲
 
-### 台帳権限に残る別の公開阻害事項
+- **32/32**: 4出演者 × 匿名/ログイン済み × LIVE/プロフィール × iPhone縦/横。実アプリで金額100円選択→実Sandbox Checkout表示、TEST台帳の支援先・payer・金額、Stripe Sessionの支援先・金額・livemode=falseを照合。
+- 実APIで10チェック: 同一requestIdは同じCheckout、同じIDで金額/出演者変更は409、不正最小額/小数/未知ID/偽造payerを拒否、台帳とStripe金額一致、偽造Webhook署名を拒否。
+- 1件の実テストカード決済成功。真正Stripe署名が検証され、TEST tips.status=succeeded、fan_id=null、正しいHARIBOW合成出演者、100円を確認。
+- 既存TEST台帳3件の内容digestは前後 **924761675c17c86d80b482256d6dd28f** で一致。テストデータ削除なし。試験終了後、自分で作成した合成出演者のis_liveだけをfalseに戻した。
 
-has_table_privilegeでanon/authenticated双方のpublic.tips TRUNCATE=trueを確認。RLSによる通常行の保護とは別の権限であり、露出RPC等を経由した悪用可能性の追加監査と、承認済みの権限是正が必要。実際にTRUNCATEを試していない。通常Data APIから直ちに実行可能と断定しない。本PRで本番権限や台帳を書き換えていない。台帳の安全性を無条件に保証できないため公開判定はNO-GO。
+### 未完了・公開禁止
 
-## 4. 共通決済経路と維持した仕様
+未claimのSandboxキー(rkcs_test形式)では、精算に必要なStripe実手数料の読取が403。署名Webhookは台帳を成功にした後、既存精算処理で失敗し、対象3イベントはfailed。settlement_statusは未確定、送金債務は0件。
+**Webhook全体のprocessed・実手数料/分配確定を成功扱いにしない。** 32ケースのうちカード提出まで進めたのは上記1件のみ。完全な32ケースの支払/精算E2Eは未完了。
+所有者がSandboxをclaimし、必要な読取権限を持つTESTキーでログインするか、既存TEST認証の保管先指定が必要。精算を省略したり推定値で埋める修正は行っていない。
+物理iPhone Safari、実LIVE映像/音声は未実施。WebKitのiPhoneエミュレーションと区別。
 
-公開プロフィール/LIVE → performerId指定のTipScreen → /api/stripe/tip → Stripe Checkout → 署名検証Webhook → tips確定 → read-only confirm。
-ゲストはAuthorizationなしでgetOptionalAuthUser=null、fan_id=null。ログイン済みはgetUserで照合し、fanId不一致を拒否。無効tokenだけの場合は従来guest扱いだが、UIのfanId付きなら403となる。認証降格で台帳所有権を変更する修正は行っていない。
-サーバーは対象performerの承認・profiles.active、整数JPY/最小額/上限100000円を確認し、fee rateはサーバー定数。requestId再利用時はpayer/performer/amount一致を検証し、Stripeの同じ冪等キーを利用。Webhookは台帳のperformer/payer/amount/sessionを照合する。
+### 一時キーの取扱い
 
-mainはPlatform separate charge方式。Connect未完了でも承認済みactive出演者への支援は受け付け、後続の送金は既存Connect適格性判定でholdする。投げ銭受付と銀行受取は異なる。未完了を理由に一律Checkout拒否へ変更すると既存金融方針を変えるため実施しない。台帳/15%手数料計算/精算/Webhook/Transfer/返金処理へのコード差分なし。
-受付不可の既存ローカライズ案内を維持。プロフィール取得失敗にも案内を表示。実Stripe残高/口座所有者の照合は未完了。
+初回Sandbox作成CLI出力のマスキングが新形式rkcs_testキーを取りこぼした。秘密値はソース/PR/静的Previewに保存していない。専用ローカルファイルはmode 600。本番キーではないが、Sandbox claim時にこの一時キーを無効化/ローテートし、完全E2Eは新しいTEST認証で行う。claim URLやキーをこの文書に記載しない。
 
-## 5. 検証
+## tips TRUNCATE権限是正
 
-WebKitはHARIBOW/PAUL/Other A/Other Bという4種類の隔離fixtureと異なる合成UUIDを使用。実本番出演者の決済ではない。
-- iPhone13相当の縦横・匿名/ログイン済み: 旧CSS遮断再現、実タップ、実TipScreen、正しいID/金額/認証header/requestId、模擬Checkout。
-- 同期連打、同じIDによる再試行、遅延した旧出演者応答: UI回帰テスト6件成功。
-- 既存tip approval/confirmation/payment safety/routing: 83件成功。
-- TypeScript成功。build成功（既存chunkサイズ警告）。最初の依存コピーにはleafletが不足して失敗したが、現main対応の既存依存を利用して成功。
-- 最終ブラウザ結果はwebkit-result.json参照。
-- 全体回帰の最終結果はvalidation.json参照。
+対象migration: supabase/migrations/20261031092522_revoke_public_tip_truncate.sql。
+PUBLIC/anon/authenticatedから**public.tipsのTRUNCATEだけ**をREVOKEし、継承権限が残れば例外で停止。service_roleのSELECT/INSERT/UPDATEを各々検査。RLS/policy/trigger/RPC/既存DML権限/台帳行は変更しない。default privilegesや他テーブルへ変更を広げない。
+TESTでrollback試験後に適用、最終版を再適用して冪等性も確認。anon/authenticatedのTRUNCATE=false、service_role DMLは全てtrue。既存3件の内容hashとpolicy hash(b2d6028be91f4c859e777cdaa56b94db)一致。TRUNCATE自体は実行していない。
+TESTの適用は直接SQLで行い、migration履歴のrepair/backfillはしていない。
 
-未実施: 物理iPhone Safari、Stripeテストカード/実Checkout、署名WebhookからTEST DB確定と出演者帰属までの往復。既存server/stripeTestE2e.tsはTransfer/返金/Payoutを実行するため、本指示の禁止事項に従い使用しない。
+本番用の正確な実行単位はproduction-proposed.sql（BEGIN/COMMITを含む）。**本番未適用。** SHA256はvalidation.json参照。対象本番refはpmmtijwswzwhuriqhlepで、実行前に対象・SHA・台帳digest・権限を再確認。5秒lock/30秒statement timeout。異常時はトランザクションを中止し、行の削除/修正やTRUNCATE再付与で復旧しない。既存アプリへ戻してもこの安全な権限除去は保持する。
 
-## 6. Draft / Previewと承認ゲート
+## 自動検証とPreview
 
-独立Draft PRで審査する。Stripe Sandbox専用設定の場所を確認中。Vercel Preview secretのモードが読取では判別できなかったため、このブランチだけgit.deploymentEnabled=falseで自動配置を抑止。Preview URLは未発行。secretや環境設定は変更していない。自動配置抑止設定は最終統合時にレビューし、未確認環境への配置を有効化しないこと。
+- TypeScript、本番相当build成功。既存chunkサイズ警告。
+- 全体: 91ファイル516件成功。最終権限ガードの独立テストは4件（全体実行後に1ケース追加）。最終CIの結果はPRのcheckを参照。
+- 旧fixture WebKit40チェック成功に加え、上記の本物のTEST DB/Sandbox接続32ケースを成功。
+- 静的QA Preview: https://daidougei-haku-94jzg3rp8-daidougei-s-projects.vercel.app
+  Vercel READY / target=null。配置先HTML HTTP200、CSPでconnect-src/frame-src/media-srcを拒否。API/Functions/cron/環境ファイル/秘密キーを含まない、合成データと模擬Checkoutのみ。実決済E2EのPreviewとは扱わない。
+- branch専用の自動デプロイ抑止は維持。TEST service-role/Stripe秘密キーのVercel Preview保存は自動承認レビューに拒否され、明示承認待ち。別経路で迂回していない。Production設定/保護設定の変更なし。
 
-公開前に必要:
-1. 既存TEST DB・Stripe Sandbox・テストファン/4出演者の設定先を確認。キーをチャット/PRに掲載しない。
-2. Transfer/返金/Payoutを行わないテスト経路で、開始→実Checkout→署名Webhook→TEST台帳/出演者一致、キャンセル・連打・改ざん拒否を実証。
-3. 実機iPhone Safariと複数出演者の匿名/ログイン済み両方の受入。
-4. tips TRUNCATE等の残存権限監査・是正SQLの個別承認（本番DB変更は別承認）。
-5. 最終コードレビュー、mainマージの個別承認、本番デプロイの個別承認。Git連携の場合はマージ前に両方を確認。
+## 再開・本番公開の承認単位
 
-本番実決済、送金、返金、DB変更、mainマージ、本番デプロイは実施していない。全員共通の実決済E2Eが揃うまで完成としない。
+まずSandbox claim後の必要な権限を持つTEST認証を用意し、今回出力に含まれた一時キーをローテートする。接続先とlivemode=falseを再確認して、32ケース全ての支払→署名Webhook processed→実手数料/分配/出演者帰属と再送冪等性を完了する。TESTの既存3台帳に変更がないことも再確認。
+機密キーを使うPreviewを作る場合は、**このPRブランチのPreviewだけ**へTEST Supabase service_roleと専用Stripe TESTキーをサーバー専用Secretとして保存する明示承認が必要（質問提示済み）。本番へ設定をコピーしない。
+
+全ゲート通過後にのみ、次をそれぞれ個別承認として提示:
+1. 正確なproduction-proposed.sqlの本番適用。
+2. PR #112の最新SHA・CI・競合を再確認してmainマージ。
+3. Vercel Productionデプロイ。Git連携でマージが自動公開を起こす場合は、マージ前に2と3の承認を揃える。
+
+公開後の受入は匿名のLIVE/プロフィール→金額画面と既存処理の読み取り確認。実本番決済・送金・返金は行わない。現時点で本番公開候補と称さない。

@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "checks": [
+    "same request reuses one Checkout",
+    "amount mutation rejected",
+    "recipient mutation rejected",
+    "below minimum rejected",
+    "fraction rejected",
+    "forged payer rejected",
+    "unknown recipient rejected",
+    "stored and Stripe amount match",
+    "Stripe livemode=false",
+    "forged webhook signature rejected"
+  ],
+  "paid": false
+}
