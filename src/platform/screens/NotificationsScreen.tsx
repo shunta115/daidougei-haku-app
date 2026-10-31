@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { disableAppearancePush, disableLiveStartPush, enableAppearancePush, enableLiveStartPush, getLivePushPreference, getNotificationPreference, listNotifications, liveStartWebPushEnabled, markNotificationRead } from '../lib/api'
+import { supabaseAuthHeaders } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import type { NotificationRow } from '../lib/types'
 import { AppBackButton } from '../components/AppBackButton'
@@ -40,6 +41,22 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
   const [livePushAvailable, setLivePushAvailable] = useState(false)
   const [livePushOn, setLivePushOn] = useState(false)
   const [livePushBusy, setLivePushBusy] = useState(false)
+
+  const [testResult, setTestResult] = useState('')
+  const [testBusy, setTestBusy] = useState(false)
+  const sendSelfTest = async () => {
+    if (testBusy || testResult) return
+    setTestBusy(true)
+    try {
+      const response = await fetch('/api/notifications/self-test', {
+        method: 'POST', headers: { ...await supabaseAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'send_one_self_test' }),
+      })
+      const result = await response.json()
+      setTestResult(response.ok ? '送信を受け付けました。iPhoneの通知をご確認ください。' : `送信停止: ${result.error || response.status}（再送しないでください）`)
+    } catch { setTestResult('結果を確認できません。再送せず管理者に確認してください。') }
+    finally { setTestBusy(false) }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -120,6 +137,7 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
     <>
       {onBack ? <AppBackButton onClick={onBack} label="戻る" /> : null}
       <h1 className="pl-h1">Notifications</h1>
+      {user && new URLSearchParams(window.location.search).get('pushSelfTest') === '1' ? <section className="pl-registration__section"><h2 className="pl-h2">本人端末の通知テスト</h2><button type="button" className="pl-btn" disabled={testBusy || Boolean(testResult)} onClick={() => void sendSelfTest()}>HAKUプッシュ通知テストを1件送信</button><p role="status">{testResult}</p></section> : null}
       {user ? <section className="pl-registration__section pl-notification-settings"><h2 className="pl-h2">{lang === 'en' ? 'Performance alerts' : lang === 'zh-TW' ? '演出通知' : '出演予定の通知'}</h2><p className="pl-muted">{lang === 'en' ? 'In-app alerts are available without Push. On iPhone, add HAKU to the Home Screen before enabling Push.' : lang === 'zh-TW' ? '即使未開啟Push，也可在HAKU內查看通知。iPhone請先將HAKU加入主畫面。' : 'Pushを許可しなくてもHAKU内通知は確認できます。iPhoneでは先にSafariからホーム画面へ追加してください。'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={pushBusy || livePushBusy} aria-pressed={pushOn} onClick={() => void togglePush()}>{pushOn ? (lang === 'en' ? 'Disable Push' : lang === 'zh-TW' ? '關閉Push通知' : 'Push通知をオフ') : (lang === 'en' ? 'Enable Push' : lang === 'zh-TW' ? '開啟Push通知' : 'Push通知をオン')}</button></section> : null}
       {user && liveStartWebPushEnabled ? <section className="pl-registration__section pl-notification-settings">
         <h2 className="pl-h2">{lang === 'en' ? 'LIVE start alerts' : lang === 'zh-TW' ? '直播開始通知' : 'LIVE開始の通知'}</h2>

@@ -17,6 +17,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/notifications/self-test", "destination": "/api/notifications/push?mode=self-test" },
     {
       "source": "/api/home-ranking",
       "destination": "/api/ops/run?job=home-ranking"
