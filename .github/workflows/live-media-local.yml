@@ -1,0 +1,55 @@
+name: HAKU real local SFU media
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/platform/lib/live*.ts'
+      - 'tests/live-media-local/**'
+      - '.github/workflows/live-media-local.yml'
+      - 'package-lock.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: live-media-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  local-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Start free loopback SFU (no cloud or Egress)
+        run: |
+          docker run --detach --name haku-local-sfu --network host livekit/livekit-server:v1.13.11 --dev --bind 127.0.0.1 --node-ip 127.0.0.1 --config-body '{"rtc":{"stun_servers":["127.0.0.1:19302"]}}'
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:7880 > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs haku-local-sfu
+          exit 1
+      - name: Real RTP using HAKU host and viewer helpers
+        env:
+          HAKU_MEDIA_OUTPUT: ${{ runner.temp }}/haku-local-media
+        run: node tests/live-media-local/run.mjs
+      - name: Save SFU logs
+        if: always()
+        run: docker logs haku-local-sfu > "$RUNNER_TEMP/haku-local-sfu.log" 2>&1 || true
+      - name: Save actual transport evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: haku-local-media
+          path: |
+            ${{ runner.temp }}/haku-local-media
+            ${{ runner.temp }}/haku-local-sfu.log
+          retention-days: 7
+      - name: Stop local SFU
+        if: always()
+        run: docker rm --force haku-local-sfu || true

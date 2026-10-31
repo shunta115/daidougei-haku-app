@@ -8,12 +8,20 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/guard-production-source.mjs && vite build",
+    "build": "node scripts/guard-production-source.mjs && vite build && node scripts/verify-standard-release.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-comments.test.ts tests/live-comment-moderation-migration.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts",
+    "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-comments.test.ts tests/live-comment-moderation-migration.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts tests/direct-live-lifecycle.test.ts tests/direct-live-token.test.ts tests/direct-live-presence.test.ts tests/direct-live-jwt.test.ts tests/youtube-player-recovery.test.tsx tests/youtube-live-simple-ui.test.tsx",
     "test:registration": "vitest run",
-    "test:safari": "node tests/e2e/run.mjs && node tests/qr-share-e2e/run.mjs"
+    "test:safari": "node tests/e2e/run.mjs && node tests/qr-share-e2e/run.mjs",
+    "typecheck:live-server": "tsc -p tsconfig.live-server.json --noEmit",
+    "test:youtube": "vitest run tests/youtube-live-companion.test.ts tests/youtube-live-migration.test.ts tests/youtube-live-database.test.ts tests/youtube-live-publish.test.ts tests/youtube-live-simple-ui.test.tsx",
+    "test:youtube:safari": "node tests/youtube-live-e2e/run.mjs",
+    "test:official-home": "vitest run tests/official-home-db.test.ts tests/official-home-api.test.ts tests/official-home-ui.test.tsx tests/official-home-validation.test.ts tests/home-test-office-preparation.test.ts",
+    "test:official-home:host": "node scripts/test-official-home-host.mjs",
+    "test:official-home:browser": "node scripts/test-official-home-browser.mjs",
+    "test:official-home:concurrency": "python3 scripts/test-home-concurrency.py",
+    "build:crowd-lab": "vite build --mode crowd-lab --outDir dist-crowd-lab"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
@@ -26,7 +34,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "stripe": "^22.3.2",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

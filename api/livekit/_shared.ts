@@ -19,6 +19,11 @@ export function getLiveKitConfig() {
   return { url, apiKey, apiSecret }
 }
 
+export function sessionRoomName(performerId: string, sessionId: string) {
+  const prefix = process.env.VERCEL_ENV === 'preview' ? 'preview-live' : 'live'
+  return `${prefix}-${performerId}-${sessionId}`
+}
+
 export function roomNameForPerformer(performerId: string) {
   return `performer-${performerId}`
 }
@@ -33,7 +38,7 @@ export async function createLiveKitToken(opts: {
   const at = new AccessToken(apiKey, apiSecret, {
     identity: opts.identity,
     name: opts.name,
-    ttl: '6h',
+    ttl: '5m',
   })
   at.addGrant({
     roomJoin: true,

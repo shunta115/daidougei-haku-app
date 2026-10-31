@@ -1,3 +1,4 @@
+import { BookingCases } from './BookingCases'
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../platform/lib/auth'
 import { AuthScreen } from '../platform/screens/AuthScreen'
@@ -6,6 +7,7 @@ import { MERCH_SYSTEM_FEE_PERCENT, TIP_SYSTEM_FEE_PERCENT } from '../../shared/f
 import { hakuAdmin } from './api'
 
 type Tab =
+  | 'bookings'
   | 'home'
   | 'applications'
   | 'users'
@@ -24,7 +26,7 @@ function confirmDanger(message: string) {
 
 export function HakuAdminApp() {
   const { ready, profile, passwordRecovery, signOut } = useAuth()
-  const [tab, setTab] = useState<Tab>('home')
+  const [tab, setTab] = useState<Tab>(new URLSearchParams(window.location.search).get('section') === 'bookings' ? 'bookings' : 'home')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dash, setDash] = useState<Record<string, unknown> | null>(null)
@@ -222,6 +224,7 @@ export function HakuAdminApp() {
   })
 
   const tabs: Array<{ id: Tab; label: string }> = useMemo(() => [
+    { id: 'bookings', label: '出演依頼' },
     { id: 'home', label: '状況' },
     { id: 'applications', label: '申請' },
     { id: 'users', label: '利用者' },
@@ -266,6 +269,7 @@ export function HakuAdminApp() {
       {error ? <p className="pl-error">{error}</p> : null}
       {busy ? <p role="status">更新しています…</p> : null}
 
+      {tab === 'bookings' ? <BookingCases /> : null}
       {tab === 'home' && dash ? (
         <section className="ha-grid">
           <article><em>利用者</em><strong>{String(dash.users ?? '—')}</strong></article>

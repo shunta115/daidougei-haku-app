@@ -1,12 +1,39 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "codex/haku-115-unified-integration": false,
+      "codex/haribow-live-stage2-20261031": false,
+      "codex/common-anonymous-tip-audit": false,
+      "codex/home-105-113-integration": false,
+      "codex/home-activity-20261031": false,
+      "codex/home-activity-ranking": false,
+      "codex/live-repair-20261031": false
+    }
+  },
   "crons": [
-    { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
+    {
+      "path": "/api/ops/run?job=stripe-transfer-retry",
+      "schedule": "0 0 * * *"
+    }
   ],
   "rewrites": [
     { "source": "/api/notifications/self-test", "destination": "/api/notifications/push?mode=self-test" },
-    { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
-    { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },
-    { "source": "/api/awp-results", "destination": "/api/ops/run?job=awp-results" },
+    {
+      "source": "/api/home-ranking",
+      "destination": "/api/ops/run?job=home-ranking"
+    },
+    {
+      "source": "/api/profile/display-name",
+      "destination": "/api/stripe/tip?action=display-name"
+    },
+    {
+      "source": "/api/votes/device",
+      "destination": "/api/ops/run?job=votes-device"
+    },
+    {
+      "source": "/api/awp-results",
+      "destination": "/api/ops/run?job=awp-results"
+    },
     {
       "source": "/official",
       "destination": "/official-v6.html"
@@ -42,5 +69,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/ops/inbox.ts": {
+      "includeFiles": "dist/index.html"
+    }
+  }
 }

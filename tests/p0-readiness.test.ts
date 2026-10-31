@@ -69,7 +69,9 @@ describe('P0 migration safety', () => {
     expect(sql).toMatch(/add column if not exists ended_reason text/i)
     expect(sql).not.toMatch(/delete\s+from|truncate|drop\s+table/i)
     expect(presence).toMatch(/STALE_SECONDS = 90/)
-    expect(presence).toMatch(/heartbeat_timeout/)
+    // Timeout authority lives in the atomic lifecycle SQL, not a handler comment.
+    expect(presence).toMatch(/sb\.rpc\('expire_direct_live_leases'\)/)
+    expect(read('supabase/migrations/20261031010000_direct_live_lifecycle.sql')).toMatch(/heartbeat_timeout/)
     expect(presence).toMatch(/requireAdmin/)
     expect(presence).toMatch(/admin_forced/)
     expect(presence).toMatch(/countAudienceParticipants/)
@@ -78,8 +80,9 @@ describe('P0 migration safety', () => {
 
   it('shows the complete LIVE frame by default on narrow phones', () => {
     const viewer = read('src/platform/screens/LiveWatchScreen.tsx')
-    expect(viewer).toMatch(/useState<'contain' \| 'cover'>\('contain'\)/)
-    expect(viewer).toMatch(/setObjectFit\(\(f\) => \(f === 'contain' \? 'cover' : 'contain'\)\)/)
+    expect(viewer).toContain("readLiveDisplayPreference('cover-viewer', false)")
+    expect(viewer).toContain("setObjectFit('contain')")
+    expect(viewer).toContain("setObjectFit('cover')")
   })
 
   it('keeps guest tips server-priced and preserves Direct Charges', () => {

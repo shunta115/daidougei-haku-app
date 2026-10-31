@@ -1,0 +1,9 @@
+{
+  "engine": "PostgreSQL 17 local independent connections",
+  "passed": [
+    "simultaneous duplicate commits count once",
+    "simultaneous different users aggregate exactly",
+    "end-before-delivery rejects late batch without resurrecting session"
+  ],
+  "productionAccess": false
+}

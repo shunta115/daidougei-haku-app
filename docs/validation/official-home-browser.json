@@ -1,0 +1,23 @@
+{
+  "engine": "WebKit",
+  "scope": "localhost real API + PGlite SQL + memory storage; no remote DB or physical iPhone",
+  "checks": [
+    "unsaved detail preview",
+    "profile saved through real API and SQL",
+    "multiple photo uploads + browser compression and thumbnail generation",
+    "main selection, publish, touch reorder persisted",
+    "unpublished PDF absent from anonymous listing",
+    "unpublished PDF byte access denied",
+    "another performer cannot edit PDF",
+    "public main photo and carousel",
+    "photo lightbox and keyboard navigation",
+    "anonymous PDF returns real valid bytes",
+    "iPhone WebKit PDF download attachment",
+    "iPhone page has no horizontal overflow",
+    "booking submitted through real API and SQL with receipt",
+    "office-only case retrieval and status update",
+    "desktop page has no horizontal overflow",
+    "no browser runtime errors"
+  ],
+  "errors": []
+}

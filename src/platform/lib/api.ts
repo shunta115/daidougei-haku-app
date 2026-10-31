@@ -1,4 +1,5 @@
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
+import { liveRequestSignal } from './liveRequestSignal'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
 import type {
@@ -31,6 +32,7 @@ export type PerformerSearchFilters = {
 }
 
 export const liveReservationsEnabled = import.meta.env.VITE_ENABLE_LIVE_RESERVATIONS === 'true'
+export const liveStartWebPushEnabled = import.meta.env.VITE_ENABLE_LIVE_START_WEB_PUSH === 'true'
 
 export async function getSignedInUserId(): Promise<string | null> {
   const { data } = await requireSupabase().auth.getUser()
@@ -261,52 +263,29 @@ export async function updateOwnDisplayName(value: string): Promise<string> {
   return data.displayName || displayName
 }
 
-export async function startLive(performerId: string, title?: string) {
+function liveLifecycleError(error: { message?: string; code?: string }) {
+  if (error.code === 'PGRST202' || /function.*not.*find|schema cache/i.test(error.message || '')) {
+    return new Error('LIVEの安全更新が未適用です。運営に連絡してください。旧方式では開始しません。')
+  }
+  if (error.message?.includes('LIVE_BUSY')) return new Error('別の画面でLIVEが準備中または配信中です。元の画面で終了してください。')
+  if (error.message?.includes('LIVE_SESSION_EXPIRED')) return new Error('LIVEの接続期限が切れました。再接続するか終了を確認してください。')
+  return new Error(error.message || 'LIVEの状態を更新できませんでした。')
+}
+
+export async function reserveLive(performerId: string, operationId: string, title?: string): Promise<string> {
   await assertApprovedActivePerformer(performerId)
+  const { data, error } = await requireSupabase().rpc('reserve_direct_live', {
+    p_performer_id: performerId, p_operation_id: operationId, p_title: title?.trim() || null,
+  })
+  if (error) throw liveLifecycleError(error)
+  if (typeof data !== 'string') throw new Error('LIVE session reservation unavailable')
+  return data
+}
+
+export async function startLive(performerId: string, title?: string, sessionId?: string, operationId?: string) {
+  await assertApprovedActivePerformer(performerId)
+  if (!sessionId || !operationId) throw new Error('LIVE session reservation required')
   const sb = requireSupabase()
-  const now = new Date().toISOString()
-  const liveTitle = title?.trim() || null
-
-  const { data: existing } = await sb
-    .from('live_sessions')
-    .select('id')
-    .eq('performer_id', performerId)
-    .is('ended_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const { data: performerRow } = await sb
-    .from('performers')
-    .select('is_live, stage_name, live_title')
-    .eq('id', performerId)
-    .maybeSingle()
-
-  const alreadyLive = Boolean(performerRow?.is_live && existing?.id)
-
-  const patch: Partial<Performer> & { stream_url: null } = {
-    is_live: true,
-    live_title: liveTitle ?? (performerRow?.live_title as string | null) ?? null,
-    stream_url: null,
-  }
-  if (!alreadyLive) {
-    patch.live_started_at = now
-  }
-
-  const { error: uerr } = await sb.from('performers').update(patch).eq('id', performerId)
-  if (uerr) throw uerr
-
-  if (alreadyLive && existing?.id) {
-    if (liveTitle) {
-      await sb.from('live_sessions').update({ title: liveTitle }).eq('id', existing.id)
-    }
-    return existing.id as string
-  }
-
-  if (existing?.id) {
-    await sb.from('live_sessions').update({ ended_at: now }).eq('id', existing.id)
-  }
-
   const featured = await getFeaturedEvent().catch(() => null)
   let venueId: string | null = null
   let eventSlotId: string | null = null
@@ -325,59 +304,42 @@ export async function startLive(performerId: string, title?: string) {
     eventSlotId = (match?.id as string | undefined) ?? null
   }
 
-  const baseInsert = {
-    performer_id: performerId,
-    stream_url: null as null,
-    title: liveTitle,
-    started_at: now,
-  }
-  const boundInsert = { ...baseInsert, event_id: featured?.id ?? null, venue_id: venueId }
-  const slotBoundInsert = { ...boundInsert, event_slot_id: eventSlotId }
-
-  let inserted = await sb.from('live_sessions').insert(slotBoundInsert).select('id').single()
-  if (inserted.error) {
-    inserted = await sb.from('live_sessions').insert(boundInsert).select('id').single()
-  }
-  if (inserted.error) {
-    inserted = await sb.from('live_sessions').insert(baseInsert).select('id').single()
-  }
-  if (inserted.error) throw inserted.error
-
-  const stageName = (performerRow?.stage_name as string) || 'パフォーマー'
-  const { error: nerr } = await sb.rpc('notify_followers_live_start', {
-    p_performer_id: performerId,
-    p_stage_name: stageName,
-    p_title: liveTitle,
+  const { data, error } = await sb.rpc('activate_direct_live', {
+    p_performer_id: performerId, p_session_id: sessionId, p_operation_id: operationId,
+    p_event_id: featured?.id ?? null, p_venue_id: venueId, p_event_slot_id: eventSlotId, p_title: title?.trim() || null,
   })
-  if (nerr) {
-    console.warn('notify_followers_live_start', nerr.message)
-  }
-
-  return (inserted.data?.id as string) ?? null
+  if (error) throw liveLifecycleError(error)
+  if (typeof data === 'string') void dispatchLiveStartPush(data).catch(() => undefined)
+  return data as string
 }
 
-export async function endLive(performerId: string) {
-  const sb = requireSupabase()
-  const now = new Date().toISOString()
-  const { error: uerr } = await sb
-    .from('performers')
-    .update({
-      is_live: false,
-      share_location: false,
-      live_started_at: null,
-      live_title: null,
-      lat: null,
-      lng: null,
-      location_updated_at: null,
-    })
-    .eq('id', performerId)
-  if (uerr) throw uerr
-  // Close every open session (guards against duplicates from older builds).
-  await sb
-    .from('live_sessions')
-    .update({ ended_at: now })
-    .eq('performer_id', performerId)
-    .is('ended_at', null)
+export async function dispatchLiveStartPush(liveSessionId: string) {
+  if (!liveStartWebPushEnabled) return
+  const headers = await supabaseAuthHeaders()
+  for (let batch = 0; batch < 10; batch += 1) {
+    const response = await fetch('/api/notifications/push', {
+      method: 'POST', headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ kind: 'live_start', liveSessionId }),
+    }).catch(() => null)
+    if (!response?.ok) return
+    const result = await response.json().catch(() => ({})) as { remaining?: boolean }
+    if (!result.remaining) return
+  }
+}
+
+export async function endLive(performerId: string, expectedSessionId?: string | null) {
+  // Resolve once, then scope the atomic end to that session; retries cannot end a newer LIVE.
+  const sessionId = expectedSessionId || await getActiveLiveSessionId(performerId)
+  if (!sessionId) return
+  const { error } = await requireSupabase().rpc('finish_direct_live', {
+    p_performer_id: performerId, p_session_id: sessionId,
+  })
+  if (error) throw liveLifecycleError(error)
+  // End is already durable. Management API cleanup cannot undo that transaction.
+  void supabaseAuthHeaders().then((headers) => fetch('/api/livekit/presence', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ action: 'cleanup-ended', performerId, sessionId }),
+  })).catch(() => undefined)
 }
 
 export async function listEventLiveSessions(eventId: string): Promise<LiveSession[]> {
@@ -427,6 +389,7 @@ export async function listLiveComments(performerId: string, liveSessionId: strin
     .eq('live_session_id', liveSessionId)
     .order('created_at', { ascending: false })
     .limit(80)
+    .abortSignal(liveRequestSignal())
   if (error) throw error
   return ((data as LiveComment[]) ?? []).reverse()
 }
@@ -437,28 +400,37 @@ export async function postLiveComment(input: {
   displayName: string
   body: string
   liveSessionId?: string | null
+  requestId?: string
 }) {
   const sb = requireSupabase()
   const text = input.body.trim().slice(0, 200)
   if (!text) throw new Error('Comment is empty')
   const { error } = await sb.from('live_comments').insert({
+    ...(input.requestId ? { id: input.requestId } : {}),
     performer_id: input.performerId,
     user_id: input.userId,
     display_name: input.displayName || 'Fan',
     body: text,
     live_session_id: input.liveSessionId ?? null,
   })
+  if (error?.code === '23505' && input.requestId) {
+    // An acknowledgement may have been lost. RLS still governs this read; never overwrite.
+    const { data: existing, error: readError } = await sb.from('live_comments')
+      .select('performer_id,user_id,live_session_id,body').eq('id', input.requestId).maybeSingle()
+    if (!readError && existing?.performer_id === input.performerId && existing.user_id === input.userId
+      && existing.live_session_id === (input.liveSessionId ?? null) && existing.body === text) return
+  }
   if (error) throw error
 }
 
 export function subscribeLiveComments(
   performerId: string,
   liveSessionId: string,
-  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void },
+  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void; onReady?: () => void; onConnectionChange?: (connected: boolean) => void },
 ) {
   const sb = requireSupabase()
   const channel = sb
-    .channel(`live-comments-${performerId}`)
+    .channel(`live-comments-${performerId}-${liveSessionId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
@@ -477,7 +449,10 @@ export function subscribeLiveComments(
         if (row.id && (!row.live_session_id || row.live_session_id === liveSessionId)) handlers.onDelete(row.id)
       },
     )
-    .subscribe()
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') { handlers.onConnectionChange?.(true); handlers.onReady?.() }
+      else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) handlers.onConnectionChange?.(false)
+    })
   return () => {
     void sb.removeChannel(channel)
   }
@@ -921,14 +896,22 @@ function pushKey(value: string) {
   return Uint8Array.from(bytes, (char) => char.charCodeAt(0))
 }
 
-export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+function assertPushSupported() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('push_unsupported')
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  if (ios && !standalone) throw new Error('push_home_screen_required')
+}
+
+async function ensurePushSubscription(userId: string) {
   const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY
   if (!publicKey) throw new Error('push_not_configured')
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('push_unsupported')
-  const permission = await Notification.requestPermission()
+  assertPushSupported()
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('push_denied')
   const registration = await navigator.serviceWorker.ready
-  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
+  const subscription = await registration.pushManager.getSubscription()
+    ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
   const json = subscription.toJSON()
   if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) throw new Error('push_invalid_subscription')
   const sb = requireSupabase()
@@ -937,21 +920,54 @@ export async function enableAppearancePush(userId: string, locale: NotificationP
     disabled_at: null, last_error: null, updated_at: new Date().toISOString(),
   }, { onConflict: 'endpoint' })
   if (error) throw error
-  await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: true, locale })
+}
+
+async function savePushConsent(userId: string, locale: NotificationPreference['locale'], field: 'appearance_push_enabled' | 'live_push_enabled', enabled: boolean) {
+  const sb = requireSupabase()
+  // Create defaults only when absent, then update one category. Concurrent
+  // settings from another tab must not overwrite the other category's consent.
+  const inserted = await sb.from('notification_preferences').upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+  if (inserted.error) throw inserted.error
+  const { error } = await sb.from('notification_preferences')
+    .update({ [field]: enabled, locale, updated_at: new Date().toISOString() }).eq('user_id', userId)
+  if (error) throw error
+}
+
+export async function enableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
+  await ensurePushSubscription(userId)
+  await savePushConsent(userId, locale, 'appearance_push_enabled', true)
 }
 
 export async function disableAppearancePush(userId: string, locale: NotificationPreference['locale']) {
-  if ('serviceWorker' in navigator) {
-    const registration = await navigator.serviceWorker.ready
-    const subscription = await registration.pushManager.getSubscription()
-    if (subscription) {
-      const sb = requireSupabase()
-      const { error } = await sb.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', subscription.endpoint)
-      if (error) throw error
-      await subscription.unsubscribe()
-    }
-  }
-  await saveNotificationPreference({ user_id: userId, appearance_in_app_enabled: true, appearance_push_enabled: false, locale })
+  // The browser subscription is shared with LIVE Push. Consent checks in the
+  // server queue suppress this category without disabling the other category.
+  await savePushConsent(userId, locale, 'appearance_push_enabled', false)
+}
+
+export async function getLivePushPreference(userId: string): Promise<{ available: boolean; enabled: boolean }> {
+  if (!liveStartWebPushEnabled || !import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY) return { available: false, enabled: false }
+  const headers = await supabaseAuthHeaders()
+  const response = await fetch('/api/notifications/push', { headers }).catch(() => null)
+  const server = response?.ok ? await response.json().catch(() => ({})) as { liveStartEnabled?: boolean } : null
+  if (!server?.liveStartEnabled) return { available: false, enabled: false }
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('notification_preferences').select('live_push_enabled').eq('user_id', userId).maybeSingle()
+  if (error) return { available: false, enabled: false }
+  return { available: true, enabled: Boolean(data?.live_push_enabled) }
+}
+
+export async function enableLiveStartPush(userId: string, locale: NotificationPreference['locale']) {
+  if (!liveStartWebPushEnabled) throw new Error('live_push_unavailable')
+  // The UI has already checked schema availability. Request permission before
+  // any network await so iPhone keeps the activation from the user's tap.
+  await ensurePushSubscription(userId)
+  if (!(await getLivePushPreference(userId)).available) throw new Error('live_push_unavailable')
+  await savePushConsent(userId, locale, 'live_push_enabled', true)
+}
+
+export async function disableLiveStartPush(userId: string, locale: NotificationPreference['locale']) {
+  if (!(await getLivePushPreference(userId)).available) throw new Error('live_push_unavailable')
+  await savePushConsent(userId, locale, 'live_push_enabled', false)
 }
 
 export async function fetchAdminMetrics(): Promise<AdminMetrics | null> {

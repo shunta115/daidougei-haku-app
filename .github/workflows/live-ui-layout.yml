@@ -1,0 +1,53 @@
+name: HAKU LIVE layout QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/platform/**'
+      - 'src/index.css'
+      - 'tests/browser/**'
+      - 'experiments/live-ui/**'
+      - '.github/workflows/live-ui-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layout:
+    name: WebKit localhost UI fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install locked WebKit
+        run: npx playwright install --with-deps webkit
+      - name: Test integrated LIVE components with localhost-only fixtures
+        env:
+          HAKU_LIVE_QA_OUTPUT: ${{ runner.temp }}/haku-ui-layout
+        run: |
+          node node_modules/vite/bin/vite.js --config tests/live-repair-e2e/vite.config.ts > "$RUNNER_TEMP/haku-ui-vite.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4187/tests/live-repair-e2e/harness.html > /dev/null; then break; fi
+            sleep 1
+          done
+          node tests/live-repair-e2e/run.mjs
+      - name: Save synthetic UI screenshots and results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: haku-live-layout
+          path: |
+            ${{ runner.temp }}/haku-ui-layout
+            ${{ runner.temp }}/haku-ui-vite.log
+          retention-days: 7

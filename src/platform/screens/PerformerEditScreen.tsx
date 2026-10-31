@@ -1,3 +1,4 @@
+import { HomeEditor } from '../components/official-home/HomeEditor'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, Camera, Save } from 'lucide-react'
 import { Avatar } from '../components/Avatar'
@@ -150,6 +151,7 @@ function ProfileForm({ performer, onBack }: { performer: Performer; onBack: () =
       <button type="button" className="pl-btn pl-btn--ghost" disabled={busy} onClick={() => photoInput.current?.click()}><Camera size={18} />{performer.photo_url ? t('editPhotoChange') : t('editPhoto')}</button>
       <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" hidden onChange={(e) => void onPhoto(e.target.files?.[0] ?? null)} />
     </div>
+    <HomeEditor performerId={performer.id} />
     <form noValidate onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy} className="pl-registration__fields">
         {field('stage_name', t('editStage'), { required: true, max: DISPLAY_NAME_MAX_LENGTH })}

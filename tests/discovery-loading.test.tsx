@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { JSDOM } from 'jsdom'
 
 const fake = vi.hoisted(() => ({
   search: vi.fn(),
+  home: vi.fn(),
   live: vi.fn(),
   event: vi.fn(),
   lineup: vi.fn(),
@@ -14,6 +15,9 @@ const fake = vi.hoisted(() => ({
 }))
 
 vi.mock('../src/platform/lib/api', () => ({
+  liveReservationsEnabled: false,
+  reserveLiveSchedule: vi.fn(),
+  cancelLiveReservation: vi.fn(),
   searchPerformers: fake.search,
   listLivePerformers: fake.live,
   getFeaturedEvent: fake.event,
@@ -22,9 +26,12 @@ vi.mock('../src/platform/lib/api', () => ({
   listOshiPerformers: fake.oshi,
   listVoteRankingNamed: fake.ranking,
 }))
+vi.mock('../src/platform/lib/homeDiscoveryApi', () => ({ listHomeSessions: async () => [] }))
+vi.mock('../src/platform/lib/homeRanking', () => ({ loadHomeRanking: fake.home, appearanceLabel: vi.fn() }))
 vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('../src/platform/lib/track', () => ({ useTrackView: vi.fn() }))
 
+import { LangProvider } from '../src/i18n/LangProvider'
 import { FanHomeScreen } from '../src/platform/screens/FanHomeScreen'
 import { SearchScreen } from '../src/platform/screens/SearchScreen'
 
@@ -52,12 +59,27 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('performer discovery loading states', () => {
   it('does not show the HOME empty state before the performer request completes', async () => {
     let resolveSearch!: (value: (typeof performer)[]) => void
-    fake.search.mockReturnValue(new Promise((resolve) => { resolveSearch = resolve }))
-    render(<FanHomeScreen onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onOpenSearch={vi.fn()} onOpenLiveList={vi.fn()} onOpenMap={vi.fn()} onTip={vi.fn()} />)
+    fake.home.mockReturnValue(new Promise<(typeof performer)[]>((resolve) => { resolveSearch = resolve }).then(performers => ({
+      performers, ranking: { ids: performers.map(p => p.id), featured: performers.map(p => p.id), upcoming: [], recent: [] },
+    })))
+    render(<FanHomeScreen onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onOpenSearch={vi.fn()} onOpenLiveList={vi.fn()} onOpenMap={vi.fn()} onTip={vi.fn()} />, { wrapper: LangProvider })
     expect(screen.getByLabelText('パフォーマーを読み込み中')).toBeTruthy()
     expect(screen.queryByText('まだ知らない才能に会いにいこう。')).toBeNull()
     resolveSearch([performer])
-    expect(await screen.findByRole('heading', { level: 1, name: '表示テスト' })).toBeTruthy()
+    expect(await screen.findByText('表示テスト', { selector: 'strong' })).toBeTruthy()
+  })
+
+  it('clears stale performers on refresh failure and recovers on reconnection', async () => {
+    const home = { performers: [performer], ranking: { ids: [performer.id], featured: [performer.id], upcoming: [], recent: [] } }
+    fake.home.mockResolvedValue(home)
+    render(<FanHomeScreen onOpenPerformer={vi.fn()} onWatchLive={vi.fn()} onOpenSearch={vi.fn()} onOpenLiveList={vi.fn()} onOpenMap={vi.fn()} onTip={vi.fn()} />, { wrapper: LangProvider })
+    expect(await screen.findByText(performer.stage_name, { selector: 'strong' })).toBeTruthy()
+    fake.home.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    expect(screen.queryByText(performer.stage_name, { selector: 'strong' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('読み込めませんでした')
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    expect(await screen.findByText(performer.stage_name, { selector: 'strong' })).toBeTruthy()
   })
 
   it('does not show a no-results message while search is loading', async () => {

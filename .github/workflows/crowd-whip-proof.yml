@@ -1,0 +1,95 @@
+name: CROWD QR to real WHIP/HLS proof
+
+on:
+  pull_request:
+    branches:
+      - main
+      - codex/haku-srs-crowd-integration-20261030
+      - codex/haku-crowd-iphone-auth-whip-20261030
+    paths:
+      - 'experiments/srs-crowd-lab/**'
+      - 'experiments/free-live/haku-auth.mjs'
+      - 'experiments/ovh-srs-lab/whip-publisher.mjs'
+      - '.github/workflows/crowd-whip-proof.yml'
+
+concurrency:
+  group: crowd-whip-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  crowd-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install isolated media tools
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chrome --with-deps
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start loopback SRS and authenticated fixture gateway
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-crowd-media up -d
+          node experiments/srs-crowd-lab/fixture-gateway.mjs > /tmp/haku-crowd-gateway.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4320/ > /dev/null && curl --fail --silent --max-time 2 http://127.0.0.1:1985/api/v1/versions > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: QR grant to Chrome WHIP to decoded HLS audio and video
+        run: |
+          node experiments/srs-crowd-lab/browser-crowd-whip-smoke.mjs > /tmp/haku-crowd-browser.log 2>&1 &
+          publisher_pid=$!
+          for i in $(seq 1 65); do
+            if [ -s /tmp/haku-crowd-stream ]; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then cat /tmp/haku-crowd-browser.log; exit 1; fi
+            sleep 1
+          done
+          stream=$(cat /tmp/haku-crowd-stream)
+          if [[ ! "$stream" =~ ^haku-lab-[a-f0-9]{32}$ ]]; then exit 1; fi
+          room=$(node -e "const s=process.argv[1].slice(9); console.log(s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20))" "$stream")
+          ticket=$(curl --fail --silent --header 'Authorization: Bearer owner' "http://127.0.0.1:4320/watch-ticket?room=${room}" | node -e "let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const t=JSON.parse(s).ticket;if(!t)process.exit(1);process.stdout.write(t)})")
+          manifest="http://127.0.0.1:4320/live/${stream}.m3u8?watch=${ticket}"
+          for i in $(seq 1 50); do
+            if node experiments/ovh-srs-lab/hls-ready.mjs "$manifest" > /dev/null; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then cat /tmp/haku-crowd-browser.log; exit 1; fi
+            sleep 1
+          done
+          node experiments/ovh-srs-lab/hls-ready.mjs "$manifest"
+          for i in $(seq 1 20); do
+            timeout 5 ffprobe -v quiet -show_entries stream=codec_name,codec_type -of csv=p=0 "$manifest" > /tmp/haku-crowd-codecs.txt || true
+            if grep -q 'h264,video' /tmp/haku-crowd-codecs.txt && grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt; then break; fi
+            sleep 2
+          done
+          cat /tmp/haku-crowd-codecs.txt
+          if ! grep -q 'h264,video' /tmp/haku-crowd-codecs.txt || ! grep -q 'aac,audio' /tmp/haku-crowd-codecs.txt; then
+            echo 'Missing H.264/AAC in gateway HLS; browser counters and SRS codecs:'
+            cat /tmp/haku-crowd-browser.log
+            exit 1
+          fi
+          timeout 20 ffmpeg -nostdin -hide_banner -v quiet -xerror -i "$manifest" -t 6 -map 0:v:0 -map 0:a:0 -f null -
+          wait "$publisher_pid"
+          status=$(curl --silent --output /dev/null --write-out "%{http_code}" "$manifest")
+          test "$status" = "401"
+          cat /tmp/haku-crowd-browser.log
+      - name: Run authority and application checks
+        run: |
+          node --test experiments/srs-crowd-lab/*.test.mjs
+      - name: Check standalone lab branch
+        if: github.base_ref != 'main'
+        run: |
+          npm run typecheck
+          npx vitest run
+          npm run build
+      - name: Clean up
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-crowd-media down --remove-orphans
