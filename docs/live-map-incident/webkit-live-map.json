@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "ended LIVE is absent",
+    "HARIBOW start without GPS appears through realtime",
+    "no fabricated marker without location",
+    "tap routes to the HAKU watch callback with the performer ID",
+    "HARIBOW end removes the LIVE immediately",
+    "another performer starts with a red LIVE marker",
+    "marker tap opens HAKU watch",
+    "Safari focus refresh removes ended marker when realtime is missed",
+    "private LIVE never appears in the directory",
+    "no runtime errors"
+  ],
+  "errors": [],
+  "passed": true,
+  "boundary": "Real React MAP and WebKit iPhone emulation. Offline API/Maps adapters; watch navigation callback verified, no real broadcast/payment or physical iPhone."
+}
