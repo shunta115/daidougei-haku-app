@@ -74,6 +74,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const [draft, setDraft] = useState('')
   const [following, setFollowing] = useState(false)
   const [quality, setQuality] = useState('AUTO')
+  const [audioBlocked, setAudioBlocked] = useState(false)
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
+  const [connectionAttempt, setConnectionAttempt] = useState(0)
   const [chromeVisible, setChromeVisible] = useState(true)
   // Keep the full broadcast visible by default on narrow phones. Viewers can
   // still opt into the existing crop-to-fill control when they prefer it.
@@ -87,6 +90,17 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+
+  const startAudio = () => {
+    const room = roomRef.current
+    if (!room) return
+    // Invoke directly inside the user gesture for Safari autoplay permission.
+    void room.startAudio().then(() => {
+      if (roomRef.current === room) setAudioBlocked(!room.canPlaybackAudio)
+    }).catch(() => {
+      if (roomRef.current === room) setAudioBlocked(true)
+    })
+  }
 
   const shareLive = () => {
     const url = `${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`
@@ -103,6 +117,19 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     getPerformer(performerId, allowPublicTest)
       .then(setP)
       .catch(() => setError('LIVE情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
+  }, [performerId, allowPublicTest])
+
+  useEffect(() => {
+    let active = true
+    const poll = async () => {
+      try {
+        const row = await getPerformer(performerId, allowPublicTest)
+        if (active && row) setP(row)
+      } catch { /* Realtime and next poll can recover a transient read failure. */ }
+    }
+    const timer = window.setInterval(() => void poll(), 10_000)
+    window.addEventListener('online', poll)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('online', poll) }
   }, [performerId, allowPublicTest])
 
   useEffect(() => {
@@ -131,7 +158,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
       .catch(() => undefined)
     return () => { active = false }
-  }, [p?.is_live, performerId])
+  }, [p?.is_live, p?.live_started_at, performerId])
 
   useEffect(() => {
     if (!liveSessionId) return
@@ -156,6 +183,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     ;(async () => {
       try {
         setError(null)
+        setConnectionState('connecting')
         const status = await fetchLiveKitStatus()
         if (cancelled) return
         if (!status.configured) {
@@ -170,6 +198,16 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           return
         }
         roomRef.current = room
+        setConnectionState('connected')
+        const updateAudio = () => setAudioBlocked(!room.canPlaybackAudio)
+        room.on(RoomEvent.AudioPlaybackStatusChanged, updateAudio)
+        room.on(RoomEvent.Reconnecting, () => { if (!cancelled) setConnectionState('reconnecting') })
+        room.on(RoomEvent.SignalReconnecting, () => { if (!cancelled) setConnectionState('reconnecting') })
+        room.on(RoomEvent.Reconnected, () => { if (!cancelled) setConnectionState('connected') })
+        room.on(RoomEvent.Disconnected, () => {
+          if (!cancelled) setConnectionState('disconnected')
+        })
+        updateAudio()
         setViewers(countViewers(room))
         room.on(RoomEvent.ParticipantConnected, () => setViewers(countViewers(room)))
         room.on(RoomEvent.ParticipantDisconnected, () => setViewers(countViewers(room)))
@@ -194,6 +232,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         })
       } catch (e) {
         if (cancelled) return
+        setConnectionState('disconnected')
         if (e instanceof LiveKitClientError) setError(e.message)
         else setError(liveKitErrorMessage('unknown', e instanceof Error ? e.message : undefined))
       }
@@ -204,7 +243,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, performerId, t])
+  }, [p?.is_live, p?.live_started_at, performerId, t, connectionAttempt])
 
   useEffect(() => {
     if (!p?.is_live || viewers <= 0) return
@@ -401,6 +440,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         ) : null}
 
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
+          <button type="button" onClick={() => void toggleFollow()} aria-label={following ? 'フォロー解除' : 'フォロー'}><Heart size={23} fill={following ? 'currentColor' : 'none'} /><small>{following ? 'フォロー中' : 'フォロー'}</small></button>
           <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
           <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
@@ -431,6 +471,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </div>
           {commentScroll.hasNewComments ? <button type="button" className="pl-live__latest-comments" onClick={() => commentScroll.scrollToLatest()}><ArrowDown size={14} /> 最新コメント</button> : null}
         </div>
+        {p?.is_live && audioBlocked ? <button type="button" className="pl-btn pl-btn--block" onClick={startAudio}>タップしてLIVE音声を再生</button> : null}
+        {p?.is_live && connectionState === 'reconnecting' ? <p role="status">通信が途切れました。再接続しています…</p> : null}
+        {p?.is_live && connectionState === 'disconnected' ? <button type="button" className="pl-btn pl-btn--block" onClick={() => setConnectionAttempt((attempt) => attempt + 1)}>LIVEに再接続</button> : null}
         <div className="pl-live__actions">
           <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る">
             <span aria-hidden="true">♥</span> いいね

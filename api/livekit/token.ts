@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createLiveKitToken, getLiveKitConfig, roomNameForPerformer } from './_shared.js'
+import { createLiveKitToken, getLiveKitConfig, sessionRoomName } from './_shared.js'
 
 function userClient(authHeader: string | undefined) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -19,13 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
-    const { performerId, asHost } = req.body as { performerId?: string; asHost?: boolean }
+    const { performerId, asHost, sessionId, operationId } = (req.body || {}) as { performerId?: string; asHost?: boolean; sessionId?: string; operationId?: string }
     if (!performerId) {
       res.status(400).json({ error: 'performerId required' })
       return
     }
 
-    const host = Boolean(asHost)
+    const host = asHost === true
+    res.setHeader('Cache-Control', 'no-store')
     if (host && !authHeader) {
       res.status(401).json({ error: 'Authorization required' })
       return
@@ -66,13 +67,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
+    const { data: session, error: sessionError } = await sb.from(host ? 'direct_live_leases' : 'live_sessions')
+      .select('id, operation_id, lifecycle_state, heartbeat_at').eq('performer_id', performerId)
+      .is('ended_at', null).maybeSingle()
+    if (sessionError) { res.status(503).json({ error: 'Safe LIVE lifecycle is unavailable' }); return }
+    if (!session || (host && (session.id !== sessionId || session.operation_id !== operationId || (session.lifecycle_state === 'live' && !performer.is_live)))
+      || (!host && session.lifecycle_state !== 'live')
+      || (session.lifecycle_state === 'preparing' && (!session.heartbeat_at || Date.parse(session.heartbeat_at) < Date.now() - 90_000))) {
+      res.status(409).json({ error: 'LIVE session expired or owned by another operation' }); return
+    }
     const { data: profile } = user
       ? await sb.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
       : { data: null }
     const guestIdentity = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-    const identity = user?.id ?? guestIdentity
-    const displayName = profile?.display_name || user?.email || 'Guest'
-    const room = roomNameForPerformer(performerId)
+    const identity = host ? performerId : `viewer-${user?.id ?? 'guest'}-${guestIdentity}`
+    const displayName = profile?.display_name || 'Guest'
+    const room = sessionRoomName(performerId, session.id)
     const token = await createLiveKitToken({
       identity,
       name: host ? performer.stage_name || displayName : displayName,

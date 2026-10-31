@@ -1016,3 +1016,11 @@
   padding: 0 !important;
   max-width: none;
 }
+
+/* The transparent panel padding must not intercept the LIVE side controls. */
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live {
+  pointer-events: none;
+}
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live > * {
+  pointer-events: auto;
+}
