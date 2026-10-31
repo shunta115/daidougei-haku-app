@@ -1,0 +1,30 @@
+{
+  "base": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
+  "date": "2026-10-31 JST",
+  "typecheck": "passed",
+  "server_typecheck": "passed",
+  "app_build": "passed; existing chunk-size warning",
+  "new_ranking_tests": 13,
+  "loading_refresh_tests": 3,
+  "webkit_checks": 14,
+  "physical_iPhone": false,
+  "connected_test_backend": false,
+  "production_mutations": false,
+  "main_merge": false,
+  "production_deploy": false,
+  "new_paid_services": false,
+  "preview": {
+    "url": "https://daidougei-haku-9q65xqj17-daidougei-s-projects.vercel.app/",
+    "deployment_id": "dpl_2Hu1a1ETHWR6cJQQnjYaeoQyrLeX",
+    "state": "READY",
+    "target": null,
+    "mode": "isolated static fixture",
+    "files": 7,
+    "html_status": 200,
+    "css_js_status": 200,
+    "css_js_exact_match": true,
+    "csp_blocks_external_connections": true
+  },
+  "full_suite": "final verified run pending",
+  "earlier_runs": "Old discovery-loading mock failed after data-source change; fixed to loadHomeRanking and real LangProvider. Initial concurrent runs also timed out in unchanged moderation/admin tests; both passed in targeted run."
+}
