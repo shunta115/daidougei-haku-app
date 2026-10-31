@@ -601,6 +601,13 @@
   border-radius: 0;
   background: linear-gradient(180deg, transparent, rgba(2, 8, 19, 0.78) 34%, rgba(2, 8, 19, 0.96));
   backdrop-filter: none;
+  /* The stage is an isolated stacking context. This sibling panel sits above
+     every stage control, so its transparent padding must not intercept taps. */
+  pointer-events: none;
+}
+
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live > * {
+  pointer-events: auto;
 }
 
 .pl-live--watch[data-layout='phone-portrait'] .pl-live__comments {
