@@ -21,7 +21,7 @@ Initial base: main dc6fd1fc0be0b073cf25be610884c481d07f5e58. Updated with main 5
 
 - TypeScript typecheck passed.
 - Vite production build passed (existing chunk-size warning).
-- 53 targeted tests passed: camera (30), fever (3), late video mount/resize/cleanup (1), YouTube UI (6), YouTube reference/embed (4), comments (6), release gate (3).
+- 53 targeted tests passed: camera (30), fever (3), late video mount/resize/cleanup (1), YouTube UI (6), YouTube reference/embed (4), comments (6), release gate (3). After updating main, the video observer test and 5 MAP discovery tests also passed (58 unique tests in total).
 - Chrome and Playwright WebKit: all 13 browser checks passed, with no page errors (see `browser-result.json`). Both native fullscreen and forced CSS fallback, 80-comment independent scrolling, portrait/landscape synthetic metadata, manual rotation/reset, resize, action handlers, YouTube API mount replacement and iPhone emulation were verified.
 - Browser fixture result is recorded separately. It uses actual Chrome and Playwright WebKit, local adapters and synthetic dimensions/poster frames. All external network requests are blocked. Support testing stops at the amount selection screen; no payment is submitted.
 
@@ -48,3 +48,5 @@ node tests/live-theater-e2e/run.mjs
 ```
 
 Chrome must be installed; optionally set HAKU_WEBKIT_EXECUTABLE to an installed compatible WebKit `pw_run.sh`. Local fixture API and media replace external services; support stops before checkout. Output defaults to /private/tmp/haku-theater-evidence.
+
+Further merge audit: #99 has an adjacent CSS-variable insertion; the variable order in this PR was adjusted to avoid it. #100 rewrites YouTubeLivePlayer and conflicts with this PR's stable iframe wrapper; it also has a package.json conflict inherited from its divergence from current main. Do not auto-merge #100 with this PR: preserve the external 16:9 frame when integrating that rewritten player and rerun the YouTube fixture. No other PR branch was modified.

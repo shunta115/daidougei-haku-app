@@ -336,9 +336,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       data-layout={mode}
       style={
         {
+          '--viewer-rotation': `${desktopRotation}deg`,
           '--video-aspect': String(ratio),
           '--video-fit': objectFit,
-          '--viewer-rotation': `${desktopRotation}deg`,
         } as CSSProperties
       }
     >
