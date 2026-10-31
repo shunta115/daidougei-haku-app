@@ -1,6 +1,6 @@
 # PC LIVE theater (2026-10-31)
 
-Base: main dc6fd1fc0be0b073cf25be610884c481d07f5e58. Branch: codex/live-pc-theater-20261031.
+Initial base: main dc6fd1fc0be0b073cf25be610884c481d07f5e58. Updated with main 5ea9392 (#109 MAP discovery) before final delivery; no merge conflicts. Branch: codex/live-pc-theater-20261031.
 
 ## Findings
 
@@ -21,7 +21,7 @@ Base: main dc6fd1fc0be0b073cf25be610884c481d07f5e58. Branch: codex/live-pc-theat
 
 - TypeScript typecheck passed.
 - Vite production build passed (existing chunk-size warning).
-- 34 targeted tests passed: camera (30), fever (3), late video mount/resize/cleanup (1).
+- 53 targeted tests passed: camera (30), fever (3), late video mount/resize/cleanup (1), YouTube UI (6), YouTube reference/embed (4), comments (6), release gate (3).
 - Chrome and Playwright WebKit: all 13 browser checks passed, with no page errors (see `browser-result.json`). Both native fullscreen and forced CSS fallback, 80-comment independent scrolling, portrait/landscape synthetic metadata, manual rotation/reset, resize, action handlers, YouTube API mount replacement and iPhone emulation were verified.
 - Browser fixture result is recorded separately. It uses actual Chrome and Playwright WebKit, local adapters and synthetic dimensions/poster frames. All external network requests are blocked. Support testing stops at the amount selection screen; no payment is submitted.
 
