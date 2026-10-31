@@ -1,0 +1,27 @@
+{
+  "checks": [
+    "real TEST Auth actor 0",
+    "real TEST Auth actor 1",
+    "real TEST Auth actor 2",
+    "real broadcaster JWT Realtime subscribed",
+    "fan A writes server total",
+    "same JWT batch retry counts once",
+    "fan B aggregates total eight",
+    "real broadcaster receives cumulative eight via Realtime",
+    "same comment UUID rejected as duplicate",
+    "real broadcaster receives one fan comment via Realtime",
+    "nonowner JWT cannot end LIVE",
+    "real JWT reservation isolation",
+    "two real TEST in-app start notifications",
+    "ended LIVE rejects JWT likes"
+  ],
+  "passed": 14,
+  "transport": "real Supabase TEST Auth JWT / PostgREST / Realtime; no LiveKit or Stripe",
+  "physicalIPhone": false,
+  "testFixtureIds": [
+    "70d3bf2e-4f89-4033-98b2-0a767f01d974",
+    "bcf4c867-21ce-44ba-abf2-886d961fc7c5",
+    "9caf3f2b-8244-4850-b31f-1ce93178006f"
+  ],
+  "retainedTestData": true
+}

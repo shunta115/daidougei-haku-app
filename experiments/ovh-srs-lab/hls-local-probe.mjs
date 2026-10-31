@@ -85,7 +85,7 @@ export async function runProbe(options) {
           stats.segments++;
           if (first) {stats.firstSegmentMs.push(Date.now()-start);first=false;}
         }
-      } catch (error) {stats.errors++; if (stats.errorSamples.length<5) stats.errorSamples.push(String(error?.message??error));}
+      } catch (error) {stats.errors++; if (stats.errorSamples.length<5) stats.errorSamples.push(String(error?.message??error)+(error?.cause?.code ? ' ['+error.cause.code+']' : ''));}
       const delay=Math.min(1500,deadline-Date.now());
       if (delay>0) await sleep(delay);
     }

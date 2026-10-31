@@ -28,6 +28,7 @@ try {
  await b.getByLabel('無料のいいねを送る',{exact:true}).first().tap()
  await host.getByText('LIVE累計 ♥ 4',{exact:true}).waitFor()
  check('two viewers send taps to host cumulative total',true)
+ check('portrait FEVER leaves LIVE stats readable',await a.evaluate(()=>{const f=document.querySelector('.pl-fever').getBoundingClientRect(),s=document.querySelector('.pl-live__stats').getBoundingClientRect();return f.top>=s.bottom||f.bottom<=s.top||f.right<=s.left||f.left>=s.right}))
  check('host renders received heart animation',await host.locator('.pl-fever__hearts span').count()>0)
  await host.screenshot({path:output+'/host.png'})
  await a.getByLabel('シェア',{exact:true}).tap()

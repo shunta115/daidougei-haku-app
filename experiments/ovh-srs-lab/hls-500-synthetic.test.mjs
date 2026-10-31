@@ -27,7 +27,7 @@ test('500 synthetic loopback HLS clients fetch segments', async () => {
     const result = await runProbe({url, viewers:500, seconds:5});
     assert.equal(result.viewersWithFirstSegment,500,JSON.stringify(result));
     assert.equal(result.bytes,500*segment.length);
-    assert.equal(result.errors,0);
+    assert.equal(result.errors,0,JSON.stringify(result));
     assert.equal(result.segments,500);
     assert.ok(result.requestP95Ms!==null);
   } finally {
