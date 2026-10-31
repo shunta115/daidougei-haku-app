@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Save, Send, Trash2, XCircle } from 'lucide-react'
 import { useLang } from '../../i18n/LangProvider'
 import { useAuth } from '../lib/auth'
@@ -11,7 +11,10 @@ import {
   type PerformerAppearanceInput,
 } from '../lib/api'
 import type { PerformerAppearance, PerformerAppearanceStatus } from '../lib/types'
+import { resolveAppearanceLocation, appearanceGoogleMapsUrl, validAppearanceCoordinates } from '../lib/appearanceLocation'
 import { appearanceDates } from '../lib/appearanceRegistration'
+
+const VenueLocationPicker = lazy(() => import('../components/VenueLocationPicker'))
 
 const empty = (): PerformerAppearanceInput => ({
   title: '', performance_date: '', start_time: '', end_time: null,
@@ -50,6 +53,8 @@ export function PerformerAppearanceManager() {
   const [form, setForm] = useState<PerformerAppearanceInput>(empty)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [additionalDates, setAdditionalDates] = useState('')
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false)
+  const location = resolveAppearanceLocation(form)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,9 +86,14 @@ export function PerformerAppearanceManager() {
   const sorted = useMemo(() => [...rows].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)), [rows])
   const upcoming = sorted.filter((row) => row.status !== 'archived' && Date.parse(row.ends_at ?? row.starts_at) >= Date.now())
   const history = sorted.filter((row) => row.status === 'archived' || Date.parse(row.ends_at ?? row.starts_at) < Date.now()).reverse()
-  const change = <K extends keyof PerformerAppearanceInput>(key: K, value: PerformerAppearanceInput[K]) => setForm((current) => ({ ...current, [key]: value }))
-  const reset = () => { setEditingId(null); setAdditionalDates(''); setForm(empty()); setError(null); if (storageKey && window.localStorage) window.localStorage.removeItem(storageKey) }
+  const change = <K extends keyof PerformerAppearanceInput>(key: K, value: PerformerAppearanceInput[K]) => {
+    const venueChanged = ['venue_name', 'venue_address', 'region', 'country'].includes(key)
+    if (venueChanged || key === 'venue_lat' || key === 'venue_lng') setLocationPickerOpen(false)
+    setForm(current => ({ ...current, [key]: value, ...(venueChanged && current[key] !== value ? { venue_lat: null, venue_lng: null } : {}) }))
+  }
+  const reset = () => { setLocationPickerOpen(false); setEditingId(null); setAdditionalDates(''); setForm(empty()); setError(null); if (storageKey && window.localStorage) window.localStorage.removeItem(storageKey) }
   const edit = (row: PerformerAppearance) => {
+    setLocationPickerOpen(false)
     setEditingId(row.id)
     setForm({
       title: row.title, performance_date: row.performance_date, start_time: row.start_time.slice(0, 5), end_time: row.end_time?.slice(0, 5) ?? null,
@@ -101,7 +111,7 @@ export function PerformerAppearanceManager() {
     if (status === 'archived' && !window.confirm(text.confirmArchive)) return
     setBusy(true); setError(null); setMessage(null)
     try {
-      const input = { ...form, title: form.title.trim(), venue_name: form.venue_name.trim(), image_url: cleanUrl(form.image_url), ticket_url: cleanUrl(form.ticket_url), end_time: form.end_time || null, status }
+      const input = { ...form, ...(!validAppearanceCoordinates(form.venue_lat, form.venue_lng) ? { venue_lat: null, venue_lng: null } : {}), title: form.title.trim(), venue_name: form.venue_name.trim(), image_url: cleanUrl(form.image_url), ticket_url: cleanUrl(form.ticket_url), end_time: form.end_time || null, status }
       if (editingId) await updatePerformerAppearance(editingId, input)
       else {
         const dates = appearanceDates(input.performance_date, additionalDates)
@@ -141,6 +151,14 @@ export function PerformerAppearanceManager() {
       <label>{text.address}<input className="pl-input" value={form.venue_address} onChange={(e) => change('venue_address', e.target.value)} /></label>
       <fieldset><legend>{text.coordinates}</legend><div className="pl-appearance-form__grid"><label>Latitude<input className="pl-input" type="number" min="-90" max="90" step="any" value={form.venue_lat ?? ''} onChange={(e) => change('venue_lat', e.target.value === '' ? null : Number(e.target.value))} /></label><label>Longitude<input className="pl-input" type="number" min="-180" max="180" step="any" value={form.venue_lng ?? ''} onChange={(e) => change('venue_lng', e.target.value === '' ? null : Number(e.target.value))} /></label></div></fieldset>
       <div className="pl-appearance-form__grid"><label>{text.region}<input className="pl-input" value={form.region} onChange={(e) => change('region', e.target.value)} /></label><label>{text.country}<input className="pl-input" value={form.country} onChange={(e) => change('country', e.target.value)} /></label></div>
+      <section className="pl-registration__section" aria-label="出演場所の確認">
+        <h3>出演場所の確認</h3>
+        <p role="status">{location?.precision === 'registered' ? '登録する座標を地図で確認できます。' : location ? `概略位置：${location.label}。実際の出演地点とは異なります。確認した地点は地図から設定できます。` : '場所を特定できないためMAPには表示されません。住所・地域を追加するか、地図で出演地点を設定できます。位置未設定でも予定は登録できます。'}</p>
+        <p className="pl-muted">会場名・住所・地域を変更した場合は位置を再確認してください。緯度・経度が両方とも有効でない場合は、座標を保存せず予定だけ登録します。</p>
+        <a href={appearanceGoogleMapsUrl(form, location)} target="_blank" rel="noopener noreferrer">Google Mapsで会場を確認</a>
+        <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setLocationPickerOpen(true)}>地図で出演地点を設定・確認</button>
+        {locationPickerOpen ? <Suspense fallback={<p role="status">地図を準備しています。</p>}><VenueLocationPicker initial={location} onConfirm={point => { setForm(current => ({ ...current, venue_lat: point.lat, venue_lng: point.lng })); setLocationPickerOpen(false) }} onCancel={() => setLocationPickerOpen(false)} /></Suspense> : null}
+      </section>
       <label>{text.description}<textarea className="pl-input" rows={4} value={form.description} onChange={(e) => change('description', e.target.value)} /></label>
       <label>{text.admission}<select className="pl-input" value={form.admission_type} onChange={(e) => change('admission_type', e.target.value as PerformerAppearanceInput['admission_type'])}><option value="free">{text.free}</option><option value="paid">{text.paid}</option><option value="tip">{text.tip}</option></select></label>
       <label>{text.admissionDetails}<input className="pl-input" value={form.admission_details} onChange={(e) => change('admission_details', e.target.value)} /></label>

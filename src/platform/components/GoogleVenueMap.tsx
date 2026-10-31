@@ -1,9 +1,11 @@
+import './appearance-map-locations.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucide-react'
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
+import { resolveAppearanceLocation } from '../lib/appearanceLocation'
 import { venueMapLabel } from '../lib/venueDisplay'
 import { mapsLocale, type Lang } from '../../i18n'
 import { useLang } from '../../i18n/LangProvider'
@@ -13,6 +15,8 @@ type Props = {
   livePerformers: Performer[]
   sharedPerformers?: Performer[]
   appearanceMarkers?: Array<{ appearance: PerformerAppearance; performer: Performer; overlapsLive: boolean }>
+  appearanceFocusNonce?: number
+  selectedAppearanceId?: string | null
   selectedPerformerId: string | null
   selectedVenueId: string | null
   onSelectPerformer: (id: string) => void
@@ -79,6 +83,8 @@ export function GoogleVenueMap({
   livePerformers,
   sharedPerformers = [],
   appearanceMarkers = [],
+  appearanceFocusNonce = 0,
+  selectedAppearanceId,
   selectedPerformerId,
   selectedVenueId,
   onSelectPerformer,
@@ -93,6 +99,7 @@ export function GoogleVenueMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const watchIdRef = useRef<number | null>(null)
   const autoCenteredRef = useRef(false)
+  const appearanceCenteredRef = useRef(false)
   const userMovedMapRef = useRef(false)
   const [googleApi, setGoogleApi] = useState<any>(null)
   const [map, setMap] = useState<any>(null)
@@ -255,6 +262,7 @@ export function GoogleVenueMap({
       live?: boolean
       performer?: boolean
       appearance?: boolean
+      approximate?: boolean
       overlapsLive?: boolean
       active?: boolean
       onClick: () => void
@@ -264,7 +272,7 @@ export function GoogleVenueMap({
       overlay.onAdd = () => {
         element = document.createElement('button')
         element.type = 'button'
-        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : input.appearance ? ' pl-google-marker--appearance' : input.performer ? ' pl-google-marker--performer' : ' pl-google-marker--venue'}${input.overlapsLive ? ' pl-google-marker--overlap' : ''}${input.active ? ' pl-google-marker--active' : ''}`
+        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : input.appearance ? ' pl-google-marker--appearance' : input.performer ? ' pl-google-marker--performer' : ' pl-google-marker--venue'}${input.approximate ? ' pl-google-marker--approximate' : ''}${input.overlapsLive ? ' pl-google-marker--overlap' : ''}${input.active ? ' pl-google-marker--active' : ''}`
         element.setAttribute('aria-label', input.live ? t('mapsShowLive', { name: input.label }) : t('mapsShowPlace', { name: input.label }))
         const portrait = input.image ? document.createElement('img') : document.createElement('b')
         if (portrait instanceof HTMLImageElement) {
@@ -281,7 +289,7 @@ export function GoogleVenueMap({
         }
         if (input.appearance) {
           const badge = document.createElement('i')
-          badge.textContent = input.overlapsLive ? 'LIVE + 予定' : '出演予定'
+          badge.textContent = input.approximate ? '概略位置' : input.overlapsLive ? 'LIVE + 予定' : '出演予定'
           element.appendChild(badge)
         }
         const label = document.createElement('span')
@@ -337,12 +345,14 @@ export function GoogleVenueMap({
       })
     })
     appearanceMarkers.forEach(({ appearance, performer, overlapsLive }) => {
-      if (appearance.venue_lat == null || appearance.venue_lng == null) return
+      const point = resolveAppearanceLocation(appearance)
+      if (!point) return
       addOverlay({
-        position: { lat: appearance.venue_lat, lng: appearance.venue_lng },
-        label: performer.stage_name,
+        position: point,
+        label: `${performer.stage_name}${point.precision === 'approximate' ? ' · 概略位置' : ''}`,
         image: performer.photo_url,
         appearance: true,
+        approximate: point.precision === 'approximate',
         overlapsLive,
         onClick: () => onSelectAppearance?.(appearance.id),
       })
@@ -364,6 +374,28 @@ export function GoogleVenueMap({
     return () => window.clearTimeout(timer)
   }, [map, selectedVenueId, venueFocusNonce, venues])
 
+  const selectedAppearanceRow = appearanceMarkers.find(item => item.appearance.id === selectedAppearanceId)
+  const selectedPoint = selectedAppearanceRow ? resolveAppearanceLocation(selectedAppearanceRow.appearance) : null
+  const selectedLat = selectedPoint?.lat
+  const selectedLng = selectedPoint?.lng
+  const selectedPrecision = selectedPoint?.precision
+  useEffect(() => {
+    if (!map || selectedLat == null || selectedLng == null) return
+    userMovedMapRef.current = true
+    map.panTo({ lat: selectedLat, lng: selectedLng })
+    map.setZoom(selectedPrecision === 'approximate' ? 12 : 16)
+  }, [appearanceFocusNonce, map, selectedAppearanceId, selectedLat, selectedLng, selectedPrecision])
+
+  useEffect(() => {
+    if (!map || appearanceCenteredRef.current || userMovedMapRef.current || location
+      || !['denied', 'unavailable'].includes(locationState) || hasVenueSeed || livePerformers.length || sharedPerformers.length) return
+    const point = appearanceMarkers[0] && resolveAppearanceLocation(appearanceMarkers[0].appearance)
+    if (!point) return
+    map.panTo({ lat: point.lat, lng: point.lng })
+    map.setZoom(point.precision === 'approximate' ? 12 : 16)
+    appearanceCenteredRef.current = true
+  }, [appearanceMarkers, hasVenueSeed, livePerformers.length, location, locationState, map, sharedPerformers.length])
+
   const recenter = () => {
     if (!map || !location) return
     userMovedMapRef.current = false
@@ -379,7 +411,7 @@ export function GoogleVenueMap({
       ...venues.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
       ...livePerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
       ...sharedPerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
-      ...appearanceMarkers.map(({ appearance }) => ({ lat: appearance.venue_lat!, lng: appearance.venue_lng! })),
+      ...appearanceMarkers.flatMap(({ appearance }) => { const point = resolveAppearanceLocation(appearance); return point ? [point] : [] }),
     ]
     setAreaCount(points.filter((point) => bounds.contains(new googleApi.maps.LatLng(point.lat, point.lng))).length)
     setAreaDirty(false)
