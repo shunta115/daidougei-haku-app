@@ -3,7 +3,7 @@ import { discoverMapLives } from '../src/platform/lib/liveMapDiscovery'
 import type { Performer, PerformerAppearance } from '../src/platform/lib/types'
 const now = Date.parse('2026-10-31T04:42:00Z')
 const haribow = { id: 'haribow', stage_name: 'HARIBOW', is_approved: true, is_live: true, is_private_test: false, share_location: true, lat: null, lng: null, location_updated_at: null } as Performer
-const appearance = { id: 'a', performer_id: 'haribow', status: 'published', starts_at: '2026-10-31T04:00:00Z', ends_at: '2026-10-31T05:00:00Z', venue_name: '公開会場', venue_lat: 35.7, venue_lng: 139.7 } as PerformerAppearance
+const appearance = { id: 'a', performer_id: 'haribow', status: 'published', starts_at: '2026-10-31T04:00:00Z', ends_at: '2026-10-31T05:00:00Z', venue_name: '公開会場', country: 'JP', region: '', venue_address: '', venue_lat: 35.7, venue_lng: 139.7 } as PerformerAppearance
 
 describe('MAP LIVE discovery', () => {
   it('keeps the production HARIBOW missing-GPS case watchable without inventing coordinates', () => {
