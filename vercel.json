@@ -1,5 +1,5 @@
 {
-  "git": { "deploymentEnabled": { "codex/home-activity-ranking": false } },
+  "git": { "deploymentEnabled": { "codex/home-activity-ranking": false, "codex/home-activity-20261031": false, "codex/home-105-113-integration": false } },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],

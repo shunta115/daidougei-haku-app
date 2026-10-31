@@ -32,6 +32,11 @@ describe('home priority', () => {
     expect(result.recent).toHaveLength(8)
     expect(result.recent.some(id=>result.featured.includes(id))).toBe(false)
   })
+  it('keeps unscheduled fallback in activity, Stripe, completeness order without synthetic dates', () => {
+    const result = rankHome([p('blank'),p('filled',{bio:'bio'}),p('paid',{stripe_onboarding_complete:true}),p('new',{lastAction:'2026-10-31T00:00:00Z'}),p('scheduled')],[a('scheduled','2026-11-01T03:00:00Z')],now)
+    expect(result.unscheduled).toEqual(['new','paid','filled','blank'])
+    expect(result.upcoming.map(x=>x.performerId)).toEqual(['scheduled'])
+  })
   it('returns no private evidence in the public payload', () => {
     const result=JSON.stringify(rankHome([p('a',{lastSignIn:'2026-10-30',lastAction:'2026-10-31'})],[],now))
     expect(result).not.toMatch(/lastSignIn|lastAction|2026|stripe|bio/)

@@ -1,0 +1,122 @@
+{
+  "project": "aeqskxxykzapgaudbeqa",
+  "checks": 8,
+  "transaction": "ROLLBACK",
+  "unchanged": true,
+  "before": [
+    {
+      "entity": "auth.users",
+      "rows": 8,
+      "digest": "51f46417f1323f7ebaec2a8652ff907d"
+    },
+    {
+      "entity": "auth.sessions",
+      "rows": 15,
+      "digest": "c29efc9e3617f007a3c055ec1b2e5e9e"
+    },
+    {
+      "entity": "public.profiles",
+      "rows": 8,
+      "digest": "7d2ce4b49f7a5738fdf7add10c00d82f"
+    },
+    {
+      "entity": "public.performers",
+      "rows": 5,
+      "digest": "88981cda12f55fe456e1116f0e7e7a1c"
+    },
+    {
+      "entity": "public.live_sessions",
+      "rows": 6,
+      "digest": "b067fa34db7a5854967c0b908d5e7d39"
+    },
+    {
+      "entity": "public.follows",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "entity": "public.performer_appearances",
+      "rows": 1,
+      "digest": "4a87213588f8dfaf80734e695e93a4e9"
+    },
+    {
+      "entity": "public.notifications",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "entity": "public.appearance_notification_events",
+      "rows": 1,
+      "digest": "895eb57966ea96325717b9ee4fc3c264"
+    },
+    {
+      "entity": "public.push_notification_deliveries",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ],
+  "after": [
+    {
+      "entity": "auth.users",
+      "rows": 8,
+      "digest": "51f46417f1323f7ebaec2a8652ff907d"
+    },
+    {
+      "entity": "auth.sessions",
+      "rows": 15,
+      "digest": "c29efc9e3617f007a3c055ec1b2e5e9e"
+    },
+    {
+      "entity": "public.profiles",
+      "rows": 8,
+      "digest": "7d2ce4b49f7a5738fdf7add10c00d82f"
+    },
+    {
+      "entity": "public.performers",
+      "rows": 5,
+      "digest": "88981cda12f55fe456e1116f0e7e7a1c"
+    },
+    {
+      "entity": "public.live_sessions",
+      "rows": 6,
+      "digest": "b067fa34db7a5854967c0b908d5e7d39"
+    },
+    {
+      "entity": "public.follows",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "entity": "public.performer_appearances",
+      "rows": 1,
+      "digest": "4a87213588f8dfaf80734e695e93a4e9"
+    },
+    {
+      "entity": "public.notifications",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "entity": "public.appearance_notification_events",
+      "rows": 1,
+      "digest": "895eb57966ea96325717b9ee4fc3c264"
+    },
+    {
+      "entity": "public.push_notification_deliveries",
+      "rows": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ],
+  "notTested": [
+    "real Auth JWT login",
+    "hosted live reservation: tables missing",
+    "hosted private activity: product_events missing",
+    "physical iPhone",
+    "real LiveKit media"
+  ],
+  "missing": [
+    "live_schedules",
+    "live_reservations",
+    "product_events"
+  ]
+}

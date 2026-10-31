@@ -5,7 +5,7 @@ export type RankingCandidate = {
   city?: string; photo_url?: string | null; support_blurb?: string; video_url?: string | null
   lastSignIn?: string | null; lastAction?: string | null
 }
-export type HomeRanking = { ids: string[]; featured: string[]; upcoming: HomeAppearance[]; recent: string[] }
+export type HomeRanking = { unscheduled?: string[]; ids: string[]; featured: string[]; upcoming: HomeAppearance[]; recent: string[] }
 const stamp = (value?: string | null) => value ? Date.parse(value) : NaN
 function activity(p: RankingCandidate, now: number) {
   return Math.max(0, ...[p.lastSignIn, p.lastAction].map(stamp).filter(n => Number.isFinite(n) && n <= now))
@@ -34,7 +34,7 @@ export function rankHome(candidates: RankingCandidate[], appearances: HomeAppear
       || order.get(a.performerId)! - order.get(b.performerId)!
   }).slice(0, 8)
   const featured = ranked.slice(0, 10).map(p => p.id)
-  return { ids: ranked.map(p => p.id), featured, upcoming,
+  return { ids: ranked.map(p => p.id), featured, upcoming, unscheduled: ranked.filter(p => !next.has(p.id)).map(p => p.id),
     recent: ranked.filter(p => !next.has(p.id) && !featured.includes(p.id)).slice(0, 8).map(p => p.id) }
 }
 /** Explicit Japan time avoids Safari's implementation-dependent bare-date parsing. */

@@ -1,0 +1,47 @@
+{
+  "inputs": {
+    "main": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
+    "105": "b63b0b268e2d845de1fba5ccddca1ecf55d7cc2c",
+    "113": "9904f758b9742afdbc3435c44e1a42723faad491"
+  },
+  "typecheck": "passed",
+  "server_typecheck": "passed",
+  "app_build": "passed; existing chunk warning",
+  "local_full": {
+    "files": 93,
+    "tests": 522,
+    "result": "passed; collected before new DB suite"
+  },
+  "local_reservation_sql": "existing migration applied in PGlite; flow passed",
+  "hosted_test_db": {
+    "project": "aeqskxxykzapgaudbeqa",
+    "checks": 8,
+    "rolled_back": true,
+    "10_table_snapshots_unchanged": true,
+    "missing": [
+      "live_schedules",
+      "live_reservations",
+      "product_events"
+    ],
+    "real_login_and_reservation_e2e": false
+  },
+  "webkit": {
+    "checks": 26,
+    "runtime_errors": 0,
+    "external_requests": 0,
+    "physical_iPhone": false
+  },
+  "preview": {
+    "url": "https://daidougei-haku-3bco5un22-daidougei-s-projects.vercel.app/",
+    "deployment": "dpl_E2rzydPs7MYCGPtkQJ3kDAYBoJEz",
+    "target": null,
+    "mode": "isolated static fixture",
+    "files": 7
+  },
+  "production_database_changes": false,
+  "production_deployment": false,
+  "main_merge": false,
+  "original_pr_overwrite": false,
+  "new_paid_services": false,
+  "ci": "pending final source commit"
+}
