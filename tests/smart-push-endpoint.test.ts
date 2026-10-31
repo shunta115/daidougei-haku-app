@@ -35,3 +35,7 @@ it('rechecks revoked eligibility immediately before delivery',async()=>{mock.eli
 it('records unknown outcomes without retrying',async()=>{mock.send.mockRejectedValue(new Error('private-provider-data'));const r=await run();expect(r.body.failed).toBe(1);expect(r.body.retry).toBe(false);expect(mock.send).toHaveBeenCalledTimes(1);expect(mock.updates).toContainEqual({table:'live_push_deliveries',patch:{status:'failed',last_error:'delivery_unconfirmed'}})})
 it.each([404,410])('disables expired subscription on %i',async code=>{mock.send.mockRejectedValue({statusCode:code});await run();expect(mock.updates.some(u=>u.table==='push_subscriptions'&&u.patch.disabled_at)).toBe(true)})
 it('does not claim or send when enqueue fails',async()=>{mock.rpc.mockResolvedValue({error:{code:'PGRST202'},data:null});expect((await run()).code).toBe(503);expect(mock.send).not.toHaveBeenCalled()})
+it('permanently cancels the event if publisher disappears after claim',async()=>{
+  mock.participants.mockResolvedValueOnce([{identity:'owner',tracks:[{type:1,muted:false}]}]).mockResolvedValueOnce([])
+  expect((await run()).body.sent).toBe(0);expect(mock.send).not.toHaveBeenCalled();expect(mock.updates.some(u=>u.table==='live_push_events'&&u.patch.cancelled_at)).toBe(true)
+})

@@ -51,9 +51,14 @@ export default async function liveStart(req: VercelRequest, res: VercelResponse)
       // Revalidate immediately before every send, including consent/unfollow changes
       // that happened after claim. No claim of a processing row is ever retried.
       const { data: eligible, error: eligibleError } = await sb.rpc('live_push_delivery_eligible', { p_delivery_id: delivery.delivery_id })
-      if (eligibleError || !eligible || !await healthy()) {
+      if (eligibleError || !eligible) {
         await sb.from('live_push_deliveries').update({ status: 'suppressed', last_error: 'eligibility_changed' }).eq('id', delivery.delivery_id).eq('status', 'processing')
         continue
+      }
+      if (!await healthy()) {
+        await cancel()
+        await sb.from('live_push_deliveries').update({ status: 'suppressed', last_error: 'publisher_unhealthy' }).eq('id', delivery.delivery_id).eq('status', 'processing')
+        break
       }
       const name = String(delivery.payload.stageName || 'パフォーマー').slice(0, 80)
       try {
