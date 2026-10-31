@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucide-react'
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
+import type { LiveMapPerformer } from '../lib/liveMapDiscovery'
 import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
 import { resolveAppearanceLocation } from '../lib/appearanceLocation'
@@ -12,7 +13,7 @@ import { useLang } from '../../i18n/LangProvider'
 
 type Props = {
   venues: EventVenueRow[]
-  livePerformers: Performer[]
+  livePerformers: LiveMapPerformer[]
   sharedPerformers?: Performer[]
   appearanceMarkers?: Array<{ appearance: PerformerAppearance; performer: Performer; overlapsLive: boolean }>
   appearanceFocusNonce?: number
@@ -284,7 +285,7 @@ export function GoogleVenueMap({
         element.appendChild(portrait)
         if (input.live) {
           const badge = document.createElement('i')
-          badge.textContent = 'LIVE'
+          badge.textContent = input.approximate ? '🔴 LIVE · 概略位置' : '🔴 LIVE'
           element.appendChild(badge)
         }
         if (input.appearance) {
@@ -326,7 +327,8 @@ export function GoogleVenueMap({
       if (performer.lat == null || performer.lng == null) return
       addOverlay({
         position: { lat: performer.lat, lng: performer.lng },
-        label: performer.stage_name,
+        label: performer.liveMapLabel ? `${performer.stage_name} · ${performer.liveMapLabel}` : performer.stage_name,
+        approximate: Boolean(performer.liveMapLabel),
         image: performer.photo_url,
         live: true,
         active: selectedPerformerId === performer.id,

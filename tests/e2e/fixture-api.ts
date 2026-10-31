@@ -37,7 +37,15 @@ export async function listFollowedPerformers() { return [] }
 export async function listLiveRanking() { return [] }
 export async function listEventSlots() { return [] }
 export async function listEventVenues() { return [] }
-export function subscribePerformerMapUpdates() { return () => undefined }
+const mapListeners = new Set<(row: Performer) => void>()
+export function subscribePerformerMapUpdates(callback: (row: Performer) => void) {
+  mapListeners.add(callback)
+  return () => { mapListeners.delete(callback) }
+}
+export function setFixtureLive(patch: Partial<Performer>, realtime = true) {
+  Object.assign(performer, patch)
+  if (realtime) mapListeners.forEach(callback => callback({ ...performer }))
+}
 export async function listSellerMerchProducts() { return [] }
 export async function listPerformerEventSlots() { return [] }
 export async function getPerformerProfileStats() { return { followers: 0, appearances: 0, supporters: 0, liveViews: 0 } }

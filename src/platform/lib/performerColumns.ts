@@ -11,6 +11,7 @@ export const PERFORMER_CLIENT_SELECT = [
   'stripe_onboarding_complete',
   'is_approved',
   'is_live',
+  'is_private_test',
   'live_started_at',
   'live_title',
   'stream_url',

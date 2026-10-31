@@ -1,3 +1,4 @@
+import { discoverMapLives } from '../lib/liveMapDiscovery'
 import { isActiveEventSlot } from '../lib/eventSlotStatus'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Globe2, Heart, LogIn, Map as MapIcon, MapPin, Navigation, Radio, TentTree, UserRound } from 'lucide-react'
@@ -19,7 +20,7 @@ import {
   type EventVenueRow,
   type FeaturedEvent,
 } from '../lib/api'
-import { distanceKm, formatMapDistance, isFreshLiveLocation, isFreshSharedLocation, walkingMinutes } from '../lib/mapLocation'
+import { distanceKm, formatMapDistance, isFreshSharedLocation, walkingMinutes } from '../lib/mapLocation'
 import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
@@ -156,7 +157,10 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     let unsubscribe: () => void = () => {}
     try {
       unsubscribe = subscribePerformerMapUpdates((row) => {
-        if (!row.is_approved) return
+        if (!row.is_approved || row.is_private_test) {
+          setPerformers(current => current.filter(item => item.id !== row.id))
+          return
+        }
         if (!includePublicTest && /^test performer$/i.test(row.stage_name.trim())) return
         setPerformers((current) => {
           const exists = current.some((item) => item.id === row.id)
@@ -182,9 +186,9 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       .filter((appearance) => performerById.has(appearance.performer_id))
     return scheduleMode === 'following' ? rows.filter((appearance) => followedPerformerIds.has(appearance.performer_id)) : rows
   }, [appearancePeriod, appearances, followedPerformerIds, scheduleMode, performerById, locationClock])
-  const liveMapPerformers = useMemo(
-    () => performers.filter((performer) => isFreshLiveLocation(performer, locationClock)),
-    [locationClock, performers],
+  const { live: allMapLives, markers: liveMapPerformers } = useMemo(
+    () => discoverMapLives(performers, appearances, locationClock),
+    [locationClock, performers, appearances],
   )
   const sharedMapPerformers = useMemo(
     () => performers.filter((performer) => !performer.is_live && isFreshSharedLocation(performer, locationClock)),
@@ -233,15 +237,18 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     })
   }, [])
 
-  const nearbyLive = useMemo(() => liveMapPerformers
-    .map((performer) => ({
-      performer,
-      distance: userLocation && performer.lat != null && performer.lng != null
-        ? distanceKm(userLocation, { lat: performer.lat, lng: performer.lng })
-        : null,
-    }))
+  const nearbyLive = useMemo(() => allMapLives
+    .map((performer) => {
+      const marker = liveMapPerformers.find(row => row.id === performer.id)
+      return {
+        performer,
+        locationLabel: marker?.liveMapLabel,
+        distance: userLocation && marker && !marker.liveMapLabel
+          ? distanceKm(userLocation, { lat: marker.lat!, lng: marker.lng! }) : null,
+      }
+    })
     .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY)),
-  [liveMapPerformers, userLocation])
+  [allMapLives, liveMapPerformers, userLocation])
   const nearbyAppearances = useMemo(() => rankNearbyAppearances(appearanceMarkers, userLocation, areaQuery), [appearanceMarkers, areaQuery, userLocation])
 
   return (
@@ -271,7 +278,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               appearanceFocusNonce={appearanceFocusNonce}
               selectedPerformerId={selectedPerformer}
               selectedVenueId={selectedVenue}
-              onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
+              onSelectPerformer={(id) => { if (allMapLives.some(p => p.id === id)) { onWatchLive(id); return } setSelectedPerformer(id); setSelectedVenue(null); setSelectedAppearance(null) }}
               onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
               onSelectAppearance={(id) => { setSelectedAppearance(id); setSelectedVenue(null); setSelectedPerformer(null) }}
               onLocationChange={setUserLocation}
@@ -349,6 +356,21 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
           })() : null}
           </div>
 
+          <section className="pl-near-live" aria-label="配信中一覧">
+            <header><div><p>LIVE NOW</p><h2>🔴 配信中一覧</h2></div><span>{t('mapGroupCount', { n: nearbyLive.length })}</span></header>
+            {nearbyLive.length > 0 ? (
+              <div className="pl-near-live__rail">
+                {nearbyLive.map(({ performer, distance, locationLabel }) => (
+                  <button type="button" key={performer.id} onClick={() => onWatchLive(performer.id)}>
+                    <span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>LIVE</i></span>
+                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><em>{locationLabel || (distance != null ? t('mapFromHere', { distance: formatMapDistance(distance) }) : '位置情報なし・視聴できます')} · {t('mapViewers', { n: viewerPeaks[performer.id] ?? 0 })}</em></span>
+                    <ChevronRight size={18} />
+                  </button>
+                ))}
+              </div>
+            ) : <p className="pl-near-live__empty">現在配信中のパフォーマーはいません。</p>}
+          </section>
+
           <section className="pl-near-live" aria-label="近くの出演予定">
             <header><div><p>NEARBY STAGES</p><h2>近くの大道芸を探す</h2></div><span>{nearbyAppearances.length}件</span></header>
             {!userLocation ? <label className="pl-near-search">地域・会場から探す<input className="pl-input" type="search" value={areaQuery} onChange={(event) => setAreaQuery(event.target.value)} placeholder="例：東京、練馬城址公園" /></label> : null}
@@ -372,20 +394,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             </div>
           </section>
 
-          <section className="pl-near-live" aria-label={t('mapNear')}>
-            <header><div><p>NEAR YOU</p><h2>{t('mapNear')}</h2></div><span>{t('mapGroupCount', { n: nearbyLive.length })}</span></header>
-            {nearbyLive.length > 0 ? (
-              <div className="pl-near-live__rail">
-                {nearbyLive.map(({ performer, distance }) => (
-                  <button type="button" key={performer.id} onClick={() => { setSelectedPerformer(performer.id); setSelectedVenue(null) }}>
-                    <span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>LIVE</i></span>
-                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{performer.genre || 'Performance'}</small><em>{distance != null ? t('mapFromHere', { distance: formatMapDistance(distance) }) : t('mapSharingShort')} · {t('mapViewers', { n: viewerPeaks[performer.id] ?? 0 })}</em></span>
-                    <ChevronRight size={18} />
-                  </button>
-                ))}
-              </div>
-            ) : <p className="pl-near-live__empty">{t('mapNoSharedExplore')}</p>}
-          </section>
+
         </>
       ) : (
         <section className="pl-schedule-v7" aria-label="出演スケジュール">
