@@ -14,7 +14,7 @@ class MapFixture {
   node: HTMLElement
   constructor(node: HTMLElement) { this.node = node }
   addListener() { return { remove() {} } }
-  setMapTypeId() {} setCenter() {} panTo() {} setZoom() {} fitBounds() {}
+  setMapTypeId() {} setCenter() {} panTo(point: { lat: number; lng: number }) { (window as any).__mapPannedTo = point } setZoom() {} fitBounds() {}
   getZoom() { return 14 }
   getBounds() { return { contains: () => true } }
 }
