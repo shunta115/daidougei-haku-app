@@ -124,3 +124,26 @@ it('excludes cancelled LIVE plans on initial load and after refresh', async () =
   expect(screen.queryByText(/2099-10-10/)).toBeNull()
 })
 
+it('keeps HARIBOW without coordinates discoverable on MAP and removes it on cancellation', async () => {
+  fake.appearances.mockResolvedValue([{
+    id: 'haribow', performer_id: 'p', title: '大道芸ワールドカップin静岡2026',
+    performance_date: '2026-10-31', starts_at: '2026-10-31T03:00:00Z', ends_at: '2026-10-31T11:00:00Z',
+    start_time: '12:00:00', end_time: '20:00:00', timezone: 'Asia/Tokyo',
+    venue_name: '静岡駅', region: '静岡駅付近', venue_address: '', country: 'Japan',
+    venue_lat: null, venue_lng: null, status: 'published',
+  }])
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-31T06:57:00Z'))
+  const profile = vi.fn()
+  render(<LangProvider><MapScheduleScreen initialView="map" onOpenPerformer={profile} onWatchLive={vi.fn()} /></LangProvider>)
+  const section = await screen.findByRole('region', { name: '位置未確定の出演予定' })
+  expect(section.textContent).toContain('静岡駅付近')
+  expect(screen.getByTestId('appearance-markers').textContent).toBe('')
+  const search = screen.getByRole('link', { name: 'Google Mapsで会場情報を検索' })
+  expect(new URL(search.getAttribute('href')!).pathname).toBe('/maps/search/')
+  fireEvent.click(section.querySelector('button')!)
+  expect(profile).toHaveBeenCalledWith('p')
+  fake.appearances.mockResolvedValue([])
+  window.dispatchEvent(new Event('focus'))
+  await vi.waitFor(() => expect(screen.queryByRole('region', { name: '位置未確定の出演予定' })).toBeNull())
+  vi.restoreAllMocks()
+})

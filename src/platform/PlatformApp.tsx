@@ -51,7 +51,9 @@ export type NavigationSnapshot = {
 
 export function savedNavigationSnapshot(): NavigationSnapshot | null {
   const saved = (window.history.state as HakuHistoryState | null)?.hakuSnapshot
-  return saved && REFRESHABLE_SCREENS.has(saved.screen) ? saved : null
+  const recipientScreen = saved && (saved.screen === 'live-watch' || saved.screen === 'tip')
+    && typeof saved.performerId === 'string' && saved.performerId.length > 0
+  return saved && (REFRESHABLE_SCREENS.has(saved.screen) || recipientScreen) ? saved : null
 }
 
 export function reloadPreservingNavigation(snapshot: NavigationSnapshot, reload = () => window.location.reload()) {
@@ -296,7 +298,6 @@ function PlatformShell() {
   }, [screen])
 
   useEffect(() => {
-    const entrySnapshot = merchandiseEntry()
     const url = new URL(window.location.href)
     const tip = url.searchParams.get('tip')
     const sessionId = url.searchParams.get('session_id')
@@ -306,6 +307,11 @@ function PlatformShell() {
     const publicProfile = url.searchParams.get('profile')
     const auth = url.searchParams.get('auth')
     const tipTo = url.searchParams.get('tipTo')
+    // Keep the selected recipient when Safari/service-worker refreshes after
+    // these one-shot query parameters have been consumed.
+    const entrySnapshot: NavigationSnapshot | null = merchandiseEntry() ?? (watch
+      ? { screen: 'live-watch', performerId: watch, merchProductId: null, eventSlug: null }
+      : tipTo ? { screen: 'tip', performerId: tipTo, merchProductId: null, eventSlug: null } : null)
     const stripe = url.searchParams.get('stripe')
     const liveList = url.searchParams.get('live')
     const merch = url.searchParams.get('merch')

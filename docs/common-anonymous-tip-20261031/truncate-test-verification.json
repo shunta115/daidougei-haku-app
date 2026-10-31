@@ -1,0 +1,16 @@
+{
+  "project": "aeqskxxykzapgaudbeqa",
+  "test_applied": true,
+  "production_applied": false,
+  "before_count": 3,
+  "after_count": 3,
+  "before_tip_digest": "924761675c17c86d80b482256d6dd28f",
+  "after_tip_digest": "924761675c17c86d80b482256d6dd28f",
+  "before_policy_digest": "b2d6028be91f4c859e777cdaa56b94db",
+  "after_policy_digest": "b2d6028be91f4c859e777cdaa56b94db",
+  "anon_truncate_after": false,
+  "authenticated_truncate_after": false,
+  "service_role_dml_preserved": true,
+  "local_postgres_tests": 3,
+  "no_truncate_executed": true
+}

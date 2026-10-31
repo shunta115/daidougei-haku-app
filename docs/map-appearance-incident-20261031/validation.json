@@ -1,0 +1,31 @@
+{
+  "base": "1b01ba21f89d6cb62c36cde2f75da4750d98b5e9",
+  "targeted": {
+    "files": 5,
+    "tests": 22,
+    "status": "passed"
+  },
+  "browser": {
+    "checks": 8,
+    "status": "passed",
+    "engine": "WebKit",
+    "device": "iPhone 13 emulation",
+    "adapters": "offline API and Maps",
+    "physicalDevice": false
+  },
+  "typecheck": "passed",
+  "build": "passed; existing chunk size warning",
+  "fullSuite": {
+    "files": 87,
+    "tests": 492,
+    "status": "passed",
+    "note": "Full run started before the additional appearance-fetch test; final 5-file/22-test targeted run also passed."
+  },
+  "productionInvestigation": "read-only SQL transactions, anonymous-role visibility, GitHub ancestry and Vercel production metadata",
+  "productionWrites": false,
+  "remaining": [
+    "physical iPhone and real Google Maps interaction",
+    "production behavior after an individually approved release",
+    "original capture client cache cannot be reconstructed"
+  ]
+}
