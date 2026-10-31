@@ -18,8 +18,8 @@ describe('appearance MAP visibility', () => {
     expect(appearanceMapState(base, new Date('2026-10-29T01:30:00Z'))).toBe('performance-window')
   })
 
-  it('does not retain an already started appearance without an end time', () => {
-    expect(appearanceMapState({ ...base, ends_at: null, end_time: null }, new Date('2026-10-29T01:30:00Z'))).toBeNull()
+  it("retains today's plan without inventing an active window", () => {
+    expect(appearanceMapState({ ...base, ends_at: null, end_time: null }, new Date('2026-10-29T01:30:00Z'))).toBe('scheduled')
   })
 
   it('uses a half-open start/end window and rejects malformed positions or timestamps', () => {

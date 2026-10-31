@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "checks": [
+    "HARIBOW is discoverable at 15:57 without coordinates",
+    "no fabricated appearance pin",
+    "unknown position searches venue instead of routing to invented coordinates",
+    "same public plan appears in schedule",
+    "started plan with unknown end remains a plan",
+    "LIVE filter excludes unknown scheduled plans",
+    "focus refresh removes cancelled plan",
+    "no runtime errors"
+  ],
+  "errors": [],
+  "boundary": "Real React + WebKit iPhone13 emulation, offline API/Maps. No production mutations or real GPS/device validation."
+}

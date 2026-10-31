@@ -1,3 +1,4 @@
+import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
 import type {
@@ -779,7 +780,7 @@ export async function listUpcomingPublishedAppearances(now = new Date()): Promis
       .from('performer_appearances')
       .select('*')
       .or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)')
-      .or(`starts_at.gte.${now.toISOString()},ends_at.gte.${now.toISOString()}`)
+      .or(appearanceFetchFilter(now))
       .order('starts_at')
       .order('id')
       .range(from, from + pageSize - 1)
@@ -789,7 +790,7 @@ export async function listUpcomingPublishedAppearances(now = new Date()): Promis
     }
     const page = (data as PerformerAppearance[]) ?? []
     rows.push(...page)
-    if (page.length < pageSize) return rows
+    if (page.length < pageSize) return rows.filter(row => appearanceIsDiscoverable(row, now))
   }
 }
 

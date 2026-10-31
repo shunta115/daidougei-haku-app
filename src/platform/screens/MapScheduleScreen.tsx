@@ -26,7 +26,7 @@ import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
 import { filterAppearancesForPeriod, type AppearancePeriod } from '../lib/appearanceSchedule'
 import { appearanceGoogleMapsUrl, resolveAppearanceLocation } from '../lib/appearanceLocation'
-import { appearanceMapState, mapVisibleAppearances } from '../lib/appearanceMap'
+import { appearanceMapState, appearanceTimeState, mapVisibleAppearances } from '../lib/appearanceMap'
 import { rankNearbyAppearances } from '../lib/nearbyAppearances'
 import { startNotificationRefresh } from '../lib/notificationRefresh'
 import { FESTIVAL_PATH } from '../../app/routes'
@@ -249,6 +249,12 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     })
     .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY)),
   [allMapLives, liveMapPerformers, userLocation])
+  const unlocatedAppearances = useMemo(() => appearances.filter(row =>
+    appearanceTimeState(row, new Date(locationClock)) !== null && !resolveAppearanceLocation(row)
+    && performerById.has(row.performer_id)
+    && (!areaQuery.trim() || [row.venue_name, row.venue_address, row.region, performerById.get(row.performer_id)!.stage_name]
+      .some(value => value.toLocaleLowerCase().includes(areaQuery.trim().toLocaleLowerCase()))),
+  ), [appearances, locationClock, performerById, areaQuery])
   const nearbyAppearances = useMemo(() => rankNearbyAppearances(appearanceMarkers, userLocation, areaQuery), [appearanceMarkers, areaQuery, userLocation])
 
   return (
@@ -261,6 +267,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
       <GlobalMessageBar />
 
+      {view === 'map' && scheduleError ? <p className="pl-error" role="alert">{scheduleError}</p> : null}
       {view === 'map' && mapError ? <p className="pl-error">{mapError}</p> : null}
 
       {view === 'map' ? (
@@ -293,7 +300,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             const approximate = point.precision === 'approximate'
             const directions = appearanceGoogleMapsUrl(appearance, point)
             return <section className="pl-venue-sheet pl-map-stage__sheet" aria-label={`${performer.stage_name} ${appearance.title}`}>
-              <div className="pl-venue-sheet__top"><div><p>🟢 {state === 'performance-window' ? '出演予定時刻' : 'UPCOMING'}{overlapsLive ? ' · LIVE配信中' : ''}</p><h2>{performer.stage_name}</h2><span>{appearance.title} · {appearance.venue_name}</span></div>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : null}</div>
+              <div className="pl-venue-sheet__top"><div><p>🟢 {state === 'performance-window' ? '出演予定時刻' : '出演予定'}{overlapsLive ? ' · LIVE配信中' : ''}</p><h2>{performer.stage_name}</h2><span>{appearance.title} · {appearance.venue_name}</span></div>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : null}</div>
               {approximate ? <p className="pl-approximate-notice">概略位置：{point.label}。実際の出演地点とは異なります。出演者の案内をご確認ください。</p> : null}
               <div className="pl-live-map-sheet__facts"><span><Clock3 size={14} /> {appearance.performance_date} {timeLabel(appearance.start_time)}{appearance.end_time ? `–${timeLabel(appearance.end_time)}` : '（終了時刻未登録）'}</span><span><MapPin size={14} /> {appearance.venue_name}</span></div>
               <div className="pl-venue-sheet__actions">{overlapsLive ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> LIVEを見る</button> : null}<button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> プロフィール</button><a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> {approximate ? 'Google Mapsで会場を確認' : '経路案内'}</a></div>
@@ -379,8 +386,27 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               const approximate = point.precision === 'approximate'
               const directions = appearanceGoogleMapsUrl(appearance, point)
               return <article key={appearance.id} className="pl-near-appearance"><button type="button" onClick={() => { setSelectedAppearance(appearance.id); setAppearanceFocusNonce(value => value + 1); setSelectedPerformer(null); setSelectedVenue(null); document.getElementById('haku-venue-map')?.scrollIntoView({ behavior: 'smooth' }) }}><span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>予定</i></span><span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{appearance.performance_date} {timeLabel(appearance.start_time)} · {appearance.venue_name}</small><em>{distance != null ? `${approximate ? '概略・約' : ''}${formatMapDistance(distance)} · ` : ''}{approximate ? `概略位置：${point.label}` : appearance.region}</em></span><ChevronRight size={18} /></button><a href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={15} /> {approximate ? 'Google Mapsで会場を確認' : 'Google Mapsで経路案内'}</a></article>
-            })}</div> : <p className="pl-near-live__empty">条件に合う公開予定はありません。</p>}
+            })}</div> : <p className="pl-near-live__empty">{unlocatedAppearances.length ? '地図上の出演地点が未確定の予定は、下の一覧で確認できます。' : '条件に合う公開予定はありません。'}</p>}
           </section>
+
+          {filter !== 'live' && filter !== 'event' && unlocatedAppearances.length > 0 ? (
+            <section className="pl-near-live" aria-label="位置未確定の出演予定">
+              <header><div><p>SCHEDULE</p><h2>位置未確定の出演予定</h2></div><span>{unlocatedAppearances.length}件</span></header>
+              <p>会場情報は公開されています。地図上の出演地点は未確定です。</p>
+              <div className="pl-near-live__rail">{unlocatedAppearances.map(appearance => {
+                const performer = performerById.get(appearance.performer_id)!
+                return <article className="pl-near-appearance pl-near-appearance--unlocated" key={appearance.id}>
+                  <button type="button" onClick={() => onOpenPerformer(performer.id)}>
+                    <span className="pl-near-live__body"><strong>{performer.stage_name}</strong>
+                      <small>{appearance.title} · {appearance.performance_date} {timeLabel(appearance.start_time)}{appearance.end_time ? `–${timeLabel(appearance.end_time)}` : '（終了時刻未登録）'}</small>
+                      <em>出演予定 · 位置未確定 · {[appearance.venue_name, appearance.region].filter(Boolean).join(' · ')}</em>
+                    </span><ChevronRight size={18} />
+                  </button>
+                  <a href={appearanceGoogleMapsUrl(appearance)} target="_blank" rel="noopener noreferrer">Google Mapsで会場情報を検索</a>
+                </article>
+              })}</div>
+            </section>
+          ) : null}
 
           <section className="pl-map-directory" aria-label={t('mapEvents')}>
             <header><div><p>EVENT</p><h2>{t('mapEvents')}</h2></div></header>
