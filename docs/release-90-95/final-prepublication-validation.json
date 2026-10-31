@@ -1,0 +1,40 @@
+{
+  "date_jst": "2026-10-31",
+  "test_project": "aeqskxxykzapgaudbeqa",
+  "targeted_regression": {
+    "files": 9,
+    "passed": 53,
+    "failed": 0
+  },
+  "real_test_role_regression": "passed; fixture writes rolled back; not a password login E2E",
+  "typecheck": "passed",
+  "live_broadcast_started": false,
+  "payment_executed": false,
+  "normal_login_e2e": "blocked: TEST session/credential location requested, not supplied",
+  "inline_google_maps": "blocked: no TEST-restricted key/confirmed zero-cost configuration",
+  "external_map": {
+    "verified": true,
+    "coordinates": "35.7,139.7",
+    "method": "Google Maps consumer URL, no project API key copied",
+    "boundary": "not inline marker E2E"
+  },
+  "physical_iphone": "manual checklist prepared; not executed",
+  "physical_backup_restore": {
+    "executed": false,
+    "reason": "official isolated project restore incurs additional monthly costs; physical backup cannot be directly downloaded",
+    "paid_feature_enabled": false
+  },
+  "test_counts_before_after": {
+    "profiles": 8,
+    "auth_users": 8,
+    "performers": 5,
+    "appearances": 0,
+    "notifications": 0,
+    "live_sessions": 6
+  },
+  "client_notification_insert": false,
+  "production_changes": false,
+  "main_merge": false,
+  "production_deploy": false,
+  "data_deletion": false
+}

@@ -756,7 +756,7 @@ export async function markNotificationRead(id: string) {
 
 export type PerformerAppearanceInput = Pick<PerformerAppearance,
   'title' | 'performance_date' | 'start_time' | 'end_time' | 'timezone' | 'venue_name' |
-  'venue_address' | 'region' | 'country' | 'description' | 'admission_type' |
+  'venue_address' | 'venue_lat' | 'venue_lng' | 'region' | 'country' | 'description' | 'admission_type' |
   'admission_details' | 'image_url' | 'ticket_url' | 'is_live_planned' | 'rain_policy' |
   'organizer_info' | 'notes' | 'status'>
 
@@ -778,8 +778,8 @@ export async function listUpcomingPublishedAppearances(now = new Date()): Promis
     const { data, error } = await sb
       .from('performer_appearances')
       .select('*')
-      .eq('status', 'published')
-      .gte('starts_at', now.toISOString())
+      .or('status.eq.published,and(status.eq.cancelled,published_at.not.is.null),and(status.eq.postponed,published_at.not.is.null)')
+      .or(`starts_at.gte.${now.toISOString()},ends_at.gte.${now.toISOString()}`)
       .order('starts_at')
       .order('id')
       .range(from, from + pageSize - 1)
@@ -828,7 +828,7 @@ async function listUpcomingLegacyEventAppearances(now: Date): Promise<PerformerA
       starts_at: `${String(slot.date).slice(0, 10)}T${startTime}+09:00`,
       ends_at: endTime ? `${String(slot.date).slice(0, 10)}T${endTime}+09:00` : null,
       venue_name: slot.event_venues?.name_ja || slot.stage_ja || '',
-      venue_address: '', region: '', country: 'JP', description: '',
+      venue_address: '', venue_lat: null, venue_lng: null, region: '', country: 'JP', description: '',
       admission_type: 'free', admission_details: '', image_url: null, ticket_url: null,
       is_live_planned: Boolean(slot.is_stream), rain_policy: '', organizer_info: '', notes: '',
       status: 'published', published_at: null, cancelled_at: null, created_at: '', updated_at: '',
@@ -867,15 +867,24 @@ export async function createPerformerAppearance(performerId: string, input: Perf
   const sb = requireSupabase()
   const { data, error } = await sb.from('performer_appearances').insert({ ...input, performer_id: performerId }).select('*').single()
   if (error) throw error
-  await dispatchAppearanceEvent(data.id as string)
+  await dispatchAppearanceEvent(data.id as string).catch(() => undefined)
   return data as PerformerAppearance
+}
+
+export async function createPerformerAppearances(performerId: string, inputs: PerformerAppearanceInput[]) {
+  const sb = requireSupabase()
+  const { data, error } = await sb.from('performer_appearances').insert(inputs.map((input) => ({ ...input, performer_id: performerId }))).select('*')
+  if (error) throw error
+  const rows = (data as PerformerAppearance[]) ?? []
+  await Promise.all(rows.map((row) => dispatchAppearanceEvent(row.id).catch(() => undefined)))
+  return rows
 }
 
 export async function updatePerformerAppearance(id: string, input: Partial<PerformerAppearanceInput>) {
   const sb = requireSupabase()
   const { data, error } = await sb.from('performer_appearances').update(input).eq('id', id).select('*').single()
   if (error) throw error
-  await dispatchAppearanceEvent(id)
+  await dispatchAppearanceEvent(id).catch(() => undefined)
   return data as PerformerAppearance
 }
 
@@ -1829,3 +1838,4 @@ export async function updateMerchOrderHandoff(orderId: string, action: 'fulfill'
   const json = (await res.json()) as { ok?: boolean; code?: string }
   if (!res.ok || !json.ok) throw new Error(json.code || 'order_action_failed')
 }
+

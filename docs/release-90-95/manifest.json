@@ -1,0 +1,32 @@
+{
+  "target": "aeqskxxykzapgaudbeqa",
+  "production": false,
+  "migrations": [
+    {
+      "order": 1,
+      "file": "supabase/migrations/20261014065602_performer_appearances_and_notifications_20261014.sql",
+      "sha256": "089a4dca85ecc7e83c701875ca53d7c652360199c8f326564b67cf175ca951ba",
+      "version": "20261014065602"
+    },
+    {
+      "order": 2,
+      "file": "supabase/migrations/20261029085105_add_appearance_map_coordinates.sql",
+      "sha256": "24600389e6590c1747681620e6dbd31f409a4419899ba771300de1285cab145a",
+      "version": "20261029085105"
+    },
+    {
+      "order": 3,
+      "file": "supabase/migrations/20261029090008_add_day_of_appearance_reminders.sql",
+      "sha256": "2bd095ebea7a3ddf4d88d25971a823cddcd6ea8ad78e6d88baeabedd66f21509",
+      "version": "20261029090008"
+    },
+    {
+      "order": 4,
+      "file": "supabase/migrations/20261030182434_harden_notification_client_inserts.sql",
+      "sha256": "d5fe94aa90514bab119bb116a0b03036caaffe95440a16a20234cd74de6e99fb",
+      "version": "20261030182434"
+    }
+  ],
+  "test_apply_sha256": "6b9c7a87f7560627a3373af7170e717c700fc482eef018aef5143e53edcde94f",
+  "production_proposal_sha256": "2e12bea6214f444f10bc74d868a538f646ffe9a794a8a5e00ab37f9f7ce27745"
+}

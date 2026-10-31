@@ -3,6 +3,7 @@ import { Crosshair, LocateFixed, Map as MapIcon, MapPin, Satellite } from 'lucid
 import type { EventVenueRow } from '../lib/api'
 import type { MapCoordinates } from '../lib/mapLocation'
 import type { Performer } from '../lib/types'
+import type { PerformerAppearance } from '../lib/types'
 import { venueMapLabel } from '../lib/venueDisplay'
 import { mapsLocale, type Lang } from '../../i18n'
 import { useLang } from '../../i18n/LangProvider'
@@ -11,10 +12,12 @@ type Props = {
   venues: EventVenueRow[]
   livePerformers: Performer[]
   sharedPerformers?: Performer[]
+  appearanceMarkers?: Array<{ appearance: PerformerAppearance; performer: Performer; overlapsLive: boolean }>
   selectedPerformerId: string | null
   selectedVenueId: string | null
   onSelectPerformer: (id: string) => void
   onSelectVenue: (id: string) => void
+  onSelectAppearance?: (id: string) => void
   onLocationChange: (location: MapCoordinates | null) => void
   venueFocusNonce?: number
   venueMarkerLabel?: string
@@ -75,10 +78,12 @@ export function GoogleVenueMap({
   venues,
   livePerformers,
   sharedPerformers = [],
+  appearanceMarkers = [],
   selectedPerformerId,
   selectedVenueId,
   onSelectPerformer,
   onSelectVenue,
+  onSelectAppearance,
   onLocationChange,
   venueFocusNonce,
   venueMarkerLabel,
@@ -249,6 +254,8 @@ export function GoogleVenueMap({
       image?: string | null
       live?: boolean
       performer?: boolean
+      appearance?: boolean
+      overlapsLive?: boolean
       active?: boolean
       onClick: () => void
     }) => {
@@ -257,7 +264,7 @@ export function GoogleVenueMap({
       overlay.onAdd = () => {
         element = document.createElement('button')
         element.type = 'button'
-        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : input.performer ? ' pl-google-marker--performer' : ' pl-google-marker--venue'}${input.active ? ' pl-google-marker--active' : ''}`
+        element.className = `pl-google-marker${input.live ? ' pl-google-marker--live' : input.appearance ? ' pl-google-marker--appearance' : input.performer ? ' pl-google-marker--performer' : ' pl-google-marker--venue'}${input.overlapsLive ? ' pl-google-marker--overlap' : ''}${input.active ? ' pl-google-marker--active' : ''}`
         element.setAttribute('aria-label', input.live ? t('mapsShowLive', { name: input.label }) : t('mapsShowPlace', { name: input.label }))
         const portrait = input.image ? document.createElement('img') : document.createElement('b')
         if (portrait instanceof HTMLImageElement) {
@@ -270,6 +277,11 @@ export function GoogleVenueMap({
         if (input.live) {
           const badge = document.createElement('i')
           badge.textContent = 'LIVE'
+          element.appendChild(badge)
+        }
+        if (input.appearance) {
+          const badge = document.createElement('i')
+          badge.textContent = input.overlapsLive ? 'LIVE + 予定' : '出演予定'
           element.appendChild(badge)
         }
         const label = document.createElement('span')
@@ -324,8 +336,19 @@ export function GoogleVenueMap({
         onClick: () => onSelectPerformer(performer.id),
       })
     })
+    appearanceMarkers.forEach(({ appearance, performer, overlapsLive }) => {
+      if (appearance.venue_lat == null || appearance.venue_lng == null) return
+      addOverlay({
+        position: { lat: appearance.venue_lat, lng: appearance.venue_lng },
+        label: performer.stage_name,
+        image: performer.photo_url,
+        appearance: true,
+        overlapsLive,
+        onClick: () => onSelectAppearance?.(appearance.id),
+      })
+    })
     return () => overlays.forEach((overlay) => overlay.setMap(null))
-  }, [googleApi, livePerformers, map, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, sharedPerformers, t, venueMarkerLabel, venues])
+  }, [appearanceMarkers, googleApi, livePerformers, map, onSelectAppearance, onSelectPerformer, onSelectVenue, selectedPerformerId, selectedVenueId, sharedPerformers, t, venueMarkerLabel, venues])
 
   useEffect(() => {
     if (!map || !selectedVenueId) return
@@ -356,6 +379,7 @@ export function GoogleVenueMap({
       ...venues.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
       ...livePerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
       ...sharedPerformers.filter((item) => item.lat != null && item.lng != null).map((item) => ({ lat: item.lat!, lng: item.lng! })),
+      ...appearanceMarkers.map(({ appearance }) => ({ lat: appearance.venue_lat!, lng: appearance.venue_lng! })),
     ]
     setAreaCount(points.filter((point) => bounds.contains(new googleApi.maps.LatLng(point.lat, point.lng))).length)
     setAreaDirty(false)

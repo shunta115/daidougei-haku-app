@@ -24,6 +24,7 @@ import type { MerchProduct, Performer, PerformerAppearance } from '../lib/types'
 import { formatYen, TIP_PRESET_LABELS_JA, TIP_PRESETS_JPY } from '../lib/money'
 import { safeExternalHref } from '../../festival/lib/safeExternalHref'
 import { downloadQrCard, performerQrDataUrl, printQrCard } from '../lib/qr'
+import { startNotificationRefresh } from '../lib/notificationRefresh'
 import { copyAppearanceUrl, isShareCancellation } from '../lib/appearanceShare'
 import { officialAwpAwards } from '../lib/awpAwards'
 import { displayStageName } from '../lib/stageLabel'
@@ -147,15 +148,18 @@ export function PerformerPublicScreen({ performerId, onTip, onBack, onWatchLive,
         if (alive) setVenues(venueRows)
       })
       .catch(() => { if (alive) { setSlots([]); setVenues([]) } })
-    listPerformerAppearances(performerId)
-      .then((rows) => { if (alive) setAppearances(rows) })
-      .catch(() => { if (alive) setAppearances([]) })
+    const stopAppearances = startNotificationRefresh(async () => {
+      try {
+        const rows = await listPerformerAppearances(performerId)
+        if (alive) setAppearances(rows)
+      } catch { if (alive) setAppearances([]) }
+    }, 20_000)
     const timer = window.setInterval(() => {
       getPerformer(performerId)
         .then((row) => { if (alive && row) setP((prev) => (prev ? { ...prev, is_live: row.is_live, live_title: row.live_title } : row)) })
         .catch(() => undefined)
     }, 20000)
-    return () => { alive = false; window.clearInterval(timer) }
+    return () => { alive = false; stopAppearances(); window.clearInterval(timer) }
   }, [performerId, t])
 
   useEffect(() => {

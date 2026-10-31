@@ -24,6 +24,9 @@ import { useLang } from '../../i18n/LangProvider'
 import type { Performer } from '../lib/types'
 import type { PerformerAppearance } from '../lib/types'
 import { filterAppearancesForPeriod, type AppearancePeriod } from '../lib/appearanceSchedule'
+import { appearanceMapState, mapVisibleAppearances } from '../lib/appearanceMap'
+import { rankNearbyAppearances } from '../lib/nearbyAppearances'
+import { startNotificationRefresh } from '../lib/notificationRefresh'
 import { FESTIVAL_PATH } from '../../app/routes'
 
 type Props = {
@@ -51,9 +54,11 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const [performers, setPerformers] = useState<Performer[]>([])
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null)
   const [selectedPerformer, setSelectedPerformer] = useState<string | null>(null)
+  const [selectedAppearance, setSelectedAppearance] = useState<string | null>(null)
   const [viewerPeaks, setViewerPeaks] = useState<Record<string, number>>({})
   const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [areaQuery, setAreaQuery] = useState('')
   const [mapError, setMapError] = useState<string | null>(null)
   const [locationClock, setLocationClock] = useState(Date.now())
   const [filter, setFilter] = useState<DiscoveryFilter>('all')
@@ -112,8 +117,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
 
   useEffect(() => {
     let cancelled = false
-    void (async () => {
-      setScheduleLoading(true)
+    const stopRefresh = startNotificationRefresh(async () => {
       setScheduleError(null)
       try {
         const [publicAppearances, userId] = await Promise.all([
@@ -125,26 +129,27 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
           userId ? listFollowedPerformers(userId).catch(() => []) : Promise.resolve([]),
         ])
         if (cancelled) return
+        setLocationClock(Date.now())
         setAppearances(publicAppearances)
         setSchedulePerformers(acts)
         setSignedInUserId(userId)
         setFollowedPerformerIds(new Set(followed.map((performer) => performer.id)))
       } catch (loadError) {
         console.error('schedule_load_failed', JSON.stringify(loadError))
-        if (!cancelled) setScheduleError('出演予定を読み込めませんでした。時間をおいて再度お試しください。')
+        if (!cancelled) {
+          setAppearances([])
+          setScheduleError('出演予定を読み込めませんでした。時間をおいて再度お試しください。')
+        }
       } finally {
         if (!cancelled) setScheduleLoading(false)
       }
-    })()
-    return () => { cancelled = true }
+    }, 20_000)
+    return () => { cancelled = true; stopRefresh() }
   }, [])
 
   useEffect(() => {
     if (view !== 'map') return
-    const refresh = () => {
-      if (document.visibilityState === 'visible') void refreshLiveMap().catch(() => undefined)
-    }
-    const timer = window.setInterval(refresh, 20_000)
+    const stopLiveRefresh = startNotificationRefresh(async () => { await refreshLiveMap().catch(() => undefined) }, 20_000)
     const clock = window.setInterval(() => setLocationClock(Date.now()), 15_000)
     let unsubscribe: () => void = () => {}
     try {
@@ -161,7 +166,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
       // Polling remains active when Realtime is unavailable.
     }
     return () => {
-      window.clearInterval(timer)
+      stopLiveRefresh()
       window.clearInterval(clock)
       unsubscribe()
     }
@@ -171,10 +176,10 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
   const venueById = useMemo(() => new Map(venues.map((venue) => [venue.id, venue])), [venues])
   const dateSlots = useMemo(() => slots.filter((slot) => String(slot.date).slice(0, 10) === selectedDate), [slots, selectedDate])
   const visibleAppearances = useMemo(() => {
-    const rows = filterAppearancesForPeriod(appearances, appearancePeriod)
+    const rows = filterAppearancesForPeriod(appearances, appearancePeriod, new Date(locationClock))
       .filter((appearance) => performerById.has(appearance.performer_id))
     return scheduleMode === 'following' ? rows.filter((appearance) => followedPerformerIds.has(appearance.performer_id)) : rows
-  }, [appearancePeriod, appearances, followedPerformerIds, scheduleMode, performerById])
+  }, [appearancePeriod, appearances, followedPerformerIds, scheduleMode, performerById, locationClock])
   const liveMapPerformers = useMemo(
     () => performers.filter((performer) => isFreshLiveLocation(performer, locationClock)),
     [locationClock, performers],
@@ -198,6 +203,14 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     return sharedMapPerformers
   }, [filter, sharedMapPerformers])
   const filteredEvents = filter === 'live' || filter === 'performer' || filter === 'nearby' ? [] : eventMapVenue
+  const mapAppearances = useMemo(() => mapVisibleAppearances(appearances, new Date(locationClock)), [appearances, locationClock])
+  const appearanceMarkers = useMemo(() => mapAppearances.flatMap((appearance) => {
+    const performer = performerById.get(appearance.performer_id)
+    if (!performer) return []
+    return [{ appearance, performer, overlapsLive: liveMapPerformers.some((row) => row.id === performer.id) }]
+  }), [liveMapPerformers, mapAppearances, performerById])
+  const filteredAppearances = filter === 'event' || filter === 'live' ? [] : appearanceMarkers
+  const selectedMapAppearance = useMemo(() => appearanceMarkers.find(({ appearance }) => appearance.id === selectedAppearance) ?? null, [appearanceMarkers, selectedAppearance])
   const selectedLivePerformer = useMemo(
     () => liveMapPerformers.find((performer) => performer.id === selectedPerformer) ?? null,
     [liveMapPerformers, selectedPerformer],
@@ -227,6 +240,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
     }))
     .sort((a, b) => (a.distance ?? Number.POSITIVE_INFINITY) - (b.distance ?? Number.POSITIVE_INFINITY)),
   [liveMapPerformers, userLocation])
+  const nearbyAppearances = useMemo(() => rankNearbyAppearances(appearanceMarkers, userLocation, areaQuery), [appearanceMarkers, areaQuery, userLocation])
 
   return (
     <main className="pl-experience pl-map-schedule">
@@ -250,16 +264,27 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
               venues={filteredEvents}
               livePerformers={filteredLive}
               sharedPerformers={filteredShared}
+              appearanceMarkers={filteredAppearances}
               selectedPerformerId={selectedPerformer}
               selectedVenueId={selectedVenue}
               onSelectPerformer={(id) => { setSelectedPerformer(id); setSelectedVenue(null) }}
               onSelectVenue={(id) => { setSelectedVenue(id); setSelectedPerformer(null) }}
+              onSelectAppearance={(id) => { setSelectedAppearance(id); setSelectedVenue(null); setSelectedPerformer(null) }}
               onLocationChange={setUserLocation}
               venueFocusNonce={venueFocusNonce}
               venueMarkerLabel="EVENT"
             />
 
-          {selectedLivePerformer ? (() => {
+          {selectedMapAppearance ? (() => {
+            const { appearance, performer, overlapsLive } = selectedMapAppearance
+            const state = appearanceMapState(appearance, new Date(locationClock))
+            const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${appearance.venue_lat},${appearance.venue_lng}`
+            return <section className="pl-venue-sheet pl-map-stage__sheet" aria-label={`${performer.stage_name} ${appearance.title}`}>
+              <div className="pl-venue-sheet__top"><div><p>🟢 {state === 'performance-window' ? '出演予定時刻' : 'UPCOMING'}{overlapsLive ? ' · LIVE配信中' : ''}</p><h2>{performer.stage_name}</h2><span>{appearance.title} · {appearance.venue_name}</span></div>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : null}</div>
+              <div className="pl-live-map-sheet__facts"><span><Clock3 size={14} /> {appearance.performance_date} {timeLabel(appearance.start_time)}{appearance.end_time ? `–${timeLabel(appearance.end_time)}` : '（終了時刻未登録）'}</span><span><MapPin size={14} /> {appearance.venue_name}</span></div>
+              <div className="pl-venue-sheet__actions">{overlapsLive ? <button type="button" className="pl-action pl-action--live" onClick={() => onWatchLive(performer.id)}><Radio size={17} /> LIVEを見る</button> : null}<button type="button" className="pl-action pl-action--glass" onClick={() => onOpenPerformer(performer.id)}><UserRound size={17} /> プロフィール</button><a className="pl-action pl-action--primary" href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> 経路案内</a></div>
+            </section>
+          })() : selectedLivePerformer ? (() => {
             const performer = selectedLivePerformer
             const point = { lat: performer.lat!, lng: performer.lng! }
             const km = userLocation ? distanceKm(userLocation, point) : null
@@ -316,6 +341,15 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
             )
           })() : null}
           </div>
+
+          <section className="pl-near-live" aria-label="近くの出演予定">
+            <header><div><p>NEARBY STAGES</p><h2>近くの大道芸を探す</h2></div><span>{nearbyAppearances.length}件</span></header>
+            {!userLocation ? <label className="pl-near-search">地域・会場から探す<input className="pl-input" type="search" value={areaQuery} onChange={(event) => setAreaQuery(event.target.value)} placeholder="例：東京、練馬城址公園" /></label> : null}
+            {nearbyAppearances.length ? <div className="pl-near-live__rail">{nearbyAppearances.map(({ appearance, performer, distance }) => {
+              const directions = `https://www.google.com/maps/dir/?api=1${userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : ''}&destination=${appearance.venue_lat},${appearance.venue_lng}`
+              return <article key={appearance.id} className="pl-near-appearance"><button type="button" onClick={() => { setSelectedAppearance(appearance.id); setSelectedPerformer(null); setSelectedVenue(null); document.getElementById('haku-venue-map')?.scrollIntoView({ behavior: 'smooth' }) }}><span className="pl-near-live__portrait">{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 2)}<i>予定</i></span><span className="pl-near-live__body"><strong>{performer.stage_name}</strong><small>{appearance.performance_date} {timeLabel(appearance.start_time)} · {appearance.venue_name}</small><em>{distance != null ? `${formatMapDistance(distance)} · ` : ''}{appearance.region}</em></span><ChevronRight size={18} /></button><a href={directions} target="_blank" rel="noopener noreferrer"><Navigation size={15} /> Google Mapsで経路案内</a></article>
+            })}</div> : <p className="pl-near-live__empty">条件に合う公開予定はありません。</p>}
+          </section>
 
           <section className="pl-map-directory" aria-label={t('mapEvents')}>
             <header><div><p>EVENT</p><h2>{t('mapEvents')}</h2></div></header>
@@ -385,7 +419,7 @@ export function MapScheduleScreen({ onOpenPerformer, onWatchLive, initialView = 
                 <button type="button" className="pl-appearance-row__profile" onClick={() => onOpenPerformer(act.id)} aria-label={`${act.stage_name}のプロフィールを開く`}>
                   <span className="pl-schedule-row__time"><strong>{dateLabel}</strong><span><Clock3 size={13} />{timeLabel(appearance.start_time)}</span></span>
                   <span className="pl-schedule-row__media">{act.photo_url ? <img src={act.photo_url} alt="" /> : <span>{act.stage_name.slice(0, 2)}</span>}</span>
-                  <span className="pl-schedule-row__body"><strong>{act.stage_name}</strong><small>{appearance.title}</small><span><MapPin size={12} /> {place}</span></span>
+                  <span className="pl-schedule-row__body"><strong>{act.stage_name}</strong><small>{appearance.title}</small>{appearance.status === 'cancelled' ? <em>中止</em> : appearance.status === 'postponed' ? <em>延期</em> : null}<span><MapPin size={12} /> {place}</span></span>
                   <ChevronRight size={18} />
                 </button>
                 {mapQuery ? <a className="pl-appearance-row__map" href={mapHref} target="_blank" rel="noopener noreferrer"><MapIcon size={14} /> MAPで見る</a> : null}

@@ -83,6 +83,8 @@ try {
   await page.getByRole('button', { name: '印刷', exact: true }).click()
   check('blocked popup gives a visible error and allows retry', await visible(page.getByRole('alert')) && await page.getByRole('button', { name: '印刷', exact: true }).isEnabled())
   await page.evaluate(() => { window.open = window.__originalOpen })
+  await page.locator('.hp-qr__top button').click()
+  check('QR dialog closes by touch without forcing a click', !(await page.getByRole('dialog').isVisible()))
   check('no browser runtime errors', errors.length === 0)
   console.log(JSON.stringify({ browser: `WebKit ${browser.version()}`, device: 'iPhone 13', passed: true, checks }, null, 2))
 } catch (error) { console.error(error); process.exitCode = 1 }
