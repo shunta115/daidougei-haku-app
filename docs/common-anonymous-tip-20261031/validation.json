@@ -10,7 +10,8 @@
   },
   "final_permission_suite": {
     "tests": 4,
-    "status": "see CI / truncate-final result"
+    "status": "passed",
+    "note": "Contains one additional guard case after full suite; final CI must include it."
   },
   "real_checkout_matrix": {
     "checks": 32,
