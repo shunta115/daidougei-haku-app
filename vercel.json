@@ -1,4 +1,5 @@
 {
+  "git": { "deploymentEnabled": { "codex/home-activity-20261031": false } },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],
