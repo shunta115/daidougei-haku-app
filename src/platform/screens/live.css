@@ -1016,3 +1016,66 @@
   padding: 0 !important;
   max-width: none;
 }
+
+/* LIVE repair: keep controls tappable and show full, uncropped media. */
+.pl-live--watch button { min-height: 44px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.pl-live__react, .pl-live__side-actions button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.pl-live__settings {
+  position: absolute; z-index: 20; top: 66px; right: 10px;
+  width: min(310px, calc(100% - 20px)); max-height: calc(100% - 76px); overflow: auto;
+  display: grid; gap: 12px; padding: 14px; border-radius: 16px;
+  background: rgba(8, 12, 20, .96); color: #fff;
+}
+.pl-live__settings label { display: flex; gap: 8px; align-items: center; }
+.pl-live__settings button { color: #fff; background: #263040; border: 1px solid #536070; border-radius: 10px; }
+.pl-live__delivery, .pl-live__copy-url {
+  position: fixed; z-index: 100; left: 12px; right: 12px; bottom: max(16px, env(safe-area-inset-bottom));
+  padding: 12px; color: white; background: #273244; border-radius: 12px; font-size: 14px;
+}
+.pl-live__copy-url { bottom: 85px; width: calc(100% - 24px); font-size: 16px; }
+.pl-live__ended { position: relative; z-index: 8; padding: 16px; background: #121b2a; border-radius: 12px; }
+.pl-live__comments-wrap[hidden] { display: none !important; }
+.pl-live--watch[data-layout='phone-portrait'] { min-height: 0; }
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__stage {
+  min-height: 0; height: auto; aspect-ratio: var(--video-aspect, 9 / 16); max-height: 100svh;
+}
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__video { min-height: 0; }
+.pl-live--watch[data-layout='phone-portrait'][data-video-orientation='landscape'] .pl-live__panel--live {
+  position: relative; padding-top: 12px; padding-right: 12px;
+}
+.pl-live--watch[data-layout='phone-portrait'][data-video-orientation='landscape'] .pl-live__side-actions {
+  bottom: 8px; gap: 6px; display: flex;
+}
+.pl-live--watch[data-layout='phone-portrait'][data-video-orientation='landscape'] .pl-live__side-actions button { width: 46px; min-height: 44px; }
+.pl-live--watch[data-layout='phone-landscape'] {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+  position: fixed; inset: 0; z-index: 60; height: 100dvh; gap: 8px; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: #050608;
+}
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__stage {
+  position: relative; inset: auto; width: 100%; height: 100%; min-width: 0; min-height: 0;
+}
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__panel--live {
+  position: relative; inset: auto; z-index: 52; width: auto; height: 100%; max-height: 100%; min-height: 0;
+  display: flex; flex-direction: column; overflow: auto; padding: 8px; border-radius: 0;
+  background: #101722; backdrop-filter: none; opacity: 1; pointer-events: auto;
+}
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__comments-wrap { flex: 1; min-height: 60px; overflow: auto; }
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__comments { max-height: none; }
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__side-actions { top: auto; bottom: 10px; display: flex; gap: 6px; }
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__actions,
+.pl-live--watch[data-layout='phone-landscape'] .pl-live__prefs { display: none; }
+.pl-live--watch.pl-live--fs-fallback, .pl-live--watch:fullscreen {
+  position: fixed; inset: 0; z-index: 80; overflow: auto; max-width: none; height: 100dvh; background: #050608;
+}
+.pl-live__creator-mini .pl-live__follow { flex-shrink: 0; min-height: 44px; padding: 6px 10px; color: #fff; background: #294a67; border: 1px solid #5f87a8; border-radius: 12px; font-size: 12px; }
+/* The portrait comment gradient must never intercept the right action rail. */
+.pl-live--watch .pl-live__stage { isolation: auto; }
+.pl-live--watch .pl-live__side-actions { z-index: 9; }
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live { pointer-events: none; }
+.pl-live--watch[data-layout='phone-portrait'] .pl-live__panel--live > * { pointer-events: auto; }
+/* Reserve a real grid cell for Follow and keep FEVER clear of the composer. */
+.pl-live--watch .pl-live__creator-mini { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px; padding: 8px; }
+.pl-live--watch .pl-live__creator-mini em { display: none; }
+.pl-live--watch .pl-live__creator-mini .pl-live__follow { grid-column: 3; grid-row: 1; width: auto; white-space: nowrap; }
+.pl-live--watch .pl-fever { top: 76px; bottom: auto; left: 12px; width: min(230px, calc(100% - 88px)); }
