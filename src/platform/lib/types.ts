@@ -28,6 +28,7 @@ export type Performer = {
   stripe_onboarding_complete: boolean
   is_approved: boolean
   is_live: boolean
+  is_private_test?: boolean
   live_started_at: string | null
   live_title: string | null
   stream_url: string | null

@@ -33,7 +33,7 @@ class DecorationFixture { setMap() {} }
 function App() {
   const [view, setView] = useState('editor')
   return <LangProvider><nav>{['editor', 'schedule', 'map', 'profile'].map(v => <button key={v} onClick={() => setView(v)}>{v}</button>)}</nav>
-    {view === 'editor' ? <PerformerAppearanceManager /> : view === 'profile' ? <PerformerPublicScreen performerId={performer.id} onBack={() => setView('schedule')} onTip={() => {}} onWatchLive={() => {}} /> : <MapScheduleScreen initialView={view as 'map' | 'schedule'} onOpenPerformer={() => setView('profile')} onWatchLive={() => {}} />}
+    {view === 'watch' ? <section aria-label="LIVE視聴遷移">LIVE視聴 {(window as any).__watchId}</section> : view === 'editor' ? <PerformerAppearanceManager /> : view === 'profile' ? <PerformerPublicScreen performerId={performer.id} onBack={() => setView('schedule')} onTip={() => {}} onWatchLive={() => {}} /> : <MapScheduleScreen initialView={view as 'map' | 'schedule'} onOpenPerformer={() => setView('profile')} onWatchLive={(id) => { (window as any).__watchId = id; setView('watch') }} />}
   </LangProvider>
 }
 createRoot(document.getElementById('root')!).render(<App />)
