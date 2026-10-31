@@ -14,7 +14,9 @@
     "test:live": "vitest run tests/p0-readiness.test.ts tests/live-camera.test.ts tests/live-comments.test.ts tests/live-comment-moderation-migration.test.ts tests/live-release-gate.test.ts tests/live-end-location.test.ts tests/payment-safety.test.ts tests/tip-approval.test.ts tests/tip-confirmation.test.ts tests/direct-live-lifecycle.test.ts tests/direct-live-token.test.ts tests/direct-live-presence.test.ts tests/direct-live-jwt.test.ts tests/youtube-player-recovery.test.tsx tests/youtube-live-simple-ui.test.tsx",
     "test:registration": "vitest run",
     "test:safari": "node tests/e2e/run.mjs && node tests/qr-share-e2e/run.mjs",
-    "typecheck:live-server": "tsc -p tsconfig.live-server.json --noEmit"
+    "typecheck:live-server": "tsc -p tsconfig.live-server.json --noEmit",
+    "test:youtube": "vitest run tests/youtube-live-companion.test.ts tests/youtube-live-migration.test.ts tests/youtube-live-database.test.ts tests/youtube-live-publish.test.ts tests/youtube-live-simple-ui.test.tsx",
+    "test:youtube:safari": "node tests/youtube-live-e2e/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",

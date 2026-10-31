@@ -2,12 +2,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { YouTubeLivePublishError } from '../src/platform/lib/youtubeLivePublish'
 import { YouTubeLiveSetup } from '../src/platform/components/YouTubeLiveSetup'
 import { ConnectedLiveWatchScreen } from '../src/platform/screens/ConnectedLiveWatchScreen'
 import type { Performer } from '../src/platform/lib/types'
 
 const api = vi.hoisted(() => ({ updatePerformer: vi.fn(), getPerformer: vi.fn(), getSignedInUserId: vi.fn().mockResolvedValue(null), isFollowing: vi.fn().mockResolvedValue(false), follow: vi.fn(), unfollow: vi.fn(), subscribePerformerLive: () => () => undefined }))
 const directLifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
+
+let lastSettings: Record<string, unknown> = {}
+const publishApi = vi.hoisted(() => ({ saveYouTubeLiveSettings: vi.fn() }))
+vi.mock('../src/platform/lib/youtubeLivePublish', async (original) => ({ ...await original<object>(), ...publishApi }))
 vi.mock('../src/platform/lib/api', () => api)
 vi.mock('../src/platform/lib/track', () => ({ trackProductEvent: vi.fn() }))
 vi.mock('../src/platform/components/YouTubeLivePlayer', () => ({
@@ -34,7 +39,10 @@ afterEach(() => {
 })
 
 describe('YouTube LIVE simple registration UI', () => {
-  beforeEach(() => { vi.clearAllMocks(); api.updatePerformer.mockResolvedValue(undefined); api.getPerformer.mockResolvedValue(performer) })
+  beforeEach(() => { vi.clearAllMocks(); lastSettings = {}; publishApi.saveYouTubeLiveSettings.mockImplementation(async (_id, patch) => {
+    if (patch.youtube_live_video_id !== undefined) lastSettings = patch
+    return { youtube_live_video_id: 'abcdefghijk', youtube_live_url: 'https://www.youtube.com/watch?v=abcdefghijk', youtube_live_enabled: true, ...lastSettings, ...patch }
+  }); api.getPerformer.mockResolvedValue(performer) })
 
   it('extracts the video ID, previews it, and publishes the canonical URL', async () => {
     const onSaved = vi.fn().mockResolvedValue(undefined)
@@ -43,7 +51,7 @@ describe('YouTube LIVE simple registration UI', () => {
     expect(screen.getByText(/動画IDを確認しました：abcdefghijk/)).toBeTruthy()
     expect(screen.getByTestId('youtube-preview').textContent).toBe('preview:abcdefghijk')
     fireEvent.click(screen.getByRole('button', { name: 'HAKUで公開する' }))
-    await waitFor(() => expect(api.updatePerformer).toHaveBeenCalledWith('performer-1', {
+    await waitFor(() => expect(publishApi.saveYouTubeLiveSettings).toHaveBeenCalledWith('performer-1', {
       youtube_live_video_id: 'abcdefghijk',
       youtube_live_url: 'https://www.youtube.com/watch?v=abcdefghijk',
       youtube_live_enabled: true,
@@ -52,12 +60,24 @@ describe('YouTube LIVE simple registration UI', () => {
     expect(await screen.findByText(/公開しました/)).toBeTruthy()
   })
 
+  it('ignores repeated publish taps while a save is pending', async () => {
+    let finish!: (value: { youtube_live_video_id: string; youtube_live_url: string; youtube_live_enabled: boolean }) => void
+    publishApi.saveYouTubeLiveSettings.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    render(<YouTubeLiveSetup performer={performer} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('YouTube LIVEのURL'), { target: { value: 'yk6Kjl0WHWs' } })
+    const button = screen.getByRole('button', { name: 'HAKUで公開する' })
+    fireEvent.click(button); fireEvent.click(button)
+    expect(publishApi.saveYouTubeLiveSettings).toHaveBeenCalledOnce()
+    finish({ youtube_live_video_id: 'yk6Kjl0WHWs', youtube_live_url: 'https://www.youtube.com/watch?v=yk6Kjl0WHWs', youtube_live_enabled: true })
+    expect(await screen.findByText(/公開しました/)).toBeTruthy()
+  })
+
   it('rejects arbitrary URLs before any update', () => {
     render(<YouTubeLiveSetup performer={performer} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('YouTube LIVEのURL'), { target: { value: 'https://evil.example/live/abcdefghijk' } })
     expect(screen.getByRole('alert').textContent).toContain('YouTube LIVEのURLを確認')
     expect(screen.getByRole('button', { name: 'HAKUで公開する' })).toHaveProperty('disabled', true)
-    expect(api.updatePerformer).not.toHaveBeenCalled()
+    expect(publishApi.saveYouTubeLiveSettings).not.toHaveBeenCalled()
   })
 
   it('turns publication off and unlinks the same stored setting', async () => {
@@ -65,13 +85,49 @@ describe('YouTube LIVE simple registration UI', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { rerender } = render(<YouTubeLiveSetup performer={linked} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />)
     fireEvent.click(screen.getByRole('switch'))
-    await waitFor(() => expect(api.updatePerformer).toHaveBeenCalledWith('performer-1', { youtube_live_enabled: false }))
-    api.updatePerformer.mockClear()
+    await waitFor(() => expect(publishApi.saveYouTubeLiveSettings).toHaveBeenCalledWith('performer-1', { youtube_live_enabled: false }))
+    await screen.findByText(/公開を停止しました/)
+    publishApi.saveYouTubeLiveSettings.mockClear()
     rerender(<YouTubeLiveSetup performer={linked} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />)
     fireEvent.click(screen.getByRole('button', { name: /連携を解除/ }))
-    await waitFor(() => expect(api.updatePerformer).toHaveBeenCalledWith('performer-1', {
+    await waitFor(() => expect(publishApi.saveYouTubeLiveSettings).toHaveBeenCalledWith('performer-1', {
       youtube_live_video_id: null, youtube_live_url: null, youtube_live_enabled: false,
     }))
+  })
+
+  it.each([
+    ['authentication', 'ログインの有効期限'],
+    ['permission', '変更する権限がありません'],
+    ['database', 'データベースに保存できませんでした'],
+    ['network', '通信できませんでした'],
+  ] as const)('distinguishes %s failure and preserves the input for retry', async (kind, message) => {
+    publishApi.saveYouTubeLiveSettings.mockRejectedValueOnce(new YouTubeLivePublishError(kind, kind === 'database' ? '23514' : undefined))
+    render(<YouTubeLiveSetup performer={performer} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('YouTube LIVEのURL'), { target: { value: 'https://youtube.com/live/yk6Kjl0WHWs' } })
+    fireEvent.click(screen.getByRole('button', { name: 'HAKUで公開する' }))
+    expect((await screen.findByRole('alert')).textContent).toContain(message)
+    expect(screen.getByLabelText('YouTube LIVEのURL')).toHaveProperty('value', 'https://youtube.com/live/yk6Kjl0WHWs')
+    fireEvent.click(screen.getByRole('button', { name: 'HAKUで公開する' }))
+    expect(await screen.findByText(/公開しました/)).toBeTruthy()
+  })
+
+  it('keeps the saved state after refresh fails and supports off/republication/unlink', async () => {
+    const onSaved = vi.fn().mockRejectedValue(new Error('refresh failed'))
+    render(<YouTubeLiveSetup performer={performer} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={onSaved} />)
+    fireEvent.change(screen.getByLabelText('YouTube LIVEのURL'), { target: { value: 'yk6Kjl0WHWs' } })
+    fireEvent.click(screen.getByRole('button', { name: 'HAKUで公開する' }))
+    expect(await screen.findByText(/保存は完了しましたが/)).toBeTruthy()
+    expect(screen.getByRole('switch')).toHaveProperty('checked', true)
+    fireEvent.click(screen.getByRole('switch'))
+    await screen.findByText(/公開を停止しました/)
+    expect(screen.getByRole('switch')).toHaveProperty('checked', false)
+    fireEvent.click(screen.getByRole('switch'))
+    await screen.findByText(/公開を再開しました/)
+    expect(screen.getByRole('switch')).toHaveProperty('checked', true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: /連携を解除/ }))
+    await screen.findByText(/連携を解除しました/)
+    expect(screen.queryByRole('switch')).toBeNull()
   })
 
   it('updates an existing registration using the same performer fields', async () => {
@@ -79,7 +135,7 @@ describe('YouTube LIVE simple registration UI', () => {
     render(<YouTubeLiveSetup performer={linked} onBack={vi.fn()} onChooseDirect={vi.fn()} onPreview={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />)
     fireEvent.change(screen.getByLabelText('YouTube LIVEのURL'), { target: { value: 'https://www.youtube.com/live/zyxwvutsrqp' } })
     fireEvent.click(screen.getByRole('button', { name: 'HAKUで公開する' }))
-    await waitFor(() => expect(api.updatePerformer).toHaveBeenCalledWith('performer-1', {
+    await waitFor(() => expect(publishApi.saveYouTubeLiveSettings).toHaveBeenCalledWith('performer-1', {
       youtube_live_video_id: 'zyxwvutsrqp',
       youtube_live_url: 'https://www.youtube.com/watch?v=zyxwvutsrqp',
       youtube_live_enabled: true,
