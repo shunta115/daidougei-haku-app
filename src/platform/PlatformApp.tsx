@@ -24,6 +24,7 @@ import { NotificationsScreen } from './screens/NotificationsScreen'
 import { ConnectedLiveWatchScreen } from './screens/ConnectedLiveWatchScreen'
 import { LiveListScreen } from './screens/LiveListScreen'
 import { TipScreen } from './screens/TipScreen'
+import { TikTokLiveCompanionScreen } from './screens/TikTokLiveCompanionScreen'
 import { FanProfileScreen } from './screens/FanProfileScreen'
 import { AdminDashboardScreen, AdminEventScreen, AdminUsersScreen } from './screens/AdminScreens'
 import { AdminOpsScreen } from './screens/AdminOpsScreen'
@@ -37,6 +38,7 @@ import type { PlatformScreen } from './lib/types'
 import { supabaseAuthHeaders } from './lib/supabase'
 import { trackProductEvent } from './lib/track'
 import { useTipConfirmation } from './lib/useTipConfirmation'
+import { parseTikTokLiveEntry } from './lib/tiktokLive'
 import { PERFORMER_REGISTER_PATH } from './lib/onboarding'
 import './platform.css'
 import './screens/registration.css'
@@ -187,6 +189,7 @@ export function initialGuestScreen(): PlatformScreen {
     if (eventRoute?.kind === 'detail') return 'event-detail'
     if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) return 'map-schedule'
     const q = new URLSearchParams(window.location.search)
+    if (parseTikTokLiveEntry(window.location.search)) return 'tiktok-live'
     if (q.get('watch')) return 'live-watch'
     if (q.get('profile')) return 'profile'
     if (q.get('tipTo')) return 'tip'
@@ -218,7 +221,7 @@ function PlatformShell() {
     const performerRoute = parsePerformerPath(window.location.pathname)
     if (performerRoute) return performerRoute.id
     try {
-      return new URLSearchParams(window.location.search).get('profile')
+      return parseTikTokLiveEntry(window.location.search)?.performerId ?? new URLSearchParams(window.location.search).get('profile')
     } catch {
       return null
     }
@@ -276,7 +279,11 @@ function PlatformShell() {
       if (!eventRoute) {
         if (window.location.pathname === FESTIVAL_PATH || window.location.pathname === MAP_PATH) setScreen('map-schedule')
         else if (window.location.pathname === EVENTS_PATH) setScreen('event-list')
-        else if (window.location.pathname === '/' || window.location.pathname === PLATFORM_PATH) setScreen('fan-home')
+        else if (window.location.pathname === '/' || window.location.pathname === PLATFORM_PATH) {
+          const tiktokEntry = parseTikTokLiveEntry(window.location.search)
+          setPerformerId(tiktokEntry?.performerId ?? null)
+          setScreen(tiktokEntry ? 'tiktok-live' : 'fan-home')
+        }
         return
       }
       if (eventRoute.kind === 'list') {
@@ -431,6 +438,7 @@ function PlatformShell() {
         s === 'fan-home' ||
         s === 'live-list' ||
         s === 'live-watch' ||
+        s === 'tiktok-live' ||
         s === 'profile' ||
         s === 'tip' ||
         s === 'search' ||
@@ -591,7 +599,7 @@ function PlatformShell() {
   const previewOn = preview === 'fan' || preview === 'performer'
   if (preview === 'performer') return <PerformerPreviewApp />
   const navRole = previewOn ? (preview === 'performer' ? 'performer' : 'fan') : role === 'admin' ? 'admin' : role === 'performer' ? 'performer' : role === 'organizer' ? 'organizer' : 'fan'
-  const showNav = !['tip', 'performer-history', 'live-watch', 'performer-live'].includes(screen)
+  const showNav = !['tip', 'performer-history', 'live-watch', 'tiktok-live', 'performer-live'].includes(screen)
   const liveShell = screen === 'live-watch' || screen === 'performer-live'
 
   const currentSnapshot = (): NavigationSnapshot => ({ screen, performerId, merchProductId, eventSlug })
@@ -710,6 +718,22 @@ function PlatformShell() {
           onRequireAuth={() => setScreen('auth')}
         />
       )
+    } else if (screen === 'tiktok-live') {
+      const entry = parseTikTokLiveEntry(window.location.search)
+      if (entry) guestBody = (
+        <TikTokLiveCompanionScreen
+          handle={entry.handle}
+          performerId={entry.performerId}
+          liveUrl={entry.url}
+          onBack={() => setScreen('live-list')}
+          onTip={() => {
+            if (!entry.performerId) return
+            setPerformerId(entry.performerId)
+            setTipReturn('tiktok-live')
+            setScreen('tip')
+          }}
+        />
+      )
     } else if (performerId && screen === 'tip') {
       guestBody = (
         <TipScreen
@@ -759,7 +783,7 @@ function PlatformShell() {
     }
 
     if (guestBody) {
-      const guestShowNav = !['tip', 'live-watch'].includes(screen)
+      const guestShowNav = !['tip', 'live-watch', 'tiktok-live'].includes(screen)
       return (
         <div className="pl-app">
           {REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
@@ -838,6 +862,22 @@ function PlatformShell() {
         onRequireAuth={() => setScreen('auth')}
       />
     )
+  } else if (screen === 'tiktok-live') {
+    const entry = parseTikTokLiveEntry(window.location.search)
+    body = entry ? (
+      <TikTokLiveCompanionScreen
+        handle={entry.handle}
+        performerId={entry.performerId}
+        liveUrl={entry.url}
+        onBack={() => setScreen('live-list')}
+        onTip={() => {
+          if (!entry.performerId) return
+          setPerformerId(entry.performerId)
+          setTipReturn('tiktok-live')
+          setScreen('tip')
+        }}
+      />
+    ) : <LiveListScreen onWatchLive={openWatch} onOpenPerformer={openPerformer} />
   } else if (performerId && screen === 'tip') {
     body = (
       <TipScreen

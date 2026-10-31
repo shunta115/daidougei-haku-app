@@ -24,6 +24,7 @@ vi.mock('../src/platform/screens/MerchScreens', () => ({
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
+vi.mock('../src/platform/screens/TikTokLiveCompanionScreen', () => ({ TikTokLiveCompanionScreen: ({ handle, performerId }: { handle: string; performerId: string | null }) => <p>tiktok-live:{handle}:{performerId}</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath, spaGo } from '../src/app/routes'
 
@@ -52,6 +53,12 @@ it('keeps the public root, event and live routes inside the MASTER experience', 
   expect(EVENTS_PATH).toBe('/events')
   expect(isPlatformPath(EVENTS_PATH)).toBe(true)
   expect(isPlatformPath(eventPath('award-winning-performers-2026'))).toBe(true)
+})
+
+it('opens the TikTok LIVE companion directly without authentication', async () => {
+  window.history.replaceState({}, '', '/live?tiktokLive=quest_tcg&performerId=test-performer')
+  render(<PlatformApp />)
+  await screen.findByText('tiktok-live:quest_tcg:test-performer')
 })
 
 it('bypasses the title screen for a Supabase password recovery callback', async () => {
