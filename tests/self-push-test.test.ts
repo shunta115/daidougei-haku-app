@@ -10,10 +10,10 @@ vi.mock('../api/stripe/_shared.js', () => ({
     }; expect(['push_subscriptions', 'platform_settings']).toContain(table); return chain
   } }),
 }))
-import handler from '../api/notifications/self-test'
+import handler from '../api/notifications/push'
 async function call(body: any = { confirm: 'send_one_self_test' }, method = 'POST') {
   const res: any = { code: 0, body: null, setHeader: vi.fn(), status(code: number) { this.code = code; return this }, json(body: unknown) { this.body = body; return this } }
-  await handler({ method, body } as any, res); return res
+  await handler({ method, body, query: { mode: 'self-test' } } as any, res); return res
 }
 beforeEach(() => {
   vi.stubEnv('ENABLE_SELF_PUSH_TEST', 'true'); vi.stubEnv('SELF_PUSH_TEST_USER_ID', 'owner'); vi.stubEnv('SELF_PUSH_TEST_SUBSCRIPTION_ID', 'phone')

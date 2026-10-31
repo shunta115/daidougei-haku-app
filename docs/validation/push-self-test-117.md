@@ -1,6 +1,6 @@
 # iPhone self-test release
 
-Scope: PR #117 only. No payment, Connect, AWP, schema or existing notification scheduler changes.
+Scope: PR #117 only. The self-test URL rewrites to a dedicated branch of the existing push function, keeping the function count at 12. No payment, Connect, AWP, schema or existing notification scheduler changes.
 
 Production configuration required after approval:
 - ENABLE_SELF_PUSH_TEST=true

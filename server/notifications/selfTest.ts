@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import webpush from 'web-push'
-import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
+import { getAdminSupabase, requireAuthUser } from '../../api/stripe/_shared.js'
 
 // One campaign, one attempt. Never delete this claim to retry an uncertain delivery.
 const CLAIM_KEY = 'haku_self_push_test_20261101'
