@@ -23,7 +23,7 @@ it('atomically disables all existing Push categories through the master switch',
 })
 it('guides iPhone installation before allowing OS permission',async()=>{
  Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone Safari'})
- render(<SmartPushSettings userId="fan" />);expect((await screen.findByRole('checkbox',{name:'フォロー中パフォーマーのLIVE開始'}) as HTMLInputElement).disabled).toBe(true);expect(screen.getByRole('img',{name:'Safariの共有ボタンからホーム画面に追加し、HAKUアイコンを開く手順'})).toBeTruthy();expect(mock.ensure).not.toHaveBeenCalled()
+ render(<SmartPushSettings userId="fan" />);expect((await screen.findByRole('checkbox',{name:'フォロー中パフォーマーのLIVE開始'}) as HTMLInputElement).disabled).toBe(true);expect(screen.getByLabelText('Safariの共有ボタンからホーム画面に追加し、HAKUアイコンを開く手順')).toBeTruthy();expect(mock.ensure).not.toHaveBeenCalled()
 })
 it('shows a recoverable error and does not save consent if permission is denied',async()=>{
  mock.ensure.mockRejectedValue(new Error('push_denied'));render(<SmartPushSettings userId="fan" />);fireEvent.click(await screen.findByRole('checkbox',{name:'フォロー中パフォーマーのLIVE開始'}));await waitFor(()=>expect(screen.getByRole('status').textContent).toContain('通知が拒否'));expect(mock.save).not.toHaveBeenCalled()
