@@ -1,0 +1,10 @@
+{
+  "base": "4403bd7f1274678dc39235e58bb59835f4dd4a6c",
+  "branch": "codex/home-105-113-integration",
+  "mode": "static isolated sample",
+  "physicalIPhone": false,
+  "assets": {
+    "index-Bk1Lpijt.js": "542451dd66e3c404c7bcde6bc1d474095c543db205b49e7b8577d86d210724f4",
+    "index-Mxwx8z-q.css": "00f31ec7098d346fb5642a693f9319be21d084036ea03a11f0595872e0f9b68a"
+  }
+}

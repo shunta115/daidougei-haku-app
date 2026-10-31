@@ -1,8 +1,10 @@
 {
+  "git": { "deploymentEnabled": { "codex/home-activity-ranking": false, "codex/home-activity-20261031": false, "codex/home-105-113-integration": false } },
   "crons": [
     { "path": "/api/ops/run?job=stripe-transfer-retry", "schedule": "0 0 * * *" }
   ],
   "rewrites": [
+    { "source": "/api/home-ranking", "destination": "/api/ops/run?job=home-ranking" },
     { "source": "/api/profile/display-name", "destination": "/api/stripe/tip?action=display-name" },
     { "source": "/api/votes/device", "destination": "/api/ops/run?job=votes-device" },
     { "source": "/api/awp-results", "destination": "/api/ops/run?job=awp-results" },
