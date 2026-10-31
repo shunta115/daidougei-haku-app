@@ -102,7 +102,7 @@ it('protects queue and subscriptions from browser role access and rejects anothe
 it('enforces the weekly cap even when today has no previous attempt',async()=>{
   await db.exec('update public.notification_preferences set push_weekly_limit=0');expect(await claim()).toHaveLength(0)
 })
-it('caps initial queues at 500 recipients and fails closed at the global budget',async()=>{
+it('fails closed at the global 500-attempt daily budget',async()=>{
   await db.exec(`
     insert into public.live_sessions(id,performer_id) select gen_random_uuid(),'${owner}' from generate_series(1,500);
     insert into public.live_push_events(live_session_id,performer_id,payload) select id,performer_id,'{}'::jsonb from public.live_sessions where id not in ('${live}','${live2}');
