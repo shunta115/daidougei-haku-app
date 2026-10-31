@@ -39,6 +39,16 @@ describe('integrated home: 105 LIVE/reservations and 113 ranking',()=>{
   fireEvent.click(screen.getByRole('button',{name:'応援・投げ銭'}));expect(callbacks.onTip).toHaveBeenCalledWith('live')
   fireEvent.click(screen.getByRole('button',{name:'プロフィール・フォロー'}));expect(callbacks.onOpenPerformer).toHaveBeenCalledWith('live')
  })
+ it('shows public registration dates after upcoming and activity, excluding unknown and future dates',async()=>{
+  const now=Date.now();fake.home.mockResolvedValueOnce({...home,performers:[...home.performers,{...p('new-older'),created_at:new Date(now-86400000).toISOString()},{...p('new-latest'),created_at:new Date(now-1000).toISOString()},{...p('unknown'),created_at:''},{...p('future'),created_at:new Date(now+86400000).toISOString()}],ranking:{...home.ranking,ids:[...home.ranking.ids,'new-older','new-latest','unknown','future']}})
+  const callbacks=props();show(callbacks)
+  const latest=await screen.findByRole('region',{name:'新しく登録したパフォーマー'})
+  expect(within(latest).getAllByRole('listitem').map(e=>e.querySelector('strong')!.textContent)).toEqual(['new-latest','new-older'])
+  const labels=[...document.querySelectorAll('.pl-cinema-section')].map(e=>e.getAttribute('aria-label'))
+  expect(labels.indexOf('まもなく出演')).toBeLessThan(labels.indexOf('注目のパフォーマー'))
+  expect(labels.indexOf('注目のパフォーマー')).toBeLessThan(labels.indexOf('新しく登録したパフォーマー'))
+  fireEvent.click(screen.getByRole('button',{name:'すべてのパフォーマーを見る'}));expect(callbacks.onOpenSearch).toHaveBeenCalled()
+ })
  it('masks stale LIVE flags everywhere, preserving the scheduled reservation',async()=>{
   fake.sessions.mockResolvedValue([]);show();await screen.findByRole('button',{name:'LIVEを予約'})
   expect(screen.queryByRole('button',{name:'今すぐ視聴 →'})).toBeNull()

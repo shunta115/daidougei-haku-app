@@ -4,7 +4,7 @@
 独立checkout: `/private/tmp/haku-115-unified`、branch: `codex/haku-115-unified-integration`。
 Desktopの未コミット作業・元PRブランチは変更しない。
 
-**本番公開判定: NO-GO。コード統合は実施したが、接続済みサービスの全機能受入と実機試験は未完了。**
+**本番公開判定: NO-GO。コード統合と実TESTの主要結合試験は実施したが、接続済みサービスの全機能受入と実機試験は未完了。**
 この文書を個別PR内の過去の停止条件・古いTESTスキーマ記録より優先する。今回の指示は隔離TEST検証を許可しており、TEST変更に一律の再承認を要求するものではない。ただし既存TESTとの差分は検査し、既存データを削除しない。
 
 ## 回収範囲と採用
@@ -17,7 +17,7 @@ GitHub Issue #115、取得できたPR #38〜114の70件、ローカルmain、関
 | 縦横/全画面/音声/小窓 | #110 PCシアター等は本番済み | #99 小窓と同一media保持、設定/診断、#106共有/全画面を手動統合。横画面を映像/コメント別列に統一 | WebKit fixture検証、実音声/別端末待ち |
 | いいね/FEVER/THANK YOU/コメント | FEVERとgift等の基礎は既存 | #106 JWT集計・12/秒・batch冪等・Realtime/poll。送信中batchをタブ内sessionStorageへ保存し再読込再送。コメントの応答不明時は同一UUIDで再試行 | 本番likes SQLが必要。TESTの実JWT/Realtimeと実画面の配信者受信・FEVERは検証済み。ブラウザ終了で未送信タップ消失の可能性は残る |
 | 匿名応援/Stripe | 既存決済・分配を保持 | #112を採用（#107を含む）。宛先復元・ロック・古い応答の破棄・タップ透過 | TEST既存32ケースは元PR証跡。統合版Sandbox実精算は未検証・権限ある隔離認証待ち。本番tips TRUNCATE是正必要 |
-| ホーム・LIVE予約・活動順 | 旧ホーム。予約DBは本番に存在 | #114のみ採用（#105/#113を含む）。本人操作/公開予定由来の順位 | TESTに不足schema/権限を追加。実JWT予約/通知・実順位APIは通過。全ホーム導線の実機受入待ち |
+| ホーム・LIVE予約・活動順 | 旧ホーム。予約DBは本番に存在 | #114のみ採用（#105/#113を含む）。本人操作/公開予定由来の順位。出演予定→活動順→登録30日以内の新着→全員を見る導線を明示 | TESTに不足schema/権限を追加。実JWT予約/通知・実順位APIは通過。全ホーム導線の実機受入待ち |
 | MAP・出演予定 | #104/#109/#110/#111/#101/#102はmain統合済み | mainを継承。予定・実LIVE・位置なしを分離、座標を捏造しない | 統合版WebKit回帰。実GPS・地図接続・実機待ち |
 | YouTube公開 | URL CHECKの過剰escapeを本番read-onlyで再確認 | #108 本人専用保存・エラー・forward SQL、#100プレーヤー復旧と#110枠を両立 | 本番SQL未適用。実YouTube再生/終了検証待ち。HAKU公開操作はYouTube配信開始ではない |
 | 公式ページ | 既存プロフィール | #103 写真20枚/動画/PDF/公開予定/SNS/事務局案件/Storage。HOME_ENABLED既定OFF | 本番専用SQL/office/retention運用が必要。TEST実Auth/Storage/API/事務局案件は検証済み。物理iPhone待ち |
@@ -82,7 +82,7 @@ Production `pmmtijwswzwhuriqhlep`: live_schedules/live_reservations/product_even
 
 ## 今回の接続済みTEST整備・結合結果
 
-本番ではなく `aeqskxxykzapgaudbeqa` だけに、durable likes、official home、予約前提navigator判定、既存予約migration、product_events、不足するサーバー専用公開予定読取grantを適用。SQLは本体migrationと`supabase/test/`に保存。一般ユーザーの権限は広げていない。
+本番ではなく `aeqskxxykzapgaudbeqa` だけに、durable likes、official home、予約前提navigator判定、既存予約migration、product_events、不足するサーバー専用公開予定読取grantを適用。SQLは本体migrationと`supabase/test/`に保存。既存プロフィール/台帳や他人への一般ユーザー編集権限は広げていない。
 
 - 実TEST PostgreSQLのSQL role/claims試験14項目通過。全fixtureはROLLBACK。
 - 新規TESTユーザー3人で実Auth JWT/PostgREST/Realtime14項目通過。配信者本人が2視聴者の合計8いいねとコメント1件を実Realtime受信。重複UUID、他人の終了拒否、予約分離、2人への通知、終了後のいいね拒否を確認。

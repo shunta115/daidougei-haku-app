@@ -4,7 +4,7 @@ export const performers = Array.from({ length: 22 }, (_, i) => ({
   bio: '紹介', genre: '大道芸', country: '日本', city: '東京', photo_url: null, support_blurb: '',
   stripe_onboarding_complete: i === 1, is_approved: true, is_private_test: false,
   is_live: i === 2, live_started_at: null, live_title: 'サンプルLIVE', stream_url: null,
-  share_location: false, lat: null, lng: null, location_updated_at: null, created_at: '', updated_at: '',
+  share_location: false, lat: null, lng: null, location_updated_at: null, created_at: i >= 18 ? new Date(Date.now() - (i - 17) * 86400000).toISOString() : '', updated_at: '',
 }))
 let changed = false
 const params = new URLSearchParams(location.search)

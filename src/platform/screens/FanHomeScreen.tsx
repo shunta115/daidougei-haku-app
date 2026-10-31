@@ -43,7 +43,8 @@ type FanHomeProps = {
   onOpenTitle?: () => void
 }
 
-function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll, captions }: {
+function PerformerRail({ id, title, eyebrow, performers, onOpen, onWatch, onSeeAll, captions }: {
+  id?: string
   captions?: Record<string, string>
   title: string
   eyebrow: string
@@ -55,7 +56,7 @@ function PerformerRail({ title, eyebrow, performers, onOpen, onWatch, onSeeAll, 
   const { t } = useLang()
   if (performers.length === 0) return null
   return (
-    <section className="pl-cinema-section" aria-label={title}>
+    <section id={id} className="pl-cinema-section" aria-label={title}>
       <header className="pl-cinema-section__head">
         <div><p>{eyebrow}</p><h2>{title}</h2></div>
         <button type="button" onClick={onSeeAll}>{t('seeAll')} <ChevronRight size={15} /></button>
@@ -188,6 +189,10 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   const featured = confirmed(ranking.featured)
   const upcoming = confirmed(ranking.upcoming.map(p => p.performerId))
   const unscheduled = confirmed((ranking.unscheduled ?? ranking.recent).slice(0, 8))
+  const newPerformers = confirmed(roster.filter(person => {
+    const registered = Date.parse(person.created_at)
+    return Number.isFinite(registered) && registered <= checkedAt && registered >= checkedAt - 30 * 86_400_000
+  }).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || a.id.localeCompare(b.id)).slice(0, 8).map(person => person.id))
   const captions = Object.fromEntries(ranking.upcoming.map(p => [p.performerId, appearanceLabel(p, checkedAt)]))
 
   return (
@@ -207,13 +212,16 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         <button type="button" data-active="true" onClick={onOpenLiveList}>{t('navLive')}</button>
         <button type="button" onClick={onOpenSearch}>{t('homeRecommend')}</button>
         <button type="button" onClick={onOpenMap}>{t('homeNear')}</button>
-        <button type="button" onClick={onOpenSearch}>{t('homeNew')}</button>
+        <button type="button" onClick={() => { const section = document.getElementById('haku-new-performers'); if (section) section.scrollIntoView({ block: 'start' }); else onOpenSearch() }}>{t('homeNew')}</button>
       </nav>
 
 
-      <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={featured} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} captions={captions} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
+      <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={featured} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
+      <PerformerRail id="haku-new-performers" title="新しく登録したパフォーマー" eyebrow="NEW · 30日以内" performers={newPerformers} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
       <PerformerRail title="パフォーマーを探す" eyebrow="DISCOVER" performers={unscheduled} captions={Object.fromEntries(unscheduled.map(p => [p.id, '公開出演予定なし']))} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
+
+      <button type="button" className="pl-btn pl-btn--ghost pl-btn--block" onClick={onOpenSearch}>すべてのパフォーマーを見る <ChevronRight size={16} /></button>
 
       {navigator ? <OfficialNavigatorCard navigator={{...navigator, live_status: feed.live.some(p => p.id === navigator.performer.id) ? 'live' : 'preparing', performer: {...navigator.performer, is_live: feed.live.some(p => p.id === navigator.performer.id)}}} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
       <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={(followedOwner === userId ? followed : []).map(p => ({...p, is_live: feed.live.some(l => l.id === p.id)}))} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
