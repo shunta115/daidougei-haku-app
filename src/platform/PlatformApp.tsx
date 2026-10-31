@@ -223,6 +223,12 @@ function PlatformShell() {
       return null
     }
   })
+  // Keep one watch component mounted while navigating inside HAKU. Its Room
+  // and media elements therefore survive full-view <-> mini transitions.
+  const [activeLiveId, setActiveLiveId] = useState<string | null>(null)
+  useEffect(() => {
+    if (screen === 'live-watch' && performerId) setActiveLiveId(performerId)
+  }, [screen, performerId])
   const [merchProductId, setMerchProductId] = useState<string | null>(() =>
     (merchandiseEntry() ?? savedNavigationSnapshot())?.merchProductId ?? null,
   )
@@ -632,6 +638,7 @@ function PlatformShell() {
 
   const openWatch = (id: string) => {
     pushDetail({ screen: 'live-watch', performerId: id, merchProductId: null, eventSlug })
+    setActiveLiveId(id)
     setPerformerId(id)
     setScreen('live-watch')
   }
@@ -670,6 +677,41 @@ function PlatformShell() {
     setScreen('map-schedule')
   }
 
+  const liveId = activeLiveId ?? (screen === 'live-watch' ? performerId : null)
+  const liveIsMini = Boolean(liveId && screen !== 'live-watch')
+  const closeLiveViewer = () => {
+    setActiveLiveId(null)
+    if (screen === 'live-watch') setScreen('live-list')
+  }
+  const liveViewer = liveId ? (
+    <div key={liveId} className={`pl-live-session${liveIsMini ? ' pl-live-session--mini' : ''}`} data-testid="persistent-live-viewer">
+      <ConnectedLiveWatchScreen
+        performerId={liveId}
+        allowPublicTest={previewOn && role === 'admin'}
+        mini={liveIsMini}
+        onMinimize={() => { setActiveLiveId(liveId); setScreen(homeForRole(role)) }}
+        onRestore={() => {
+          pushDetail({ screen: 'live-watch', performerId: liveId, merchProductId: null, eventSlug })
+          setPerformerId(liveId)
+          setScreen('live-watch')
+        }}
+        onClose={closeLiveViewer}
+        onEnded={closeLiveViewer}
+        onBack={() => {
+          setActiveLiveId(null)
+          backOr(() => { setPerformerId(null); setScreen('live-list') })
+        }}
+        onTip={() => {
+          trackProductEvent('tip_cta_click', { performerId: liveId, props: { surface: 'live' } })
+          setPerformerId(liveId)
+          setTipReturn('live-watch')
+          setScreen('tip')
+        }}
+        onRequireAuth={() => { setActiveLiveId(liveId); setScreen('auth') }}
+      />
+    </div>
+  ) : null
+
   if (!user) {
     let guestBody: ReactNode = null
 
@@ -692,24 +734,8 @@ function PlatformShell() {
           }}
         />
       )
-    } else if (screen === 'live-watch' && performerId) {
-      guestBody = (
-        <ConnectedLiveWatchScreen
-          performerId={performerId}
-          onBack={() => {
-            backOr(() => {
-              setPerformerId(null)
-              setScreen('live-list')
-            })
-          }}
-          onTip={() => {
-            trackProductEvent('tip_cta_click', { performerId, props: { surface: 'guest_live' } })
-            setTipReturn('live-watch')
-            setScreen('tip')
-          }}
-          onRequireAuth={() => setScreen('auth')}
-        />
-      )
+    } else if (screen === 'live-watch' && liveId) {
+      guestBody = <div aria-hidden="true" />
     } else if (performerId && screen === 'tip') {
       guestBody = (
         <TipScreen
@@ -783,6 +809,7 @@ function PlatformShell() {
               </div>
             ) : null}
             {guestBody}
+            {liveViewer}
           </div>
           {guestShowNav ? (
             <BottomNav
@@ -819,25 +846,8 @@ function PlatformShell() {
 
   let body: ReactNode = null
 
-  if (screen === 'live-watch' && performerId) {
-    body = (
-      <ConnectedLiveWatchScreen
-        performerId={performerId}
-        allowPublicTest={previewOn && role === 'admin'}
-        onBack={() => {
-          backOr(() => {
-            setPerformerId(null)
-            setScreen(homeForRole(role))
-          })
-        }}
-        onTip={() => {
-          trackProductEvent('tip_cta_click', { performerId, props: { surface: 'live' } })
-          setTipReturn('live-watch')
-          setScreen('tip')
-        }}
-        onRequireAuth={() => setScreen('auth')}
-      />
-    )
+  if (screen === 'live-watch' && liveId) {
+    body = null
   } else if (performerId && screen === 'tip') {
     body = (
       <TipScreen
@@ -1081,7 +1091,7 @@ function PlatformShell() {
           aria-disabled={previewOn || undefined}
           onClickCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
           onSubmitCapture={previewOn ? (event) => { event.preventDefault(); event.stopPropagation() } : undefined}
-        >{body}</div>
+        >{body}{liveViewer}</div>
       </div>
       {showNav && !previewOn ? (
         <BottomNav
