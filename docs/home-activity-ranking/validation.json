@@ -25,6 +25,16 @@
     "css_js_exact_match": true,
     "csp_blocks_external_connections": true
   },
-  "full_suite": "final verified run pending",
-  "earlier_runs": "Old discovery-loading mock failed after data-source change; fixed to loadHomeRanking and real LangProvider. Initial concurrent runs also timed out in unchanged moderation/admin tests; both passed in targeted run."
+  "full_suite": {
+    "source_commit": "f86e1b8ff9ff7998b15f2ef1694e5b74a2bb2ce8",
+    "provider": "GitHub Actions / Node 24 / locked dependencies",
+    "run_url": "https://github.com/shunta115/daidougei-haku-app/actions/runs/41182294580",
+    "test_files_passed": 90,
+    "tests_passed": 507,
+    "typecheck": "passed",
+    "build": "passed",
+    "conclusion": "success"
+  },
+  "earlier_runs": "Old discovery-loading mock failed after data-source change; fixed to loadHomeRanking and real LangProvider. Initial concurrent runs also timed out in unchanged moderation/admin tests; both passed in targeted run.",
+  "local_regression_notes": "Concurrent local runs had unchanged moderation/admin timeouts. Latest admin-device-vote-settings timeout passed all 11 tests on isolated retry. All 3 loading/refresh tests passed. Complete authoritative run: CI above."
 }

@@ -60,3 +60,11 @@ npx vite --config tests/home-ranking-preview/vite.config.ts
 # 別ターミナル。必要に応じてHAKU_WEBKIT_EXECUTABLEでOS対応WebKitを指定
 node tests/home-ranking-preview/run.mjs
 ```
+
+## 最終検証結果
+
+アプリコード `f86e1b8ff9ff7998b15f2ef1694e5b74a2bb2ce8` の [GitHub CI #317](https://github.com/shunta115/daidougei-haku-app/actions/runs/41182294580) で、TypeScript・全90ファイル507テスト・buildが成功。サーバーの専用TypeScript確認も成功。WebKitは最終の共通CSS・実アプリ外枠で14項目成功し、portrait/narrow画像を目視確認。
+
+初回の旧searchモックを新API取得モックへ更新し、実アプリと同じLangProviderを適用。障害時クリア／復帰も検証。ローカルの並行全体実行では既存DB初期化や投票設定のtimeoutも発生したが、該当テストは単独で成功し、CIでは設定変更なしで全件成功。テストtimeout値・品質ゲートは変更していない。
+
+本追補は証跡のみで、上記CI検証済みのアプリコードは変更していない。
