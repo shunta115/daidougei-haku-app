@@ -34,6 +34,7 @@ try {
  await viewer.waitForFunction(()=>document.querySelector('audio').srcObject?.getAudioTracks().some(t=>t.readyState==='live'),{},{timeout:15000})
  const media=await viewer.evaluate(async()=>{const publications=[...window.room.remoteParticipants.values()].flatMap(p=>[...p.trackPublications.values()]);return Promise.all(publications.filter(p=>p.track).map(async p=>({kind:p.kind,stats:await p.track.getRTCStatsReport().then(r=>[...(r?.values() || [])].filter(s=>s.type==='inbound-rtp').map(s=>({bytesReceived:s.bytesReceived,packetsReceived:s.packetsReceived,framesDecoded:s.framesDecoded,jitter:s.jitter,packetsLost:s.packetsLost})))})))})
  check('actual audio RTP packets reach the viewer',media.some(p=>p.kind==='audio'&&p.stats.some(s=>s.bytesReceived>0&&s.packetsReceived>0)))
+ const sender=await host.evaluate(async()=>Promise.all([...window.room.localParticipant.trackPublications.values()].filter(p=>p.track).map(async p=>({kind:p.kind,stats:await p.track.getRTCStatsReport().then(r=>[...(r?.values()||[])].filter(s=>s.type==='outbound-rtp').map(s=>({bytesSent:s.bytesSent,packetsSent:s.packetsSent,framesEncoded:s.framesEncoded,frameWidth:s.frameWidth,frameHeight:s.frameHeight,framesPerSecond:s.framesPerSecond,qualityLimitationReason:s.qualityLimitationReason,qualityLimitationDurations:s.qualityLimitationDurations,totalEncodeTime:s.totalEncodeTime,qpSum:s.qpSum,encoderImplementation:s.encoderImplementation})))}))))
  check('SFU confirms both independent participants',(await service.listParticipants(roomName)).length===2)
  const oldVideo=await viewer.locator('video').evaluate(v=>v.srcObject.id)
  await viewer.evaluate(()=>window.room.disconnect())
@@ -45,5 +46,5 @@ try {
  await viewer.waitForFunction(()=>window.room.state==='disconnected',{},{timeout:15000})
  check('scoped SFU room termination disconnects host and viewer',true)
  check('no browser runtime errors',errors.length===0)
- await writeFile(output+'/result.json',JSON.stringify({transport:'real local LiveKit SFU',lifecycleApi:false,supabase:false,syntheticCapture:true,physicalIPhone:false,cloudLiveKit:false,results,media,errors},null,2))
+ await writeFile(output+'/result.json',JSON.stringify({transport:'real local LiveKit SFU',lifecycleApi:false,supabase:false,syntheticCapture:true,physicalIPhone:false,cloudLiveKit:false,results,media,sender,errors},null,2))
 } finally {clearTimeout(deadline);await browser?.close();await service.deleteRoom(roomName).catch(()=>{});await server.close()}

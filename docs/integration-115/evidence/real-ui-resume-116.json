@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "three real JWT users render actual broadcaster/viewer screens",
+    "two actual viewer screens send four likes to actual broadcaster over real TEST Realtime",
+    "real broadcaster FEVER meter responds to received likes",
+    "actual viewer comment reaches broadcaster and second viewer over real TEST Realtime",
+    "no browser runtime errors"
+  ],
+  "errors": [],
+  "passed": 5,
+  "backend": "real TEST Auth/PostgREST/Realtime with actual React screens; LiveKit status deliberately unavailable; no Stripe",
+  "physicalIPhone": false
+}
