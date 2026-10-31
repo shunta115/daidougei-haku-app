@@ -14,6 +14,8 @@ const fake = vi.hoisted(() => ({
 }))
 
 vi.mock('../src/platform/lib/api', () => ({
+  listUpcomingPublishedAppearances: vi.fn().mockResolvedValue([]),
+  liveReservationsEnabled: false,
   searchPerformers: fake.search,
   listLivePerformers: fake.live,
   getFeaturedEvent: fake.event,
@@ -22,6 +24,7 @@ vi.mock('../src/platform/lib/api', () => ({
   listOshiPerformers: fake.oshi,
   listVoteRankingNamed: fake.ranking,
 }))
+vi.mock('../src/platform/lib/homeDiscoveryApi', () => ({ listHomeSessions: vi.fn().mockResolvedValue([]) }))
 vi.mock('../src/platform/lib/auth', () => ({ useAuth: () => ({ user: null }) }))
 vi.mock('../src/platform/lib/track', () => ({ useTrackView: vi.fn() }))
 
@@ -57,7 +60,8 @@ describe('performer discovery loading states', () => {
     expect(screen.getByLabelText('パフォーマーを読み込み中')).toBeTruthy()
     expect(screen.queryByText('まだ知らない才能に会いにいこう。')).toBeNull()
     resolveSearch([performer])
-    expect(await screen.findByRole('heading', { level: 1, name: '表示テスト' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '心が動く、その瞬間へ。' })).toBeTruthy()
+    expect(await screen.findByText('表示テスト')).toBeTruthy()
   })
 
   it('does not show a no-results message while search is loading', async () => {
