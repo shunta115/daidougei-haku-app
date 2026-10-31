@@ -14,17 +14,13 @@ import {
 } from 'livekit-client'
 import { supabase } from './supabase'
 import {
-  ensurePortraitCameraTrack,
+  ensureNativeCameraTrack,
   hostCameraTrack,
   LANDSCAPE_LIVE_CAPTURE,
   PORTRAIT_LIVE_CAPTURE,
   preferNaturalCameraFieldOfView,
 } from './liveCamera'
-import {
-  canComposePortraitVideo,
-  PortraitContainProcessor,
-  type LiveVideoOrientation,
-} from './livePortraitProcessor'
+import type { LiveVideoOrientation } from './livePortraitProcessor'
 
 export type LiveKitErrorKind = 'not_configured' | 'auth' | 'connection' | 'unknown'
 
@@ -206,45 +202,23 @@ function viewerRoomOptions() {
   }
 }
 
-async function installVideoProcessor(cameraTrack: ReturnType<typeof hostCameraTrack>, orientation: LiveVideoOrientation) {
-  if (!cameraTrack || !canComposePortraitVideo()) return false
-  const processor = new PortraitContainProcessor(orientation)
-  try {
-    await cameraTrack.setProcessor(processor, true)
-    // setProcessor starts the hidden source video asynchronously. Do not call
-    // setup successful until the Canvas has rendered multiple real frames.
-    await processor.waitForFrameAdvance()
-    return true
-  } catch (error) {
-    if (cameraTrack.getProcessor()) {
-      try {
-        await cameraTrack.stopProcessor()
-      } catch {
-        /* keep the working Room even if cleanup is unavailable */
-      }
-    }
-    console.warn('[HAKU LIVE] Video composition unavailable; using the camera track directly.', error)
-    return false
-  }
-}
-
 export async function connectAsHost(url: string, token: string, orientation: LiveVideoOrientation = 'portrait') {
   const room = new Room(hostRoomOptions(orientation))
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
-    const landscape = orientation === 'landscape'
     await room.localParticipant.setCameraEnabled(true, {
-      resolution: landscape
+      resolution: orientation === 'landscape'
         ? LANDSCAPE_LIVE_CAPTURE
         : PORTRAIT_LIVE_CAPTURE,
       facingMode: 'user',
     })
     const cameraTrack = hostCameraTrack(room)
     if (cameraTrack) {
-      if (!landscape) await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+      await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
       await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
-      await installVideoProcessor(cameraTrack, landscape ? 'landscape' : 'portrait')
+      // Publish the actual camera frame. A fixed-ratio Canvas can create large
+      // black bars on Safari when the device ignores requested constraints.
     }
   } catch (e) {
     try {
@@ -282,15 +256,8 @@ export async function setHostCameraEnabled(
   })
   const cameraTrack = hostCameraTrack(room)
   if (!cameraTrack) throw new Error('camera_track_unavailable')
-  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
-  const processor = cameraTrack.getProcessor()
-  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
-    const installed = await installVideoProcessor(cameraTrack, orientation)
-    if (canComposePortraitVideo() && !installed) throw new Error('camera_video_processor_unavailable')
-  } else {
-    await processor.waitForFrameAdvance()
-  }
   return true
 }
 
@@ -305,15 +272,8 @@ export async function restartHostCameraForOrientation(
     resolution: orientation === 'landscape' ? LANDSCAPE_LIVE_CAPTURE : PORTRAIT_LIVE_CAPTURE,
     facingMode,
   })
-  if (orientation === 'portrait') await ensurePortraitCameraTrack(cameraTrack.mediaStreamTrack)
+  await ensureNativeCameraTrack(cameraTrack.mediaStreamTrack, orientation)
   await preferNaturalCameraFieldOfView(cameraTrack.mediaStreamTrack)
-  const processor = cameraTrack.getProcessor()
-  if (!(processor instanceof PortraitContainProcessor) || processor.orientation !== orientation) {
-    const installed = await installVideoProcessor(cameraTrack, orientation)
-    if (canComposePortraitVideo() && !installed) throw new Error('orientation_video_processor_unavailable')
-  } else {
-    await processor.waitForFrameAdvance()
-  }
   return true
 }
 
