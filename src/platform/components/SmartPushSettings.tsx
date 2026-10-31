@@ -5,7 +5,7 @@ import { pushEnvironment } from '../lib/pushEnvironment'
 import { PushSetupGuide } from './PushSetupGuide'
 
 export function SmartPushSettings({ userId }: { userId: string }) {
-  const [pref, setPref] = useState<SmartPushPreference | null>(null)
+  const [pref, setPref] = useState<(SmartPushPreference & { deliveryPaused?: boolean }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   useEffect(() => { let active = true; setPref(null); void getSmartPushPreference(userId).then(value => { if (active) setPref(value) }).catch(() => { if (active) setMessage('通知設定を読み込めませんでした。接続を確認してください。') }); return () => { active = false } }, [userId])
@@ -30,6 +30,7 @@ export function SmartPushSettings({ userId }: { userId: string }) {
   }
   return <section className="pl-registration__section" aria-label="SMART PUSH通知設定"><h2 className="pl-h2">好きなパフォーマーのLIVEを見逃さない！</h2>
     <p className="pl-muted">フォロー中で、あなたがONにした通知だけを受け取れます。販促・フォロワー個人情報の通知はありません。</p>
+    {pref?.deliveryPaused ? <p role="note">現在、Push配信は停止中です。通知設定と購読は準備できます。</p> : null}
     {pref ? <fieldset disabled={busy}><legend>プッシュ通知</legend>
       <label><input type="checkbox" checked={pref.push_all_enabled} onChange={e => void update({ push_all_enabled:e.target.checked })} />プッシュ通知を許可する（OFFで全停止）</label>
       <label><input type="checkbox" checked={pref.live_push_enabled} disabled={!pref.push_all_enabled || env.needsInstall || !env.supported || env.denied} onChange={e => void update({ live_push_enabled:e.target.checked })} />フォロー中パフォーマーのLIVE開始</label>

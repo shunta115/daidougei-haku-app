@@ -1,10 +1,9 @@
 # HAKU SMART PUSH: first release candidate
 
-This branch is preparation only. No production schema changes, production flags,
-merge, real Push, SNS posts or paid services are authorized by this draft.
-The supplied directive ends mid-sentence in section 12. Its remaining approval
-conditions are still needed. Issues #118/#119 require separate approval for DB,
-merge, deployment and actual sends. PR117's approval applied only to its one test.
+This branch is preparation only. The continuation directive has been received.
+Production DB, merge, Production deployment/configuration and actual device sends
+require separate approvals under sections 19–23. PR117's one-device approval is
+not reused. Production backup success must be verified before any DB application.
 
 ## Existing assets and separation
 
@@ -53,24 +52,24 @@ Only one active subscription per recipient is selected for a given event.
 
 Existing PK/unique constraints and row locks protect enqueue/claim. Recipient
 preference locks serialize competing performers; a global advisory lock protects
-the launch budget. A processing/failed delivery is never reclaimed. Every attempt
-consumes quota, including an uncertain result. A crash may lose a notification;
+the launch budget. A processing/failed/unknown delivery is never reclaimed. Every attempt
+consumes quota, including an uncertain result. Interrupted processing becomes unknown after two minutes; it is never resent. Known uncontacted rows can be released if the master switch pauses a batch. A crash may lose a notification;
 at-most-once attempts are intentional. 404/410 disable only the failed subscription.
 
 ## Cost and stop conditions
 
 No new serverless function or cron. Existing heartbeat dispatch: max 5 sends per
-request, max 500 queued recipients/event, max 500 attempts globally/UTC day. Empty
+request, max 500 enrolled recipients and 500 attempts globally/UTC day. Audience discovery uses stable pages of 100, and each client pump continues at most 10 five-recipient batches. Overlapping pumps are suppressed; the existing heartbeat resumes remaining untouched rows. Empty
 repeated enqueue returns its existing event without scanning followers again.
 These are safety bounds, not a promise of zero infrastructure charges. Existing
 plan consumption must be reviewed before activation; do not upgrade a plan.
 
-Flags, all OFF unless separately approved:
+Production flags remain OFF unless separately approved:
 - VITE_ENABLE_SMART_PUSH (preview/client UI)
 - ENABLE_SMART_PUSH (private rehearsal and master runtime)
 - ENABLE_LIVE_START_WEB_PUSH (LIVE sending)
 
-VAPID values are reused and never logged or copied into documentation. Test
+Production VAPID values are unchanged. A separate TEST-only pair is scoped to this preview branch; private keys are never included in the repository or user-facing logs. Test
 subscriptions/providers are fake. No Stripe or Connect configuration changes.
 
 ## Other requested categories and explicit remaining gates
@@ -90,9 +89,21 @@ normal categories, the existing appearance queue and future reservation queue
 must share atomic global recipient quotas; do not claim multi-category caps are
 already complete. Reservation quotas need their own bounded allowance.
 
+The database master switch smart_push_control.enabled defaults OFF and is
+rechecked before each send; stopping it does not require a redeploy. The runs
+table records aggregate claimed/accepted/failed/unknown/suppressed counts and
+elapsed milliseconds without recipient identities. VAPID 401/403 and repeated
+unknown outcomes pause the sender automatically.
+
+The real TEST Auth/REST/RPC integration has passed (see TEST-RESULTS.md). The TEST
+DB already has guarded lifecycle RPCs from another experiment. A strictly
+TEST-URL/preview-flag gated adapter uses those existing RPCs without changing the
+production LIVE lifecycle or merging that PR. The preview build verifies its
+client URL, Auth key, existing service credential and paused master inside Vercel;
+only a success marker is logged. No credential values are printed.
+
 No real-device success is claimed for these new modes. PR117 proved the existing
-one-device transport only. Remaining acceptance: TEST Supabase API/RLS integration,
-real concurrent Postgres connections, WebKit/Android device flows, host disconnect
+one-device transport only. Remaining acceptance: Vercel protected HTTP route with the user’s normal login, WebKit/Android device flows, host disconnect
 and permission revocation, notification taps when logged out/ended, and measured
 request/DB usage. Startup under severe local CPU load may require a longer PGlite
 boot timeout; do not hide functional failures behind timeout changes.

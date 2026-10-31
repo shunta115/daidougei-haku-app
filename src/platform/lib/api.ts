@@ -1,3 +1,4 @@
+import { smartPushTestLifecycle, startSmartPushTestLive, endSmartPushTestLive } from './smartPushTestLifecycle'
 import { pushEnvironment } from './pushEnvironment'
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
 import { requireSupabase } from './supabase'
@@ -264,6 +265,7 @@ export async function updateOwnDisplayName(value: string): Promise<string> {
 
 export async function startLive(performerId: string, title?: string) {
   await assertApprovedActivePerformer(performerId)
+  if (smartPushTestLifecycle) return startSmartPushTestLive(performerId, title)
   const sb = requireSupabase()
   const now = new Date().toISOString()
   const liveTitle = title?.trim() || null
@@ -358,6 +360,7 @@ export async function startLive(performerId: string, title?: string) {
 }
 
 export async function endLive(performerId: string) {
+  if (smartPushTestLifecycle) return endSmartPushTestLive(performerId)
   const sb = requireSupabase()
   const now = new Date().toISOString()
   const { error: uerr } = await sb

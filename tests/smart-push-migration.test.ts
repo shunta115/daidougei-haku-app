@@ -14,22 +14,27 @@ beforeAll(async()=>{
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth;
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    create function public.is_admin() returns boolean language sql stable as $$ select false $$;
     grant usage on schema public,auth to anon,authenticated,service_role;
     create table public.profiles(id uuid primary key,status text default 'active');
     create table public.performers(id uuid primary key,stage_name text,is_live boolean default true,is_approved boolean default true,is_private_test boolean default false);
     create table public.live_sessions(id uuid primary key,performer_id uuid,started_at timestamptz default now(),ended_at timestamptz);
     create table public.notification_preferences(user_id uuid primary key,appearance_push_enabled boolean default false,locale text default 'ja');
-    create table public.push_subscriptions(id uuid primary key,user_id uuid,endpoint text,p256dh text,auth text,disabled_at timestamptz);
+    create table public.push_subscriptions(id uuid primary key,user_id uuid,endpoint text,p256dh text,auth text,disabled_at timestamptz,updated_at timestamptz default now());
     create table public.follows(fan_id uuid,performer_id uuid,primary key(fan_id,performer_id));
+    alter table public.follows enable row level security;grant select on public.follows to authenticated;
     grant select,update on public.live_sessions to authenticated;
     alter table public.live_sessions enable row level security;
     create policy owner on public.live_sessions to authenticated using(performer_id=auth.uid()) with check(performer_id=auth.uid());
   `)
   const migration=readFileSync('supabase/migrations/20261031181110_smart_push_live.sql','utf8')
   await db.exec(migration); await db.exec(migration)
+  await db.exec(readFileSync('supabase/migrations/20261031183621_smart_push_intent_rpc_compatibility.sql','utf8'))
+  await db.exec(readFileSync('supabase/migrations/20261031183831_smart_push_runtime_controls.sql','utf8'))
+  await db.exec(readFileSync('supabase/migrations/20261031185419_smart_push_presend_revalidation.sql','utf8'))
 },120000)
 beforeEach(async()=>{
-  await db.exec(`reset role; truncate public.live_push_deliveries,public.live_push_events,public.live_sessions,public.notification_preferences,public.push_subscriptions,public.follows,public.performers,public.profiles cascade;
+  await db.exec(`reset role; update public.smart_push_control set enabled=true,daily_budget=500; truncate public.live_push_deliveries,public.live_push_events,public.live_sessions,public.notification_preferences,public.push_subscriptions,public.follows,public.performers,public.profiles cascade;
     insert into public.profiles(id) values('${owner}'),('${owner2}'),('${fan}'),('${stranger}');
     insert into public.performers(id,stage_name) values('${owner}','Performer A'),('${owner2}','Performer B');
     insert into public.live_sessions(id,performer_id,follower_push_requested) values('${live}','${owner}',true),('${live2}','${owner2}',true);
@@ -109,4 +114,36 @@ it('fails closed at the global 500-attempt daily budget',async()=>{
     insert into public.live_push_deliveries(event_id,user_id,subscription_id,status,attempts) select id,'${fan}','${sub}','failed',1 from public.live_push_events where id<>'${event}';
   `)
   expect(await claim()).toHaveLength(0)
+})
+
+it('disables claims immediately through the private master control',async()=>{await db.exec('update public.smart_push_control set enabled=false');expect(await claim()).toHaveLength(0)})
+it('classifies interrupted attempts as unknown and continues only untouched recipients',async()=>{
+ await claim();await db.exec("update public.live_push_deliveries set updated_at=now()-interval '3 minutes'");await db.exec('select public.reconcile_live_push_queue()');
+ expect((await db.query<{status:string}>('select status from public.live_push_deliveries')).rows[0].status).toBe('unknown');expect(await claim()).toHaveLength(0)
+})
+it('permits only the owner intent update through the private authenticated wrapper',async()=>{
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated')
+ try {await db.query(`select public.set_live_push_intent('${live}',false)`)} finally {await db.exec('reset role')}
+ expect((await db.query<{follower_push_requested:boolean}>(`select follower_push_requested from public.live_sessions where id='${live}'`)).rows[0].follower_push_requested).toBe(false)
+})
+it('pages an audience larger than one batch without truncation or duplicates',async()=>{
+ await db.exec(`
+ insert into public.profiles(id) select gen_random_uuid() from generate_series(1,120);
+ insert into public.notification_preferences(user_id,live_push_enabled,push_start_hour,push_end_hour) select id,true,0,0 from public.profiles where id not in ('${owner}','${owner2}','${fan}','${stranger}');
+ insert into public.push_subscriptions(id,user_id,endpoint,p256dh,auth) select gen_random_uuid(),user_id,'https://push.example.test/'||user_id,'fake','fake' from public.notification_preferences where user_id<>'${fan}';
+ insert into public.follows select user_id,'${owner2}' from public.notification_preferences on conflict do nothing;
+ `)
+ const next=await queue(live2,owner2);await queue(live2,owner2)
+ expect((await db.query<{n:number}>(`select count(*)::int n from public.live_push_deliveries where event_id='${next}'`)).rows[0].n).toBe(121)
+ await queue(live2,owner2)
+ expect((await db.query<{n:number}>(`select count(*)::int n from public.live_push_deliveries where event_id='${next}'`)).rows[0].n).toBe(121)
+})
+
+it('does not expose follower IDs or the master switch to performer browser roles',async()=>{
+ await db.query("select set_config('request.jwt.claim.sub',$1,false)",[owner]);await db.exec('set role authenticated');
+ try {expect((await db.query('select fan_id from public.follows')).rows).toHaveLength(0);await expect(db.query('select * from public.smart_push_control')).rejects.toThrow()}finally{await db.exec('reset role')}
+})
+
+it.each(['update public.notification_preferences set push_daily_limit=0','update public.notification_preferences set push_weekly_limit=0','update public.smart_push_control set enabled=false'])('rechecks changed settings after claim: %s',async sql=>{
+ const claimed=await claim() as {delivery_id:string}[];await db.exec(sql);expect((await db.query<{ok:boolean}>(`select public.live_push_delivery_eligible('${claimed[0].delivery_id}') ok`)).rows[0].ok).toBe(false)
 })
