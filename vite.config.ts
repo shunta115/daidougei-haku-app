@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         'haku-admin': fileURLToPath(new URL('./haku-admin.html', import.meta.url)),
+        'haku-crowd-live': fileURLToPath(new URL('./haku-crowd-live.html', import.meta.url)),
       },
     },
   },

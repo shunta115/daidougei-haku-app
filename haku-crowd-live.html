@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>HAKU CROWD LIVE TEST</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#0c1018;color:#f7f7fb;padding:calc(16px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom))}
+main{max-width:640px;margin:auto}
+h1{font-size:1.5rem}
+section{background:#192334;border:1px solid #34445b;border-radius:18px;padding:16px;margin:16px 0}
+button,a.action{display:block;width:100%;border:0;border-radius:14px;padding:17px;margin-top:10px;background:#e8f1ff;color:#102036;font-size:1rem;font-weight:700;text-align:center;text-decoration:none}
+button.secondary{background:#324459;color:#fff}
+button.danger{background:#623345;color:#fff}
+button:disabled{opacity:.5}
+video{display:block;width:100%;max-height:65dvh;aspect-ratio:9/16;object-fit:contain;background:#05070a;border-radius:14px}
+#qr{display:block;margin:14px auto;background:white;padding:8px;max-width:100%}
+#qrLink{overflow-wrap:anywhere}
+.note{color:#c4d0df;line-height:1.6}
+#status{min-height:2em;font-weight:700}
+[hidden]{display:none!important}
+</style>
+</head>
+<body><main>
+<h1>HAKU CROWD LIVE <small>TEST</small></h1>
+<p class="note">出演者の事前許可とHAKUログインが必要です。カメラ・マイクは「LIVE配信を開始」を押した後に起動します。</p>
+<p id="status" role="status" aria-live="polite">確認中…</p>
+<section id="login" hidden><h2>ログインが必要です</h2><p class="note">HAKUへログイン後、Safariの「戻る」でこのQR画面に戻ってください。</p><a class="action" href="/live?auth=1">HAKUでログイン</a></section>
+<section id="owner" hidden>
+<h2>出演者の操作</h2>
+<button id="makeQr">代理配信を許可してQRを表示</button>
+<canvas id="qr" hidden aria-label="代理配信用QR"></canvas>
+<a id="qrLink" hidden></a>
+<button id="direct" class="secondary">自分でLIVE配信を開始</button>
+<button id="emergency" class="danger" disabled>配信を緊急停止</button>
+</section>
+<section id="camera" hidden>
+<h2>撮影者の操作</h2>
+<p id="performerName" class="note"></p>
+<video id="preview" autoplay muted playsinline aria-label="配信プレビュー"></video>
+<button id="start">LIVE配信を開始</button>
+<button id="switch" class="secondary" disabled>前後カメラを切り替える</button>
+<button id="stop" class="danger" disabled>撮影を停止</button>
+<p class="note">別アプリへの移動や画面ロック時は送信を停止します。復帰後は自動で再開しません。</p>
+</section>
+<section id="watcher" hidden>
+<h2>視聴する</h2>
+<video id="watch" playsinline controls preload="none" aria-label="LIVE映像"></video>
+<button id="play">映像・音声を再生</button>
+<a id="tip" class="action">❤️ パフォーマーを応援する</a>
+<a id="profile" class="action">パフォーマーをフォローする</a>
+</section>
+</main><script type="module" src="/src/experiments/crowd-live/main.mjs"></script></body></html>
