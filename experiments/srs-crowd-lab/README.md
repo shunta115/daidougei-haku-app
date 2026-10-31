@@ -13,7 +13,9 @@ PR #88 の SRS WHIP/HLS と PR #87 の本人承認・QR・一回限りの grant 
 
 ## まだ公開できない理由
 
-このコードは単一プロセスのメモリ内状態であり、再起動後の一日3回制限・grant失効状態を永続化しない。HAKU Authの本人確認、既存パフォーマーIDとの照合、非公開視聴のHLSセグメント認可、TLS、公開WHIP入口の遮断、SRS publisher切断の実環境確認が未完了。投げ銭・フォローは既存のパフォーマーIDへ紐付ける設計だが、今回のラボでは決済や本番データへ接続していない。
+TEST gatewayは `HAKU_CROWD_STATE_FILE` に指定するprivate SQLiteファイルを必須とする（Node 24推奨）。QR・一回限りgrant・日次上限・停止/交代fence・視聴認可/署名鍵を再起動と同一ホストの複数worker間で保持する。ファイルは0600、ローカル永続ディスクに置き、ネットワーク共有や複数ホストでは使用しない。本人が視聴を許可しない限り一般視聴ticketは発行しない。TEST Authで本人/非公開出演者を照合する。
+
+TLS、公開WHIP入口の遮断、公開環境のSRS切断、既存HAKU一覧との接続は未完了。投げ銭・フォローは既存のパフォーマーIDへ紐付ける設計だが、今回のラボでは決済や本番データへ接続していない。通常 `npm run build` はCROWD画面を含めない。ローカル実験画面のみ `npm run build:crowd-lab` で別出力する。
 
 iPhone Safariのカメラ、バックグラウンド、再接続、H.264/AAC再生とQR実機操作は未検証。PR #88 の500疑似クライアント試験は localhost 10秒のHTTP/HLS測定であり、実機500人・1時間の証明ではない。
 
@@ -24,7 +26,7 @@ iPhone Safariのカメラ、バックグラウンド、再接続、H.264/AAC再�
 ## 実機検証前の必要作業
 
 1. 費用と外部公開の承認を得た隔離TESTサーバーでHTTPS/WSS/TURN/WHIPを構成する。
-2. HAKU TEST Authと出演者IDに結合した永続的なgrant・日次上限・room状態を実装する。
+2. private永続ディスク上にSQLite状態を配置し、HAKU TEST Auth gatewayの再起動/運用を実環境で確認する。
 3. SRS publish管理APIを内部専用に保ち、WHIP入口とHLSマニフェスト・セグメントに認可を設ける。
 4. 本人iPhone、代理iPhone、別端末視聴者で停止・交代・権限失効・音声映像を実測する。
 

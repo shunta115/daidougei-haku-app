@@ -15,3 +15,9 @@
 scripts/test-official-home-*.mjs
 tests/fixtures/official-home/**
 artifacts/official-home/**
+
+# Standard HAKU release excludes all experimental/test servers and local builds
+experiments/**
+tests/**
+haku-crowd-live.html
+dist-crowd-lab/**

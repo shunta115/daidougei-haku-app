@@ -24,8 +24,7 @@ async function body(req) {
 
 export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ openMedia: openSrsWhip, closeMedia: closeSrsWhip }) } = {}) {
   if (typeof resolveActor !== 'function') throw new Error('authenticated_actor_resolver_required');
-  const owners = new Map();
-  const tickets = makeWatchTickets();
+  const tickets = makeWatchTickets({ secret: gate.watchSecret() });
   let timer;
   const server = createServer(async (req, res) => {
     try {
@@ -47,14 +46,14 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const hlsPath = /^\/live\/haku-lab-[a-f0-9]{32}(?:-[0-9]+)?\.(?:m3u8|ts)$/.test(mediaUrl.pathname);
       if (req.method === 'GET' && hlsPath) {
         const token = mediaUrl.searchParams.get('watch');
-        const roomId = [...owners.keys()].find(key => mediaUrl.pathname.startsWith('/live/haku-lab-' + key.replaceAll('-', '')));
-        const sourceActor = owners.get(roomId);
+        const roomId = gate.roomIds().find(key => mediaUrl.pathname.startsWith('/live/haku-lab-' + key.replaceAll('-', '')));
+        const sourceActor = gate.ownerForRoom(roomId);
         let state;
         try { state = sourceActor ? gate.state(sourceActor, roomId) : null; } catch { state = null; }
         const otherParams = [...mediaUrl.searchParams.keys()].filter(key => key !== 'watch');
         if (!roomId || otherParams.some(key => key !== 'hls_ctx') || otherParams.length > 1 ||
             (otherParams.length && !/^[a-z0-9]{1,64}$/.test(mediaUrl.searchParams.get('hls_ctx') || '')) ||
-            !tickets.verify(token, roomId, state)) {
+            !tickets.verify(token, roomId, state, (...claims) => gate.canWatchClaim(...claims))) {
           json(res, 401, { error: 'watch_not_authorized' }); return;
         }
         const upstream = new URL('http://127.0.0.1:8080' + mediaUrl.pathname);
@@ -77,17 +76,13 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       if (req.method === 'POST' && url.pathname === '/rooms') {
         const data = JSON.parse(await body(req) || '{}');
         const room = gate.create(actor, data.title);
-        owners.set(room.id, actor);
         json(res, 201, room); return;
       }
       if (!roomId || url.searchParams.size !== 1) { json(res, 404, { error: 'not_found' }); return; }
       if (req.method === 'GET' && url.pathname === '/state') { json(res, 200, gate.state(actor, roomId)); return; }
       if (req.method === 'GET' && url.pathname === '/watch-ticket') {
-        const state = gate.state(actor, roomId);
-        if (state.phase !== 'live' || (actor.id !== state.performerId && actor.id !== state.publisherId)) {
-          json(res, 403, { error: 'watch_not_authorized' }); return;
-        }
-        json(res, 200, { ticket: tickets.issue({ roomId, actorId: actor.id, epoch: state.epoch }) }); return;
+        const state = gate.authorizeWatch(actor, roomId);
+        json(res, 200, { ticket: tickets.issue({ roomId, actorId: actor.id, epoch: state.epoch, audienceGeneration: state.audienceGeneration ?? null }), refreshAfterMs: 60_000 }); return;
       }
       if (req.method !== 'POST') { json(res, 404, { error: 'not_found' }); return; }
       if (url.pathname === '/whip') {
@@ -103,6 +98,7 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
       const data = JSON.parse(await body(req) || '{}');
       let result;
       switch (url.pathname) {
+        case '/audience': result = gate.setAudience(actor, roomId, data.allowed); break;
         case '/consent': result = await gate.consent(actor, roomId, data.allowed); break;
         case '/qr': result = gate.qr(actor, roomId); break;
         case '/request': result = gate.request(actor, roomId, data.peerId, data.token, data.consent === true); break;
@@ -120,7 +116,7 @@ export function makeCrowdHttpGateway({ resolveActor, gate = makeSrsCrowdGate({ o
     }
   });
   server.on('listening', () => {
-    timer = setInterval(() => { void gate.sweep(roomId => owners.get(roomId)).catch(() => {}); }, 2000);
+    timer = setInterval(() => { void gate.sweep().catch(() => {}); }, 2000);
     timer.unref();
   });
   server.on('close', () => clearInterval(timer));

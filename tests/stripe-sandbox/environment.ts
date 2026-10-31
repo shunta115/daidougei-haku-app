@@ -1,8 +1,12 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 export const TEST_REF = 'aeqskxxykzapgaudbeqa'
 export function loadTestEnvironment() {
-  const values = JSON.parse(readFileSync(process.env.HAKU_SANDBOX_ENV_FILE || '/private/tmp/haku-pr112-env.json', 'utf8'))
+  const envFile = process.env.HAKU_SANDBOX_ENV_FILE
+  if (!envFile) throw new Error('explicit_fresh_sandbox_environment_required')
+  if ((statSync(envFile).mode & 0o077) !== 0) throw new Error('private_sandbox_environment_required')
+  const values = JSON.parse(readFileSync(envFile, 'utf8'))
   for (const [key,value] of Object.entries(values)) process.env[key] = String(value)
+  if (process.env.VERCEL_ENV !== 'preview') throw new Error('sandbox_preview_environment_required')
   for (const name of ['SUPABASE_URL','VITE_SUPABASE_URL']) {
     if (new URL(process.env[name] || '').hostname !== `${TEST_REF}.supabase.co`) throw new Error('isolated_test_database_required')
   }

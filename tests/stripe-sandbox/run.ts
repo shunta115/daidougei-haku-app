@@ -4,13 +4,15 @@ import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import assert from 'node:assert/strict'
 import { loadTestEnvironment } from './environment'
+import { verifySettlementPermissions } from './preflight'
 loadTestEnvironment()
-const fixtures=JSON.parse(readFileSync('/private/tmp/haku-pr112-fixtures.json','utf8'))
+const fixtures=JSON.parse(readFileSync(process.env.HAKU_SANDBOX_FIXTURE_FILE || '/private/tmp/haku-pr112-fixtures.json','utf8'))
 const admin=createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})
 const fanClient=createClient(process.env.SUPABASE_URL!,process.env.VITE_SUPABASE_ANON_KEY!,{auth:{persistSession:false}})
 const auth=await fanClient.auth.signInWithPassword({email:fixtures.fan.email,password:fixtures.fan.password})
 if(auth.error||!auth.data.session)throw new Error('test_fan_login_failed')
 const stripe=new Stripe(process.env.STRIPE_SECRET_KEY!)
+if (process.env.HAKU_CHECKOUT_ONLY !== '1') await verifySettlementPermissions(stripe)
 const output=`/private/tmp/haku-pr112-real-e2e${process.env.HAKU_E2E_LABEL ? '-'+process.env.HAKU_E2E_LABEL : ''}`;mkdirSync(output,{recursive:true})
 const results:any[]=[]
 const browser=await webkit.launch()
@@ -75,10 +77,19 @@ try {
   for(let i=0;i<40;i++){
    const result=await admin.from('tips').select('id,status,performer_id,fan_id,amount_cents,stripe_charge_id,settlement_status,performer_share_yen,haku_fee_yen,stripe_fee_yen').eq('id',tip.id).single()
    if(result.error)throw new Error(`test_ledger_read_${result.error.code}`)
-   row=result.data;if(row.status==='succeeded'&&row.stripe_charge_id)break
+   row=result.data;if(row.status==='succeeded'&&row.stripe_charge_id&&row.settlement_status==='settled')break
    await new Promise(resolve=>setTimeout(resolve,500))
   }
   assert.equal(row.status,'succeeded');assert.equal(row.performer_id,test.artist.id);assert.equal(row.amount_cents,100)
+  assert.equal(row.settlement_status,'settled','paid tip must include actual-fee settlement')
+  const charge=await stripe.charges.retrieve(row.stripe_charge_id,{expand:['balance_transaction']})
+  assert.equal(charge.livemode,false)
+  assert.equal(charge.amount,100)
+  const balance=charge.balance_transaction
+  assert.ok(balance && typeof balance !== 'string','actual Stripe balance transaction required')
+  assert.equal(row.stripe_fee_yen,balance.fee,'ledger fee must equal actual Stripe fee')
+  for(const amount of [row.stripe_fee_yen,row.haku_fee_yen,row.performer_share_yen]) assert.ok(Number.isSafeInteger(amount)&&amount>=0)
+  assert.equal(row.stripe_fee_yen+row.haku_fee_yen+row.performer_share_yen,row.amount_cents,'financial conservation')
   const events=await admin.from('stripe_webhook_events').select('event_type,status').eq('object_id',session.id)
   assert.ok(events.data?.some(e=>e.event_type==='checkout.session.completed'&&e.status==='processed'))
   results.push({artist:test.artist.label,signedIn:test.signedIn,surface:test.surface,orientation:test.orientation,tipId:tip.id,stripeTestMode:true,paid:true,attribution:true,webhook:true,settlement:row.settlement_status})

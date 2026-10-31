@@ -16,12 +16,15 @@ export async function sendLiveLikeBatch(performerId: string, startedAt: string, 
   return Number(data)
 }
 
-export function subscribeLiveLikeTotal(performerId: string, startedAt: string, onTotal: (total: number) => void, onReady: () => void) {
+export function subscribeLiveLikeTotal(performerId: string, startedAt: string, onTotal: (total: number) => void, onReady: () => void, onConnectionChange?: (connected: boolean) => void) {
   const sb = requireSupabase()
   const channel = sb.channel(`live-like-total-${performerId}-${startedAt}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_like_totals', filter: `performer_id=eq.${performerId}` }, ({ new: row }) => {
       const value = row as { total?: number; live_started_at?: string }
       if (Date.parse(value.live_started_at ?? '') === Date.parse(startedAt) && Number.isSafeInteger(value.total) && value.total! >= 0) onTotal(value.total!)
-    }).subscribe(status => { if (status === 'SUBSCRIBED') onReady() })
+    }).subscribe(status => {
+      if (status === 'SUBSCRIBED') { onConnectionChange?.(true); onReady() }
+      else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) onConnectionChange?.(false)
+    })
   return () => { void sb.removeChannel(channel) }
 }

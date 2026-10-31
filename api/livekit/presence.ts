@@ -5,6 +5,9 @@ import { RoomServiceClient } from 'livekit-server-sdk'
 import { getLiveKitConfig, sessionRoomName } from './_shared.js'
 
 const STALE_SECONDS = 90
+const WATCHDOG_PAGE_SIZE = 50
+const WATCHDOG_CONCURRENCY = 8
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function countAudienceParticipants(participants: { identity: string }[], performerId: string) {
   return participants.filter((participant) => participant.identity !== performerId).length
 }
@@ -16,47 +19,64 @@ function readiness(res: VercelResponse) {
 }
 function roomService() {
   const { url, apiKey, apiSecret } = getLiveKitConfig()
-  return new RoomServiceClient(url, apiKey, apiSecret)
+  return new RoomServiceClient(url, apiKey, apiSecret, { requestTimeout: 2, failover: false })
 }
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return }
   if (req.method === 'GET' && req.query.mode === 'status') { readiness(res); return }
   try {
-    const sb = getAdminSupabase()
     if (req.method === 'GET') {
       // SFU queries and lifecycle mutation are reserved for the configured watchdog.
       const secret = process.env.CRON_SECRET
       if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
         res.status(401).json({ error: 'Watchdog authorization required' }); return
       }
-      // heartbeat_timeout cleanup is atomic with start/end and also scheduled by separately approved SQL.
+      const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null
+      if (cursor && !UUID.test(cursor)) { res.status(400).json({ error: 'Invalid watchdog cursor' }); return }
+      const sb = getAdminSupabase()
       const { data, error } = await sb.rpc('expire_direct_live_leases')
       if (error) throw error
-      const { data: stale, error: readError } = await sb.from('direct_live_leases')
+      // Keyset pages remain correct when healthy observations renew heartbeats and
+      // remove rows from this stale set. OFFSET or an unordered LIMIT can starve LIVE.
+      let query = sb.from('direct_live_leases')
         .select('id,performer_id,heartbeat_at').is('ended_at', null).eq('lifecycle_state', 'live')
-        .lt('heartbeat_at', new Date(Date.now() - STALE_SECONDS * 1000).toISOString()).limit(50)
+        .lt('heartbeat_at', new Date(Date.now() - STALE_SECONDS * 1000).toISOString())
+        .order('id', { ascending: true }).limit(WATCHDOG_PAGE_SIZE)
+      if (cursor) query = query.gt('id', cursor)
+      const { data: stale, error: readError } = await query
       if (readError) throw readError
-      let ended = 0
-      for (const lease of stale || []) {
-        let hostConnected: boolean
-        try {
-          const participants = await roomService().listParticipants(sessionRoomName(lease.performer_id, lease.id))
-          hostConnected = participants.some((p) => p.identity === lease.performer_id)
-        } catch (error) {
-          const failure = error as { code?: string; status?: number }
-          if (failure.code === 'not_found' || failure.status === 404) hostConnected = false
-          else continue // Unknown/outage is NOT evidence that the host is absent.
+      let ended = 0, unknown = 0, cleanupPending = 0, index = 0
+      const leases = stale || []
+      const service = leases.length ? roomService() : null
+      await Promise.all(Array.from({ length: Math.min(WATCHDOG_CONCURRENCY, leases.length) }, async () => {
+        while (index < leases.length) {
+          const lease = leases[index++]
+          let hostConnected: boolean | null = null
+          try {
+            const participants = await service!.listParticipants(sessionRoomName(lease.performer_id, lease.id))
+            hostConnected = participants.some((p) => p.identity === lease.performer_id)
+          } catch (error) {
+            // A proxy's generic HTTP 404 is not proof that a LiveKit room is absent.
+            if ((error as { code?: string }).code === 'not_found') hostConnected = false
+          }
+          if (hostConnected === null) unknown++
+          const { data: result, error: observeError } = await sb.rpc('observe_direct_live_host', {
+            p_performer_id: lease.performer_id, p_session_id: lease.id,
+            p_expected_heartbeat: lease.heartbeat_at, p_host_connected: hostConnected,
+          })
+          if (observeError) throw observeError
+          if (result === 'ended') {
+            ended++
+            try { await service!.deleteRoom(sessionRoomName(lease.performer_id, lease.id)) }
+            catch { cleanupPending++ }
+          }
         }
-        const { data: result, error: observeError } = await sb.rpc('observe_direct_live_host', {
-          p_performer_id: lease.performer_id, p_session_id: lease.id,
-          p_expected_heartbeat: lease.heartbeat_at, p_host_connected: hostConnected,
-        })
-        if (observeError) throw observeError
-        if (result === 'ended') ended++
-      }
-      res.status(200).json({ ok: true, expired: data, ended }); return
+      }))
+      const nextCursor = leases.length === WATCHDOG_PAGE_SIZE ? leases[leases.length - 1].id : null
+      res.status(200).json({ ok: true, expired: data, ended, unknown, cleanupPending, scanned: leases.length, nextCursor }); return
     }
+    const sb = getAdminSupabase()
     if (req.body?.action === 'force-end') {
       if (!await requireAdmin(req, res)) return
       const sessionId = typeof req.body.sessionId === 'string' ? req.body.sessionId : ''

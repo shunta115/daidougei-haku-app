@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createServer as createViteServer } from 'vite'
 import { loadTestEnvironment } from './environment'
 loadTestEnvironment()
-const secret = readFileSync('/private/tmp/haku-pr112-webhook.log','utf8').match(/whsec_[A-Za-z0-9_]+/)?.[0]
+const secret = readFileSync(process.env.HAKU_SANDBOX_LISTENER_LOG || '/private/tmp/haku-pr112-webhook.log','utf8').match(/whsec_[A-Za-z0-9_]+/)?.[0]
 if (!secret) throw new Error('sandbox_listener_signature_secret_required')
 process.env.STRIPE_WEBHOOK_SECRET = secret
 const { default: tip } = await import('../../api/stripe/tip')

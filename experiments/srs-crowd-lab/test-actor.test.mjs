@@ -29,3 +29,14 @@ test('TEST Auth verifier rejects inactive or anonymous accounts', async () => {
   }) });
   await assert.rejects(resolver({ headers: { authorization: 'Bearer test-access-token' } }), /registered_account_required/);
 });
+
+test('TEST Auth verifier refuses private performer publishing before QR creation', async () => {
+  const id = '00000000-0000-4000-8000-000000000003';
+  const resolver = makeTestActorResolver({ publishableKey: 'public-test-key', fetcher: async url => {
+    if (String(url).endsWith('/auth/v1/user')) return Response.json({ id, is_anonymous: false });
+    if (String(url).includes('/profiles?')) return Response.json([{ id, role: 'performer', status: 'active' }]);
+    assert.ok(new URL(url).searchParams.get('select').includes('is_private_test'));
+    return Response.json([{ id, is_approved: true, is_private_test: true }]);
+  } });
+  await assert.rejects(resolver({ headers: { authorization: 'Bearer test-access-token' } }), /private_live_not_supported/);
+});

@@ -100,9 +100,18 @@ optional Push SQLをlifecycle後に適用すると、通知helperのauthenticate
 
 1. 実LiveKitの端末間映像/音声、Safariの画面ロック・バックグラウンド・復帰・長時間、実カメラ品質/音質は未検証。HARIBOWモザイクの根本原因は未確定。watchdogはスクリプトのみで運用未起動。
 2. 現Stripe接続で列挙されたアカウントはlivemode=trueだけ。実決済操作なし。統合版のclaim済みSandbox Checkout→真正Webhook→実手数料→台帳/分配の完走は未検証。#112の過去32ケースは参考証跡で、統合版の成功には数えない。必要なTEST接続を用意し、以前の一時キー露出・未claim手数料403も解消してから再検証する。
-3. CROWDの共有永続認可/セッション原子管理、一般視聴者認可、公開HTTPS/ICE/メディア経路、既存HAKUの公開LIVE一覧への安全な接続は未完成。実験を有効化して完成扱いにしない。
+3. CROWDのQR/停止/交代/視聴認可を単一ホストSQLiteへ永続化し、再起動/複数worker競合を24テストで確認。公開HTTPS/ICE、既存HAKU一覧との接続と実機受入は未完成。通常ビルドから実験画面/サーバーを分離。
 4. 物理iPhone/LINE実受渡し、実YouTube視聴と終了検知、500実端末/外部回線/長時間の受入は未検証。公式ページの実機受入・本番office/retention運用も必要。
 5. 本番migration・main merge・Production deployは個別承認前で未実施。これらの承認だけで上の未完成・未検証を免除しない。
 
 Preview: https://daidougei-haku-314h4sxoa-daidougei-s-projects.vercel.app/ （READY / target=null / Vercel認証あり）
 UI source: 39480be。架空データ・模擬通信の静的QAだけを配置。実TESTの認証・Storage・Realtimeの試験はlocalhostで別途実施し、この公開Previewとは分離。API/Functions/cron/環境ファイル/秘密キーなし、CSPで外部接続・media・frame・formを拒否。
+
+## PR #116 加速更新（基準9c62a472以降）
+
+- watchdogをUUID keysetで全件巡回し、50件超の監視滞留を修復。SFUは8並列・2秒timeout、不明観測では不在窓をリセット。終了後に当該roomだけを解放。runnerはcursorを保持し安全に停止する。関連18テスト通過、運用起動は未実施。
+- いいね/コメントはRealtime正常時60秒補正、切断時は従来の2/3秒取得と即時復帰を維持。対象9テスト通過。
+- Stripe Sandboxの事前権限検査、真正手数料照合/精算完了/金額保存則をE2E必須条件に変更。旧credential自動使用を廃止。新規無料Sandboxも手数料参照403のため決済を作成せず停止。
+- 標準Production相当build成功（CROWD非同梱を自動検査）。Production指定のCROWD lab buildは意図どおり拒否。実験だけは別コマンド/別出力。
+- 新規DB migrationなし。公開順は上記SQL個別承認→通常HAKU（CROWD除外）→既存承認済workerのwatchdog→公式home/Pushを各受入後に個別有効化。CROWD公開は独立判定。lifecycle未適用でアプリだけを先行公開しない。
+- ローカルSFU実RTPの専用CIを追加。合成カメラ/マイクと実HAKU media helperを利用するが、実端末/Safari/実Auth lifecycleの成功とは扱わない。

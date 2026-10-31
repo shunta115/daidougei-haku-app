@@ -26,6 +26,7 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
       sendLikeRef.current = () => {}; addGiftRef.current = () => {}; return
     }
     let alive = true, currentLevel = 0, knownTotal: number | null = null
+    let realtimeConnected = false, lastReadAt = -Infinity
     let pending = 0, sending = false, reading = false, tapStart = 0, taps = 0, nextRetry = 0, failures = 0
     const outboxKey = userId ? likeOutboxKey(performerId, liveStartedAt, userId) : null
     const restored = outboxKey ? readLikeOutbox(outboxKey) : { pending: 0, batch: null }
@@ -48,12 +49,15 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
     }
     const hydrate = async () => {
       if (!alive || reading) return
-      reading = true
+      reading = true; lastReadAt = Date.now()
       try { receive(await getLiveLikeTotal(performerId, liveStartedAt)); if (alive) setDeliveryError(previous => previous?.includes('累計を確認') ? null : previous) }
-      catch { if (alive) setDeliveryError('いいねの累計を確認できません。通信を確認してください。') }
+      catch { realtimeConnected = false; if (alive) setDeliveryError('いいねの累計を確認できません。通信を確認してください。') }
       finally { reading = false }
     }
-    const unsubscribe = subscribeLiveLikeTotal(performerId, liveStartedAt, total => receive(total), () => void hydrate())
+    const unsubscribe = subscribeLiveLikeTotal(performerId, liveStartedAt, total => receive(total),
+      () => { realtimeConnected = true; void hydrate() },
+      connected => { if (alive) { realtimeConnected = connected; if (!connected) void hydrate() } },
+    )
     void hydrate()
     const flush = async () => {
       if (!alive || !userId || sending || Date.now() < nextRetry) return
@@ -85,7 +89,7 @@ export function useLiveFever(performerId: string | undefined, liveStartedAt: str
     }
     addGiftRef.current = tier => gain(LIVE_FEVER_CONFIG.giftGain[tier])
     const flushTimer = window.setInterval(() => void flush(), LIVE_FEVER_CONFIG.flushMs)
-    const pollTimer = window.setInterval(() => { if (document.visibilityState !== 'hidden') void hydrate() }, 2000)
+    const pollTimer = window.setInterval(() => { if (document.visibilityState !== 'hidden' && (!realtimeConnected || Date.now() - lastReadAt >= 60_000 || Date.now() < lastReadAt)) void hydrate() }, 2000)
     const decayTimer = window.setInterval(() => {
       currentLevel = Math.max(0, currentLevel - LIVE_FEVER_CONFIG.decay); setLevel(currentLevel)
       const now = Date.now()

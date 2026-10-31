@@ -426,11 +426,11 @@ export async function postLiveComment(input: {
 export function subscribeLiveComments(
   performerId: string,
   liveSessionId: string,
-  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void; onReady?: () => void },
+  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void; onReady?: () => void; onConnectionChange?: (connected: boolean) => void },
 ) {
   const sb = requireSupabase()
   const channel = sb
-    .channel(`live-comments-${performerId}`)
+    .channel(`live-comments-${performerId}-${liveSessionId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'live_comments', filter: `performer_id=eq.${performerId}` },
@@ -449,7 +449,10 @@ export function subscribeLiveComments(
         if (row.id && (!row.live_session_id || row.live_session_id === liveSessionId)) handlers.onDelete(row.id)
       },
     )
-    .subscribe(status => { if (status === 'SUBSCRIBED') handlers.onReady?.() })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') { handlers.onConnectionChange?.(true); handlers.onReady?.() }
+      else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) handlers.onConnectionChange?.(false)
+    })
   return () => {
     void sb.removeChannel(channel)
   }

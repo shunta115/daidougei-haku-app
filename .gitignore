@@ -35,3 +35,6 @@ package-lock 2.json
 
 # Finder duplicate copies
 * 2.*
+
+# Explicit local-only CROWD lab build
+dist-crowd-lab

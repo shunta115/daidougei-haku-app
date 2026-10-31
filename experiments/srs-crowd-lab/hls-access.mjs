@@ -7,12 +7,12 @@ export function makeWatchTickets({ secret = randomBytes(32), now = Date.now, lif
   if (!Buffer.isBuffer(secret) || secret.length < 32) throw new Error('watch_secret_required');
   const sign = payload => createHmac('sha256', secret).update(payload).digest();
   return {
-    issue({ roomId, actorId, epoch }) {
+    issue({ roomId, actorId, epoch, audienceGeneration = null }) {
       if (!validRoom(roomId) || !validActor(actorId) || !Number.isSafeInteger(epoch)) throw new Error('invalid_watch_claim');
-      const payload = Buffer.from(JSON.stringify({ roomId, actorId, epoch, until: now() + lifetimeMs })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ roomId, actorId, epoch, audienceGeneration, until: now() + lifetimeMs })).toString('base64url');
       return payload + '.' + sign(payload).toString('base64url');
     },
-    verify(token, roomId, state) {
+    verify(token, roomId, state, authorize = null) {
       if (typeof token !== 'string' || token.length > 512 || !validRoom(roomId)) return false;
       const parts = token.split('.');
       if (parts.length !== 2) return false;
@@ -24,7 +24,7 @@ export function makeWatchTickets({ secret = randomBytes(32), now = Date.now, lif
       return claim.roomId === roomId && validActor(claim.actorId) &&
         Number.isSafeInteger(claim.until) && claim.until > now() &&
         state?.phase === 'live' && state.epoch === claim.epoch &&
-        (claim.actorId === state.performerId || claim.actorId === state.publisherId);
+        (authorize ? authorize(claim.actorId, roomId, claim.epoch, claim.audienceGeneration) : (claim.actorId === state.performerId || claim.actorId === state.publisherId));
     },
   };
 }

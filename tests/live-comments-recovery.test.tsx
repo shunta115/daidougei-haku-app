@@ -38,3 +38,22 @@ it('detects new comments after the 80-row cap without forcing a scrolled-up read
  expect(hook.result.current.hasNewComments).toBe(true);expect(node.scrollTo).not.toHaveBeenCalled()
  act(()=>hook.result.current.scrollToLatest('auto'));expect(node.scrollTo).toHaveBeenCalledWith({top:500,behavior:'auto'})
 })
+
+it('reconciles healthy Realtime only once a minute while disconnect and foreground recover immediately',async()=>{
+ const view=renderHook(()=>useLiveComments('p','session',true))
+ await act(async()=>{})
+ await act(async()=>wire.handlers.onReady())
+ const initial=wire.read.mock.calls.length
+ await act(async()=>{await vi.advanceTimersByTimeAsync(57_000)})
+ expect(wire.read).toHaveBeenCalledTimes(initial)
+ await act(async()=>{await vi.advanceTimersByTimeAsync(3000)})
+ expect(wire.read).toHaveBeenCalledTimes(initial+1)
+ wire.read.mockResolvedValue([row('recovered')])
+ await act(async()=>wire.handlers.onConnectionChange(false))
+ expect(view.result.current.comments[0].id).toBe('recovered')
+ await act(async()=>{await vi.advanceTimersByTimeAsync(3000)})
+ expect(wire.read).toHaveBeenCalledTimes(initial+3)
+ await act(async()=>window.dispatchEvent(new Event('online')))
+ expect(wire.read).toHaveBeenCalledTimes(initial+4)
+ view.unmount();expect(vi.getTimerCount()).toBe(0)
+})

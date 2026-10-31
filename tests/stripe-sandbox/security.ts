@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto'
 import assert from 'node:assert/strict'
 import Stripe from 'stripe'
 loadTestEnvironment()
-const f=JSON.parse(readFileSync('/private/tmp/haku-pr112-fixtures.json','utf8'))
+const f=JSON.parse(readFileSync(process.env.HAKU_SANDBOX_FIXTURE_FILE || '/private/tmp/haku-pr112-fixtures.json','utf8'))
 const stripe=new Stripe(process.env.STRIPE_SECRET_KEY!)
 const requestId=randomUUID()
 const body={performerId:f.performers[0].id,amountYen:100,requestId}

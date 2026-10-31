@@ -30,11 +30,20 @@ try{
   await page.locator('.pl-live').waitFor();pages.push(page)
  }
  checks.push('three real JWT users render actual broadcaster/viewer screens')
+ for(const page of pages)await page.getByText('LIVE累計 ♥ 0',{exact:true}).waitFor()
+ // FEVER intentionally decays. Capture the actual DOM response while other
+ // browser contexts are sending, rather than sampling it after it has faded.
+ await pages[0].evaluate(()=>{
+  window.__hakuObservedFever=0
+  const meter=document.querySelector('[aria-label="HAKU FEVER 盛り上がりメーター"]')
+  if(!meter)throw Error('FEVER meter missing')
+  new MutationObserver(()=>{window.__hakuObservedFever=Math.max(window.__hakuObservedFever,Number(meter.getAttribute('aria-valuenow')))}).observe(meter,{attributes:true,attributeFilter:['aria-valuenow']})
+ })
  for(let i=0;i<3;i++)await pages[1].getByLabel('無料のいいねを送る',{exact:true}).first().tap()
  await pages[2].getByLabel('無料のいいねを送る',{exact:true}).first().tap()
  await pages[0].getByText('LIVE累計 ♥ 4',{exact:true}).waitFor({timeout:30000})
  checks.push('two actual viewer screens send four likes to actual broadcaster over real TEST Realtime')
- await pages[0].waitForFunction(()=>Number(document.querySelector('[aria-label="HAKU FEVER 盛り上がりメーター"]')?.getAttribute('aria-valuenow'))>0)
+ await pages[0].waitForFunction(()=>window.__hakuObservedFever>0)
  checks.push('real broadcaster FEVER meter responds to received likes')
  const text='HAKU115 real browser comment '+Date.now()
  await pages[1].locator('.pl-live__composer input').fill(text)
