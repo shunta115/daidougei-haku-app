@@ -41,6 +41,7 @@ import { useVideoAspect } from '../lib/useVideoAspect'
 import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
+import './live-theater.css'
 
 type Props = {
   performerId: string
@@ -222,6 +223,25 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   useEffect(() => {
     localStorage.setItem('pl-gift-sound', soundOn ? '1' : '0')
   }, [soundOn])
+  // Rotation is an explicit viewer correction for already sideways source frames.
+  // Pixel dimensions cannot tell whether a person inside a frame is upright.
+  const [viewerRotation, setViewerRotation] = useState(0)
+  const desktopRotation = mode === 'desktop' ? viewerRotation : 0
+  const stageMounted = Boolean(p || error)
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || !stageMounted) return
+    const measure = () => {
+      stage.style.setProperty('--theater-video-width', `${stage.clientWidth}px`)
+      stage.style.setProperty('--theater-video-height', `${stage.clientHeight}px`)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [stageMounted])
+  useEffect(() => setViewerRotation(0), [performerId])
+
   useEffect(() => {
     localStorage.setItem('pl-gift-calm', calmMotion ? '1' : '0')
   }, [calmMotion])
@@ -318,10 +338,12 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         {
           '--video-aspect': String(ratio),
           '--video-fit': objectFit,
+          '--viewer-rotation': `${desktopRotation}deg`,
         } as CSSProperties
       }
     >
       <div
+        data-video-quarter-turn={Math.abs(desktopRotation % 180) === 90}
         ref={stageRef}
         className={stageClass}
         onClick={() => {
@@ -338,6 +360,11 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
             <ArrowLeft size={19} />
           </button>
           <div className="pl-live__hud-actions">
+            <div className="pl-live__rotation-controls" role="group" aria-label="映像の向きの補正">
+              <button type="button" className="pl-btn pl-live__chip" aria-label="映像を左に90度回転" onClick={() => setViewerRotation((value) => (value + 270) % 360)}>↶</button>
+              <button type="button" className="pl-btn pl-live__chip" aria-label="映像の回転をリセット" onClick={() => setViewerRotation(0)}>向き {desktopRotation}°</button>
+              <button type="button" className="pl-btn pl-live__chip" aria-label="映像を右に90度回転" onClick={() => setViewerRotation((value) => (value + 90) % 360)}>↷</button>
+            </div>
             <div className="pl-live__stats">
               {p?.is_live ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}
               <span>{formatDuration(elapsed)}</span>

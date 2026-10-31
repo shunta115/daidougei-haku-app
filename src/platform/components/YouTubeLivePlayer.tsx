@@ -87,7 +87,8 @@ export function YouTubeLivePlayer({ videoId, canonicalUrl, onStateChange }: Prop
   }, [onStateChange, videoId])
 
   return <div className="pl-youtube-player" data-state={state}>
-    <div ref={mountRef} className="pl-youtube-player__frame">
+    <div className="pl-youtube-player__frame">
+      <div ref={mountRef}>
       <iframe
         title="YouTube LIVE"
         src={youtubeEmbedUrl(videoId, window.location.origin)}
@@ -95,6 +96,7 @@ export function YouTubeLivePlayer({ videoId, canonicalUrl, onStateChange }: Prop
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
       />
+      </div>
     </div>
     {state === 'loading' ? <p className="pl-youtube-player__status">YouTubeに接続しています…</p> : null}
     {state === 'ended' ? <p className="pl-youtube-player__notice">このYouTube配信は終了しました。</p> : null}

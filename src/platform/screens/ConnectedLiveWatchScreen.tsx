@@ -6,6 +6,7 @@ import { YouTubeLivePlayer } from '../components/YouTubeLivePlayer'
 import { LiveWatchScreen } from './LiveWatchScreen'
 import { trackProductEvent } from '../lib/track'
 import './youtube-live.css'
+import './live-theater.css'
 
 type Props = {
   performerId: string
@@ -45,6 +46,7 @@ export function ConnectedLiveWatchScreen(props: Props) {
       <div><p>HAKU CONNECT LIVE</p><h1>{performer.stage_name}</h1><span>YouTube公式プレーヤー</span></div>
     </header>
     <YouTubeLivePlayer videoId={performer.youtube_live_video_id} canonicalUrl={performer.youtube_live_url} onStateChange={onPlayerState} />
+    <aside className="pl-youtube-live__rail" aria-label="LIVEの応援とコメント案内">
     <section className="pl-youtube-live__support">
       <div><strong>HAKUでパフォーマーを応援</strong><span>YouTubeのSuper Chat等とは別の、HAKU独自の投げ銭です。</span></div>
       <button type="button" className="pl-btn pl-btn--tip" onClick={() => {
@@ -57,5 +59,6 @@ export function ConnectedLiveWatchScreen(props: Props) {
       <p>YouTubeのコメント・いいね・Super ChatはYouTube側で利用してください。HAKUのコメント・投げ銭とは別の機能・台帳です。</p>
       <a href={performer.youtube_live_url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} /> YouTube公式画面を開く</a>
     </section>
+    </aside>
   </main>
 }

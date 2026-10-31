@@ -1,0 +1,88 @@
+.pl-youtube-live__rail { display: contents; }
+/* Viewer-only desktop rules: do not change the host studio or phone layouts. */
+.pl-live__rotation-controls { display: none; }
+
+.pl-live--watch[data-layout='desktop'] {
+  --theater-height: min(calc((100cqw - 356px) * .5625), 78dvh);
+  container-type: inline-size;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  max-width: 1800px;
+  align-items: stretch;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__stage {
+  min-width: 0;
+  height: var(--theater-height);
+  max-height: none;
+  aspect-ratio: 16 / 9;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__video {
+  position: absolute;
+  inset: 0;
+  object-fit: var(--video-fit, contain);
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__stage[data-video-quarter-turn='true'] .pl-live__video {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: var(--theater-video-height);
+  height: var(--theater-video-width);
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(var(--viewer-rotation));
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__stage[data-video-quarter-turn='false'] .pl-live__video {
+  transform: rotate(var(--viewer-rotation, 0deg));
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__rotation-controls {
+  display: flex;
+  gap: 4px;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__panel--live {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  height: var(--theater-height);
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: var(--live-radius);
+  background: #0e0f14;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__comments-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__comments {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  box-sizing: border-box;
+  align-content: start;
+}
+.pl-live--watch[data-layout='desktop'] .pl-live__composer { position: static; }
+.pl-live--watch[data-layout='desktop'] .pl-live__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pl-live--watch[data-layout='desktop'] > .pl-error { grid-column: 1 / -1; }
+/* Native fullscreen must override the normal theater dimensions too. */
+.pl-live--watch .pl-live__stage:fullscreen,
+.pl-live--watch .pl-live__stage:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+}
+@media (min-width: 1100px) {
+  .pl-youtube-live { max-width: 1800px; width: 100%; grid-template-columns: minmax(0, 1fr) minmax(300px, 340px); align-items: start; }
+  .pl-youtube-live__header { grid-column: 1 / -1; }
+  .pl-youtube-live__rail { display: grid; gap: 14px; min-width: 0; }
+  .pl-youtube-live__support { grid-template-columns: 1fr; }
+  .pl-youtube-live__support button { white-space: normal; }
+}
+
+/* The YouTube API replaces its mount node. Keep the aspect box outside it. */
+.pl-youtube-player__frame > div { position: absolute; inset: 0; }
+
+.pl-live__rotation-controls button { color: #fff; }

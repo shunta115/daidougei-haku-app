@@ -8,28 +8,29 @@ export function useVideoAspect(videoRef: RefObject<HTMLVideoElement | null>, fal
   )
 
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-
+    let observed: HTMLVideoElement | null = null
+    const detach = () => {
+      observed?.removeEventListener('loadedmetadata', read)
+      observed?.removeEventListener('resize', read)
+    }
     const read = () => {
-      const w = video.videoWidth
-      const h = video.videoHeight
-      if (!w || !h) return
-      const r = w / h
+      const video = videoRef.current
+      if (video !== observed) {
+        detach()
+        observed = video
+        video?.addEventListener('loadedmetadata', read)
+        video?.addEventListener('resize', read)
+      }
+      if (!video?.videoWidth || !video.videoHeight) return
+      const r = video.videoWidth / video.videoHeight
       setRatio(r)
       setOrientation(r > 1.05 ? 'landscape' : r < 0.95 ? 'portrait' : 'square')
     }
-
     read()
-    video.addEventListener('loadedmetadata', read)
-    video.addEventListener('resize', read)
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => read()) : null
-    ro?.observe(video)
-    const id = window.setInterval(read, 2000)
+    // The watch screen mounts its video after asynchronous performer loading.
+    const id = window.setInterval(read, 500)
     return () => {
-      video.removeEventListener('loadedmetadata', read)
-      video.removeEventListener('resize', read)
-      ro?.disconnect()
+      detach()
       window.clearInterval(id)
     }
   }, [videoRef])
