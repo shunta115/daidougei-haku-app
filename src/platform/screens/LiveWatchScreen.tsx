@@ -10,10 +10,8 @@ import {
   getActiveLiveSessionId,
   getPerformer,
   isFollowing,
-  listLiveComments,
   muteLiveCommentUser,
   postLiveComment,
-  subscribeLiveComments,
   subscribePerformerLive,
   unfollow,
   updateLiveViewerPeak,
@@ -36,11 +34,13 @@ import {
 } from '../lib/livekit'
 import { useFullscreen } from '../lib/useFullscreen'
 import { useLiveLayout } from '../lib/useLiveLayout'
-import { appendLiveComment, removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
+import { removeLiveComment, useLiveCommentScroll } from '../lib/useLiveCommentScroll'
 import { useVideoAspect } from '../lib/useVideoAspect'
 import { useLiveFever } from '../lib/useLiveFever'
 import { useLiveViewportHeight } from '../lib/useLiveViewport'
 import { readLiveDisplayPreference, saveLiveDisplayPreference } from '../lib/liveDisplayPreferences'
+import { useLiveComments } from '../lib/useLiveComments'
+import { liveLandingUrl, shareLiveUrl } from '../lib/liveShare'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 import './live-theater.css'
@@ -70,25 +70,36 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const { mode, isOverlayChrome } = useLiveLayout()
   const viewportHeight = useLiveViewportHeight()
   const [p, setP] = useState<Performer | null>(null)
-  const fever = useLiveFever(performerId, p?.live_started_at, Boolean(p?.is_live))
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [commentsVisible, setCommentsVisible] = useState(true)
+  const [shareStatus, setShareStatus] = useState('')
+  const [copyUrl, setCopyUrl] = useState<string | null>(null)
+  const shareBusy = useRef(false)
+  const [requestedLink] = useState(() => ({ performerId, startedAt: new URLSearchParams(window.location.search).get('liveStartedAt') }))
+  const requestedLive = requestedLink.performerId === performerId ? requestedLink.startedAt : null
+  const wrongSession = Boolean(requestedLive && p?.live_started_at && Date.parse(requestedLive) !== Date.parse(p.live_started_at))
+  const liveActive = Boolean(p?.id === performerId && p.is_live && !wrongSession)
+  const fever = useLiveFever(performerId, p?.live_started_at, liveActive, user?.id)
   const reaction = fever.hearts.length > 0
   useTrackView('live_view', { performerId }, Boolean(p?.is_live))
   const [error, setError] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
   const [elapsed, setElapsed] = useState(0)
-  const [comments, setComments] = useState<LiveComment[]>([])
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
+  const { comments, setComments, commentError } = useLiveComments(performerId, liveSessionId, liveActive)
   const [canModerate, setCanModerate] = useState(false)
   const [draft, setDraft] = useState('')
+  const commentBusy = useRef(false)
+  const [commentSending, setCommentSending] = useState(false)
   const [following, setFollowing] = useState(false)
+  const followBusy = useRef(false)
+  const [followSaving, setFollowSaving] = useState(false)
   const [quality, setQuality] = useState('AUTO')
   const [audioBlocked, setAudioBlocked] = useState(false)
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
   const [connectionAttempt, setConnectionAttempt] = useState(0)
   const [chromeVisible, setChromeVisible] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [audioMuted, setAudioMuted] = useState(false)
-  const [commentsVisible, setCommentsVisible] = useState(() => readLiveDisplayPreference('comments'))
   const [giftEffects, setGiftEffects] = useState(() => readLiveDisplayPreference('gift-effects'))
   // Keep the full broadcast visible by default on narrow phones. Viewers can
   // still opt into the existing crop-to-fill control when they prefer it.
@@ -102,6 +113,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
+  const screenRef = useRef<HTMLDivElement>(null)
 
   const startAudio = () => {
     const room = roomRef.current
@@ -115,40 +127,51 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   }
 
   const shareLive = () => {
-    const url = `${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`
-    if (navigator.share) void navigator.share({ title: p?.stage_name || '大道芸博 LIVE', text: 'このLIVEを一緒に見よう。', url }).catch(() => undefined)
-    else void navigator.clipboard?.writeText(url)
+    if (shareBusy.current) return
+    shareBusy.current = true
+    const url = liveLandingUrl(window.location.origin, performerId, requestedLive || p?.live_started_at)
+    setCopyUrl(null); setShareStatus('')
+    // Call Web Share directly in the tap handler to preserve Safari user activation.
+    void shareLiveUrl(url, p?.stage_name || 'HAKU LIVE').then(result => {
+      setShareStatus(result === 'copied' ? 'LIVEのURLをコピーしました。' : result === 'shared' ? '共有先にLIVEのURLを渡しました。' : '')
+    }).catch(() => { setCopyUrl(url); setShareStatus('URLを選択してコピーしてください。') })
+      .finally(() => { shareBusy.current = false })
+  }
+  const sendLike = () => {
+    if (!user) {
+      if (onRequireAuth) onRequireAuth()
+      else spaGo(`${PLATFORM_PATH}?auth=1&watch=${encodeURIComponent(performerId)}`)
+      return
+    }
+    fever.sendLike()
   }
   const roomRef = useRef<Room | null>(null)
   const onEndedRef = useRef(onEnded)
   onEndedRef.current = onEnded
   const hideTimer = useRef<number | null>(null)
   const { ratio, orientation: videoOrient } = useVideoAspect(videoRef, 9 / 16)
-  const fs = useFullscreen(stageRef)
-  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id)
+  const fs = useFullscreen(screenRef)
+  const commentScroll = useLiveCommentScroll(comments.length, comments.at(-1)?.id, liveSessionId)
 
   useEffect(() => {
-    getPerformer(performerId, allowPublicTest)
-      .then(setP)
-      .catch(() => setError('LIVE情報を読み込めませんでした。通信を確認して、もう一度開いてください。'))
-  }, [performerId, allowPublicTest])
-
-  useEffect(() => {
-    let active = true
-    const poll = async () => {
-      try {
-        const row = await getPerformer(performerId, allowPublicTest)
-        if (active && row) setP(row)
-      } catch { /* Realtime and next poll can recover a transient read failure. */ }
+    let alive = true, reading = false
+    const refresh = async () => {
+      if (reading) return
+      reading = true
+      try { const row = await getPerformer(performerId, allowPublicTest); if (alive) setP(row) }
+      catch { if (alive) setError('LIVE情報を読み込めませんでした。通信を確認してください。') }
+      finally { reading = false }
     }
-    const timer = window.setInterval(() => void poll(), 10_000)
-    window.addEventListener('online', poll)
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('online', poll) }
+    const recover = () => { if (document.visibilityState !== 'hidden') void refresh() }
+    void refresh()
+    const timer = window.setInterval(recover, 10000)
+    window.addEventListener('online', recover); document.addEventListener('visibilitychange', recover)
+    return () => { alive = false; window.clearInterval(timer); window.removeEventListener('online', recover); document.removeEventListener('visibilitychange', recover) }
   }, [performerId, allowPublicTest])
 
   useEffect(() => {
     return subscribePerformerLive(performerId, (row) => {
-      setP((prev) => (prev ? { ...prev, ...row } : prev))
+      setP((prev) => (prev?.id === performerId ? { ...prev, ...row } : prev))
       if (row.is_live === false) {
         onEndedRef.current?.()
         setLiveSessionId(null)
@@ -167,22 +190,20 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   }, [user, performerId])
 
   useEffect(() => {
-    if (!p?.is_live) return
-    let active = true
-    void getActiveLiveSessionId(performerId)
-      .then((sessionId) => { if (active) setLiveSessionId(sessionId) })
-      .catch(() => undefined)
-    return () => { active = false }
-  }, [p?.is_live, p?.live_started_at, performerId])
-
-  useEffect(() => {
-    if (!liveSessionId) return
-    listLiveComments(performerId, liveSessionId).then(setComments).catch(() => undefined)
-    return subscribeLiveComments(performerId, liveSessionId, {
-      onInsert: (row) => setComments((prev) => appendLiveComment(prev, row)),
-      onDelete: (commentId) => setComments((prev) => removeLiveComment(prev, commentId)),
-    })
-  }, [liveSessionId, performerId])
+    setLiveSessionId(null)
+    if (!liveActive) return
+    let active = true, resolving = false
+    const resolve = async () => {
+      if (resolving) return
+      resolving = true
+      try { const id = await getActiveLiveSessionId(performerId); if (active) setLiveSessionId(id) }
+      catch { if (active) setError('LIVEセッションを確認できません。通信回復後に再取得します。') }
+      finally { resolving = false }
+    }
+    void resolve()
+    const timer = window.setInterval(() => void resolve(), 5000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [liveActive, p?.live_started_at, performerId])
 
   useEffect(() => {
     if (!liveSessionId || !user?.id) {
@@ -193,7 +214,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   }, [liveSessionId, user?.id])
 
   useEffect(() => {
-    if (!p?.is_live) return
+    if (!liveActive) return
     let cancelled = false
     ;(async () => {
       try {
@@ -258,7 +279,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       roomRef.current = null
       if (room) void room.disconnect()
     }
-  }, [p?.is_live, p?.live_started_at, performerId, t, connectionAttempt])
+  }, [liveActive, p?.live_started_at, performerId, t, connectionAttempt])
 
   useEffect(() => {
     if (!p?.is_live || viewers <= 0) return
@@ -313,26 +334,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
     }
   }
 
-  const bumpChrome = () => {
-    setChromeVisible(true)
-    if (hideTimer.current) window.clearTimeout(hideTimer.current)
-    if (isOverlayChrome) {
-      hideTimer.current = window.setTimeout(() => setChromeVisible(false), 3500)
-    }
-  }
-
-  useEffect(() => {
-    if (!isOverlayChrome) {
-      setChromeVisible(true)
-      return
-    }
-    bumpChrome()
-    return () => {
-      if (hideTimer.current) window.clearTimeout(hideTimer.current)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOverlayChrome])
-
   const toggleFollow = async () => {
     if (!user) {
       if (onRequireAuth) {
@@ -342,6 +343,8 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       spaGo(`${PLATFORM_PATH}?auth=1`)
       return
     }
+    if (followBusy.current) return
+    followBusy.current = true; setFollowSaving(true)
     trackProductEvent('follow_click', { performerId, props: { surface: 'live' } })
     try {
       if (following) await unfollow(user.id, performerId)
@@ -349,11 +352,13 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
       setFollowing(!following)
     } catch {
       setError('フォローを更新できませんでした。通信を確認して、もう一度お試しください。')
-    }
+    } finally { followBusy.current = false; setFollowSaving(false) }
   }
 
   const sendComment = async () => {
-    if (!user || !profile || !draft.trim() || !liveSessionId) return
+    if (!user || !profile || !liveActive || !draft.trim() || !liveSessionId || commentBusy.current) return
+    commentBusy.current = true; setCommentSending(true)
+    const sentDraft = draft
     try {
       await postLiveComment({
         performerId,
@@ -362,10 +367,10 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         body: draft,
         liveSessionId,
       })
-      setDraft('')
+      setDraft(current => current === sentDraft ? '' : current)
     } catch {
       setError('コメントを送信できませんでした。このLIVEでのコメント権限または通信状態を確認してください。')
-    }
+    } finally { commentBusy.current = false; setCommentSending(false) }
   }
 
   const removeComment = async (commentId: string) => {
@@ -392,16 +397,18 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
 
   const stageClass = [
     'pl-live__stage',
-    fs.fallback ? 'pl-live__stage--fs-fallback' : '',
+
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
     <div
-      className={`pl-live pl-live--watch${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}${mini ? ' pl-live--mini' : ''}`}
+      ref={screenRef}
+      className={`pl-live pl-live--watch${fs.fallback ? ' pl-live--fs-fallback' : ''}${isOverlayChrome || fs.active ? ' pl-live--immersive' : ''}${mini ? ' pl-live--mini' : ''}`}
       data-mini={mini}
       data-layout={mode}
+      data-video-orientation={videoOrient}
       style={
         {
           '--viewer-rotation': `${desktopRotation}deg`,
@@ -417,7 +424,6 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         className={stageClass}
         onClick={() => {
           if (mini) { onRestore?.(); return }
-          if (isOverlayChrome) bumpChrome()
         }}
       >
         <video ref={videoRef} className="pl-live__video" poster={p?.photo_url ?? undefined} playsInline autoPlay muted={audioMuted} />
@@ -427,9 +433,9 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           <button type="button" className="pl-live__mini-close" onClick={(event) => { event.stopPropagation(); onClose?.() }} aria-label="小窓を閉じる"><X size={18} /></button>
         </div> : null}
         <TipGiftOverlay performerId={performerId} soundEnabled={soundOn && !audioMuted && giftEffects} reducedMotion={calmMotion} effectsEnabled={giftEffects} onGift={fever.addGift} />
-        <LiveFeverOverlay level={fever.level} likes={fever.likes} hearts={fever.hearts} reducedMotion={calmMotion} />
+        <LiveFeverOverlay level={fever.level} likes={fever.likes} synced={fever.synced} hearts={fever.hearts} reducedMotion={calmMotion} />
 
-        <div className="pl-live__chrome pl-live__hud-top" data-dim={isOverlayChrome && !chromeVisible}>
+        <div className="pl-live__chrome pl-live__hud-top" data-dim={false}>
           <button type="button" className="pl-btn pl-btn--ghost pl-live__chip" onClick={onBack} aria-label={t('back')}>
             <ArrowLeft size={19} />
           </button>
@@ -446,7 +452,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
               <button type="button" className="pl-btn pl-live__chip" aria-label="映像を右に90度回転" onClick={() => setViewerRotation((value) => (value + 90) % 360)}>↷</button>
             </div>
             <div className="pl-live__stats">
-              {p?.is_live ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}
+              {liveActive ? <span className="pl-live__pill">{t('liveNow')}</span> : <span className="pl-live__pill pl-live__pill--off">{t('liveEnded')}</span>}
               <span>{formatDuration(elapsed)}</span>
               <span><Users size={13} /> {viewers}</span>
             </div>
@@ -467,22 +473,23 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
 
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
           <button type="button" onClick={() => void toggleFollow()} aria-label={following ? 'フォロー解除' : 'フォロー'}><Heart size={23} fill={following ? 'currentColor' : 'none'} /><small>{following ? 'フォロー中' : 'フォロー'}</small></button>
-          <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
-          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live--watch .pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
+          <button type="button" disabled={!liveActive} onClick={sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
+          <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
           <button type="button" onClick={toggleAudio} aria-label={audioMuted ? '音声をオン' : '音声をオフ'}>{audioMuted ? <VolumeX size={23} /> : <Volume2 size={23} />}<small>{audioMuted ? '音声OFF' : '音声ON'}</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
         </aside>
       </div>
 
-      <div className="pl-live__panel pl-live__panel--live" data-dim={isOverlayChrome && !chromeVisible}>
+      <div className="pl-live__panel pl-live__panel--live" data-dim={false}>
         <div className="pl-live__creator-mini">
           {p?.photo_url ? <img src={p.photo_url} alt="" /> : <span aria-hidden="true">{p?.stage_name?.slice(0, 2) || 'DH'}</span>}
           <div>
             <strong>{p?.stage_name || 'LIVE'}</strong>
             <small>{p?.live_title || p?.genre || 'いま起きているパフォーマンス'}</small>
           </div>
-          {p?.is_live ? <em>LIVE</em> : null}
+          {liveActive ? <em>LIVE</em> : null}
+          <button type="button" className="pl-live__follow" disabled={followSaving} aria-pressed={following} onClick={() => void toggleFollow()}>{following ? t('following') : t('follow')}</button>
         </div>
         <div className="pl-live__comments-wrap" hidden={!commentsVisible}>
           <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">
@@ -504,7 +511,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         {p?.is_live && connectionState === 'reconnecting' ? <p role="status">通信が途切れました。再接続しています…</p> : null}
         {p?.is_live && connectionState === 'disconnected' ? <button type="button" className="pl-btn pl-btn--block" onClick={() => setConnectionAttempt((attempt) => attempt + 1)}>LIVEに再接続</button> : null}
         <div className="pl-live__actions">
-          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る">
+          <button type="button" className={`pl-live__react${reaction ? ' pl-live__react--on' : ''}`} disabled={!liveActive} onClick={sendLike} aria-label="無料のいいねを送る">
             <span aria-hidden="true">♥</span> いいね
           </button>
           <button
@@ -526,7 +533,7 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           >
             <Gift size={18} /> 応援
           </button>
-          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void toggleFollow()}>
+          <button type="button" className="pl-btn pl-btn--ghost" disabled={followSaving} onClick={() => void toggleFollow()}>
             <Heart size={17} fill={following ? 'currentColor' : 'none'} /> {following ? t('following') : t('follow')}
           </button>
         </div>
@@ -536,14 +543,14 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
             style={{ marginBottom: 0 }}
             placeholder={t('commentPlaceholder')}
             value={draft}
-            disabled={!user}
-            onFocus={bumpChrome}
+            disabled={!user || !liveActive || !liveSessionId || commentSending}
+            maxLength={200}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void sendComment()
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendComment()
             }}
           />
-          <button type="button" className="pl-btn" disabled={!user} onClick={() => void sendComment()}>
+          <button type="button" className="pl-btn" disabled={!user || !liveActive || !liveSessionId || commentSending} onClick={() => void sendComment()}>
             <Send size={18} /><span className="pl-live__send-label">{t('send')}</span>
           </button>
         </div>
@@ -571,6 +578,13 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
         <label className="pl-live__setting-toggle"><span>演出を抑える</span><input type="checkbox" checked={calmMotion} onChange={(event) => setCalmMotion(event.target.checked)} /></label>
         <button type="button" className="pl-btn pl-btn--block" onClick={() => setSettingsOpen(false)}>設定を閉じる</button>
       </section> : null}
+      {wrongSession || p && !p.is_live ? <div className="pl-live__ended" role="status">
+        <p>このLIVEは終了しました。</p>
+        <button type="button" className="pl-btn" onClick={() => spaGo(`${PLATFORM_PATH}?profile=${encodeURIComponent(performerId)}`)}>配信者のプロフィールを見る</button>
+        <button type="button" className="pl-btn" onClick={onBack}>LIVE一覧へ戻る</button>
+      </div> : null}
+      {shareStatus || fever.deliveryError || commentError ? <p className="pl-live__delivery" role="status">{shareStatus || fever.deliveryError || commentError}{shareStatus ? <button type="button" aria-label="共有結果を閉じる" onClick={() => setShareStatus('')}>閉じる</button> : null}</p> : null}
+      {copyUrl ? <input className="pl-input pl-live__copy-url" aria-label="LIVE共有URL" readOnly value={copyUrl} onFocus={event => event.currentTarget.select()} /> : null}
       {error ? (
         <p className="pl-error">
           {error}

@@ -1,4 +1,5 @@
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
+import { liveRequestSignal } from './liveRequestSignal'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
 import type {
@@ -388,6 +389,7 @@ export async function listLiveComments(performerId: string, liveSessionId: strin
     .eq('live_session_id', liveSessionId)
     .order('created_at', { ascending: false })
     .limit(80)
+    .abortSignal(liveRequestSignal())
   if (error) throw error
   return ((data as LiveComment[]) ?? []).reverse()
 }
@@ -415,7 +417,7 @@ export async function postLiveComment(input: {
 export function subscribeLiveComments(
   performerId: string,
   liveSessionId: string,
-  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void },
+  handlers: { onInsert: (row: LiveComment) => void; onDelete: (commentId: string) => void; onReady?: () => void },
 ) {
   const sb = requireSupabase()
   const channel = sb
@@ -438,7 +440,7 @@ export function subscribeLiveComments(
         if (row.id && (!row.live_session_id || row.live_session_id === liveSessionId)) handlers.onDelete(row.id)
       },
     )
-    .subscribe()
+    .subscribe(status => { if (status === 'SUBSCRIBED') handlers.onReady?.() })
   return () => {
     void sb.removeChannel(channel)
   }

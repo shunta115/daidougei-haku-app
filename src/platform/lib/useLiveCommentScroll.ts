@@ -18,11 +18,12 @@ export function hasIncomingLiveComment(previousCount: number, currentCount: numb
   return currentCount > previousCount || (currentCount === previousCount && latestChanged)
 }
 
-export function useLiveCommentScroll(commentCount: number, latestCommentId?: string) {
+export function useLiveCommentScroll(commentCount: number, latestId?: string, sessionKey?: string | null) {
   const listRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const previousCountRef = useRef(commentCount)
-  const previousLatestRef = useRef(latestCommentId)
+  const previousLatestRef = useRef(latestId)
+  const previousSessionRef = useRef(sessionKey)
   const [hasNewComments, setHasNewComments] = useState(false)
 
   const scrollToLatest = (behavior: ScrollBehavior = 'smooth') => {
@@ -36,15 +37,17 @@ export function useLiveCommentScroll(commentCount: number, latestCommentId?: str
   useLayoutEffect(() => {
     const list = listRef.current
     const previousCount = previousCountRef.current
-    const latestChanged = latestCommentId != null && latestCommentId !== previousLatestRef.current
+    const incoming = hasIncomingLiveComment(previousCount, commentCount) || Boolean(latestId && latestId !== previousLatestRef.current)
+    if (sessionKey !== previousSessionRef.current) { pinnedRef.current = true; setHasNewComments(false) }
+    previousSessionRef.current = sessionKey
+    previousLatestRef.current = latestId
     previousCountRef.current = commentCount
-    previousLatestRef.current = latestCommentId
     if (!list) return
     if (pinnedRef.current) scrollToLatest('auto')
-    else if (hasIncomingLiveComment(previousCount, commentCount, latestChanged)) setHasNewComments(true)
-    // The latest ID changes even when the bounded 80-comment list stays full.
+    else if (incoming) setHasNewComments(true)
+    // commentCount is the event that drives the scroll; scrollToLatest is intentionally local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commentCount, latestCommentId])
+  }, [commentCount, latestId, sessionKey])
 
   const onScroll = () => {
     const list = listRef.current
