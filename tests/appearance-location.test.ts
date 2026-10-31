@@ -26,7 +26,7 @@ describe('reviewed appearance representatives', () => {
     expect(appearanceMapState(row(), now)).toBe('performance-window')
     for (const status of ['cancelled', 'private', 'postponed', 'draft', 'archived'] as const) expect(appearanceMapState(row({ status }), now)).toBeNull()
     expect(appearanceMapState(row(), new Date('2026-11-01T04:00:00Z'))).toBeNull()
-    expect(appearanceMapState(row({ ends_at: null }), now)).toBeNull()
+    expect(appearanceMapState(row({ ends_at: null, performance_date: '2026-11-01', timezone: 'Asia/Tokyo' }), now)).toBe('scheduled')
     expect(appearanceMapState(row({ ends_at: 'bad' }), new Date('2026-10-31'))).toBeNull()
   })
   it('uses a venue search for approximate locations, and coordinate directions only for registered locations', () => {
