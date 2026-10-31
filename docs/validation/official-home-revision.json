@@ -1,0 +1,77 @@
+{
+  "date_jst": "2026-10-31",
+  "scope": "code/migration edits and LOCAL tests; remote TEST catalog reads only",
+  "migration_sha256": "4401704ddaa3e11217916145ae8068b3fd7841b0f5cd38cadc1d12cbcb2b053a",
+  "regression": {
+    "files": 79,
+    "passed": 488
+  },
+  "typescript": {
+    "application": "passed",
+    "api_and_maintenance": "passed"
+  },
+  "build": "passed; existing large chunk warning remains",
+  "webkit": {
+    "engine": "WebKit",
+    "scope": "localhost real API + PGlite SQL + memory storage; no remote DB or physical iPhone",
+    "checks": [
+      "unsaved detail preview",
+      "profile saved through real API and SQL",
+      "multiple photo uploads + browser compression and thumbnail generation",
+      "main selection, publish, touch reorder persisted",
+      "unpublished PDF absent from anonymous listing",
+      "unpublished PDF byte access denied",
+      "another performer cannot edit PDF",
+      "public main photo and carousel",
+      "photo lightbox and keyboard navigation",
+      "anonymous PDF returns real valid bytes",
+      "iPhone WebKit PDF download attachment",
+      "iPhone page has no horizontal overflow",
+      "booking submitted through real API and SQL with receipt",
+      "office-only case retrieval and status update",
+      "desktop page has no horizontal overflow",
+      "no browser runtime errors"
+    ],
+    "errors": []
+  },
+  "native_postgresql": {
+    "scope": "new isolated PostgreSQL cluster, Unix socket only; no remote DB",
+    "checks": [
+      "service_role still has no performers UPDATE privilege",
+      "two real sessions race for final photo slot: exactly one succeeds, count stays 20",
+      "concurrent main selection serializes without uniqueness errors; exactly one main",
+      "reorder succeeds under restricted service_role",
+      "office membership lookup works; membership email stays denied"
+    ],
+    "passed": 5
+  },
+  "test_readonly_preflight": {
+    "project_id": "aeqskxxykzapgaudbeqa",
+    "project_name": "haku-merch-validation",
+    "transaction_read_only": "on",
+    "schema_exists": false,
+    "relation_conflicts": [],
+    "function_conflicts": [],
+    "trigger_conflicts": [],
+    "bucket_exists": false,
+    "migration_applied": false,
+    "service_performers_update_current": false,
+    "service_member_lookup_current": false,
+    "existing_storage_policies": "avatars and merch only"
+  },
+  "not_executed": [
+    "remote migration",
+    "remote INSERT or account setup",
+    "remote DELETE",
+    "Stripe/LIVE setting changes",
+    "main merge",
+    "Production deployment"
+  ],
+  "limits": [
+    "Hosted Supabase Storage and TEST Auth flow still untested",
+    "Physical iPhone untested",
+    "Daily retention and cleanup operator/schedule must be approved before activation",
+    "Legal classification/archive/backup-restore handling needs office confirmation"
+  ],
+  "test_execution_note": "Initial overlapping build/tests exhausted 30s DB startup hooks; final serial regression and restricted-role DB audit passed with bounded 60s initialization allowance."
+}

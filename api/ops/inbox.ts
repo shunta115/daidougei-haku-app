@@ -1,3 +1,4 @@
+import { officialHome } from '../../server/officialHome.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAdminSupabase } from '../stripe/_shared.js'
 import { prevTokyoDay, requireAdmin, tokyoDay } from './_guard.js'
@@ -7,6 +8,7 @@ import { readSnapshot, type OpsMetrics } from './_snapshot.js'
 import { handlePublicPerformerStats } from './_performerStats.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.resource === 'official-home') return officialHome(req, res)
   if (req.method === 'GET' && req.query.resource === 'performer-stats') {
     return handlePublicPerformerStats(req, res)
   }
