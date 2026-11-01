@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex,nofollow" />
+<title>HAKU LIVE — WHIPローカル試験</title>
+<style>
+:root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: max(24px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom)); background:#0c1018; color:#f5f7fb; }
+main { max-width: 580px; margin:auto; }
+h1 { font-size:1.6rem; margin: 0 0 12px; }
+.note { font-size:.88rem; color:#c1ccdf; line-height:1.65; }
+.panel { background:#1b2535; padding:16px; border:1px solid #37445b; border-radius:18px; margin:18px 0; }
+video { width:100%; aspect-ratio:16/9; background:#050608; border-radius:12px; object-fit:cover; }
+button { width:100%; padding:16px; font-size:1.08rem; font-weight:700; border-radius:12px; border:0; cursor:pointer; }
+button:disabled { opacity:.45; cursor:default; }
+#start { background:#e8f1ff; color:#101827; }
+#stop { background:#4a2d39; color:white; margin-top:8px; }
+#status { font-weight:700; color:#9dd2ff; }
+small { color:#bdc9dc; }
+</style>
+</head>
+<body><main>
+<h1>HAKU LIVE 試験</h1>
+<p class="note">このページは開発者のPC内だけで動作する検証用です。実際のHAKU・Stripe・パフォーマー認証には接続しません。外部公開禁止。</p>
+<section class="panel">
+<h2>配信する</h2>
+<video id="preview" autoplay muted playsinline aria-label="配信カメラ"></video>
+<p id="status" role="status" aria-live="polite">待機中</p>
+<button id="start">LIVE配信を開始</button>
+<button id="stop" disabled>配信を終了</button>
+<p class="note">初回はカメラ・マイクの許可が必要です。画面を閉じたり、他のアプリに切り替えると安全のため停止します。</p>
+</section>
+<section class="panel">
+<h2>視聴する（HLS）</h2>
+<video id="watch" playsinline controls preload="none" aria-label="配信の視聴"></video>
+<button id="watchButton" style="margin-top:8px">映像を読み込む</button>
+<p class="note">iPhone SafariのHLS再生を想定。WHIP→HLSの音声・映像変換はSRS実機での確認が必要です。</p>
+</section>
+<small>LOCAL ONLY / localhost gateway 4319 → SRS WHIP 1985, HLS 8080 / 実サーバー500人性能は未検証</small>
+</main>
+<script type="module">
+import {LocalWhipPublisher} from './whip-publisher.mjs';
+const $ = id => document.getElementById(id);
+const states={idle:'待機中',starting:'カメラを起動中',connecting:'SRSへ接続中',live:'LIVE配信中',error:'配信エラー'};
+const publisher=new LocalWhipPublisher({
+  getUserMedia: constraints=>navigator.mediaDevices.getUserMedia(constraints),
+  PeerConnection: RTCPeerConnection,
+  fetchImpl: (...args)=>fetch(...args),
+  onPreview: stream=>{ $('preview').srcObject=stream; },
+  onState: state=>{
+    $('status').textContent=states[state]||state;
+    $('start').disabled=state==='starting'||state==='connecting'||state==='live';
+    $('stop').disabled=state==='idle'||state==='error';
+  }
+});
+// Local-only, aggregate media counters; never expose SDP, ICE, tokens or stream keys.
+window.__hakuLabMediaCounters = async () => {
+  const pc = publisher.pc;
+  if (!pc) return null;
+  const stats = await pc.getStats();
+  const result = { videoBytes: 0, audioBytes: 0, videoFrames: 0, videoPackets: 0, videoCodec: null, videoFmtp: null };
+  for (const entry of stats.values()) {
+    if (entry.type !== 'outbound-rtp' || entry.isRemote) continue;
+    if (entry.kind === 'video') {
+      result.videoBytes += entry.bytesSent || 0;
+      result.videoFrames += entry.framesSent || 0;
+      result.videoPackets += entry.packetsSent || 0;
+      const codec = stats.get(entry.codecId);
+      result.videoCodec = codec?.mimeType || null;
+      result.videoFmtp = codec?.sdpFmtpLine || null;
+    }
+    if (entry.kind === 'audio') result.audioBytes += entry.bytesSent || 0;
+  }
+  return result;
+};
+$('start').addEventListener('click', async ()=>{
+  try { await publisher.start('http://127.0.0.1:4319/rtc/v1/whip/?app=live&stream=haku-lab'); }
+  catch (error) { $('status').textContent='開始できません: '+String(error.message||error); }
+});
+$('stop').addEventListener('click',()=>publisher.stop());
+$('watchButton').addEventListener('click',async()=>{
+  $('watch').src='http://127.0.0.1:4319/live/haku-lab.m3u8';
+  try { await $('watch').play(); }
+  catch { $('watchButton').textContent='動画の再生ボタンを押してください'; }
+});
+document.addEventListener('visibilitychange',()=>{ if(document.hidden)publisher.stop(); });
+window.addEventListener('pagehide',()=>publisher.stop());
+</script>
+</body></html>
