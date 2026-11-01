@@ -42,5 +42,6 @@
         }
       ]
     }
-  ]
+  ],
+  "git": { "deploymentEnabled": { "codex/live-support-direct-tip": false } }
 }
