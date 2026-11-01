@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { smartPushEnabled, setLivePushIntent, dispatchLivePush, type BroadcastMode } from '../lib/smartPush'
 import { RoomEvent, type Room } from 'livekit-client'
 import { ArrowDown, Mic, MicOff, SwitchCamera, Trash2, UserX, Video, VideoOff } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
@@ -73,6 +74,9 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
   const [schedules, setSchedules] = useState<LiveSchedule[]>([])
   const [scheduleFeatureAvailable, setScheduleFeatureAvailable] = useState(false)
   const [shareLocation, setShareLocation] = useState(Boolean(performer?.share_location))
+  const [broadcastMode, setBroadcastMode] = useState<BroadcastMode>('public_silent')
+  const [rehearsing, setRehearsing] = useState(false)
+  const rehearsalRoomRef = useRef(false)
   const [phase, setPhase] = useState<'ready' | 'live'>(performer?.is_live ? 'live' : 'ready')
   const [method, setMethod] = useState<'direct' | 'youtube'>(() => performer?.youtube_live_enabled && !performer?.is_live ? 'youtube' : 'direct')
   const [previewState, setPreviewState] = useState<'idle' | 'preparing' | 'ready' | 'denied' | 'ended'>('idle')
@@ -179,12 +183,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
       try {
         const headers = await supabaseAuthHeaders()
         if (!active) return
-        await fetch('/api/livekit/presence', {
+        const response = await fetch('/api/livekit/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({ performerId: performer.id }),
           keepalive: true,
         })
+        if (response.ok && liveSessionId && roomRef.current?.state === 'connected') void dispatchLivePush(liveSessionId).catch(() => undefined)
       } catch {
         // LIVE transport remains independent; the next heartbeat retries automatically.
       }
@@ -192,7 +197,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     void heartbeat()
     const timer = window.setInterval(() => void heartbeat(), 20_000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [performer, phase])
+  }, [performer, phase, liveSessionId])
 
   useEffect(() => {
     if (orientationMode !== 'auto' || phase !== 'live' || !cameraEnabled || appliedOrientationRef.current === videoOrientation || failedAutoOrientationRef.current === videoOrientation || orientationSwitchRef.current || mediaBusy) return
@@ -336,15 +341,16 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setPublishedOrientation(videoOrientation)
   }
 
-  const connectHostRoom = async () => {
+  const connectHostRoom = async (rehearsal = false) => {
     if (!performer) throw new Error('パフォーマー情報を確認できませんでした。登録状況に戻って再読み込みしてください。')
     const status = await fetchLiveKitStatus()
     if (!status.configured) {
       throw new LiveKitClientError('not_configured', liveKitErrorMessage('not_configured'))
     }
-    const { token, url } = await fetchLiveKitToken(performer.id, true)
+    const { token, url } = await fetchLiveKitToken(performer.id, true, rehearsal)
     const room = await connectAsHost(url, token, videoOrientation)
     wireRoom(room)
+    rehearsalRoomRef.current = rehearsal
     return room
   }
 
@@ -394,6 +400,15 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setError(null)
     endingRef.current = false
     try {
+      if (smartPushEnabled && broadcastMode === 'test') {
+        setRehearsing(true)
+        return
+      }
+      if (rehearsalRoomRef.current && roomRef.current) {
+        await roomRef.current.disconnect()
+        roomRef.current = null
+        rehearsalRoomRef.current = false
+      }
       let lat: number | null = null
       let lng: number | null = null
       if (shareLocation && 'geolocation' in navigator) {
@@ -422,6 +437,10 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
 
       const sessionId = await startLive(performer.id, title)
       setLiveSessionId(sessionId)
+      if (smartPushEnabled && sessionId) {
+        try { await setLivePushIntent(sessionId, broadcastMode === 'public_notify'); if (broadcastMode === 'public_notify') await dispatchLivePush(sessionId) }
+        catch { setError('LIVEは公開中ですがフォロワー通知は開始していません。') }
+      }
       const matchingSchedule = schedules.find((schedule) =>
         schedule.title.trim() === title.trim()
         && Math.abs(new Date(schedule.scheduled_start_at).getTime() - Date.now()) <= 12 * 60 * 60_000,
@@ -454,7 +473,7 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
     setError(null)
     setPreviewState('preparing')
     try {
-      if (!roomRef.current) await connectHostRoom()
+      if (!roomRef.current) await connectHostRoom(smartPushEnabled)
       else attachLocalPreview(roomRef.current)
       setPreviewState('ready')
     } catch (e) {
@@ -794,6 +813,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </div>
           <p className="pl-brand">LIVE FOR YOUR FANS</p><h1 className="pl-h1">会場に来られないファンにも届けよう</h1>
           <p className="pl-muted">視聴は無料です。配信中はオンラインのファンからも応援を受け取れます。</p>
+          {smartPushEnabled ? <fieldset className="pl-card"><legend>配信モード</legend>
+            <label><input type="radio" name="broadcast-mode" checked={broadcastMode === 'test'} onChange={() => setBroadcastMode('test')} />テスト配信（本人のみ・通知なし）</label>
+            <label><input type="radio" name="broadcast-mode" checked={broadcastMode === 'public_silent'} onChange={() => setBroadcastMode('public_silent')} />公開LIVE・通知なし</label>
+            <label><input type="radio" name="broadcast-mode" checked={broadcastMode === 'public_notify'} onChange={() => setBroadcastMode('public_notify')} />公開LIVE・フォロワー通知あり</label>
+            <p className="pl-muted">通知ONでも45秒以上配信が続いた場合だけ、通知に同意したフォロワーへ届けます。</p>
+            {rehearsing ? <p role="status">非公開で映像・音声を確認中です。公開一覧・MAPへの表示とフォロワー通知はありません。</p> : null}
+          </fieldset> : null}
           {orientationPicker()}
           <ol className="pl-live__setup-steps"><li data-done={previewState === 'ready'}>1. カメラ・マイクを許可</li><li data-done={previewState === 'ready'}>2. 映像と音声を確認</li><li>3. LIVE配信を開始</li></ol>
           <label>
@@ -823,12 +849,13 @@ export function PerformerLiveScreen({ onBack, onPreviewYouTube }: Props) {
           </label>
           {previewState !== 'ready' ? <button type="button" className="pl-btn pl-btn--block" disabled={busy} onClick={() => void preparePreview()}>{busy ? 'カメラを準備中…' : 'カメラ・マイクを準備する'}</button> : <p className="pl-registration__notice" role="status">映像の準備ができました。画面を確認してから配信を開始してください。</p>}
           <button type="button" className="pl-btn pl-btn--block pl-btn--live" disabled={busy || previewState !== 'ready'} onClick={() => void goLive()}>
-            {busy ? 'LIVE開始処理中…' : 'LIVE配信を開始'}
+            {busy ? 'LIVE開始処理中…' : smartPushEnabled && broadcastMode === 'test' ? '非公開テストを開始' : 'LIVE配信を開始'}
           </button>
         </div>
       ) : (
         <div className="pl-live__panel pl-live__panel--live">
           {!roomRef.current && busy ? <p className="pl-muted">カメラ再接続中…</p> : null}
+          {smartPushEnabled && liveSessionId ? <button type="button" className="pl-btn pl-btn--ghost" onClick={() => void setLivePushIntent(liveSessionId, false).then(() => setError('フォロワー通知を取り消しました。すでに届いた通知は取り消せません。')).catch(() => setError('通知の取り消しを確認できませんでした。'))}>フォロワー通知を取り消す</button> : null}
           {orientationPicker(true)}
           <div className="pl-live__comments-wrap">
             <div ref={commentScroll.listRef} className="pl-live__comments" onScroll={commentScroll.onScroll} aria-live="polite">

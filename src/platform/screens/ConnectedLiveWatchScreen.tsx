@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, ExternalLink, Gift, ShieldCheck } from 'lucide-react'
-import { getPerformer } from '../lib/api'
+import { getActiveLiveSessionId, getPerformer } from '../lib/api'
 import type { Performer } from '../lib/types'
 import { YouTubeLivePlayer } from '../components/YouTubeLivePlayer'
 import { LiveWatchScreen } from './LiveWatchScreen'
@@ -22,7 +22,11 @@ export function ConnectedLiveWatchScreen(props: Props) {
   useEffect(() => {
     let active = true
     setFailed(false)
-    void getPerformer(props.performerId, props.allowPublicTest)
+    const expected = new URLSearchParams(window.location.search).get('liveSession')
+    void (async () => {
+      if (expected && await getActiveLiveSessionId(props.performerId) !== expected) throw new Error('live_ended')
+      return getPerformer(props.performerId, props.allowPublicTest)
+    })()
       .then((row) => { if (active) { setPerformer(row); setFailed(!row) } })
       .catch(() => { if (active) setFailed(true) })
     return () => { active = false }
@@ -32,7 +36,7 @@ export function ConnectedLiveWatchScreen(props: Props) {
     if (state === 'playing') trackProductEvent('live_view_start', { performerId: props.performerId, props: { provider: 'youtube', mode: 'official_embed' } })
   }, [props.performerId])
 
-  if (failed) return <p className="pl-error">配信情報を表示できません。公開設定または通信状態をご確認ください。</p>
+  if (failed) return <p className="pl-error">この通知のLIVEは終了したか、現在視聴できません。公開設定または通信状態をご確認ください。</p>
   if (!performer) return <p className="pl-muted">Loading…</p>
   // HAKU DIRECT always wins if both are configured, preserving the existing
   // LiveKit viewing path and its access controls without ambiguity.
