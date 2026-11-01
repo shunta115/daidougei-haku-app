@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "browser": "Playwright WebKit",
+  "durationSeconds": 10,
+  "synthetic": true,
+  "sfu": false,
+  "physicalIPhone": false,
+  "avSyncMeasured": false,
+  "requestedCanvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30
+  },
+  "metrics": [
+    {
+      "direction": "receive",
+      "kind": "audio",
+      "bitrate": 32387.045181927228,
+      "loss": 0,
+      "jitterMs": 2,
+      "rttMs": null,
+      "fps": null,
+      "width": null,
+      "height": null,
+      "droppedFrames": null,
+      "concealment": 0,
+      "codec": null,
+      "cpuLimited": false
+    },
+    {
+      "direction": "receive",
+      "kind": "video",
+      "bitrate": 134595.76169532188,
+      "loss": 0,
+      "jitterMs": 3,
+      "rttMs": null,
+      "fps": 28,
+      "width": 640,
+      "height": 360,
+      "droppedFrames": 0,
+      "concealment": null,
+      "codec": null,
+      "cpuLimited": false
+    }
+  ]
+}
