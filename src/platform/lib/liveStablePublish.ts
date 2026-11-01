@@ -9,7 +9,7 @@ export function liveStablePublish(mobile: boolean) {
       maxFramerate: 30,
     },
     videoSimulcastLayers: [VideoPresets.h360, new VideoPreset(854, 480, 900_000, 25)],
-    // Same 48kbps payload ceiling as SDK defaults, higher transport priority where supported.
+    // Same 48kbps payload ceiling as SDK defaults, explicit SDK-default transport priority.
     audioPreset: { ...AudioPresets.music, priority: 'high' as const },
   }
 }

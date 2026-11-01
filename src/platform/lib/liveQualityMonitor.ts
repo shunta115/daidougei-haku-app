@@ -67,6 +67,8 @@ export function monitorLiveQuality(room: Room, options: { testLayerControl?: boo
           packetsReceived: raw.packetsReceived, packetsLost: raw.packetsLost,
           framesDropped: raw.framesDropped, concealedSamples: raw.concealedSamples,
           totalSamplesReceived: raw.totalSamplesReceived,
+          framesEncoded: raw.framesEncoded, framesDecoded: raw.framesDecoded,
+          jitterBufferDelay: raw.jitterBufferDelay, jitterBufferEmittedCount: raw.jitterBufferEmittedCount,
         })
         metrics.push(metric)
       })

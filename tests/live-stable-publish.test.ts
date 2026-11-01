@@ -15,7 +15,7 @@ it.each([[1280,720], [720,1280]])('uses the installed SDK to verify distinct lay
   expect(before.reduce((sum,e)=>sum+(e.maxBitrate??0),0)).toBe(5100000)
   expect(after.reduce((sum,e)=>sum+(e.maxBitrate??0),0)).toBe(3850000)
 })
-it('preserves top quality and audio bitrate while raising audio transport priority', () => {
+it('preserves top quality and audio bitrate with the SDK-default audio transport priority', () => {
   expect(liveStablePublish(true).videoEncoding.maxBitrate).toBe(2500000)
   expect(liveStablePublish(false).videoEncoding.maxBitrate).toBe(3000000)
   expect(liveStablePublish(true).audioPreset).toEqual({maxBitrate:48000,priority:'high'})

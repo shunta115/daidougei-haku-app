@@ -45,3 +45,20 @@ it('does not label a good connection as 1080p without RTP evidence', () => {
   expect(observedVideoLabel([{ ...health(0, 100), direction: 'receive', width: 720, height: 1280 }], 'receive')).toBe('720p')
   expect(observedVideoLabel([{ ...health(0, 100), direction: 'receive', width: 1920, height: 1080 }], 'send')).toBe('AUTO')
 })
+
+describe('Frame and jitter-buffer interval diagnostics', () => {
+  const video: RtpSample = { id: 'v', type: 'inbound-rtp', kind: 'video', timestamp: 1000, framesDecoded: 100, framesPerSecond: 13, jitterBufferDelay: 2, jitterBufferEmittedCount: 100 }
+  it('separates measured interval FPS from instantaneous FPS and converts buffer seconds', () => {
+    const metric = rtpMetric({ ...video, timestamp: 6000, framesDecoded: 200, jitterBufferDelay: 5, jitterBufferEmittedCount: 200 }, video)!
+    expect(metric.intervalFps).toBe(20); expect(metric.fps).toBe(13); expect(metric.jitterBufferMs).toBe(30)
+    expect(rtpMetric({ ...video, type: 'outbound-rtp', timestamp: 6000, framesEncoded: 250 }, { ...video, type: 'outbound-rtp', framesEncoded: 100 })?.intervalFps).toBe(30)
+  })
+  it.each([undefined, { ...video, timestamp: 6000 }, { ...video, timestamp: -30000 }, { ...video, id: 'other' }, { ...video, framesDecoded: 999, jitterBufferDelay: 999, jitterBufferEmittedCount: 999 }])('keeps absent, stale or reset counters unknown', before => {
+    const metric = rtpMetric({ ...video, timestamp: 6000 }, before)!
+    expect(metric.intervalFps).toBeNull(); expect(metric.jitterBufferMs).toBeNull()
+  })
+  it('does not divide by an empty emission interval or invent missing frame counters', () => {
+    const metric = rtpMetric({ ...video, timestamp: 6000, framesDecoded: undefined }, video)!
+    expect(metric.intervalFps).toBeNull(); expect(metric.jitterBufferMs).toBeNull()
+  })
+})

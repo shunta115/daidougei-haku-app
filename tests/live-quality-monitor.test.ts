@@ -57,3 +57,14 @@ describe('Room monitor lifecycle', () => {
     expect(readLiveQuality(room)?.cause).toBe('unknown'); stop()
   })
 })
+
+it('retains only required counters between polls for interval diagnostics', async () => {
+  vi.useFakeTimers(); const { room, stats } = fixture()
+  stats.mockResolvedValueOnce(new Map([['x', { id: 'x', timestamp: 1000, type: 'outbound-rtp', kind: 'video', bytesSent: 100, frameWidth: 720, frameHeight: 1280, framesEncoded: 100 }]]))
+  stats.mockResolvedValueOnce(new Map([['x', { id: 'x', timestamp: 6000, type: 'outbound-rtp', kind: 'video', bytesSent: 100, frameWidth: 720, frameHeight: 1280, framesEncoded: 200 }]]))
+  const stop = monitorLiveQuality(room)
+  await vi.advanceTimersByTimeAsync(5000); expect(readLiveQuality(room)?.metrics[0].intervalFps).toBeNull()
+  await vi.advanceTimersByTimeAsync(5000); expect(readLiveQuality(room)?.metrics[0].intervalFps).toBe(20)
+  expect(stats).toHaveBeenCalledTimes(2); expect(vi.getTimerCount()).toBe(1)
+  stop()
+})

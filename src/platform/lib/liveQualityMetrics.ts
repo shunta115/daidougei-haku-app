@@ -4,11 +4,14 @@ export type RtpSample = {
   bytesSent?: number; bytesReceived?: number; packetsReceived?: number; packetsLost?: number
   jitter?: number; roundTripTime?: number; framesPerSecond?: number; frameWidth?: number
   frameHeight?: number; framesDropped?: number; concealedSamples?: number; totalSamplesReceived?: number
+  framesEncoded?: number; framesDecoded?: number; jitterBufferDelay?: number; jitterBufferEmittedCount?: number
   codecId?: string; qualityLimitationReason?: string
 }
 export type RtpMetric = {
   direction: 'send' | 'receive' | 'remote-receive'; kind: 'audio' | 'video'
   bitrate: number | null; loss: number | null; jitterMs: number | null; rttMs: number | null
+  /** Counter-derived interval FPS; distinct from the browser instantaneous fps. */
+  intervalFps?: number | null; jitterBufferMs?: number | null
   fps: number | null; width: number | null; height: number | null
   droppedFrames: number | null; concealment: number | null; cpuLimited: boolean
   codec?: { mimeType: string; clockRate: number | null; channels: number | null } | null
@@ -27,7 +30,13 @@ export function rtpMetric(now: RtpSample, before?: RtpSample): RtpMetric | null 
   const lost = delta(now.packetsLost, previous?.packetsLost)
   const concealed = delta(now.concealedSamples, previous?.concealedSamples)
   const samples = delta(now.totalSamplesReceived, previous?.totalSamplesReceived)
+  const frames = direction === 'send' ? delta(now.framesEncoded, previous?.framesEncoded) : direction === 'receive' ? delta(now.framesDecoded, previous?.framesDecoded) : null
+  const bufferDelay = delta(now.jitterBufferDelay, previous?.jitterBufferDelay)
+  const emitted = delta(now.jitterBufferEmittedCount, previous?.jitterBufferEmittedCount)
   return {
+    intervalFps: frames == null ? null : frames * 1000 / elapsed,
+    // Queue residence only: this is not end-to-end latency or A/V synchronization.
+    jitterBufferMs: direction === 'receive' && bufferDelay != null && emitted != null && emitted > 0 ? bufferDelay * 1000 / emitted : null,
     direction, kind, bitrate: bytes == null ? null : bytes * 8000 / elapsed,
     loss: lost != null && received != null && lost + received > 0 ? lost / (lost + received) : null,
     jitterMs: valid(now.jitter) ? now.jitter * 1000 : null,

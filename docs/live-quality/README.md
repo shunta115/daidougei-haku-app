@@ -1,3 +1,5 @@
+> 最新の再比較とNO-GO判断: [2026-11-02報告](20261102/README.md)。音声highはSDK既定値の明示で、優先度引上げではありません。
+
 # HAKU LIVE 品質監査・安全な改善（2026-11-01 JST）
 
 本番公開判定: **NO-GO**。このDraftは品質診断・正しい品質表示・ローカルTEST音声比較・実験的レイヤー制御の実装です。最高品質化プロジェクト全体の完了ではありません。
@@ -25,7 +27,7 @@
 
 SDK2.21.0の`computeVideoEncodings`を直接呼ぶ試験で、横1280×720/縦720×1280とも改善前のscaleResolutionDownByが[1.5,1,1]となり、720系を重複生成し得ることを確認。`liveStablePublish.ts`で[2,1.5,1]（360/480/720）、fps上限[20,25,30]へ修正。mobile上位2.5Mbps・desktop上位3Mbpsを維持する。全層active時のmobile上限合計は5.10→3.85Mbps（約24.5%減）。これはSDKの設定計算であり、実送信量・CPU・画質の実測改善率ではない。dynacastの状態次第で実際の差は変わる。過去HARIBOWモザイクの確定原因とはしない。
 
-音声は従来と同じ48kbpsの上限で`priority: high`を要求。対応ブラウザが優先度を無視する可能性はある。AEC/NS/AGC/DTX/RED、カメラ/Canvas取得、同期タイムスタンプ、ミュート時のprivacy仕様を一律変更しない。Poorで要求する受信寸法を480系、Lostは360系へ合わせる。既存の開始・終了・再接続・予約・代理配信・決済処理を置き換えない。
+音声は従来と同じ48kbpsの上限でSDK既定値の`priority: high`を明示（優先度引上げではない）。対応ブラウザが優先度を無視する可能性はある。AEC/NS/AGC/DTX/RED、カメラ/Canvas取得、同期タイムスタンプ、ミュート時のprivacy仕様を一律変更しない。Poorで要求する受信寸法を480系、Lostは360系へ合わせる。既存の開始・終了・再接続・予約・代理配信・決済処理を置き換えない。
 
 
 - `liveQualityMetrics.ts`: 送信/受信/remote受信を区別。bytes差分の実効payload bitrate、packets差分の損失率、jitter/RTT、fps/寸法、frame drop差分、音声concealment比、CPU制約を扱う。初回、SSRC/track変更、逆行、30秒超の空白、欠落、負の損失補正は不明。remote受信情報がない場合、送出量から損失率を捏造しない。
