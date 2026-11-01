@@ -1,0 +1,182 @@
+[
+  {
+    "trial": "old-1",
+    "audio": {
+      "good": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 700956,
+        "seconds": 56.104699951171874,
+        "jitterBufferMs": null,
+        "audioKbps": 99.9497012706664
+      },
+      "down700": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 503183,
+        "seconds": 40.511300048828126,
+        "jitterBufferMs": null,
+        "audioKbps": 99.36644825389762
+      },
+      "down350loss3": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 365194,
+        "seconds": 40.515600097656254,
+        "jitterBufferMs": null,
+        "audioKbps": 72.10931080764138
+      },
+      "recovery1": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 846320,
+        "seconds": 55.4677998046875,
+        "jitterBufferMs": null,
+        "audioKbps": 122.06289097170625
+      },
+      "recovery2": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 947663,
+        "seconds": 77.09480004882812,
+        "jitterBufferMs": null,
+        "audioKbps": 98.33742347341673
+      }
+    }
+  },
+  {
+    "trial": "new-2",
+    "audio": {
+      "good": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 704104,
+        "seconds": 56.326199951171866,
+        "jitterBufferMs": null,
+        "audioKbps": 100.00376387689916
+      },
+      "down700": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 501856,
+        "seconds": 40.33449999999999,
+        "jitterBufferMs": null,
+        "audioKbps": 99.53880672873102
+      },
+      "down350loss3": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 499351,
+        "seconds": 40.434,
+        "jitterBufferMs": null,
+        "audioKbps": 98.79823910570312
+      },
+      "recovery1": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 706423,
+        "seconds": 56.5045,
+        "jitterBufferMs": null,
+        "audioKbps": 100.01652965692998
+      },
+      "recovery2": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 941768,
+        "seconds": 76.69349999999999,
+        "jitterBufferMs": null,
+        "audioKbps": 98.23706050708341
+      }
+    }
+  },
+  {
+    "trial": "new-3",
+    "audio": {
+      "good": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 697936,
+        "seconds": 55.82490014648438,
+        "jitterBufferMs": null,
+        "audioKbps": 100.01787706469591
+      },
+      "down700": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 502996,
+        "seconds": 40.417,
+        "jitterBufferMs": null,
+        "audioKbps": 99.56127372145383
+      },
+      "down350loss3": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 490518,
+        "seconds": 40.31430004882812,
+        "jitterBufferMs": null,
+        "audioKbps": 97.33876056999951
+      },
+      "recovery1": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 704265,
+        "seconds": 56.16610009765625,
+        "jitterBufferMs": null,
+        "audioKbps": 100.31175371271871
+      },
+      "recovery2": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 998838,
+        "seconds": 81.17719995117187,
+        "jitterBufferMs": null,
+        "audioKbps": 98.43532426354213
+      }
+    }
+  },
+  {
+    "trial": "old-4",
+    "audio": {
+      "good": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 694512,
+        "seconds": 55.51159985351562,
+        "jitterBufferMs": null,
+        "audioKbps": 100.08891861631557
+      },
+      "down700": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 497852,
+        "seconds": 40.20230004882813,
+        "jitterBufferMs": null,
+        "audioKbps": 99.06935660802066
+      },
+      "down350loss3": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 220745,
+        "seconds": 40.82569995117188,
+        "jitterBufferMs": null,
+        "audioKbps": 43.25608629152993
+      },
+      "recovery1": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 1017729,
+        "seconds": 56.12659985351563,
+        "jitterBufferMs": null,
+        "audioKbps": 145.06191398105895
+      },
+      "recovery2": {
+        "delay": 0,
+        "emitted": 0,
+        "audioBytes": 1001194,
+        "seconds": 81.37210009765626,
+        "jitterBufferMs": null,
+        "audioKbps": 98.4311820683942
+      }
+    }
+  }
+]

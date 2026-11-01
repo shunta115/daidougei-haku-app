@@ -1,11 +1,13 @@
+import { liveStablePublish } from './liveStablePublish'
+import { liveAudioTestProfile, type LiveAudioTestMode } from './liveAudioProfile'
+import { monitorLiveQuality, readLiveQuality } from './liveQualityMonitor'
+import { observedVideoLabel } from './liveQualityMetrics'
 import {
   ConnectionQuality,
   MediaDeviceFailure,
   Room,
   RoomEvent,
   Track,
-  VideoPreset,
-  VideoPresets,
   VideoQuality,
   type RemoteParticipant,
   type RemoteTrack,
@@ -71,9 +73,6 @@ export function isLiveKitConfigured() {
 export function liveRoomName(performerId: string) {
   return `performer-${performerId}`
 }
-
-/** ~480p 16:9 layer for weak-network simulcast. */
-const VideoPreset480p = new VideoPreset(854, 480, 900_000, 30)
 
 function isMobileUa() {
   if (typeof navigator === 'undefined') return false
@@ -157,7 +156,8 @@ export async function fetchLiveKitToken(performerId: string, asHost: boolean) {
   return json as { token: string; url: string; room: string }
 }
 
-function hostRoomOptions(orientation: LiveVideoOrientation) {
+function hostRoomOptions(orientation: LiveVideoOrientation, audioMode?: LiveAudioTestMode) {
+  const testAudio = import.meta.env.DEV && audioMode ? liveAudioTestProfile(audioMode) : null
   const mobile = isMobileUa()
   return {
     // SFU selects layers per subscriber; unused layers pause → CPU/battery save on host.
@@ -174,14 +174,10 @@ function hostRoomOptions(orientation: LiveVideoOrientation) {
       echoCancellation: true,
       noiseSuppression: true,
       channelCount: 1,
+      ...testAudio?.capture,
     },
     publishDefaults: {
-      // Primary = 1080p30; extra layers = 480p + 720p for auto step-down.
-      videoEncoding: {
-        maxBitrate: mobile ? 2_500_000 : VideoPresets.h1080.encoding.maxBitrate,
-        maxFramerate: 30,
-      },
-      videoSimulcastLayers: [VideoPreset480p, VideoPresets.h720],
+      ...liveStablePublish(mobile),
       simulcast: true,
       videoCodec: preferredVideoCodec(),
       backupCodec: true,
@@ -191,6 +187,7 @@ function hostRoomOptions(orientation: LiveVideoOrientation) {
       forceStereo: false,
       // Privacy controls stop the physical microphone track while muted.
       stopMicTrackOnMute: true,
+      ...testAudio?.publish,
     },
   }
 }
@@ -228,8 +225,11 @@ async function installVideoProcessor(cameraTrack: ReturnType<typeof hostCameraTr
   }
 }
 
-export async function connectAsHost(url: string, token: string, orientation: LiveVideoOrientation = 'portrait') {
-  const room = new Room(hostRoomOptions(orientation))
+export async function connectAsHost(
+  url: string, token: string, orientation: LiveVideoOrientation = 'portrait',
+  testOptions: { audioMode?: LiveAudioTestMode; layerControl?: boolean } = {},
+) {
+  const room = new Room(hostRoomOptions(orientation, testOptions.audioMode))
   try {
     await room.connect(url, token, { autoSubscribe: true })
     await room.localParticipant.setMicrophoneEnabled(true)
@@ -255,6 +255,7 @@ export async function connectAsHost(url: string, token: string, orientation: Liv
     const detail = e instanceof Error ? e.message : undefined
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
   }
+  monitorLiveQuality(room, { testLayerControl: testOptions.layerControl })
   return room
 }
 
@@ -330,6 +331,7 @@ export async function connectAsViewer(url: string, token: string) {
     const detail = e instanceof Error ? e.message : undefined
     throw new LiveKitClientError('connection', liveKitErrorMessage('connection', detail))
   }
+  monitorLiveQuality(room)
   return room
 }
 
@@ -351,17 +353,16 @@ export function attachRemoteTrack(
   }
 }
 
-export type LiveQualityLabel = '1080p' | '720p' | '480p' | 'AUDIO+' | 'AUTO'
+export type LiveQualityLabel = '1080p' | '720p' | '480p' | '360p' | 'AUDIO+' | 'AUTO'
 
 /**
  * Network-aware quality:
- * - Good/Excellent → up to 1080p (adaptiveStream)
- * - Poor → cap 720p
- * - Lost → cap 480p, keep audio; only drop video if still Lost after soft cap
- * Dynacast + simulcast on the host supply the matching layers.
+ * - Good/Excellent → request the highest available layer
+ * - Poor → request the medium 480-series layer
+ * - Lost → request the lowest available layer while keeping audio
+ * Dynacast/simulcast govern actual layers. The returned badge uses measured RTP dimensions.
  */
 export function applyNetworkAdaptation(room: Room, quality: ConnectionQuality): LiveQualityLabel {
-  let label: LiveQualityLabel = 'AUTO'
   let maxQuality = VideoQuality.HIGH
   let dimensions: { width: number; height: number } | null = null
   let dropVideo = false
@@ -370,25 +371,22 @@ export function applyNetworkAdaptation(room: Room, quality: ConnectionQuality): 
     case ConnectionQuality.Excellent:
     case ConnectionQuality.Good:
       maxQuality = VideoQuality.HIGH
-      label = '1080p'
       break
     case ConnectionQuality.Poor:
       maxQuality = VideoQuality.MEDIUM
-      dimensions = { width: 1280, height: 720 }
-      label = '720p'
+      dimensions = { width: 854, height: 480 }
       break
     case ConnectionQuality.Lost:
       maxQuality = VideoQuality.LOW
-      dimensions = { width: 854, height: 480 }
-      label = '480p'
+      dimensions = { width: 640, height: 360 }
       break
     default:
       maxQuality = VideoQuality.HIGH
-      label = 'AUTO'
   }
 
   // Publisher: stop encoding unused high layers when uplink is weak (CPU/battery + bandwidth).
   for (const pub of room.localParticipant.videoTrackPublications.values()) {
+    if (readLiveQuality(room)?.adaptation === 'test-layers') break
     const track = pub.track
     if (track && 'setPublishingQuality' in track && typeof track.setPublishingQuality === 'function') {
       track.setPublishingQuality(maxQuality)
@@ -408,12 +406,9 @@ export function applyNetworkAdaptation(room: Room, quality: ConnectionQuality): 
     }
   }
 
-  if (quality === ConnectionQuality.Lost) {
-    // Soft 480p first; if remote still marks Lost, prefer audio continuity.
-    label = '480p'
-  }
-
-  return label
+  const measured = readLiveQuality(room)
+  if (!measured || !measured.sampledAt || performance.now() - measured.sampledAt > 10_000) return 'AUTO'
+  return observedVideoLabel(measured.metrics, room.localParticipant.videoTrackPublications.size ? 'send' : 'receive')
 }
 
 /** @deprecated Prefer applyNetworkAdaptation — kept for call-site compatibility. */

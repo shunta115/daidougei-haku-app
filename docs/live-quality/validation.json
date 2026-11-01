@@ -1,0 +1,83 @@
+{
+  "dateJST": "2026-11-01",
+  "baseMain": "b3d3427544f4cf2cbe5a61423b0f9090b0498979",
+  "releaseDecision": "NO-GO pending physical iPhone/TEST SFU and explicit production approval",
+  "typecheck": "passed",
+  "build": "passed; existing chunk-size warning",
+  "lockedDependencies": "npm ci --ignore-scripts --offline passed; local Node 26, CI uses Node 24",
+  "localRegression": {
+    "files": 93,
+    "tests": 546,
+    "status": "passed",
+    "note": "Started before final stable-publish test was added; final urgent changes covered separately and final commit must pass CI"
+  },
+  "finalUrgentTests": {
+    "files": 5,
+    "tests": 29,
+    "status": "passed"
+  },
+  "sdkEncodingComparison": {
+    "sourceDimensions": [
+      [
+        1280,
+        720
+      ],
+      [
+        720,
+        1280
+      ]
+    ],
+    "beforeScale": [
+      1.5,
+      1,
+      1
+    ],
+    "afterScale": [
+      2,
+      1.5,
+      1
+    ],
+    "beforeLayerCeilingBps": 5100000,
+    "afterLayerCeilingBps": 3850000,
+    "afterMaxFps": [
+      20,
+      25,
+      30
+    ],
+    "actualNetworkBeforeAfterMeasured": false
+  },
+  "localSyntheticWebKit": "loopback.json; 10 seconds, real local RTP, no SFU, no physical camera/iPhone, no A/V sync measurement",
+  "simulated60Minutes": {
+    "clock": "fake timers",
+    "polls": 720,
+    "timers": 1,
+    "actualMedia": false
+  },
+  "real10_30_60MinuteStreaming": "not tested",
+  "avSync": "not measured",
+  "500DirectViewers": "not tested",
+  "physicalIPhone": "not tested",
+  "productionDbWrites": 0,
+  "productionDeployments": 0,
+  "mainMerges": 0,
+  "paymentOperations": 0,
+  "egressUsage": 0,
+  "newPaidServices": 0,
+  "verifiedAdditionalCostYen": null,
+  "pr116PatchCheck": {
+    "head": "e808b01a656a49223788ae32d428e9462fe3d4f6",
+    "result": "git apply --check passed"
+  },
+  "pr120PatchCheck": {
+    "head": "632a372a1df09c766e1a57d4e9e3172b3a7d6f08",
+    "result": "git apply --check passed"
+  },
+  "sourceSha256": {
+    "src/platform/lib/livekit.ts": "6b5cf76ba5b2f271ff6fc9709a0ef7ae3472a208c79d88a50709b9c4a4f2d232",
+    "src/platform/lib/liveStablePublish.ts": "469bbbc33424138731324597b3be36870660b0f0607e93794c1c4d1fff07f499",
+    "src/platform/lib/liveAudioProfile.ts": "193c02d3854fb42f1c3408e774595a810484ffe5177f1314340ed8a816f5b003",
+    "src/platform/lib/liveQualityMetrics.ts": "93e533f520577fc8ff8971c72fd41f4314be3fdcdabd3a02436e779f91d240bf",
+    "src/platform/lib/liveQualityMonitor.ts": "877373b8c27f1657d8a6f47d2bd4e2c179d5e92a484ca48c77d0ea3617cdeca3",
+    "shared/liveBandwidth.ts": "57b845e14db0fa0d06d46f751a1af24bf73578f700902a1e05b03a3d67fcfe98"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "dateJst": "2026-11-02",
+  "baselineSha": "0fa8c16e8abdaa3404e1910ffabef3fd1841edb3",
+  "localRoot": "/private/tmp/haku-pr122-nov2",
+  "scope": "local synthetic actual SFU, not cloud TEST, Safari or production",
+  "sha256": {
+    "run.mjs": "9896cdc76d86013fbfd118720cdfb27a4cf6e612e32bf4cf6dc7f94ab71edb1b",
+    "harness.js": "fe73e45f5b45d0d2ed845084444062ad249d0fcc3e71fe4beab660bb89e5ff67",
+    "summarize.mjs": "342bff75927a8ed8e9c6e1ea0d7f2b9b2d547e8971f72d4dea10ee6cf689ecbc",
+    "speech.wav": "7b9301b727e92b553655e9eae7df0274dab33dab9e61e4f7dbe2b4dbd42235bb",
+    "evidence/old-1.json": "8455d9c00e8357c4b040e5043ff4895b43b7c4e1bcf29efceb5c9dc5246a1f20",
+    "evidence/new-2.json": "89837909e0252e4fa6e9cfffca3c63858c347e57cf3722f42ba54b73f696f991",
+    "evidence/new-3.json": "e6126a10657950b54cb75abd17445e2384c09b09df0724987d72ed73e5a7b975",
+    "evidence/old-4.json": "137bc43d67fdaf39e0a1af43adca2da4cb2c6de56e699e78235856a01e9cb3d5",
+    "evidence/diag-on.json": "504f0bc049742125a4132b2bea9c20463c02de2f4e5e4399f1be79f945473c7f",
+    "evidence/diag-off.json": "9541264b1a1242f290fce0e4c5da6fe4a2abe6a941b728d662813dbcd6e88235",
+    "evidence/rejected-combined.patch": "243a559d4bf6e80ad3e71ec044d2405cb4192fe42d44d8c9428ce186444cbfa8",
+    "evidence/budget-only.patch": "fa9e6325c78f4532b707c3d334e719044c4e97d8502ec0e6b24aff62a2e84da5",
+    "evidence/liveAudioProtection.ts": "8aa1202d6f9bf0ffeac780e8eb225f2cad79801e269c1d74849e4f6575ba32eb",
+    "evidence/live-audio-protection.test.ts": "09740483c9fc2d3c53403856eb6ea745d72d1a489b428e9c2952e44fc476c50e"
+  }
+}
