@@ -7,12 +7,13 @@ iPhone縦画面の透明panel paddingはタップ透過、子要素は操作可�
 
 検証:
 - TypeScript成功、routing70テスト成功（追加16件: 合成4出演者×匿名/ログイン×LIVE/プロフィール、正しい出演者ID、auth非表示）。
+- 全89ファイル521テスト成功。
 - 本番build成功（既存chunk size警告）。
 - WebKit iPhone13 touch: 56チェック成功。HARIBOW/PAUL/Other A/Other B合成fixture、匿名/ログイン、縦側面ボタン・横側面/下部ボタン・縦横プロフィール。実コンポーネントの金額選択と既存Checkoutリクエスト契約を検証。外部APIは隔離アダプタ、Checkoutはmock。
 - 物理iPhone Safari/実映像/実決済は未検証。このPRはLIVEから既存金額選択への導線のみを対象とする。
 
 静的QA Preview:
-https://daidougei-haku-7xr7wa7cv-daidougei-s-projects.vercel.app
+https://daidougei-haku-cayp1l6le-daidougei-s-projects.vercel.app
 合成fixtureのみ。金額選択まで、決済ボタン無効。秘密鍵/環境ファイル/API/Functions/cronなし。CSPで外部通信禁止。
 例: /?artist=HARIBOW&performer=11111111-1111-4111-8111-111111111111
 ログインfixture: &signedIn=1 / プロフィール: &profile=1
