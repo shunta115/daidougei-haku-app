@@ -118,7 +118,7 @@ export async function requireAuthUser(
   res: VercelResponse,
 ): Promise<User | null> {
   const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined
-  if (!authHeader) {
+  if (!authHeader || !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(authHeader)) {
     res.status(401).json({ error: 'Authorization required' })
     return null
   }
@@ -126,6 +126,14 @@ export async function requireAuthUser(
   const { data, error } = await sb.auth.getUser()
   if (error || !data.user) {
     res.status(401).json({ error: 'Invalid session' })
+    return null
+  }
+  // A previously issued JWT can outlive an Auth ban. Check current DB state
+  // for every authenticated server operation rather than trusting stale claims.
+  const { data: profile, error: profileError } = await getAdminSupabase()
+    .from('profiles').select('status').eq('id', data.user.id).maybeSingle()
+  if (profileError || !profile || !['active', 'pending'].includes(profile.status)) {
+    res.status(403).json({ error: 'Account unavailable' })
     return null
   }
   return data.user
