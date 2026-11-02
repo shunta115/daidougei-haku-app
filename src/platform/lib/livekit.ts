@@ -176,12 +176,12 @@ function hostRoomOptions(orientation: LiveVideoOrientation) {
       channelCount: 1,
     },
     publishDefaults: {
-      // Primary = 1080p30; extra layers = 480p + 720p for auto step-down.
+      // Keep the primary encoding; distinct 360p/480p layers avoid duplicate 720p on the 720p Canvas.
       videoEncoding: {
         maxBitrate: mobile ? 2_500_000 : VideoPresets.h1080.encoding.maxBitrate,
         maxFramerate: 30,
       },
-      videoSimulcastLayers: [VideoPreset480p, VideoPresets.h720],
+      videoSimulcastLayers: [VideoPresets.h360, VideoPreset480p],
       simulcast: true,
       videoCodec: preferredVideoCodec(),
       backupCodec: true,
