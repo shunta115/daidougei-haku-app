@@ -8,6 +8,12 @@ export function SmartPushSettings({ userId }: { userId: string }) {
   const [pref, setPref] = useState<(SmartPushPreference & { deliveryPaused?: boolean }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [, refreshEnvironment] = useState(0)
+  useEffect(() => {
+    const refresh = () => refreshEnvironment(n => n + 1)
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
   useEffect(() => { let active = true; setPref(null); void getSmartPushPreference(userId).then(value => { if (active) setPref(value) }).catch(() => { if (active) setMessage('通知設定を読み込めませんでした。接続を確認してください。') }); return () => { active = false } }, [userId])
   const env = pushEnvironment()
   const update = async (patch: Partial<SmartPushPreference>) => {
@@ -26,10 +32,11 @@ export function SmartPushSettings({ userId }: { userId: string }) {
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : ''
       setMessage(code === 'push_denied' ? '通知が拒否されています。下の設定ガイドをご確認ください。' : code === 'push_unsupported' ? 'ホーム画面からHAKUを起動してください。' : '通知設定を保存できませんでした。設定と接続を確認してください。')
-    } finally { setBusy(false) }
+    } finally { setBusy(false); refreshEnvironment(n => n + 1) }
   }
   return <section className="pl-registration__section" aria-label="SMART PUSH通知設定"><h2 className="pl-h2">好きなパフォーマーのLIVEを見逃さない！</h2>
     <p className="pl-muted">フォロー中で、あなたがONにした通知だけを受け取れます。販促・フォロワー個人情報の通知はありません。</p>
+    <p role="note">{env.denied ? '端末の通知許可：拒否済み。再度の許可画面は表示しません。' : env.needsInstall ? '通知にはホーム画面への追加が必要です。' : !env.supported ? 'このブラウザはPush通知に対応していません。' : Notification.permission === 'granted' ? '端末の通知許可：許可済み。カテゴリごとの設定は以下で変更できます。' : '端末の通知許可：未設定。カテゴリをONにする操作で許可を確認します。'}</p>
     {pref?.deliveryPaused ? <p role="note">現在、Push配信は停止中です。通知設定と購読は準備できます。</p> : null}
     {pref ? <fieldset disabled={busy}><legend>プッシュ通知</legend>
       <label><input type="checkbox" checked={pref.push_all_enabled} onChange={e => void update({ push_all_enabled:e.target.checked })} />プッシュ通知を許可する（OFFで全停止）</label>
@@ -45,3 +52,4 @@ export function SmartPushSettings({ userId }: { userId: string }) {
     <p role="status">{message}</p><PushSetupGuide />
   </section>
 }
+
