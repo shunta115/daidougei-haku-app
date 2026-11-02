@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { NotificationInvitation } from './components/NotificationInvitation'
 import { EVENTS_PATH, FESTIVAL_PATH, MAP_PATH, PASSWORD_RESET_PATH, PLATFORM_PATH, eventPath, eventVotePath, parseEventsPath, parsePerformerPath, performerPath, spaGo } from '../app/routes'
 import { BrandLogo } from '../brand/BrandLogo'
 import { PUBLIC_EVENT_META } from '../festival/data/public/eventMeta'
@@ -1048,6 +1049,7 @@ function PlatformShell() {
 
   return (
     <div className="pl-app">
+      {user && !previewOn && !liveShell && showNav ? <NotificationInvitation userId={user.id} onSettings={() => openChildScreen('notifications')} /> : null}
       {!previewOn && REFRESHABLE_SCREENS.has(screen) ? <><PullToRefresh onRefresh={refreshCurrentScreen} /><RefreshButton onRefresh={refreshCurrentScreen} /></> : null}
       {previewOn ? (
         <aside className="pl-preview-bar" role="status">
@@ -1110,3 +1112,4 @@ export function PlatformApp() {
     </>
   )
 }
+
