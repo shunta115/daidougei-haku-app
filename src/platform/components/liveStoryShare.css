@@ -1,0 +1,61 @@
+.haku-story-backdrop {
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  background:#000b;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  padding-bottom:max(16px,env(safe-area-inset-bottom))
+}
+.haku-story {
+  box-sizing:border-box;
+  background:#10221c;
+  color:#fff;
+  border:1px solid #59705d;
+  border-radius:20px;
+  padding:20px;
+  width:min(100%,440px);
+  max-height:90dvh;
+  overflow:auto;
+  overscroll-behavior:contain;
+  font:14px/1.6 sans-serif
+}
+.haku-story h2 {
+  font-size:20px;
+  clear:both
+}
+.haku-story img {
+  display:block;
+  width:135px;
+  height:240px;
+  margin:12px auto;
+  border-radius:8px
+}
+.haku-story button,.haku-story a {
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+  margin:10px 0;
+  padding:12px;
+  border:1px solid #799b80;
+  border-radius:10px;
+  background:#213c2c;
+  color:#fff;
+  text-align:center;
+  font:inherit;
+  cursor:pointer
+}
+.haku-story .haku-story-close {
+  width:auto;
+  float:right;
+  padding:6px 12px
+}
+.haku-story button:disabled {
+  opacity:.5
+}
+.haku-story :focus-visible {
+  outline:3px solid #b8f36c;
+  outline-offset:2px
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ConnectionQuality, RoomEvent, type Room } from 'livekit-client'
-import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, SlidersHorizontal, Trash2, UserX, Users } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Gift, Heart, Maximize2, MessageCircle, Minimize2, Send, Share2, Instagram, SlidersHorizontal, Trash2, UserX, Users } from 'lucide-react'
 import { TipGiftOverlay } from '../components/TipGiftOverlay'
 import { LiveFeverOverlay } from '../components/LiveFeverOverlay'
 import {
@@ -42,6 +42,7 @@ import { useLiveFever } from '../lib/useLiveFever'
 import type { LiveComment, Performer } from '../lib/types'
 import './live.css'
 import './live-theater.css'
+import { LiveStoryShare } from '../components/LiveStoryShare'
 
 type Props = {
   performerId: string
@@ -88,6 +89,31 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
   const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
 
+  const [showStoryShare, setShowStoryShare] = useState(false)
+  const [storyLive, setStoryLive] = useState<boolean | null>(null)
+  const storyRequest = useRef(0)
+  const openStoryShare = () => {
+    setStoryLive(null)
+    setShowStoryShare(true)
+  }
+  useEffect(() => {
+    if (!showStoryShare) return
+    const refresh = () => {
+      if (document.visibilityState === 'hidden') return
+      const request = ++storyRequest.current
+      setStoryLive(null)
+      // Recheck after returning from Instagram or a suspended tab.
+      void getPerformer(performerId, allowPublicTest).then(current => {
+        if (request === storyRequest.current) setStoryLive(current ? current.is_live === true : null)
+      }).catch(() => { /* Unknown state deliberately never says LIVE中. */ })
+    }
+    refresh()
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      ++storyRequest.current
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [showStoryShare, performerId, allowPublicTest])
   const shareLive = () => {
     const url = `${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`
     if (navigator.share) void navigator.share({ title: p?.stage_name || '大道芸博 LIVE', text: 'このLIVEを一緒に見よう。', url }).catch(() => undefined)
@@ -400,11 +426,18 @@ export function LiveWatchScreen({ performerId, onBack, onTip, onRequireAuth, all
           </div>
         ) : null}
 
+        {showStoryShare && <LiveStoryShare
+          name={p?.stage_name || 'HAKU LIVE'}
+          url={`${window.location.origin}${PLATFORM_PATH}?watch=${encodeURIComponent(performerId)}`}
+          live={p?.is_live === false ? false : storyLive}
+          onClose={() => { ++storyRequest.current; setShowStoryShare(false) }}
+        />}
         <aside className="pl-live__side-actions" aria-label="LIVEアクション">
           <button type="button" disabled={!p?.is_live} onClick={fever.sendLike} aria-label="無料のいいねを送る"><Heart size={23} fill={reaction ? 'currentColor' : 'none'} /><small>LIKE</small></button>
           <button type="button" onClick={() => document.querySelector<HTMLInputElement>('.pl-live__composer input')?.focus()} aria-label="コメント"><MessageCircle size={23} /><small>{comments.length || 'コメント'}</small></button>
           <button type="button" className="pl-live__side-support" onClick={onTip} aria-label="応援する"><Gift size={23} /><small>応援</small></button>
           <button type="button" onClick={shareLive} aria-label="シェア"><Share2 size={23} /><small>シェア</small></button>
+          <button type="button" onClick={openStoryShare} aria-label="Instagramストーリーで共有"><Instagram size={23} /><small>ストーリー</small></button>
         </aside>
       </div>
 
