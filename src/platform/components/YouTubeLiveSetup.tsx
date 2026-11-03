@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ExternalLink, Link2, Radio, Trash2, Video } from 'lucide-react'
-import { updatePerformer } from '../lib/api'
+import { saveYouTubeLiveSettings, youtubeLivePublishError, type YouTubeLiveSettings } from '../lib/youtubeLivePublish'
 import type { Performer } from '../lib/types'
 import { parseYouTubeLiveReference } from '../lib/youtubeLive'
 import { YouTubeLivePlayer } from './YouTubeLivePlayer'
@@ -19,57 +19,73 @@ export function YouTubeLiveSetup({ performer, onBack, onChooseDirect, onPreview,
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const parsed = useMemo(() => parseYouTubeLiveReference(input), [input])
-  const savedId = performer.youtube_live_video_id ?? null
-  const published = Boolean(performer.youtube_live_enabled && savedId && performer.youtube_live_url)
+  const saving = useRef(false)
+  const [saved, setSaved] = useState<YouTubeLiveSettings>({
+    youtube_live_video_id: performer.youtube_live_video_id ?? null,
+    youtube_live_url: performer.youtube_live_url ?? null,
+    youtube_live_enabled: Boolean(performer.youtube_live_enabled),
+  })
+  const savedId = saved.youtube_live_video_id
+  const published = Boolean(saved.youtube_live_enabled && savedId && saved.youtube_live_url)
+
+  const refresh = async () => {
+    try { await onSaved() } catch {
+      setError('保存は完了しましたが、画面の再読み込みに失敗しました。通信状態を確認して画面を開き直してください。')
+    }
+  }
   const changed = parsed?.videoId !== savedId
 
   const publish = async () => {
-    if (!parsed || busy) {
+    if (saving.current) return
+    if (!parsed) {
       setError('YouTube LIVEのURLを確認してください。「共有」からコピーしたURLをそのまま貼り付けられます。')
       return
     }
+    saving.current = true
     setBusy(true); setError(null); setMessage(null)
     try {
-      await updatePerformer(performer.id, {
+      setSaved(await saveYouTubeLiveSettings(performer.id, {
         youtube_live_video_id: parsed.videoId,
         youtube_live_url: parsed.canonicalUrl,
         youtube_live_enabled: true,
-      })
+      }))
       setInput(parsed.canonicalUrl)
-      await onSaved()
+      await refresh()
       setMessage('公開しました。ファンはHAKU内でこのYouTube LIVEを視聴できます。')
-    } catch {
-      setError('公開できませんでした。本人のアカウントでログインしているか、通信状態を確認してください。')
-    } finally { setBusy(false) }
+    } catch (error) {
+      setError(youtubeLivePublishError(error))
+    } finally { saving.current = false; setBusy(false) }
   }
 
   const setPublished = async (enabled: boolean) => {
-    if (!savedId || !performer.youtube_live_url || busy) return
+    if (!savedId || !saved.youtube_live_url || saving.current) return
+    saving.current = true
     setBusy(true); setError(null); setMessage(null)
     try {
-      await updatePerformer(performer.id, { youtube_live_enabled: enabled })
-      await onSaved()
+      setSaved(await saveYouTubeLiveSettings(performer.id, { youtube_live_enabled: enabled }))
+      await refresh()
       setMessage(enabled ? 'HAKUでの公開を再開しました。' : 'HAKUでの公開を停止しました。YouTube側の配信には影響しません。')
-    } catch {
-      setError('公開状態を変更できませんでした。通信状態を確認してください。')
-    } finally { setBusy(false) }
+    } catch (error) {
+      setError(youtubeLivePublishError(error))
+    } finally { saving.current = false; setBusy(false) }
   }
 
   const unlink = async () => {
-    if (busy || !window.confirm('YouTube LIVE連携を解除しますか？YouTube側の配信は終了しません。')) return
+    if (saving.current || !window.confirm('YouTube LIVE連携を解除しますか？YouTube側の配信は終了しません。')) return
+    saving.current = true
     setBusy(true); setError(null); setMessage(null)
     try {
-      await updatePerformer(performer.id, {
+      setSaved(await saveYouTubeLiveSettings(performer.id, {
         youtube_live_video_id: null,
         youtube_live_url: null,
         youtube_live_enabled: false,
-      })
+      }))
       setInput('')
-      await onSaved()
+      await refresh()
       setMessage('YouTube LIVE連携を解除しました。')
-    } catch {
-      setError('連携を解除できませんでした。通信状態を確認してください。')
-    } finally { setBusy(false) }
+    } catch (error) {
+      setError(youtubeLivePublishError(error))
+    } finally { saving.current = false; setBusy(false) }
   }
 
   return <main className="pl-youtube-setup">

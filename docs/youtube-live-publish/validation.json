@@ -1,0 +1,39 @@
+{
+  "productionBaseline": "850424a5e3efdb17d7a9506a840288d4aeeb9955",
+  "productionDeployment": "dpl_AJ5MPiQgsKQYug4dKduazQ3W2n6i",
+  "productionWrites": false,
+  "productionDeploymentPerformed": false,
+  "mainMerged": false,
+  "paymentChanges": false,
+  "databaseFailure": {
+    "code": "23514",
+    "constraint": "performers_youtube_live_url_check",
+    "occurrences": 11,
+    "reportedVideoId": "yk6Kjl0WHWs"
+  },
+  "fullRegression": {
+    "filesPassed": 85,
+    "testsPassed": 500,
+    "command": "npm run test:registration"
+  },
+  "youtubeRegression": {
+    "filesPassed": 5,
+    "testsPassed": 37,
+    "command": "npm run test:youtube"
+  },
+  "finalDatabaseRegression": {
+    "testsPassed": 8,
+    "policy": "deployed owner policy plus delegated update fixture"
+  },
+  "typecheck": "passed",
+  "build": "passed; existing large-chunk advisory",
+  "webkit": {
+    "checksPassed": 11,
+    "browser": "WebKit iPhone 13 emulation",
+    "supabase": "local boundary fixture",
+    "externalRequests": "blocked"
+  },
+  "physicalIPhone": "not performed",
+  "hostedWriteEndToEnd": "not performed",
+  "productionRecovery": "pending approval and targeted migration application"
+}

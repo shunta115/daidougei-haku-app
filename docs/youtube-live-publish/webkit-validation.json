@@ -1,0 +1,18 @@
+{
+  "browser": "WebKit iPhone 13 emulation",
+  "boundary": "local Supabase fixture; external requests blocked",
+  "checks": [
+    "iPhone URL paste recognizes the reported video ID",
+    "authentication error is distinct and preserves input",
+    "permission error is distinct and preserves input",
+    "database error is distinct and preserves input",
+    "network error is distinct and preserves input",
+    "publish persists the canonical URL and creates no duplicate writes",
+    "stop and republish reflect saved state",
+    "unlink clears the saved reference",
+    "publish after unlink works",
+    "no Google OAuth or YouTube API request",
+    "no uncaught browser exception"
+  ],
+  "errors": []
+}
