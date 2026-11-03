@@ -1,0 +1,43 @@
+{
+  "base": "850424a5e3efdb17d7a9506a840288d4aeeb9955",
+  "typecheck": "passed",
+  "app_lint": "passed",
+  "unit_targeted": {
+    "files": 3,
+    "tests": 11,
+    "result": "passed"
+  },
+  "full_suite": {
+    "files": 85,
+    "passed_tests": 483,
+    "failed_tests": 1,
+    "failure": "merch-ui reservation test exceeded default 5000ms during concurrent builds",
+    "rerun": {
+      "file": "tests/merch-ui.test.tsx",
+      "tests": 3,
+      "result": "passed without timeout override"
+    }
+  },
+  "webkit": {
+    "checks": 17,
+    "result": "passed",
+    "scope": "local static fixture; no remote calls; not physical iPhone"
+  },
+  "preview": {
+    "url": "https://daidougei-haku-q66izf6xf-daidougei-s-projects.vercel.app",
+    "deploymentId": "dpl_GMURadu5r7QfuGcPspkW9ABbt4Vh",
+    "state": "READY",
+    "target": null,
+    "kind": "isolated static sample; not connected TEST app",
+    "httpStatus": 200,
+    "cspVerified": true
+  },
+  "not_performed": [
+    "main merge",
+    "production deploy",
+    "remote DB operations",
+    "real streaming or financial operations",
+    "TEST Auth/live reservation integration",
+    "physical iPhone Safari"
+  ]
+}

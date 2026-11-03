@@ -1,0 +1,24 @@
+{
+  "engine": "WebKit iPhone 13 emulation; not a physical iPhone",
+  "checks": [
+    "confirmed LIVE precedes upcoming",
+    "watch action visible in first viewport",
+    "LIVE title visible in first viewport",
+    "reservation button visible without scrolling",
+    "no horizontal page overflow",
+    "reservation state updates across both entry points",
+    "cancel requires explicit confirmation",
+    "back preserves reservation",
+    "explicit cancellation restores reserve",
+    "watch callback preserved",
+    "follow/profile callback preserved",
+    "upcoming is first section when no LIVE",
+    "upcoming reservation visible without scrolling",
+    "landscape fits width",
+    "320px viewport fits width",
+    "no remote requests",
+    "no page errors"
+  ],
+  "errors": [],
+  "remote": []
+}

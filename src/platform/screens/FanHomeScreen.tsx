@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Bell, ChevronRight, Heart, MapPin, Play, Radio, Search } from 'lucide-react'
 import { BrandLogo } from '../../brand/BrandLogo'
 import { InstallPrompt } from '../components/InstallPrompt'
@@ -8,7 +8,10 @@ import { PUBLIC_EVENT_META } from '../../festival/data/public/eventMeta'
 import {
   getFeaturedEvent,
   getTodayOfficialNavigator,
-  listEventLineup,
+  listUpcomingLiveSchedules,
+  listUpcomingPublishedAppearances,
+  listOwnLiveReservationIds,
+  liveReservationsEnabled,
   listFollowedPerformers,
   listLivePerformers,
   listOshiPerformers,
@@ -18,8 +21,12 @@ import {
 import { useAuth } from '../lib/auth'
 import { useTrackView } from '../lib/track'
 import { useLang } from '../../i18n/LangProvider'
-import type { Performer } from '../lib/types'
+import type { LiveSchedule, PerformerAppearance, Performer } from '../lib/types'
+import { HomeStage } from '../components/home/HomeStage'
+import { homeDiscovery, type HomeSession } from '../lib/homeDiscovery'
+import { listHomeSessions } from '../lib/homeDiscoveryApi'
 import './fanHome.css'
+import './homeStage.css'
 
 type FanHomeProps = {
   onOpenPerformer: (id: string) => void
@@ -105,7 +112,18 @@ function OfficialNavigatorCard({ navigator, onOpen, onWatch, onTip }: {
 export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOpenLiveList, onOpenMap, onOpenEvent, onOpenNotifications, onTip, onPerformerLive, onPerformerSchedule, onPerformerDesk, onOpenTitle }: FanHomeProps) {
   const { user } = useAuth()
   const { t } = useLang()
+  const userId = user?.id ?? null
+  const loadError = t('homeLoadError')
+  const latestUserId = useRef(userId)
+  useEffect(() => { latestUserId.current = userId }, [userId])
   useTrackView('home_view')
+  const [schedules, setSchedules] = useState<LiveSchedule[]>([])
+  const [appearances, setAppearances] = useState<PerformerAppearance[]>([])
+  const [sessions, setSessions] = useState<HomeSession[]>([])
+  const reservationRevision = useRef(0)
+  const [reserved, setReserved] = useState<string[] | null>(null)
+  const [reservationOwner, setReservationOwner] = useState(userId)
+  const [checkedAt, setCheckedAt] = useState(() => Date.now())
   const [live, setLive] = useState<Performer[]>([])
   const [roster, setRoster] = useState<Performer[]>([])
   const [followed, setFollowed] = useState<Performer[]>([])
@@ -117,42 +135,46 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const [liveRows, allRows, event] = await Promise.all([listLivePerformers(), searchPerformers(''), getFeaturedEvent()])
+      let partialError = false
+      const revision = reservationRevision.current
+      const [liveRows, allRows, event, scheduleRows, appearanceRows, sessionRows, reservationIds] = await Promise.all([
+        listLivePerformers(), searchPerformers(''), getFeaturedEvent().catch(() => null),
+        liveReservationsEnabled ? listUpcomingLiveSchedules().catch(() => { partialError = true; return [] as LiveSchedule[] }) : Promise.resolve([] as LiveSchedule[]),
+        listUpcomingPublishedAppearances().catch(() => { partialError = true; return [] as PerformerAppearance[] }),
+        listHomeSessions().catch(() => { partialError = true; return [] as HomeSession[] }),
+        liveReservationsEnabled && userId ? listOwnLiveReservationIds(userId).catch(() => null) : Promise.resolve([] as string[]),
+      ])
       if (cancelled) return
       if (event) {
         setEventLabel({ date: event.date_label, place: event.place_label, slug: event.slug })
-        const [lineup, officialNavigator] = await Promise.all([
-          listEventLineup(event.id).catch((): string[] => []),
-          getTodayOfficialNavigator(event.id).catch(() => null),
-        ])
-        if (!cancelled) setRoster(lineup.length ? allRows.filter((p) => lineup.includes(p.id)) : allRows)
+        const officialNavigator = await getTodayOfficialNavigator(event.id).catch(() => null)
+        if (!cancelled) setRoster(allRows)
         if (!cancelled) setNavigator(officialNavigator)
       } else { setRoster(allRows); setNavigator(null) }
-      setLive(liveRows)
-      if (user) {
-        const favorites = await listOshiPerformers(user.id).catch(() => [])
-        const follows = favorites.length ? favorites : await listFollowedPerformers(user.id).catch(() => [])
+      if (cancelled) return
+      setLive(liveRows); setSchedules(scheduleRows); setAppearances(appearanceRows); setSessions(sessionRows); if (revision === reservationRevision.current) { setReserved(reservationIds); setReservationOwner(userId) }; setCheckedAt(Date.now())
+      if (userId) {
+        const favorites = await listOshiPerformers(userId).catch(() => [])
+        const follows = favorites.length ? favorites : await listFollowedPerformers(userId).catch(() => [])
         if (!cancelled) setFollowed(follows)
       } else setFollowed([])
-      setError(null)
+      setError(partialError ? '一部の配信・予定情報を確認できません。時間をおいて再度確認してください。' : null)
     }
-    void load()
-      .catch(() => setError(t('homeLoadError')))
-      .finally(() => { if (!cancelled) setLoading(false) })
-    const timer = window.setInterval(() => void load().catch(() => undefined), 12000)
-    return () => { cancelled = true; window.clearInterval(timer) }
-  }, [t, user])
+    let inFlight = false
+    const refresh = async () => {
+      if (document.hidden || inFlight) return
+      inFlight = true
+      try { await load() } catch { if (!cancelled) { setLive([]); setSessions([]); setError(loadError) } }
+      finally { inFlight = false; if (!cancelled) setLoading(false) }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 30_000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('online', refresh)
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh) }
+  }, [loadError, userId])
 
-  const hero = live[0] ?? followed[0] ?? roster[0] ?? null
-  const recommendations = useMemo(() => {
-    const seen = new Set<string>()
-    return [...live, ...roster].filter((performer) => {
-      if (seen.has(performer.id)) return false
-      seen.add(performer.id)
-      return true
-    }).slice(0, 10)
-  }, [live, roster])
-  const upcoming = useMemo(() => roster.filter((performer) => !performer.is_live).slice(0, 8), [roster])
+  const feed = useMemo(() => homeDiscovery(roster, live, schedules, appearances, sessions, checkedAt), [roster, live, schedules, appearances, sessions, checkedAt])
 
   return (
     <main className="pl-experience pl-home-v7">
@@ -164,6 +186,7 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         </div>
       </header>
 
+      {loading ? <section className="pl-cinema-hero pl-cinema-hero--loading" aria-label={t('homeLoading')} aria-busy="true"><p>ステージを確認しています…</p></section> : <HomeStage feed={feed} reserved={reservationOwner === userId ? reserved : null} setReserved={ids => { if (latestUserId.current !== userId) return; reservationRevision.current += 1; setReserved(ids); setReservationOwner(userId) }} key={userId ?? 'guest'} userId={userId} onWatch={onWatchLive} onProfile={onOpenPerformer} onTip={onTip} onSearch={onOpenSearch} />}
       <GlobalMessageBar />
 
       <nav className="pl-home-v7__channels" aria-label={t('homeChannels')}>
@@ -173,38 +196,9 @@ export function FanHomeScreen({ onOpenPerformer, onWatchLive, onOpenSearch, onOp
         <button type="button" onClick={onOpenSearch}>{t('homeNew')}</button>
       </nav>
 
-      {loading ? (
-        <section className="pl-cinema-hero pl-cinema-hero--loading" aria-label={t('homeLoading')} aria-busy="true">
-          <div className="pl-cinema-hero__skeleton" aria-hidden="true"><span /><span /><span /></div>
-        </section>
-      ) : hero ? (
-        <section className={`pl-cinema-hero${hero.is_live ? ' pl-cinema-hero--live' : ''}`} style={{ '--hero-image': hero.photo_url ? `url(${hero.photo_url})` : 'none' } as CSSProperties} aria-labelledby="pl-home-hero-title">
-          <div className="pl-cinema-hero__ambient" aria-hidden="true" />
-          <div className="pl-cinema-hero__media" aria-hidden="true">{!hero.photo_url ? <span>{hero.stage_name.slice(0, 2)}</span> : null}</div>
-          <div className="pl-cinema-hero__scrim" aria-hidden="true" />
-          <div className="pl-cinema-hero__content">
-            <h1 className="pl-sr-only">{hero.stage_name}</h1>
-            <div className="pl-cinema-hero__status"><span /> {hero.is_live ? 'LIVE' : 'FEATURED'}</div>
-            <h2 id="pl-home-hero-title">{t('homeHero1')}<br />{t('homeHero2')}</h2>
-            <button type="button" className="pl-cinema-hero__play" onClick={() => (hero.is_live ? onWatchLive(hero.id) : onOpenLiveList())} aria-label={hero.is_live ? t('homeWatchNamed', { name: hero.stage_name }) : t('homeFindLive')}><Play size={24} fill="currentColor" /></button>
-            <div className="pl-cinema-hero__live-meta">
-              <div className="pl-cinema-hero__avatars" aria-hidden="true">{(live.length ? live : recommendations).slice(0, 3).map((performer) => <span key={performer.id}>{performer.photo_url ? <img src={performer.photo_url} alt="" /> : performer.stage_name.slice(0, 1)}</span>)}</div>
-              <p><strong>{live.length > 0 ? t('homeLiveCount', { n: live.length }) : t('homeNextLive')}</strong><small>{hero.stage_name} · {hero.genre || 'Performance'}</small></p>
-              <ChevronRight size={18} />
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="pl-home-v7__empty">
-          <div><p>DISCOVER</p><h1>{t('homeEmptyTitle')}</h1><span>{t('homeEmptyBody')}</span></div>
-          <button type="button" className="pl-action pl-action--primary" onClick={onOpenSearch}><Search size={18} /> {t('homeSearch')}</button>
-        </section>
-      )}
 
-      <PerformerRail title={t('homeFeatured')} eyebrow="FEATURED" performers={recommendations} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
-      {navigator ? <OfficialNavigatorCard navigator={navigator} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
-      <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
-      <PerformerRail title={t('homeUpcoming')} eyebrow="UP NEXT" performers={upcoming} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenMap} />
+      {navigator ? <OfficialNavigatorCard navigator={{...navigator, live_status: feed.live.some(p => p.id === navigator.performer.id) ? 'live' : 'preparing', performer: {...navigator.performer, is_live: feed.live.some(p => p.id === navigator.performer.id)}}} onOpen={onOpenPerformer} onWatch={onWatchLive} onTip={onTip} /> : null}
+      <PerformerRail title={t('homeFollowingRail')} eyebrow="YOUR PEOPLE" performers={followed.map(p => ({...p, is_live: feed.live.some(l => l.id === p.id)}))} onOpen={onOpenPerformer} onWatch={onWatchLive} onSeeAll={onOpenSearch} />
 
       {onPerformerLive && onPerformerSchedule && onPerformerDesk ? (
         <section className="pl-performer-desk" aria-label={t('performerDeskTitle')}>
