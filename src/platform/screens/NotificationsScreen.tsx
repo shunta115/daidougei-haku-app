@@ -1,3 +1,5 @@
+import { SmartPushSettings } from '../components/SmartPushSettings'
+import { smartPushEnabled } from '../lib/smartPush'
 import { useEffect, useState } from 'react'
 import { disableAppearancePush, enableAppearancePush, getNotificationPreference, listNotifications, markNotificationRead } from '../lib/api'
 import { supabaseAuthHeaders } from '../lib/supabase'
@@ -107,8 +109,9 @@ export function NotificationsScreen({ onOpenLive, onOpenPerformer, onOpenSchedul
     <>
       {onBack ? <AppBackButton onClick={onBack} label="戻る" /> : null}
       <h1 className="pl-h1">Notifications</h1>
+      {smartPushEnabled && user ? <SmartPushSettings userId={user.id} /> : null}
       {user && new URLSearchParams(window.location.search).get('pushSelfTest') === '1' ? <section className="pl-registration__section"><h2 className="pl-h2">本人端末の通知テスト</h2><button type="button" className="pl-btn" disabled={testBusy || Boolean(testResult)} onClick={() => void sendSelfTest()}>HAKUプッシュ通知テストを1件送信</button><p role="status">{testResult}</p></section> : null}
-      {user ? <section className="pl-registration__section pl-notification-settings"><h2 className="pl-h2">{lang === 'en' ? 'Performance alerts' : lang === 'zh-TW' ? '演出通知' : '出演予定の通知'}</h2><p className="pl-muted">{lang === 'en' ? 'In-app alerts are available without Push. On iPhone, add HAKU to the Home Screen before enabling Push.' : lang === 'zh-TW' ? '即使未開啟Push，也可在HAKU內查看通知。iPhone請先將HAKU加入主畫面。' : 'Pushを許可しなくてもHAKU内通知は確認できます。iPhoneでは先にSafariからホーム画面へ追加してください。'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={pushBusy} aria-pressed={pushOn} onClick={() => void togglePush()}>{pushOn ? (lang === 'en' ? 'Disable Push' : lang === 'zh-TW' ? '關閉Push通知' : 'Push通知をオフ') : (lang === 'en' ? 'Enable Push' : lang === 'zh-TW' ? '開啟Push通知' : 'Push通知をオン')}</button></section> : null}
+      {user && !smartPushEnabled ? <section className="pl-registration__section pl-notification-settings"><h2 className="pl-h2">{lang === 'en' ? 'Performance alerts' : lang === 'zh-TW' ? '演出通知' : '出演予定の通知'}</h2><p className="pl-muted">{lang === 'en' ? 'In-app alerts are available without Push. On iPhone, add HAKU to the Home Screen before enabling Push.' : lang === 'zh-TW' ? '即使未開啟Push，也可在HAKU內查看通知。iPhone請先將HAKU加入主畫面。' : 'Pushを許可しなくてもHAKU内通知は確認できます。iPhoneでは先にSafariからホーム画面へ追加してください。'}</p><button type="button" className="pl-btn pl-btn--ghost pl-btn--block" disabled={pushBusy} aria-pressed={pushOn} onClick={() => void togglePush()}>{pushOn ? (lang === 'en' ? 'Disable Push' : lang === 'zh-TW' ? '關閉Push通知' : 'Push通知をオフ') : (lang === 'en' ? 'Enable Push' : lang === 'zh-TW' ? '開啟Push通知' : 'Push通知をオン')}</button></section> : null}
       {error ? <p className="pl-error">{error}</p> : null}
       {rows.length === 0 && !error ? <div className="pl-empty">No notifications.</div> : null}
       {rows.map((n) => (

@@ -25,7 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
+    const rehearsal = req.body?.rehearsal === true
     const host = Boolean(asHost)
+    if (rehearsal && (!host || process.env.ENABLE_SMART_PUSH !== 'true')) return res.status(403).json({ error: 'Rehearsal unavailable' })
     if (host && !authHeader) {
       res.status(401).json({ error: 'Authorization required' })
       return
@@ -72,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const guestIdentity = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const identity = user?.id ?? guestIdentity
     const displayName = profile?.display_name || user?.email || 'Guest'
-    const room = roomNameForPerformer(performerId)
+    const room = roomNameForPerformer(performerId) + (rehearsal ? '-private-rehearsal' : '')
     const token = await createLiveKitToken({
       identity,
       name: host ? performer.stage_name || displayName : displayName,
