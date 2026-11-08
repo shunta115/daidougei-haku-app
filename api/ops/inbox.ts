@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAdminSupabase } from '../stripe/_shared.js'
+import { getAdminSupabase, requireAuthUser } from '../stripe/_shared.js'
 import { prevTokyoDay, requireAdmin, tokyoDay } from './_guard.js'
 import { buildAlerts } from './_agents.js'
 import hakuAdminHandler from './_hakuAdmin.js'
@@ -11,6 +11,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return handlePublicPerformerStats(req, res)
   }
   const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
+  if (req.method === 'POST' && body.resource === 'performer-application' && body.action === 'apply') {
+    const user = await requireAuthUser(req, res)
+    if (!user) return
+    const { error } = await getAdminSupabase().rpc('apply_fan_performer', { p_user_id: user.id, p_actor_id: user.id })
+    res.setHeader('Cache-Control', 'no-store')
+    if (error) { res.status(409).json({ error: '申請できませんでした。アカウントの状態を確認してください。' }); return }
+    res.status(200).json({ ok: true })
+    return
+  }
   if (req.method === 'POST' && (body.resource || body.action)) {
     return hakuAdminHandler(req, res)
   }

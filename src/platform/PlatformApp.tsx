@@ -205,6 +205,8 @@ function PlatformShell() {
   const { ready, configured, user, profile, profileError, passwordRecovery, refreshProfile, signOut } = useAuth()
   const { t } = useLang()
   const [screen, setScreen] = useState<PlatformScreen>(initialGuestScreen)
+  const [applicationBusy, setApplicationBusy] = useState(false)
+  const [applicationError, setApplicationError] = useState('')
   const [registrationEntry] = useState(() => window.location.pathname === PERFORMER_REGISTER_PATH)
   const [authRole] = useState<'fan' | 'performer'>(() => {
     if (registrationEntry) return 'performer'
@@ -569,8 +571,20 @@ function PlatformShell() {
   if (registrationEntry && profile && profile.role !== 'performer' && profile.role !== 'admin') {
     return <div className="pl-app"><div className="pl-shell pl-registration">
       <h1 className="pl-h1">{t('authPerformerTitle')}</h1>
-      <p className="pl-muted">{t('authWrongRole', { role: profile.role === 'fan' ? t('fan') : t('organizer') })}</p>
-      <button className="pl-btn pl-btn--block" onClick={() => void signOut()}>{t('authSignOutRegister')}</button>
+      <p className="pl-muted">{profile.role === 'fan' ? '現在の一般会員アカウントで申請できます。' : t('authWrongRole', { role: t('organizer') })}</p>
+      {profile.role === 'fan' && profile.status === 'active' ? <>
+        <p className="pl-muted">現在のメールアドレス・ログイン・履歴を維持して申請できます。公開には運営の承認が必要です。</p>
+        {applicationError ? <p className="pl-error" role="alert">{applicationError}</p> : null}
+        <button className="pl-btn pl-btn--block" disabled={applicationBusy} onClick={async () => {
+          setApplicationBusy(true); setApplicationError('')
+          try {
+            const response = await fetch('/api/haku-admin', { method: 'POST', headers: { 'Content-Type': 'application/json', ...await supabaseAuthHeaders() }, body: JSON.stringify({ resource: 'performer-application', action: 'apply' }) })
+            if (!response.ok) throw new Error('申請できませんでした。ログインとアカウントの状態を確認してください。')
+            await refreshProfile()
+          } catch (error) { setApplicationError(error instanceof Error ? error.message : '申請できませんでした。') }
+          finally { setApplicationBusy(false) }
+        }}>{applicationBusy ? '申請中…' : '同じアカウントでパフォーマー登録を申請'}</button>
+      </> : null}
       <a className="pl-registration__link" href={PLATFORM_PATH}>{t('authBackAccount')}</a>
     </div></div>
   }

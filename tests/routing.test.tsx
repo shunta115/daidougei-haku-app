@@ -206,7 +206,37 @@ it('does not silently convert an existing fan into a performer', async () => {
   fake.auth.user = { id: 'fixture' }
   fake.auth.profile = { role: 'fan', status: 'active' }
   render(<PlatformApp />)
-  await screen.findByText(/現在はファンのアカウント/)
+  const request = vi.fn()
+  vi.stubGlobal('fetch', request)
+  await screen.findByRole('button', { name: '同じアカウントでパフォーマー登録を申請' })
+  expect(request).not.toHaveBeenCalled()
+  expect(fake.auth.signOut).not.toHaveBeenCalled()
+})
+
+it('submits an existing fan application only after an explicit action and refreshes the same login', async () => {
+  window.history.replaceState({}, '', '/live/register')
+  fake.auth.user = { id: 'fixture' }
+  fake.auth.profile = { role: 'fan', status: 'active' }
+  const request = vi.fn().mockResolvedValue({ ok: true })
+  vi.stubGlobal('fetch', request)
+  render(<PlatformApp />)
+  await act(async () => fireEvent.click(await screen.findByRole('button', { name: '同じアカウントでパフォーマー登録を申請' })))
+  expect(request).toHaveBeenCalledWith('/api/haku-admin', expect.objectContaining({ method: 'POST', body: JSON.stringify({ resource: 'performer-application', action: 'apply' }) }))
+  expect(fake.auth.refreshProfile).toHaveBeenCalled()
+  expect(fake.auth.signOut).not.toHaveBeenCalled()
+})
+
+it('shows a failed application and allows retry without logging out', async () => {
+  window.history.replaceState({}, '', '/live/register')
+  fake.auth.user = { id: 'fixture' }
+  fake.auth.profile = { role: 'fan', status: 'active' }
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+  render(<PlatformApp />)
+  await act(async () => fireEvent.click(await screen.findByRole('button', { name: '同じアカウントでパフォーマー登録を申請' })))
+  expect((await screen.findByRole('alert')).textContent).toContain('申請できませんでした')
+  expect(screen.getByRole('button', { name: '同じアカウントでパフォーマー登録を申請' }).hasAttribute('disabled')).toBe(false)
+  expect(fake.auth.refreshProfile).not.toHaveBeenCalled()
+  expect(fake.auth.signOut).not.toHaveBeenCalled()
 })
 
 it('returns from Stripe to the performer dashboard', async () => {

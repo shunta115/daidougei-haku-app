@@ -50,7 +50,7 @@ describe('HAKU admin and public performer safety', () => {
     expect(app).toMatch(/pl-preview-readonly/)
     expect(app).toMatch(/onClickCapture/)
     expect(admin).toMatch(/action === 'reject'/)
-    expect(admin).toMatch(/review_status: 'approved'/)
+    expect(admin).toMatch(/rpc\('manage_performer_account'/)
   })
 
   it('manages event performers through the existing event_lineup relation without changing approval', () => {
@@ -117,7 +117,8 @@ describe('HAKU admin and public performer safety', () => {
     expect(admin).toMatch(/inviteUserByEmail/)
     expect(admin).toMatch(/cannot change your own administrator access/)
     expect(admin).toMatch(/at least one active super admin is required/)
-    expect(admin).toMatch(/revokeSessions\(targetId\)/)
+    expect(admin).toMatch(/updateUserById\(targetId, \{ ban_duration:/)
+    expect(admin).not.toMatch(/signOut\((?:targetId|userId)/)
     expect(app).toMatch(/＋ 管理者を追加/)
     expect(app).toMatch(/招待メールを送る/)
     expect(app).toMatch(/admin_permission === 'super_admin'/)

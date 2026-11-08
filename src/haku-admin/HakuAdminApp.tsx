@@ -296,9 +296,13 @@ export function HakuAdminApp() {
               <p>{user.role === 'fan' ? 'お客様' : user.role === 'performer' ? 'パフォーマー' : user.role === 'admin' ? '運営' : user.role} · {user.status === 'active' ? '有効' : user.status === 'suspended' ? '停止中' : user.status === 'deleted' ? '削除済み' : user.status}</p>
               {visibleEmailId === user.id ? <p>メール: {user.email}</p> : null}
               <div className="ha-actions">
+                {user.role === 'fan' && user.status === 'active' ? <button type="button" className="pl-btn" onClick={() => {
+                  if (!confirmDanger(`${user.display_name} をパフォーマー登録へ切り替えます。メール・ID・履歴は維持し、公開には別途承認が必要です。`)) return
+                  void hakuAdmin('users', 'apply-performer', { id: user.id }).then(() => reload('users')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
+                }}>パフォーマー登録へ切り替え</button> : null}
                 <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setVisibleEmailId((value) => value === user.id ? null : user.id)}>{visibleEmailId === user.id ? 'メールを隠す' : 'メールを確認'}</button>
                 <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
-                  if (!confirmDanger(`${user.display_name} を停止します。セッションも無効化します。`)) return
+                  if (!confirmDanger(`${user.display_name} を停止します。以後のログイン・更新も禁止します。`)) return
                   void hakuAdmin('users', 'suspend', { id: user.id }).then(() => reload('users')).catch((e) => setError(e instanceof Error ? e.message : '失敗'))
                 }}>停止</button>
                 <button type="button" className="pl-btn pl-btn--danger" onClick={() => {

@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const fake = vi.hoisted(() => ({
   performerPatch: null as Record<string, unknown> | null,
@@ -52,18 +52,25 @@ beforeEach(() => {
   fake.profileError = null
 })
 
-it('publishes only after the performer and account state are both updated', async () => {
-  await approvePerformer('performer-1')
+afterEach(() => vi.unstubAllGlobals())
 
-  expect(fake.performerPatch).toEqual({ is_approved: true })
-  expect(fake.profilePatch).toEqual({ status: 'active' })
+it('routes legacy approval through the guarded cockpit API', async () => {
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
+  vi.stubGlobal('fetch', request)
+  await approvePerformer('performer-1')
+  expect(request).toHaveBeenCalledWith('/api/ops/inbox', expect.objectContaining({
+    method: 'POST',
+    body: JSON.stringify({ resource: 'performers', action: 'approve', payload: { id: 'performer-1' } }),
+  }))
+  expect(fake.performerPatch).toBeNull()
+  expect(fake.profilePatch).toBeNull()
 })
 
-it('removes public approval when account activation fails', async () => {
-  fake.profileError = { message: 'profile update failed' }
-
-  await expect(approvePerformer('performer-1')).rejects.toEqual(fake.profileError)
-  expect(fake.performerPatch).toEqual({ is_approved: false, is_live: false, share_location: false })
+it('reports a blocked approval without attempting a direct database write', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'account unavailable' }) }))
+  await expect(approvePerformer('performer-1')).rejects.toThrow('account unavailable')
+  expect(fake.performerPatch).toBeNull()
+  expect(fake.profilePatch).toBeNull()
 })
 
 it('unpublishes a performer and removes any active LIVE location', async () => {

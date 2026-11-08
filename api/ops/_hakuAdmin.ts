@@ -22,15 +22,11 @@ async function audit(adminId: string, action: string, targetId?: string | null, 
   })
 }
 
-async function revokeSessions(userId: string) {
-  const sb = getAdminSupabase()
-  const adminAuth = sb.auth.admin as { signOut?: (id: string, scope?: 'global' | 'local' | 'others') => Promise<{ error: Error | null }> }
-  if (typeof adminAuth.signOut === 'function') {
-    const { error } = await adminAuth.signOut(userId, 'global')
-    if (error) throw error
-    return
-  }
-  throw new Error('Session revoke is unavailable on this Auth version')
+// signOut expects a user's JWT, never a UUID. Ban by ID instead; Auth
+// rejects subsequent login/refresh. API authorization also checks profile status.
+async function restrictAuthUser(userId: string) {
+  const { error } = await getAdminSupabase().auth.admin.updateUserById(userId, { ban_duration: '876000h' })
+  if (error) throw error
 }
 
 function yenSum(rows: Array<Record<string, unknown>>, keys: string[]) {
@@ -175,12 +171,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return
           }
         }
+        const { error: authError } = await sb.auth.admin.updateUserById(targetId, { ban_duration: status === 'disabled' ? '876000h' : 'none' })
+        if (authError) throw authError
         const now = new Date().toISOString()
         const { error: memberError } = await sb.from('admin_members').update({ status, disabled_at: status === 'disabled' ? now : null, updated_at: now }).eq('user_id', targetId)
         if (memberError) throw memberError
         const { error: profileError } = await sb.from('profiles').update({ status: status === 'active' ? 'active' : 'suspended' }).eq('id', targetId).eq('role', 'admin')
         if (profileError) throw profileError
-        if (status === 'disabled') await revokeSessions(targetId)
         await audit(admin.id, `admin.${status}`, targetId)
         res.status(200).json({ ok: true })
         return
@@ -264,21 +261,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: 'cannot modify self' })
         return
       }
-      if (action === 'suspend') {
-        const { error } = await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)
+      if (action === 'apply-performer') {
+        const { error } = await sb.rpc('apply_fan_performer', { p_user_id: id, p_actor_id: admin.id })
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '有効な一般会員アカウントで申請してください。' })
+          return
+        }
         if (error) throw error
-        await sb.from('performers').update({ is_live: false, is_approved: false }).eq('id', id)
-        await revokeSessions(id)
-        await audit(admin.id, 'user.suspend', id)
         res.status(200).json({ ok: true })
         return
       }
-      if (action === 'soft-delete') {
-        const { error } = await sb.from('profiles').update({ status: 'deleted', display_name: 'Deleted' }).eq('id', id)
+      if (action === 'suspend' || action === 'soft-delete') {
+        // Commit the application-side restriction before contacting Auth. If
+        // Auth fails, the same action safely retries the ban without reopening the profile.
+        const { error } = await sb.rpc('manage_performer_account', {
+          p_actor_id: admin.id, p_user_id: id, p_action: action,
+        })
+        if (error?.code === 'P0002') { res.status(404).json({ error: 'user not found' }); return }
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '管理者の停止は管理者管理から行ってください。' })
+          return
+        }
         if (error) throw error
-        await sb.from('performers').update({ is_live: false, is_approved: false, stage_name: 'Deleted' }).eq('id', id)
-        await revokeSessions(id)
-        await audit(admin.id, 'user.soft_delete', id)
+        try {
+          await restrictAuthUser(id)
+        } catch {
+          res.status(503).json({
+            error: 'アプリでの停止は保存済みです。ログイン停止を完了するため、同じ操作を再試行してください。',
+            code: 'auth_restriction_pending',
+          })
+          return
+        }
         res.status(200).json({ ok: true })
         return
       }
@@ -316,22 +329,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (action === 'approve') {
-        const reviewedAt = new Date().toISOString()
-        const { data, error } = await sb.from('performers').update({
-          is_approved: true,
-          review_status: 'approved',
-          reviewed_at: reviewedAt,
-          reviewed_by: admin.id,
-          rejection_reason: null,
-        }).eq('id', id).select('id')
-        if (error) throw error
-        if (!data?.length) throw new Error('approve failed')
-        const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
-        if (perr) {
-          await sb.from('performers').update({ is_approved: false, is_live: false, share_location: false }).eq('id', id)
-          throw perr
+        const { error } = await sb.rpc('manage_performer_account', {
+          p_actor_id: admin.id, p_user_id: id, p_action: 'approve',
+        })
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '停止・削除・ログイン禁止中のアカウントは承認できません。' })
+          return
         }
-        await audit(admin.id, 'performer.approve', id)
+        if (error?.code === 'P0002') { res.status(404).json({ error: 'performer not found' }); return }
+        if (error) throw error
         res.status(200).json({ ok: true })
         return
       }
