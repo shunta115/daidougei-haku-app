@@ -1,0 +1,14 @@
+# LOCAL-ONLY research lab. Never publish this config on the internet.
+# SRS WHIP (browser) -> RTC-to-RTMP -> HLS; conversion requires verification.
+services:
+  srs:
+    image: ossrs/srs:v7.0.205
+    restart: 'no'
+    command: ./objs/srs -c conf/haku-whip-hls.conf
+    volumes:
+      - ./srs-whip-hls.conf:/usr/local/srs/conf/haku-whip-hls.conf:ro
+    ports:
+      - '127.0.0.1:1935:1935'
+      - '127.0.0.1:1985:1985'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8000:8000/udp'

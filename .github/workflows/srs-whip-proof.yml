@@ -1,0 +1,153 @@
+name: SRS WHIP local proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/ovh-srs-lab/**'
+      - '.github/workflows/srs-whip-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  whip-hls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install test tools
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install chrome --with-deps
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start localhost SRS and gateway
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof up -d
+          node experiments/ovh-srs-lab/local-gateway.mjs > /tmp/haku-gateway.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:4319/ > /dev/null && curl --fail --silent --max-time 2 http://127.0.0.1:1985/api/v1/versions > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify loopback RTMP handshake
+        run: node experiments/ovh-srs-lab/rtmp-handshake.mjs
+      - name: Verify RTMP to HLS baseline before WHIP
+        run: |
+          timeout 25 ffmpeg -nostdin -hide_banner -loglevel info -re -f lavfi -i testsrc2=size=320x180:rate=15 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 300k -g 30 -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/haku-rtmp-control > /tmp/haku-rtmp-baseline.log 2>&1 &
+          encoder_pid=$!
+          for i in $(seq 1 18); do
+            if node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 > /dev/null; then break; fi
+            if ! kill -0 "$encoder_pid" 2>/dev/null; then
+              echo 'RTMP baseline encoder stopped before HLS'
+              cat /tmp/haku-rtmp-baseline.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 > /dev/null; then
+            echo 'RTMP baseline produced no HLS'
+            echo 'Lab HLS files:'
+            docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof exec -T srs sh -c "head -n 12 ./objs/nginx/html/live/haku-rtmp-control.m3u8" || true
+            curl --silent --max-time 3 --output /tmp/haku-manifest-response --write-out 'HTTP %{http_code}, bytes %{size_download}\\n' http://127.0.0.1:8080/live/haku-rtmp-control.m3u8 || true
+            head -n 12 /tmp/haku-manifest-response || true
+            docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof exec -T srs sh -c "find ./objs/nginx/html -maxdepth 4 -type f \\( -name '*.m3u8' -o -name '*.ts' \\) -print" || true
+            cat /tmp/haku-rtmp-baseline.log
+            exit 1
+          fi
+          kill "$encoder_pid" 2>/dev/null || true
+          echo 'RTMP to HLS baseline generated a segment'
+      - name: Publish browser camera and validate HLS audio/video
+        run: |
+          node experiments/ovh-srs-lab/browser-whip-smoke.mjs > /tmp/haku-browser.log 2>&1 &
+          publisher_pid=$!
+          for i in $(seq 1 55); do
+            if node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8 > /dev/null; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then
+              echo "WHIP publisher failed before HLS"
+              cat /tmp/haku-browser.log
+              cat /tmp/haku-gateway.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8 > /dev/null; then
+            echo 'HLS segment was not generated; browser media counters follow'
+            cat /tmp/haku-browser.log
+            exit 1
+          fi
+          echo 'WHIP HLS media playlist ready'
+          for i in $(seq 1 20); do
+            timeout 5 ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 http://127.0.0.1:8080/live/haku-lab.m3u8 > /tmp/haku-codecs.txt || true
+            if grep -q 'h264,video' /tmp/haku-codecs.txt && grep -q 'aac,audio' /tmp/haku-codecs.txt; then break; fi
+            sleep 2
+          done
+          cat /tmp/haku-codecs.txt
+          if ! grep -q 'h264,video' /tmp/haku-codecs.txt || ! grep -q 'aac,audio' /tmp/haku-codecs.txt; then
+            echo 'WHIP HLS did not contain both H.264 video and AAC audio'
+            cat /tmp/haku-browser.log
+            exit 1
+          fi
+          echo 'H.264 and AAC streams identified'
+          timeout 20 ffmpeg -nostdin -hide_banner -v error -xerror -i http://127.0.0.1:8080/live/haku-lab.m3u8 -t 6 -map 0:v:0 -map 0:a:0 -f null -
+          echo 'H.264 and AAC decoded for six seconds'
+          node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers=5 --seconds=10
+          wait "$publisher_pid"
+          cat /tmp/haku-browser.log
+          echo "Browser WHIP -> SRS -> HLS H.264/AAC proved on loopback"
+      - name: Clean up isolated lab
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-proof down --remove-orphans
+
+  rtmp-hls-500-http:
+    needs: whip-hls
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Install local test encoder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start isolated localhost SRS
+        run: |
+          docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-load up -d
+          for i in $(seq 1 30); do
+            if curl --silent --max-time 2 http://127.0.0.1:8080/ > /dev/null && (echo > /dev/tcp/127.0.0.1/1935) > /dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Publish RTMP and request HLS with 500 concurrent synthetic clients
+        env:
+          HAKU_LOCAL_LOAD_APPROVED: YES
+        run: |
+          ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=854x480:rate=24 -re -f lavfi -i sine=frequency=440:sample_rate=48000 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -b:v 800k -maxrate 900k -bufsize 1800k -g 48 -c:a aac -b:a 48k -ar 48000 -f flv rtmp://127.0.0.1:1935/live/haku-lab > /tmp/haku-ffmpeg.log 2>&1 &
+          publisher_pid=$!
+          for i in $(seq 1 50); do
+            if node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8 > /dev/null; then break; fi
+            if ! kill -0 "$publisher_pid" 2>/dev/null; then
+              echo "RTMP test encoder stopped"
+              cat /tmp/haku-ffmpeg.log
+              exit 1
+            fi
+            sleep 1
+          done
+          node experiments/ovh-srs-lab/hls-ready.mjs http://127.0.0.1:8080/live/haku-lab.m3u8
+          for viewers in 1 10 50 100 500; do
+            node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/haku-lab.m3u8 --viewers="$viewers" --seconds=10 > /tmp/haku-load-result.json
+            node -e "const r=require('/tmp/haku-load-result.json'); console.log(JSON.stringify({viewers:r.viewers,receivedFirstSegment:r.viewersWithFirstSegment,errors:r.errors,bytes:r.bytes,throughputMbps:Number((r.bytes*8/r.seconds/1e6).toFixed(2)),p95Ms:r.requestP95Ms})); if(r.viewersWithFirstSegment!==r.viewers || r.errors>0) process.exit(1)"
+            docker stats --no-stream --format 'SRS CPU {{.CPUPerc}} MEM {{.MemUsage}} NET {{.NetIO}}' haku-srs-load-srs-1
+          done
+          kill "$publisher_pid" 2>/dev/null || true
+      - name: Clean up isolated lab
+        if: always()
+        run: docker compose -f experiments/ovh-srs-lab/compose-whip.yaml -p haku-srs-load down --remove-orphans

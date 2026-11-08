@@ -1,0 +1,122 @@
+# HAKU LIVE: OVHcloud + SRS 500視聴検証
+
+状態（2026-10-29更新）: **GitHub Actionsの隔離されたlocalhost試験でWHIP→SRS→HLSのH.264映像・AAC音声を生成・デコード済み。RTMP入力によるHLS視聴は最大500疑似クライアントを10秒間、初回受信500/500・取得エラー0で実測。** 実VPS、iPhone Safari、QR代理配信の実認証、500人×長時間は未検証。PR #88はDraft、一般公開不可。以下の過去の「未実施」は当時の記録であり、この最新状態に置き換える。
+
+## 隔離CIの最新実測
+
+- [SRS WHIP local proof（GitHub Actions）](https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764234): Chrome疑似カメラ・マイク→WHIP→SRS→HLS。RTMPハンドシェイクとRTMP→HLS基準試験も成功。HLS内のH.264/AACをffprobeで確認し、ffmpegで両トラックを6秒間デコード。WHIP由来HLSを5疑似視聴者が受信。
+- 同一ワークフローの別ジョブで、RTMP H.264/AAC入力のSRS HLSを10秒ずつ段階測定。1人: 1/1・0エラー・1.11Mbps・p95 30ms。10人: 10/10・0エラー・14.55Mbps・p95 27ms。50人: 50/50・0エラー・72.46Mbps・p95 50ms。100人: 100/100・0エラー・145.56Mbps・p95 95ms。500人: 500/500・0エラー・597.31Mbps・p95 332ms。Mbpsはプローブが取得したセグメントバイト数を10秒で割った値。コンテナのCPU/メモリ/累積NETはCIログ参照。瞬間CPU値をピーク値と見なさない。
+- HLSプローブはライブ端から取得し、クエリが変わっても同一セグメントを再取得しない。以前の50/100人での過大転送とエラーはこの重複受信が原因。これは**localhost・単一CIランナー・10秒**であり、500台の実機、外部ネットワーク、WHIP入力の500人、1時間運用や日本からの品質を証明しない。
+- [HAKU quality gate](https://github.com/shunta115/daidougei-haku-app/actions/runs/40909764189): TypeScript、447件Vitest、本番ビルド成功。追加費用のあるサービスは起動していない。既存LiveKit、DB、Stripe、Connect、本番デプロイには触れていない。
+- [PR #87](https://github.com/shunta115/daidougei-haku-app/pull/87) のQR発行・本人承認・一回限りの権限・交代/停止は設計上再利用可能。ただしSRSのWHIP publish認可とHAKU実認証への接続は未実装。ローカルSRSは認証・TLSなしのため外部公開厳禁。
+
+## 契約前の判断
+
+- OVHcloud欧州のVPS-3を候補とする。公式掲示価格は月$12.32から、6vCPU、12GB、2Gbps公称、対象地域の通信は無制限。契約期間・税・購入地域・規約・実際の帯域は注文前に確認する。
+- **アジア拠点は今回不採用**。OVHcloud公式ページ間でアジア向け月間転送量の表記が食い違う。VPS製品ページではVPS-3は1TB、Unmetered VPSの説明ページではVPS-3は3TBと記載され、いずれも超過後10Mbps制限。契約画面の具体的商品・リージョン条件で確定するまで両方を未確定として扱う。500人×3時間×30日の約19.75TBにはいずれも不足。
+- 500人×(映像800kbps+音声48kbps)×1.15 = **約487.6Mbps** の下り。1時間約219.42GB、1日3時間×30日なら約19.75TB（500人が常時見る極端な条件）。
+- 20本同時の500人LIVEは約9.75Gbpsを要する。VPS-3単体の公称2Gbpsでは不可能。出演者数と同時配信数を分けて計算する。
+- 料金や公称2Gbpsだけで500人成功とは判断しない。日本のiPhoneでの遅延・通信品質・CPU・帯域を実測する。
+
+公式資料: https://www.ovhcloud.com/en/vps/ / https://www.ovhcloud.com/en/vps/unmetered-vps/ / https://github.com/ossrs/srs / https://ossrs.io/lts/en-us/docs/v6/doc/webrtc / https://www.ossrs.net/lts/en-us/docs/v6/doc/hls
+
+## ローカル・非本番のSRS起動
+
+このcomposeはRTMPとHTTPを127.0.0.1にバインドする。**認証・TLSがないため外部公開禁止。**
+
+1. Dockerがある開発端末で `docker compose -f experiments/ovh-srs-lab/compose.yaml up -d`
+2. 利用許諾を得たテスト映像をH.264/AACでRTMP送出。例: `ffmpeg -re -stream_loop -1 -i /path/to/authorized-test.mp4 -c:v libx264 -preset veryfast -b:v 800k -c:a aac -b:a 48k -f flv rtmp://127.0.0.1:1935/live/test`
+3. `curl -f http://127.0.0.1:8080/live/test.m3u8` でHLSが出るか確認
+4. `docker compose -f experiments/ovh-srs-lab/compose.yaml down` で終了
+
+見積もりのみ: `node experiments/ovh-srs-lab/capacity.mjs --viewers=500 --simultaneous-streams=1`。
+
+計算の自動テスト: `node --test experiments/ovh-srs-lab/capacity.test.mjs`（サーバーに通信しない）。
+
+HLS視聴負荷試験用のローカル限定クライアント: `node experiments/ovh-srs-lab/hls-local-probe.mjs --url=http://127.0.0.1:8080/live/test.m3u8 --viewers=5 --seconds=10`。成功数、転送バイト数、エラー数、応答時間を記録する。自動テストは `node --test experiments/ovh-srs-lab/hls-local-probe.test.mjs`。500クライアントの検証プログラムとして準備したが、**現時点での通信先はループバックのみ**、5接続を超える場合は明示フラグが必要。実VPSへの500人相当の負荷は契約・許可・請求条件が確認できるまで行わない。合成HLSサーバーによるテストは実SRS・映像デコード・iPhone・実ネットワークを保証しない。
+
+**ワンタップ配信への注意:** このcomposeはRTMP入力のみを確認する段階。iPhone Safariからの入力にはSRSのWHIP/WebRTC対応、HTTPS、UDP等の適切な通信設定、認証・権限管理、映像H.264/音声OpusからHLS向け音声への変換整合性を別途検証する。WHIP入力→HLS出力の成功は未確認。一般公開前には認証・停止機能とTLS・Firewallが必要。
+
+SRS v6.0-r1（2026-08-12公開の安定版）を試作用に指定。Dockerのない環境のため、イメージ起動・動作検証は未実施。公式リリース: https://github.com/ossrs/srs/releases/tag/v6.0-r1
+
+## 2026-10-29 ローカル検証記録
+
+- `node --test experiments/ovh-srs-lab/*.test.mjs` と同等のローカル実行で **8/8テスト成功**。実HLSテストのみ `ffmpeg` が必要。
+- 500個の仮想HLS視聴クライアントが、127.0.0.1上の合成HTTPサーバーからそれぞれ256バイトのダミーセグメントを取得（500/500、エラー0）。これは**負荷試験プログラム自体の動作確認**。
+- **SRS実機の500人配信試験ではない**。転送したのは合計128,000バイトだけで、480pの継続映像や500Mbpsの帯域性能を再現していない。
+- FFmpegで生成した**実際の480p H.264/AACのHLSセグメント**を、127.0.0.1の簡易HTTPサーバーから5クライアント（4.64MB）および50クライアント（46.4MB）へ配信し、いずれもエラー0、受信50/50を確認。これによりHLS負荷試験ツールの実データ受信を確認した。**SRSを使った配信でも、500人を配信した結果でもない。**
+- この環境ではDockerが使用できず、SRSコンテナ起動は未検証。OVHcloud契約・課金・本番操作なし。
+- 実VPSのベンチマーク、iPhone実機試験、認証付きWHIP配信は個別承認・環境確保後。
+
+## 500クライアント・実HLSデータのローカル試験（2026-10-29）
+
+- 実行: `HAKU_LOCAL_500_REAL_SMOKE=YES node experiments/ovh-srs-lab/hls-500-real-local-smoke.mjs`
+- 配信元は **127.0.0.1** 上の一時的なNode.js HTTPサーバー。FFmpegが生成した8秒間の480p H.264/AACのHLSセグメント4個を固定で配布。OVHcloudや外部サイトへのアクセスなし。
+- 500の疑似視聴クライアントが全員セグメント受信成功。500/500、合計2,000セグメント、463,514,000バイト、HTTPエラー0、実行15.002秒、リクエスト時間p95=970ms、全体平均転送約247.2Mbps。
+- **この試験は500台のiPhoneによる連続LIVE視聴ではない。** 同じ4個の短いファイルを各クライアントが1回受信しただけ。実SRSの性能、約487.6Mbpsの持続配信、1時間の安定稼働、モバイル回線、WHIP入力、画質、映像再生、OVHcloudの実効帯域は**未検証**。
+- 500クライアントの負荷は明示的な環境変数がないと実行できない。ローカル限定であり、有料VPSや本番サイトへ負荷をかける機能はない。
+
+## ワンタップWHIP → HLS ローカル試作（2026-10-29追加）
+
+今回、**「LIVE配信を開始」ボタンからカメラ/マイクを取得し、SRSのWHIP APIにSDPを送るブラウザ側のコード**を追加した。SRSがRTC→RTMP→HLSへ変換できるかを確認するための、別系統のローカルラボ。
+
+- `compose-whip.yaml`: RTMP(1935)、WHIP API(1985)、HLS(8080)、WebRTC UDP(8000)をすべて127.0.0.1にだけ公開。RTC→RTMP変換とHLSを有効化する。
+- `whip-publisher.mjs`: ワンタップ配信のブラウザ側実装。H.264優先、SDP交換、接続待機、失敗時のカメラ停止、バックグラウンド停止、終了時のWHIPリソース削除（対応サーバーのみ）を実装。**接続先はlocalhost/127.0.0.1のSRS試験URLだけに固定**し、実運用に使える秘密情報は持たない。
+- `whip-local.html`: ローカルの配信開始・終了・HLS視聴ボタンを表示する画面。
+- `whip-publisher.test.mjs`: SDP送信、エラー時停止、カメラ許可待ちの停止競合など5件の自動テスト（Node.js上のモック）。`node --test experiments/ovh-srs-lab/whip-publisher.test.mjs` で実行できる。
+
+**ローカル起動手順（Dockerのある開発端末のみ）**
+
+1. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml up -d`
+2. `node experiments/ovh-srs-lab/local-gateway.mjs` で同一オリジンのローカルゲートウェイを起動
+3. 同じPCのブラウザで `http://127.0.0.1:4319/` を開き「LIVE配信を開始」を押す
+4. 画面の「映像を読み込む」でHLS再生を確認し、終了ボタン・画面非表示でカメラが停止するか検証
+5. `docker compose -f experiments/ovh-srs-lab/compose-whip.yaml down` で終了
+
+**重要な未検証項目:** この実行環境にはDockerがなく、SRSを実際に起動したWHIP→HLSのE2Eは未実施。WebRTCのOpus音声をHLS互換AACへ変換できるか、H.264ネゴシエーション、iPhone Safari、外部携帯回線、認証・権限、TLS/HTTPS、QR代理配信、500人負荷は**未確認**。ローカルHTTP URLはiPhoneから使えず、iPhoneの実機テストには別途安全なHTTPS試験環境が必要。**このローカル構成を外部公開してはならない。**
+
+参考: https://ossrs.io/lts/en-us/docs/v6/doc/webrtc / https://www.ossrs.net/lts/en-us/docs/v6/doc/hls
+
+## 2026-10-29 追加実装・検証
+
+- WHIP接続がLIVE開始後に `failed` になった場合、撮影者のカメラ/マイクを物理的に停止し、画面状態をエラーへ変更する。既存の「カメラ許可待ち中のキャンセル」「SDP処理中の停止」と合わせて競合テストを追加。
+- `admission.mjs`: 500人視聴に必要な帯域をもとに、**実測済みの持続可能帯域**と35%の安全余裕を使って同時配信数を計算。実測値がない場合は配信容量を「0」として拒否する。公称2Gbpsを実測値の代わりにしない。
+- 同時配信数は例として、実測1,000Mbpsなら最大1本、実測1,800Mbpsなら最大2本（1配信500人、映像800kbps+音声48kbps、通信余裕15%、安全余裕35%）。**試算であり、VPSの実測結果ではない。**
+- ローカルNode.jsの自動テスト **18件すべて成功**（通信量計算4、疑似HLS 1、HLSローカル2、実HLS 1、帯域入場制御4、WHIP6）。実SRSサーバーや500人×60分の合格を意味しない。
+- ブラウザ実機自動テストは、この実行環境のChromium管理ポリシーが127.0.0.1へのページアクセスを拒否したため未実施。制限を回避せず、Node.jsモックテストのみ実施した。
+- SRS公式資料ではWebRTC→RTMPの音声AAC変換機能が説明されているが、現在の構成でのWHIP→HLS実動作は未検証。https://github.com/ossrs/srs/blob/develop/trunk/conf/full.conf
+
+**注意:** `admission.mjs` は純粋な計画ロジックであり、本番の強制遮断機構ではない。実際の強制上限には共有DBの原子的予約・実メディア接続の停止・監視が必要。
+
+## 2026-10-29 通信量を抑える配信側制御
+
+- ブラウザのWHIP送信時に `RTCRtpSender.setParameters` を使い、映像最大800kbps・24fps、音声最大48kbpsを要求する。SDP送信前に適用し、未対応・失敗時にはカメラを止めて配信を開始しない。
+- ただし、この設定はWebRTCの送信目標・上限ヒントであり、ネットワーク転送量や通信事業者の請求を完全に制御するものではない。配信者の実送信量、HLS側の実出力ビットレートは今後実測する。
+- エラー時の停止を含むNode.js自動テストを追加。**20/20件成功**（2026-10-29、既存18件+送信レート制御2件）。
+- 500人向け実サーバー配信・iPhone Safari・SRSコンテナ起動の検証は依然として未完了。
+
+## 2026-10-29 同一オリジン・ローカルゲートウェイ追加
+
+- ブラウザが4319番でページを開き、SRS WHIPが1985番・HLSが8080番という構成では、ブラウザのCORS制限で動作しない可能性がある。この問題を避けるため、**127.0.0.1:4319に限定した同一オリジンのゲートウェイ**を追加。
+- `local-gateway.mjs` はWHIPのSDP送信・リソース削除、HLSマニフェスト/セグメント、ローカルHTML/JSの固定ルートだけを許可。ホスト・Originを検査し、外部アクセスと未知のパスを拒否する。実運用に流用しない。
+- `whip-local.html` は4319番経由のWHIP・HLSへ変更。**SRS本体の動作、WebRTC接続、音声変換、iPhone実機は依然として未検証**。
+- `local-gateway.test.mjs` に固定ルート、WHIP/HLSプロキシ、外部Origin拒否の3テストを追加。テストファイルをGitHubへ保存済みだが、この変更について実行結果は未確認。
+
+## 2026-10-29 最新進捗：実SRS試験への準備
+
+- **公式SRS v6.0-r1の設定を監査**。HLSの標準セグメント名は `[app]/[stream]-[seq].ts`。従来のローカルゲートウェイは連番セグメントを通せず、映像が再生できない不具合があったため修正した。既存の配信テストにも実際のSRS形式のセグメント検証を追加。
+- `tests/ovh-srs-lab.test.ts` を追加し、既存GitHub ActionsのVitest品質ゲートからNode.jsのローカル安全試験を呼び出すようにした。**CI結果を確認するまでは成功と表記しない。**
+- `compose-whip.yaml` ではHLSセグメントを4秒、保持ウィンドウを24秒に設定（SRS標準の10秒セグメントから短縮）。視聴遅延を下げる狙いだが、500人のHTTPリクエスト増加と実際のSafari遅延を測定してから採否を決める。
+- `run-local-srs-smoke.sh` を追加。Dockerを使える開発機で明示的に `HAKU_SRS_LOCAL_SMOKE=YES bash experiments/ovh-srs-lab/run-local-srs-smoke.sh` を実行すると、SRS起動→FFmpegで実映像送出→HLS/音声コーデック検査→5視聴負荷試験→自動終了する。Dockerがない現環境では**未実行**。
+- SRSの試験ポートはlocalhostのみ。Docker接続先がリモートの場合は拒否。外部負荷試験・有料サーバー・本番環境は一切変更していない。
+
+## 次の試験ゲート
+
+0. **費用発生前に承認が必要**。OVHcloudの最終購入画面における月額・初期費用・リージョン・契約期間・転送規約を確定し、ユーザーからその条件について個別承認を得る。現時点では契約していない。
+
+1. VPS契約と負荷生成機の費用・請求上限・ネットワーク規約について**個別承認**を得る。
+2. 別の承認済み試験端末群からHLS視聴を段階的に5→50→100→500と上げ、500人を連続60分維持できるか実測。視聴開始成功率99%以上、5分超の連続停止0、95パーセンタイル視聴開始10秒以内を合格目標にする。
+3. CPU/メモリ/通信帯域、HTTP失敗率、HLS遅延、配信者側の上り、iPhone Safariで再接続を測定。数値未採取を「合格」と表記しない。
+4. 合格後にHAKU DIRECTとCROWDの本人承認・QR・WHIP/WebRTC入力・HLS再生・投げ銭導線を**別の開発PR**で統合する。
+
+既存のLiveKit/Stripe/Supabase/本番DB/本番デプロイは変更しない。従来のcompose.yamlはRTMP入力ラボ。新しいcompose-whip.yamlはWHIP入力を有効にしたローカル検証構成。ブラウザのワンタップWHIPクライアントは実装したが、SRS実接続、iPhone Safari、観客代理配信の本番統合は未実装。DockerがないためSRS実動作は未検証。
