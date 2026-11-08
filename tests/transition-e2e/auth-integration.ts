@@ -68,8 +68,12 @@ async function main() {
   const admin = await fixture('admin')
   const pending = await fixture('pending', 'performer')
   const reject = await fixture('reject', 'performer')
+  const recovery = await fixture('recovery')
   sql(`update public.profiles set role='admin' where id='${admin.id}';
-    insert into public.admin_members(user_id,name,email) values ('${admin.id}','Test admin','${admin.email}');
+    insert into public.admin_members(user_id,name,email,permission)
+      values ('${admin.id}','Test admin','${admin.email}','super_admin');
+    update public.profiles set status='deleted', display_name='Deleted' where id='${recovery.id}';
+    insert into public.follows(fan_id,performer_id) values ('${recovery.id}','${pending.id}');
     insert into public.performers(id,stage_name,stripe_account_id) values ('${fan.id}','Existing performer','acct_fixture_preserved');
     insert into public.follows(fan_id,performer_id) values ('${fan.id}','${pending.id}');
     insert into public.tips(fan_id,performer_id,amount_cents,stripe_payment_intent)
@@ -83,7 +87,7 @@ async function main() {
     insert into public.live_sessions(performer_id) values ('${reject.id}');`);
   const snapshot = () => sql(`select jsonb_build_array(
     (select jsonb_agg(to_jsonb(t)) from public.tips t),
-    (select jsonb_agg(to_jsonb(f)) from public.follows f),
+    (select jsonb_agg(to_jsonb(f) order by f.fan_id,f.performer_id) from public.follows f),
     (select jsonb_agg(to_jsonb(v)) from public.event_votes v),
     (select jsonb_agg(to_jsonb(o)) from public.merch_orders o),
     (select stripe_account_id from public.performers where id='${fan.id}'),
@@ -126,7 +130,32 @@ async function main() {
   assert.equal(await call(admin.token, 'users', 'suspend', reject.id), 200)
   assert.equal(sql(`select status from public.profiles where id='${reject.id}'`), 'deleted')
   assert.ok((await reject.client.auth.signInWithPassword({ email: reject.email, password })).error)
+  await assertStaleRestDenied(recovery.token, recovery.id)
+  assert.equal(await call(admin.token, 'users', 'apply-performer', recovery.id), 409)
+  const expectedUpdated = sql(`select updated_at from public.profiles where id='${recovery.id}'`)
+  const authBefore = sql(`select to_jsonb(u) from auth.users u where id='${recovery.id}'`)
+  const recover = (commit: boolean, email = recovery.email) => execFileSync('psql', [
+    db!, '-v', 'target_uuid=' + recovery.id, '-v', 'actor_uuid=' + admin.id,
+    '-v', 'verified_email=' + email, '-v', 'expected_updated_at=' + expectedUpdated,
+    '-v', 'approved_display_name=Recovered TEST member', '-v', 'approval_reference=CI fixture',
+    '-v', 'commit_recovery=' + commit, '-f', 'supabase/runbooks/restore_logically_deleted_fan.sql',
+  ], { encoding: 'utf8', stdio: 'pipe' })
+  assert.throws(() => recover(true, 'different@example.com'), /Profile differs/)
+  recover(false)
+  assert.equal(sql(`select status from public.profiles where id='${recovery.id}'`), 'deleted')
+  assert.equal(sql(`select count(*) from public.admin_audit where target_id='${recovery.id}'`), '0')
+  recover(true)
+  assert.equal(sql(`select to_jsonb(u) from auth.users u where id='${recovery.id}'`), authBefore)
+  assert.equal(sql(`select count(*) from public.admin_audit where target_id='${recovery.id}' and action='user.recover_logical_delete'`), '1')
+  assert.throws(() => recover(true), /Profile differs/)
+  const restored = await recovery.client.from('profiles').select('id,email,status,role').eq('id', recovery.id).single()
+  assert.equal(restored.error, null)
+  assert.deepEqual(restored.data, { id: recovery.id, email: recovery.email, status: 'active', role: 'fan' })
+  assert.equal(await call(recovery.token, 'performer-application', 'apply', pending.id), 200)
+  assert.equal(await call(admin.token, 'performers', 'approve', recovery.id), 200)
+  assert.equal(sql(`select review_status from public.performers where id='${recovery.id}'`), 'approved')
+  assert.equal((await recovery.client.auth.refreshSession()).data.user?.id, recovery.id)
   assert.equal(snapshot(), before)
-  console.log('PASS: real Auth, RLS, cockpit API, approval/rejection, stale JWT denial, injected Ban failure/retry, UUID/email/Connect/ledger/vote preservation')
+  console.log('PASS: real Auth, RLS, cockpit API, approval/rejection, stale JWT denial, injected Ban failure/retry, guarded recovery rehearsal and audited commit, same-session application and approval, UUID/email/Connect/ledger/vote preservation')
 }
 void main().catch(error => { console.error(error); process.exitCode = 1 })

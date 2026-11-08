@@ -263,6 +263,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (action === 'apply-performer') {
         const { error } = await sb.rpc('apply_fan_performer', { p_user_id: id, p_actor_id: admin.id })
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '有効な一般会員アカウントで申請してください。' })
+          return
+        }
         if (error) throw error
         res.status(200).json({ ok: true })
         return

@@ -9,7 +9,7 @@ const user = { id: '00000000-0000-0000-0000-000000000001', email: 'test@example.
 const jwt = ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now()/1000)+3600 })).toString('base64url'), 'test-signature'].join('.')
 const session = { access_token: jwt, refresh_token: 'test-only', expires_in: 3600, expires_at: Math.floor(Date.now()/1000)+3600, token_type: 'bearer', user }
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4187'], { env: { ...process.env, VITE_SUPABASE_URL: host, VITE_SUPABASE_ANON_KEY: 'test-only-publishable' }, stdio: 'pipe' })
-let browser, log = '', applied = false, approved = false, requests = [], errors = []
+let browser, log = '', deleted = true, applied = false, approved = false, requests = [], errors = []
 server.stdout.on('data', x => log += x); server.stderr.on('data', x => log += x)
 try {
   for (let i=0;i<100;i++) { try { if ((await fetch('http://127.0.0.1:4187')).ok) break } catch {} await new Promise(r=>setTimeout(r,200)) }
@@ -22,6 +22,7 @@ try {
     if (url.origin === host) {
       requests.push(url.pathname)
       if (url.pathname === '/auth/v1/user') return route.fulfill({ json: user })
+      if (deleted && url.pathname.startsWith('/rest/v1/profiles')) return route.fulfill({ status: 403, json: { code: '42501', message: 'Account unavailable' } })
       if (url.pathname.startsWith('/rest/v1/profiles')) return route.fulfill({ json: { id: user.id, email: user.email, display_name: 'TEST', role: applied ? 'performer' : 'fan', status: 'active' } })
       if (url.pathname.startsWith('/rest/v1/performers')) return route.fulfill({ json: applied ? { id: user.id, stage_name: 'TEST', bio:'',genre:'',city:'',country:'', is_approved:approved,is_live:false,review_status:approved ? 'approved' : 'pending',stripe_onboarding_complete:false,sns_json:[] } : null })
       return route.fulfill({ json: [] })
@@ -37,6 +38,12 @@ try {
   const page=await context.newPage(); page.on('pageerror',e=>errors.push(e.message))
   await page.goto('http://127.0.0.1:4187/live/register', { waitUntil: 'domcontentloaded', timeout: 120000 })
   const apply=page.getByRole('button',{name:'同じアカウントでパフォーマー登録を申請'})
+  await page.getByRole('alert').waitFor()
+  assert.equal(await apply.count(), 0)
+  const beforeRecovery = await page.evaluate(() => JSON.parse(localStorage.getItem('sb-haku-transition-test-auth-token')))
+  assert.equal(beforeRecovery.access_token, jwt)
+  deleted = false
+  await page.reload({ waitUntil: 'domcontentloaded' })
   await apply.waitFor({ timeout: 120000 }); await page.screenshot({path:`${output}/before.png`,fullPage:true})
   await apply.click(); await apply.waitFor({state:'detached',timeout:120000})
   assert.ok(applied); assert.ok(!requests.some(p=>p.includes('/signup') || p.includes('/logout')))
@@ -58,7 +65,7 @@ try {
   assert.equal(afterApproval.access_token, jwt)
   await page.screenshot({path:`${output}/approved.png`,fullPage:true})
   assert.deepEqual(errors,[])
-  const result={engine:'WebKit',device:'iPhone 13 emulation (not physical Safari)',passed:['fan application entry','Bearer access token','self-only request','profile refresh after application','no signup/logout','same user ID/email/session','no horizontal overflow','no browser errors','pending and approved display on same session'],externalServices:'mocked; no Supabase/Stripe operations'}
+  const result={engine:'WebKit',device:'iPhone 13 emulation (not physical Safari)',passed:['deleted account blocked, recovered with existing session','fan application entry','Bearer access token','self-only request','profile refresh after application','no signup/logout','same user ID/email/session','no horizontal overflow','no browser errors','pending and approved display on same session'],externalServices:'mocked; no Supabase/Stripe operations'}
   await writeFile(`${output}/results.json`,JSON.stringify(result,null,2)); console.log(JSON.stringify(result,null,2))
 } catch(error) { console.error(log); throw error }
 finally { await browser?.close(); server.kill('SIGTERM') }
