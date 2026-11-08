@@ -9,13 +9,13 @@ const user = { id: '00000000-0000-0000-0000-000000000001', email: 'test@example.
 const jwt = ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now()/1000)+3600 })).toString('base64url'), 'test-signature'].join('.')
 const session = { access_token: jwt, refresh_token: 'test-only', expires_in: 3600, expires_at: Math.floor(Date.now()/1000)+3600, token_type: 'bearer', user }
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4187'], { env: { ...process.env, VITE_SUPABASE_URL: host, VITE_SUPABASE_ANON_KEY: 'test-only-publishable' }, stdio: 'pipe' })
-let browser, log = '', applied = false, requests = [], errors = []
+let browser, log = '', applied = false, approved = false, requests = [], errors = []
 server.stdout.on('data', x => log += x); server.stderr.on('data', x => log += x)
 try {
   for (let i=0;i<100;i++) { try { if ((await fetch('http://127.0.0.1:4187')).ok) break } catch {} await new Promise(r=>setTimeout(r,200)) }
   browser = await webkit.launch({ headless: true, ...(process.env.HAKU_WEBKIT_EXECUTABLE ? { executablePath: process.env.HAKU_WEBKIT_EXECUTABLE } : {}) })
   const context = await browser.newContext({ ...devices['iPhone 13'], locale: 'ja-JP', timezoneId: 'Asia/Tokyo', serviceWorkers: 'block' })
-  await context.addInitScript(({ session }) => { localStorage.setItem('sb-haku-transition-test-auth-token', JSON.stringify(session)); localStorage.setItem('daidougei-lang','ja') }, { session })
+  await context.addInitScript(({ session }) => { if (!localStorage.getItem('sb-haku-transition-test-auth-token')) localStorage.setItem('sb-haku-transition-test-auth-token', JSON.stringify(session)); localStorage.setItem('daidougei-lang','ja') }, { session })
   // All nonlocal networking is mocked or blocked. No production or Stripe access.
   await context.route('**/*', async route => {
     const url = new URL(route.request().url())
@@ -23,7 +23,7 @@ try {
       requests.push(url.pathname)
       if (url.pathname === '/auth/v1/user') return route.fulfill({ json: user })
       if (url.pathname.startsWith('/rest/v1/profiles')) return route.fulfill({ json: { id: user.id, email: user.email, display_name: 'TEST', role: applied ? 'performer' : 'fan', status: 'active' } })
-      if (url.pathname.startsWith('/rest/v1/performers')) return route.fulfill({ json: applied ? { id: user.id, stage_name: 'TEST', bio:'',genre:'',city:'',country:'', is_approved:false,is_live:false,review_status:'pending',stripe_onboarding_complete:false,sns_json:[] } : null })
+      if (url.pathname.startsWith('/rest/v1/performers')) return route.fulfill({ json: applied ? { id: user.id, stage_name: 'TEST', bio:'',genre:'',city:'',country:'', is_approved:approved,is_live:false,review_status:approved ? 'approved' : 'pending',stripe_onboarding_complete:false,sns_json:[] } : null })
       return route.fulfill({ json: [] })
     }
     if (url.hostname !== '127.0.0.1') return route.abort()
@@ -44,8 +44,21 @@ try {
   assert.equal(saved.user.id,user.id); assert.equal(saved.user.email,user.email); assert.equal(saved.access_token,jwt)
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false)
   await page.screenshot({path:`${output}/after.png`,fullPage:true})
+  const profileNav = page.locator('.pl-nav__btn').filter({ hasText: 'マイページ' })
+  await profileNav.click()
+  await page.getByText(/公開・LIVE・販売開始は運営承認後/).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'プロフィールを共有' }).count(), 0)
+  approved = true
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await profileNav.click()
+  await page.getByRole('button', { name: 'プロフィールを共有' }).waitFor()
+  assert.equal(await page.getByText(/公開・LIVE・販売開始は運営承認後/).count(), 0)
+  const afterApproval = await page.evaluate(() => JSON.parse(localStorage.getItem('sb-haku-transition-test-auth-token')))
+  assert.equal(afterApproval.user.id, user.id)
+  assert.equal(afterApproval.access_token, jwt)
+  await page.screenshot({path:`${output}/approved.png`,fullPage:true})
   assert.deepEqual(errors,[])
-  const result={engine:'WebKit',device:'iPhone 13 emulation (not physical Safari)',passed:['fan application entry','Bearer access token','self-only request','profile refresh after application','no signup/logout','same user ID/email/session','no horizontal overflow','no browser errors'],externalServices:'mocked; no Supabase/Stripe operations'}
+  const result={engine:'WebKit',device:'iPhone 13 emulation (not physical Safari)',passed:['fan application entry','Bearer access token','self-only request','profile refresh after application','no signup/logout','same user ID/email/session','no horizontal overflow','no browser errors','pending and approved display on same session'],externalServices:'mocked; no Supabase/Stripe operations'}
   await writeFile(`${output}/results.json`,JSON.stringify(result,null,2)); console.log(JSON.stringify(result,null,2))
 } catch(error) { console.error(log); throw error }
 finally { await browser?.close(); server.kill('SIGTERM') }
