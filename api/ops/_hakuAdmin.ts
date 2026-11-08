@@ -261,37 +261,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: 'cannot modify self' })
         return
       }
-      if (['suspend', 'soft-delete'].includes(action)) {
-        const { data: target, error } = await sb.from('profiles').select('role').eq('id', id).maybeSingle()
-        if (error) throw error
-        if (!target) { res.status(404).json({ error: 'user not found' }); return }
-        if (target.role === 'admin') {
-          res.status(409).json({ error: '管理者の停止は管理者管理から行ってください。' }); return
-        }
-      }
       if (action === 'apply-performer') {
         const { error } = await sb.rpc('apply_fan_performer', { p_user_id: id, p_actor_id: admin.id })
         if (error) throw error
         res.status(200).json({ ok: true })
         return
       }
-      if (action === 'suspend') {
-        await restrictAuthUser(id)
-        const { error } = await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)
+      if (action === 'suspend' || action === 'soft-delete') {
+        // Commit the application-side restriction before contacting Auth. If
+        // Auth fails, the same action safely retries the ban without reopening the profile.
+        const { error } = await sb.rpc('manage_performer_account', {
+          p_actor_id: admin.id, p_user_id: id, p_action: action,
+        })
+        if (error?.code === 'P0002') { res.status(404).json({ error: 'user not found' }); return }
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '管理者の停止は管理者管理から行ってください。' })
+          return
+        }
         if (error) throw error
-        const { error: performerError } = await sb.from('performers').update({ is_live: false, is_approved: false }).eq('id', id)
-        if (performerError) throw performerError
-        await audit(admin.id, 'user.suspend', id)
-        res.status(200).json({ ok: true })
-        return
-      }
-      if (action === 'soft-delete') {
-        await restrictAuthUser(id)
-        const { error } = await sb.from('profiles').update({ status: 'deleted', display_name: 'Deleted' }).eq('id', id)
-        if (error) throw error
-        const { error: performerError } = await sb.from('performers').update({ is_live: false, is_approved: false, stage_name: 'Deleted' }).eq('id', id)
-        if (performerError) throw performerError
-        await audit(admin.id, 'user.soft_delete', id)
+        try {
+          await restrictAuthUser(id)
+        } catch {
+          res.status(503).json({
+            error: 'アプリでの停止は保存済みです。ログイン停止を完了するため、同じ操作を再試行してください。',
+            code: 'auth_restriction_pending',
+          })
+          return
+        }
         res.status(200).json({ ok: true })
         return
       }
@@ -329,22 +325,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return
       }
       if (action === 'approve') {
-        const reviewedAt = new Date().toISOString()
-        const { data, error } = await sb.from('performers').update({
-          is_approved: true,
-          review_status: 'approved',
-          reviewed_at: reviewedAt,
-          reviewed_by: admin.id,
-          rejection_reason: null,
-        }).eq('id', id).select('id')
-        if (error) throw error
-        if (!data?.length) throw new Error('approve failed')
-        const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
-        if (perr) {
-          await sb.from('performers').update({ is_approved: false, is_live: false, share_location: false }).eq('id', id)
-          throw perr
+        const { error } = await sb.rpc('manage_performer_account', {
+          p_actor_id: admin.id, p_user_id: id, p_action: 'approve',
+        })
+        if (error?.code === 'P0001') {
+          res.status(409).json({ error: '停止・削除・ログイン禁止中のアカウントは承認できません。' })
+          return
         }
-        await audit(admin.id, 'performer.approve', id)
+        if (error?.code === 'P0002') { res.status(404).json({ error: 'performer not found' }); return }
+        if (error) throw error
         res.status(200).json({ ok: true })
         return
       }

@@ -50,7 +50,7 @@ describe('HAKU admin and public performer safety', () => {
     expect(app).toMatch(/pl-preview-readonly/)
     expect(app).toMatch(/onClickCapture/)
     expect(admin).toMatch(/action === 'reject'/)
-    expect(admin).toMatch(/review_status: 'approved'/)
+    expect(admin).toMatch(/rpc\('manage_performer_account'/)
   })
 
   it('manages event performers through the existing event_lineup relation without changing approval', () => {

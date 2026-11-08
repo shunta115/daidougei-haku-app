@@ -1,3 +1,4 @@
+import { hakuAdmin } from '../../haku-admin/api'
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
@@ -985,24 +986,7 @@ export async function listPerformerRegistrations(): Promise<PerformerRegistratio
 }
 
 export async function approvePerformer(id: string) {
-  const sb = requireSupabase()
-  const { data, error } = await sb
-    .from('performers')
-    .update({ is_approved: true })
-    .eq('id', id)
-    .select('id')
-  if (error) throw error
-  if (!data?.length) throw new Error('Approve failed: performer row not updated (check RLS/grants)')
-
-  const { error: perr } = await sb.from('profiles').update({ status: 'active' }).eq('id', id)
-  if (perr) {
-    const { error: rollbackError } = await sb
-      .from('performers')
-      .update({ is_approved: false, is_live: false, share_location: false })
-      .eq('id', id)
-    if (rollbackError) throw new Error('Approval could not be completed or safely rolled back')
-    throw perr
-  }
+  await hakuAdmin('performers', 'approve', { id })
 }
 
 export async function unpublishPerformer(id: string) {
@@ -1033,19 +1017,11 @@ export async function unpublishPerformer(id: string) {
 }
 
 export async function suspendUser(id: string) {
-  const sb = requireSupabase()
-  const { error } = await sb.from('profiles').update({ status: 'suspended' }).eq('id', id)
-  if (error) throw error
-  const { error: perr } = await sb.from('performers').update({ is_live: false, is_approved: false }).eq('id', id)
-  if (perr) throw perr
+  await hakuAdmin('users', 'suspend', { id })
 }
 
 export async function softDeleteUser(id: string) {
-  const sb = requireSupabase()
-  const { error } = await sb.from('profiles').update({ status: 'deleted', display_name: 'Deleted' }).eq('id', id)
-  if (error) throw error
-  const { error: perr } = await sb.from('performers').update({ is_live: false, is_approved: false, stage_name: 'Deleted' }).eq('id', id)
-  if (perr) throw perr
+  await hakuAdmin('users', 'soft-delete', { id })
 }
 
 export async function listUsers() {

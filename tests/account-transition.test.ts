@@ -59,28 +59,38 @@ describe('existing-account performer application', () => {
 })
 
 describe('UUID based account restriction', () => {
-  function mockDatabase(role = 'fan') {
-    const update = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }))
-    state.from.mockImplementation(() => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role }, error: null }) }) }),
-      update, insert: vi.fn(async () => ({ error: null })),
-    }))
-    return update
-  }
-  it.each(['suspend', 'soft-delete'])('%s uses Auth ban by UUID and never passes a UUID as JWT', async action => {
-    mockDatabase(); const res = response()
+  it.each(['suspend', 'soft-delete'])('%s commits DB restriction before Auth ban', async action => {
+    const res = response()
     await adminHandler(req({ resource: 'users', action, payload: { id: 'fan-id' } }), res)
+    expect(state.rpc).toHaveBeenCalledWith('manage_performer_account', { p_actor_id: 'admin-id', p_user_id: 'fan-id', p_action: action })
+    expect(state.rpc.mock.invocationCallOrder[0]).toBeLessThan(state.ban.mock.invocationCallOrder[0])
     expect(state.ban).toHaveBeenCalledWith('fan-id', { ban_duration: '876000h' })
     expect(res.status).toHaveBeenCalledWith(200)
   })
-  it('does not change profile state if Auth restriction fails', async () => {
-    const update = mockDatabase(); state.ban.mockResolvedValueOnce({ error: new Error('Auth unavailable') }); const res = response()
-    await adminHandler(req({ resource: 'users', action: 'suspend', payload: { id: 'fan-id' } }), res)
-    expect(update).not.toHaveBeenCalled(); expect(res.status).toHaveBeenCalledWith(500)
+  it('keeps the DB restriction and permits retry when Auth fails', async () => {
+    state.ban.mockResolvedValueOnce({ error: new Error('Auth unavailable') })
+    const request = req({ resource: 'users', action: 'suspend', payload: { id: 'fan-id' } })
+    const failed = response()
+    await adminHandler(request, failed)
+    expect(failed.status).toHaveBeenCalledWith(503)
+    expect(failed.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'auth_restriction_pending' }))
+    const retry = response()
+    await adminHandler(request, retry)
+    expect(retry.status).toHaveBeenCalledWith(200)
+    expect(state.rpc).toHaveBeenCalledTimes(2)
   })
-  it('does not bypass administrator lifecycle protections using the users panel', async () => {
-    mockDatabase('admin'); const res = response()
+  it('does not contact Auth if the DB restriction fails', async () => {
+    state.rpc.mockResolvedValueOnce({ error: { code: 'P0001' } })
+    const res = response()
     await adminHandler(req({ resource: 'users', action: 'suspend', payload: { id: 'other-admin' } }), res)
-    expect(state.ban).not.toHaveBeenCalled(); expect(res.status).toHaveBeenCalledWith(409)
+    expect(state.ban).not.toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(409)
+  })
+  it('returns a conflict for a blocked approval', async () => {
+    state.rpc.mockResolvedValueOnce({ error: { code: 'P0001' } })
+    const res = response()
+    await adminHandler(req({ resource: 'performers', action: 'approve', payload: { id: 'fan-id' } }), res)
+    expect(res.status).toHaveBeenCalledWith(409)
+    expect(state.ban).not.toHaveBeenCalled()
   })
 })

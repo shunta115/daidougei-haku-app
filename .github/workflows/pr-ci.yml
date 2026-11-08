@@ -38,3 +38,35 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npx tsc --noEmit --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck api/ops/_hakuAdmin.ts api/ops/inbox.ts api/stripe/_shared.ts
+  supabase-auth-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - run: npm ci --ignore-scripts
+      - name: Test with disposable Auth, REST and PostgreSQL
+        shell: bash
+        run: |
+          test_dir="$(mktemp -d)"
+          supabase init --workdir "$test_dir"
+          trap 'supabase stop --no-backup --workdir "$test_dir"' EXIT
+          supabase start --workdir "$test_dir" -x realtime,imgproxy,studio,edge-runtime,logflare,vector,supavisor
+          source <(supabase status --workdir "$test_dir" -o env)
+          test "$API_URL" = http://127.0.0.1:54321
+          psql "$DB_URL" -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20260726_platform_beta.sql \
+            -f supabase/migrations/20260924_protect_privileged_profile_fields.sql \
+            -f supabase/migrations/20261003_admin_review_workflow.sql \
+            -f supabase/migrations/20261005_admin_members.sql \
+            -f supabase/migrations/20261102023117_fan_performer_application.sql \
+            -f supabase/migrations/20261108090000_guard_performer_account_review.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c 'grant select, insert, update on public.profiles, public.performers, public.admin_audit, public.admin_members to service_role'
+          SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" HAKU_TEST_DB_URL="$DB_URL" \
+            npx --no-install vite-node tests/transition-e2e/auth-integration.ts
