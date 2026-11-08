@@ -15,7 +15,7 @@ vi.mock('../src/platform/screens/EventScreens', () => ({
   EventListScreen: ({ onOpen }: { onOpen: (slug: string) => void }) => <button onClick={() => onOpen('award-winning-performers-2026')}>event-list</button>,
   EventDetailScreen: ({ slug, onBack, onOpenPerformer }: { slug: string; onBack: () => void; onOpenPerformer: (id: string) => void }) => <><p>event-detail:{slug}</p><button onClick={onBack}>event-back</button><button onClick={() => onOpenPerformer('performer-1')}>event-performer</button></>,
 }))
-vi.mock('../src/platform/screens/PerformerPublicScreen', () => ({ PerformerPublicScreen: ({ onBack }: { onBack: () => void }) => <><p>performer-public</p><button onClick={onBack}>profile-back</button></> }))
+vi.mock('../src/platform/screens/PerformerPublicScreen', () => ({ PerformerPublicScreen: ({ onBack, onTip }: { onBack: () => void; onTip: () => void }) => <><button onClick={onTip}>profile-support</button><p>performer-public</p><button onClick={onBack}>profile-back</button></> }))
 vi.mock('../src/platform/screens/LiveListScreen', () => ({ LiveListScreen: ({ onOpenPerformer }: { onOpenPerformer: (id: string) => void }) => <><p>live-list</p><button onClick={() => onOpenPerformer('performer-1')}>live-performer</button></> }))
 vi.mock('../src/platform/screens/MerchScreens', () => ({
   MerchListScreen: ({ onOpenProduct }: { onOpenProduct: (id: string) => void }) => <><p>merch-list</p><button onClick={() => onOpenProduct('product-1')}>open-product</button></>,
@@ -24,6 +24,8 @@ vi.mock('../src/platform/screens/MerchScreens', () => ({
 }))
 vi.mock('../src/platform/screens/AdminScreens', () => ({ AdminDashboardScreen: () => <p>admin-dashboard</p>, AdminUsersScreen: () => null, AdminEventScreen: () => null }))
 vi.mock('../src/platform/screens/LiveWatchScreen', () => ({ LiveWatchScreen: () => <p>live-watch</p> }))
+vi.mock('../src/platform/screens/ConnectedLiveWatchScreen', () => ({ ConnectedLiveWatchScreen: ({ performerId, onTip }: { performerId: string; onTip: () => void }) => <><p>live-watch:{performerId}</p><button onClick={onTip}>live-support</button></> }))
+vi.mock('../src/platform/screens/TipScreen', () => ({ TipScreen: ({ performerId, returnToLive }: { performerId: string; returnToLive?: boolean }) => <p>amount-selection:{performerId}:{returnToLive ? 'live' : 'profile'}</p> }))
 import { PlatformApp } from '../src/platform/PlatformApp'
 import { EVENTS_PATH, FESTIVAL_PATH, eventPath, isPlatformPath, spaGo } from '../src/app/routes'
 
@@ -270,3 +272,18 @@ it('restores the correct merchandise product through Back and Forward', async ()
   act(() => window.history.forward())
   await screen.findByText('product:product-1')
 })
+
+for (const performer of ['haribow-fixture', 'paul-fixture', 'other-a-fixture', 'other-b-fixture']) {
+  for (const signedIn of [false, true]) {
+    for (const surface of ['live', 'profile']) {
+      it(`keeps ${performer} when ${signedIn ? 'fan' : 'guest'} supports from ${surface}`, async () => {
+        window.history.replaceState({}, '', surface === 'live' ? `/live?watch=${encodeURIComponent(performer)}` : `/performer/${encodeURIComponent(performer)}`)
+        if (signedIn) fake.auth = { ...fake.auth, user: { id: 'fan' }, profile: { role: 'fan', status: 'active' } }
+        render(<PlatformApp />)
+        fireEvent.click(await screen.findByRole('button', { name: `${surface}-support` }))
+        await screen.findByText(`amount-selection:${performer}:${surface}`)
+        expect(screen.queryByText('register:fan')).toBeNull()
+      })
+    }
+  }
+}
