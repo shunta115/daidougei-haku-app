@@ -1,5 +1,6 @@
 import { smartPushTestLifecycle, startSmartPushTestLive, endSmartPushTestLive } from './smartPushTestLifecycle'
 import { pushEnvironment } from './pushEnvironment'
+import { announceNotificationOpportunity } from './notificationPrompt'
 import { appearanceFetchFilter, appearanceIsDiscoverable } from './appearanceMap'
 import { requireSupabase } from './supabase'
 import { trackProductEvent } from './track'
@@ -197,6 +198,7 @@ export async function reserveLiveSchedule(scheduleId: string, userId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('live_reservations').insert({ live_schedule_id: scheduleId, user_id: userId })
   if (error && error.code !== '23505') throw error
+  if (!error) announceNotificationOpportunity(userId, 'reservation')
 }
 
 export async function cancelLiveReservation(scheduleId: string, userId: string) {
@@ -722,7 +724,10 @@ export async function follow(fanId: string, performerId: string) {
   const sb = requireSupabase()
   const { error } = await sb.from('follows').insert({ fan_id: fanId, performer_id: performerId })
   if (error && error.code !== '23505') throw error
-  if (!error) trackProductEvent('follow_complete', { performerId })
+  if (!error) {
+    trackProductEvent('follow_complete', { performerId })
+    announceNotificationOpportunity(fanId, 'follow')
+  }
 }
 
 export async function listFollowedPerformers(fanId: string): Promise<Performer[]> {
@@ -930,7 +935,8 @@ export async function ensurePushSubscription(userId: string) {
   if (!publicKey) throw new Error('push_not_configured')
   if (pushEnvironment().needsInstall) throw new Error('push_unsupported')
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) throw new Error('push_unsupported')
-  const permission = await Notification.requestPermission()
+  if (Notification.permission === 'denied') throw new Error('push_denied')
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('push_denied')
   const registration = await navigator.serviceWorker.ready
   const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(publicKey) })
