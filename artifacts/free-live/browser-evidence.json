@@ -1,0 +1,76 @@
+{
+  "browser": "Chromium fake camera and microphone; local separate browser contexts; NOT iPhone hardware",
+  "checks": [
+    {
+      "name": "DIRECT camera started",
+      "room": "b1c1c5de-84a0-4720-b98c-e343ab8aef0b",
+      "video": {
+        "width": 640,
+        "height": 360,
+        "tracks": [
+          {
+            "kind": "audio",
+            "state": "live"
+          },
+          {
+            "kind": "video",
+            "state": "live"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Five independent browser contexts received video",
+      "dimensions": [
+        [
+          320,
+          180
+        ],
+        [
+          320,
+          180
+        ],
+        [
+          320,
+          180
+        ],
+        [
+          320,
+          180
+        ],
+        [
+          320,
+          180
+        ]
+      ]
+    },
+    {
+      "name": "Receiver audio RTP bytes observed; speaker audibility requires hardware test"
+    },
+    {
+      "name": "Viewer explicitly reconnected without adding a sixth seat"
+    },
+    {
+      "name": "Sixth viewer rejected"
+    },
+    {
+      "name": "CROWD handoff and five viewers reconnected",
+      "oldPublisherCameraRemoved": true
+    },
+    {
+      "name": "Performer emergency stop closed audience capture and all five viewers"
+    },
+    {
+      "name": "Static Preview fallback has five same-device loopback receivers"
+    },
+    {
+      "name": "Meter is visible",
+      "text": "送信量（実測）\n0.1 MB\n受信量（実測）\n0.1 MB\n映像接続数\n5 / 5\nTURN中継\n使用しない"
+    },
+    {
+      "name": "Synthetic visibilitychange synchronously ended real fake-device tracks",
+      "iphoneHardwareVerified": false
+    }
+  ],
+  "pageErrors": []
+}

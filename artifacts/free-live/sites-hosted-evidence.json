@@ -1,0 +1,27 @@
+{
+  "url": "https://haku-live-device-check.eb-shimada409.chatgpt.site",
+  "checkedAt": "2026-10-28T00:19:41.858Z",
+  "healthStatus": 200,
+  "health": {
+    "ok": true,
+    "mode": "sites-owner-lab",
+    "persistent": true,
+    "mediaRelay": false,
+    "requiresVisitorIdentity": true
+  },
+  "visitorStatusWithoutIdentity": 401,
+  "visitorErrorWithoutIdentity": "sites_sign_in_required",
+  "pageStatus": 200,
+  "pageUrl": "https://haku-live-device-check.eb-shimada409.chatgpt.site/haku-free-live",
+  "hostedLabGuard": true,
+  "deployedHtmlMatchesSource": true,
+  "sourceCommit": "1b239130cf0b6b183ea57c08e3f942908a42d22d",
+  "siteId": "appgprj_6ae136c62b4081918abb289252c19486",
+  "deploymentId": "appgdep_6ae13f7899848191afb396e2ba36da68",
+  "versionId": "appgprj_6ae136c62b4081918abb289252c19486~appgver_d6fbb4ea574081919c94f1049fb33485",
+  "limitations": [
+    "Service access is not visitor authentication; no identity was injected for this read-only check.",
+    "No signed-in visitor API writes, phone camera, microphone or cross-network media were tested by this check.",
+    "Miniflare D1 and SQLite separately verified five seats, a rejected sixth, camera handoff and grant expiry."
+  ]
+}

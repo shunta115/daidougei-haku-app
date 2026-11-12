@@ -1,0 +1,8 @@
+// Standalone owner-private Sites route. This is not HAKU's Vercel API.
+import { env } from 'cloudflare:workers';
+import { handleSitesLiveRequest } from '../../../live-lab/sites-controller.mjs';
+export const dynamic = 'force-dynamic';
+const origin = 'https://haku-live-device-check.eb-shimada409.chatgpt.site';
+const handle = (request: Request) => handleSitesLiveRequest(request, { db: env.DB, origin });
+export const GET = handle;
+export const POST = handle;
