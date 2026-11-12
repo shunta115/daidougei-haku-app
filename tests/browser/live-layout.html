@@ -12,20 +12,20 @@
     </style>
   </head>
   <body data-status="running">
-    <main class="pl-live pl-live--performer pl-live--immersive" data-phase="live">
+    <main class="pl-live pl-live--performer pl-live--immersive" data-phase="live" data-video-orientation="portrait">
       <section class="pl-live__stage">
         <video class="pl-live__video" aria-label="camera"></video>
         <header class="pl-live__hud-top"><button class="pl-btn pl-live__chip">戻る</button><div class="pl-live__stats">LIVE中　0:42　👁 2</div></header>
-        <div class="pl-live__media-controls">
+      </section>
+      <section class="pl-live__panel pl-live__panel--live">
+        <div class="pl-live__studio-summary"><strong>配信スタジオ</strong><span>👁 2　♥ 4　🎁 1</span></div>
+        <div class="pl-live__studio-tools"><div class="pl-live__media-controls">
           <button class="pl-live__media-control">切替</button>
           <button class="pl-live__media-control">マイク</button>
           <button class="pl-live__media-control">カメラ</button>
-        </div>
-      </section>
-      <section class="pl-live__panel pl-live__panel--live">
+        </div><button class="pl-live__settings-button">設定</button></div>
         <div class="pl-live__comments"><div class="pl-live__comment"><strong>視聴者</strong>映像がきれいです</div></div>
         <div class="pl-live__composer"><input class="pl-input" value="コメント"><button class="pl-btn">送信</button></div>
-        <div class="pl-live__prefs">MAP位置共有　ギフト音</div>
         <button class="pl-btn pl-btn--block pl-btn--danger pl-live__end-live">ライブ終了</button>
       </section>
     </main>
@@ -34,23 +34,27 @@
       const portrait = matchMedia('(orientation: portrait)').matches
       const root = document.querySelector('.pl-live')
       root.dataset.layout = portrait ? 'phone-portrait' : 'phone-landscape'
-      root.style.setProperty('--video-aspect', portrait ? String(9 / 16) : String(16 / 9))
+      root.dataset.videoOrientation = portrait ? 'portrait' : 'landscape'
+      root.style.setProperty('--video-aspect', portrait ? String(3 / 4) : String(16 / 9))
       root.style.setProperty('--video-fit', 'contain')
-      requestAnimationFrame(() => requestAnimationFrame(() => {
+      const verify = () => {
         const stage = document.querySelector('.pl-live__stage').getBoundingClientRect()
         const controls = document.querySelector('.pl-live__media-controls').getBoundingClientRect()
         const panel = document.querySelector('.pl-live__panel').getBoundingClientRect()
         const end = document.querySelector('.pl-live__end-live').getBoundingClientRect()
-        const overlaps = !(controls.right <= panel.left || controls.left >= panel.right || controls.bottom <= panel.top || controls.top >= panel.bottom)
+        const stageOverlapsPanel = !(stage.right <= panel.left || stage.left >= panel.right || stage.bottom <= panel.top || stage.top >= panel.bottom)
+        const controlsInsidePanel = controls.left >= panel.left && controls.right <= panel.right && controls.top >= panel.top && controls.bottom <= panel.bottom
         const ratio = stage.width / stage.height
-        const ratioOk = portrait ? Math.abs(ratio - 9 / 16) < 0.02 : stage.width === innerWidth && stage.height === innerHeight
+        const ratioOk = portrait ? Math.abs(ratio - 3 / 4) < 0.02 : stage.width < innerWidth && stage.height <= innerHeight
         const endAccessible = portrait
           ? end.bottom <= document.documentElement.scrollHeight + 1
           : end.top >= 0 && end.bottom <= innerHeight
-        const passed = ratioOk && !overlaps && endAccessible
+        const passed = ratioOk && !stageOverlapsPanel && controlsInsidePanel && endAccessible
         document.body.dataset.status = passed ? 'passed' : 'failed'
-        document.querySelector('#result').textContent = JSON.stringify({ passed, portrait, ratio, overlaps, endAccessible, endBottom: end.bottom, viewport: [innerWidth, innerHeight] })
-      }))
+        document.querySelector('#result').textContent = JSON.stringify({ passed, portrait, ratio, stageOverlapsPanel, controlsInsidePanel, endAccessible, endBottom: end.bottom, viewport: [innerWidth, innerHeight] })
+      }
+      requestAnimationFrame(verify)
+      setTimeout(verify, 150)
     </script>
   </body>
 </html>
